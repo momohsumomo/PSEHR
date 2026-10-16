@@ -10,14 +10,14 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 DEST = ROOT / "data" / "hub_packages"
-REPO = os.environ.get("WUNDADI_PACK_REPO", "momohsumomo/wundadi")
+REPO = os.environ.get("PSEHR_PACK_REPO", "momohsumomo/PSEHR")
 
 
 def main() -> int:
     url = f"https://api.github.com/repos/{REPO}/releases/latest"
     req = urllib.request.Request(
         url,
-        headers={"Accept": "application/vnd.github+json", "User-Agent": "wundadi-drug-pack"},
+        headers={"Accept": "application/vnd.github+json", "User-Agent": "psehr-drug-pack"},
     )
     try:
         with urllib.request.urlopen(req, timeout=60) as resp:
