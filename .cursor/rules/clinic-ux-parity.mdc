@@ -1,0 +1,18 @@
+---
+description: 診療／掛號介面必須對齊醫聖；版面以實機截圖為準
+globs: frontend/src/pages/Clinic*.tsx,frontend/src/pages/Register*.tsx,frontend/src/pages/Patient*.tsx,frontend/src/components/clinic/**/*
+alwaysApply: false
+---
+
+# 醫聖 UX 對齊
+
+**完成定義＝視覺與操作像醫聖。** 字串目錄／對話數量 ≠ 完成。
+
+抽出庫：docs/醫聖對照/sc-atlas/
+
+1. **版面權威**：專案根目錄 `醫聖介面截圖參考/`（禁止忽略既有截圖再向使用者要圖）
+2. **UI 連結**：UI-連結圖-SC32拆解.md
+3. **行為**：UI-邏輯總表.md（與截圖衝突時以截圖為準）
+4. exe/ini/set 只供欄位與文案，不替代截圖
+
+硬規則：依圖排版；有圖卻猜版面＝不算像。

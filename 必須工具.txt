@@ -1,0 +1,44 @@
+【三沙盒架構】docs/三沙盒架構.md（前端 Mock / 後端 Swagger / 讀卡腳本 完全解耦）
+
+【規格與順序】checklist以及開發順序.txt（含 Phase 0～6 與 Jira KAN 對照）
+【Confluence】專案首頁 https://momohsu.atlassian.net/wiki/spaces/~7120209c3b5f0c419b4c1ab68f5ab00a56de97/pages/557058
+【Confluence】📊 視覺化儀表板 https://momohsu.atlassian.net/wiki/spaces/~7120209c3b5f0c419b4c1ab68f5ab00a56de97/pages/622593
+【週報】2026-06-02 https://momohsu.atlassian.net/wiki/spaces/~7120209c3b5f0c419b4c1ab68f5ab00a56de97/pages/557087
+【Jira 看板】https://momohsu.atlassian.net/jira/software/projects/KAN/boards
+
+【沙盒1】前端 UI（Mock only，不連後端）
+  目錄：frontend/
+  資料：frontend/src/mocks/ 唯一真相
+  啟動：cd frontend && npm install && npm run dev
+  網址：http://127.0.0.1:5173
+  Jira：KAN-8
+
+【沙盒2】後端 API（Swagger only，不連前端）
+  初始化：python scripts/init_shadow_db.py
+  啟動：雙擊 啟動-Wundadi門診.bat
+  或只開後端：scripts\start_api.bat
+  或：python -m uvicorn src.api.main:app --reload --host 127.0.0.1 --port 5000
+  Swagger：http://127.0.0.1:5000/docs
+  （8800/8888 若 WinError 10013：Windows 保留埠 8734-8833，改 5000）
+  雙層驗證：GET /sandbox/dual-layer/{Encounter|Condition|MedicationRequest}/{id}
+  Jira：KAN-2、KAN-4
+
+【沙盒3】健保讀卡獨立腳本
+  主控台探測：python utils/nhi_reader.py health
+  PC/SC 診斷：python utils/nhi_reader.py pcsc
+  Jira：KAN-7
+
+【Python 虛擬環境】專案目錄內 .venv（勿污染全域 Python）
+  建立（僅第一次）：python -m venv .venv
+  啟用（PowerShell）：.\.venv\Scripts\Activate.ps1
+  啟用（CMD）：.\.venv\Scripts\activate.bat
+  安裝依賴：pip install -r requirements.txt
+  讀卡硬體診斷（非產品路線）：python card_reader_test.py
+  產品讀卡：Phase 4 KAN-7 健保署讀卡機控制軟體 6.0（主控台 :5066 + 業務端 API）
+  離開 venv：deactivate
+
+【沙盒2 API 速查】見上方；DB：data/shadow.db
+  門診 UI 規格（審查）：docs/次世代FHIR門診診間UI佈局與欄位規格書.md
+
+【開發流水線】
+【Confluence】看規格 ➔ 【Jira】拉任務 ➔ 【Cursor】用 AI 寫扣 ➔ 【Nx】檢查代碼結構 ➔ 【Git】本機快照 ➔ 推進【GCP 私有倉庫】 ➔ 自動儲存到【GCP 台灣 FHIR 資料庫】

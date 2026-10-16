@@ -1,0 +1,3221 @@
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
+import { ClinicalAlertsPanel } from "@/components/clinic/ClinicalAlertsPanel";
+import { ClinicShortcutBar } from "@/components/clinic/ClinicShortcutBar";
+import { ClinicBigPalette } from "@/components/clinic/ClinicBigPalette";
+import { QUEUE_FILTERS, type QueueFilterId } from "@/components/clinic/HisRegisterToolBar";
+import { ClinicModuleTabs } from "@/components/clinic/ClinicModuleTabs";
+import { RegisterOptionsDialog } from "@/components/clinic/RegisterOptionsDialog";
+import { PatientEditDialog, type PatientEditSeed } from "@/components/clinic/PatientEditDialog";
+import { CertificateDialog } from "@/components/clinic/CertificateDialog";
+import { OutpatientSidebarQueue } from "@/components/clinic/OutpatientSidebarQueue";
+import { PatientLookDialog } from "@/components/clinic/PatientLookDialog";
+import { ReferralSlipDialog } from "@/components/clinic/ReferralSlipDialog";
+import { IcCardInfoDialog } from "@/components/clinic/IcCardInfoDialog";
+import { findSameDayHits, SameDayRegisterDialog } from "@/components/clinic/SameDayRegisterDialog";
+import { ChartPatientHead } from "@/components/clinic/ChartPatientHead";
+import {
+  ChartVitalsColumn,
+  EMPTY_VITALS,
+  type ChartVitals,
+} from "@/components/clinic/ChartVitalsColumn";
+import { ChartQtyPad } from "@/components/clinic/ChartQtyPad";
+import {
+  CLINIC_CHART_SHORTCUT_BAR,
+  CLINIC_LIST_SHORTCUT_BAR,
+  CLINIC_MODULE_TABS,
+  type ClinicTab,
+} from "@/lib/clinicShortcutSets";
+import { EncounterQueuePanel } from "@/components/clinic/EncounterQueuePanel";
+import { HistoryRxPanel } from "@/components/clinic/HistoryRxPanel";
+import { PatientHeaderWidget } from "@/components/clinic/widgets/PatientHeaderWidget";
+import { LesionPhotosWidget } from "@/components/clinic/widgets/LesionPhotosWidget";
+import { ChiefComplaintWidget } from "@/components/clinic/widgets/ChiefComplaintWidget";
+import { DiagnosesWidget } from "@/components/clinic/widgets/DiagnosesWidget";
+import { CurrentRxWidget } from "@/components/clinic/widgets/CurrentRxWidget";
+import {
+  ChartContextRail,
+  type ChartEditFocus,
+} from "@/components/clinic/ChartContextRail";
+import { useI18n } from "@/i18n/I18nContext";
+import { useClinicCatalog } from "@/hooks/useClinicCatalog";
+import { useClinicWorkspace } from "@/hooks/useClinicWorkspace";
+import { useDefaultUiConfig } from "@/hooks/useDefaultUiConfig";
+import type { DiagnosisRow, HistoryVisit, RxLine } from "@/mocks";
+import {
+  RegisterEditDialog,
+  emptyRegisterForm,
+  type RegisterEditForm,
+} from "@/components/clinic/RegisterEditDialog";
+import { RegisterConfirmDialog } from "@/components/clinic/RegisterConfirmDialog";
+import { PatientFinderDialog } from "@/components/clinic/PatientFinderDialog";
+import { DeleteRegisterDialog } from "@/components/clinic/DeleteRegisterDialog";
+import type { PatientHit } from "@/lib/patientSearch";
+import {
+  HisStubDialog,
+  type HisStubId,
+} from "@/components/clinic/HisStubDialog";
+import { ClinicSessionGate } from "@/components/clinic/ClinicSessionGate";
+import {
+  lastClinicDept,
+  lastPharmacist,
+  loadClinicSession,
+  saveClinicSession,
+  shiftForClock,
+  type ClinicSession,
+} from "@/lib/clinicSession";
+import {
+  applyClinicDrugDisplayNames,
+  resolvePackageLines,
+} from "@/utils/catalogRx";
+import { cancelRegister, writeVisitToCard, CardReadError, type CardFaultReport, patchEncounterReg, fetchStaff, replyReferral } from "@/api/clinicApi";
+import { appendChiefNotes, mapDiagnosisList, readyIcd9, resolveIcd9Row } from "@/lib/icdCrosswalk";
+import { loadClinicRegisterDefaults } from "@/lib/clinicProfile";
+import { isDepositHold } from "@/lib/registerModes";
+import { openPrintPreview } from "@/lib/printJob";
+import { findPrintSetup, loadPrintSettings } from "@/lib/printSettings";
+import { buildSimpleSlipHtml } from "@/lib/simpleSlip";
+import { doctorDisplayName, pickClinicDoctor } from "@/lib/doctorName";
+import { openNhiCloudRx } from "@/lib/nhiCloud";
+import { registerHubAction } from "@/lib/registerHubActions";
+import { RefundDepositDialog } from "@/components/clinic/RefundDepositDialog";
+import { readLocalClinicBundle } from "@/lib/clinicProfile";
+import {
+  VisitSaveConfirmPanel,
+  buildVisitSaveDraft,
+  type VisitSaveDraft,
+} from "@/components/clinic/VisitSaveConfirmPanel";
+import { HIS, HIS_FONT, hisFontStyle } from "@/lib/hisTheme";
+import { compareClinicQueue, normalizeClock, nowClock, planQueueNumber, shiftQueueNumbers } from "@/lib/queueOrder";
+import { InsertNumberDialog } from "@/components/clinic/InsertNumberDialog";
+import { useEscLayer } from "@/hooks/useEscLayer";
+
+type ChartRailTab = "common" | "full" | "oral" | "waiting" | "history";
+
+/**
+ * 診療作業 — 頂部分層（F2 清單｜F3 看診｜F4 歷史｜F5 過敏｜F6 放射）；
+ * 底列依清單／看診切換快捷鍵組；清單全幅候診，看診左表單右側候診／歷史／常用。
+ */
+const PLACEHOLDER_CC = new Set(["門診掛號", "門診登記", "預掛", "預掛 門診掛號"]);
+
+function visibleComplaint(value: string | null | undefined): string {
+  const text = (value || "").trim();
+  return PLACEHOLDER_CC.has(text) ? "" : text;
+}
+
+function diagnosisKey(row: { nhiIcd10?: string; icd10?: string; text?: string }): string {
+  return (row.nhiIcd10 || row.icd10 || row.text || "").trim().toUpperCase();
+}
+
+function diagnosisTaken(
+  rows: { nhiIcd10?: string; icd10?: string; text?: string }[],
+  row: { nhiIcd10?: string; icd10?: string; text?: string },
+  except?: number,
+): boolean {
+  const key = diagnosisKey(row);
+  if (!key) return false;
+  return rows.some((item, index) => index !== except && diagnosisKey(item) === key);
+}
+
+/** 門診申報 d19–d23：一個主診斷、四個次診斷。 */
+const CLAIM_DX_LIMIT = 5;
+const CLAIM_DX_FULL =
+  "健保申報的診斷最多五個（主診斷加四個次診斷）。多出來的沒有寫進去。";
+const CLAIM_DX_SAVE =
+  "這筆看診的診斷超過五個。申報只有五格，請先刪到五個以內再存檔。";
+
+function takeDiagnosisSlots(
+  base: DiagnosisRow[],
+  incoming: DiagnosisRow[],
+): { accepted: DiagnosisRow[]; overflow: boolean; duplicateName: string } {
+  const accepted: DiagnosisRow[] = [];
+  let overflow = false;
+  let duplicateName = "";
+  for (const item of incoming) {
+    if (diagnosisTaken([...base, ...accepted], item)) {
+      duplicateName = item.text || item.nhiIcd10 || item.icd10 || "";
+      continue;
+    }
+    if (base.length + accepted.length >= CLAIM_DX_LIMIT) {
+      overflow = true;
+      break;
+    }
+    accepted.push({
+      ...item,
+      id: item.id || `dx-tmp-${Date.now()}-${base.length + accepted.length}`,
+    });
+  }
+  return { accepted, overflow, duplicateName };
+}
+
+function readEmrSeek(params: URLSearchParams): ClinicSession | null {
+  if (params.get("from") !== "emr" || !params.get("encounter")) return null;
+  const date = (params.get("date") || "").slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return null;
+  const shiftRaw = params.get("shift") || "";
+  const shift: ClinicSession["shift"] =
+    shiftRaw === "下午" || shiftRaw === "晚上" || shiftRaw === "上午" ? shiftRaw : "上午";
+  const prev = loadClinicSession();
+  return {
+    date,
+    shift,
+    pharmacist: params.get("pharmacist") || prev?.pharmacist || "",
+    dept: prev?.dept || lastClinicDept(),
+  };
+}
+
+export function ClinicOutpatientPage() {
+  const t = useI18n();
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const seekBoot = readEmrSeek(searchParams);
+  const {
+    prefs,
+    ccChips,
+    sections,
+    currentRxColumns,
+    defaultUsages,
+    queueColumns,
+    queueColumnKeys,
+  } = useDefaultUiConfig();
+  const { catalog } = useClinicCatalog();
+  const ws = useClinicWorkspace({
+    loadWorkspace: true,
+    initialDate: seekBoot?.date,
+    initialEncounterId: seekBoot ? searchParams.get("encounter") : null,
+  });
+  const {
+    apiMode,
+    loading,
+    error,
+    queue,
+    selectedEncounterId,
+    setSelectedEncounterId,
+    selected,
+    allergies,
+    diagnoses,
+    prevRx,
+    historyVisits,
+    ensureVisitDetail,
+    currentRx: apiCurrentRx,
+    patientResource,
+    ccFromWs,
+    lesionMedia,
+    clinicalProfile,
+    emptyCurrentRx,
+    cloneRxLines,
+    handleStatusChange,
+    persistChiefComplaint,
+    persistVitals,
+    persistVisit,
+    persistHistoryVisit,
+    refreshQueue,
+    readCardRegisterPatient,
+    submitRegisterEdit,
+    currentDate,
+    setCurrentDate,
+    queueHints,
+    vitalsFromWs,
+  } = ws;
+
+  const [queueSearch, setQueueSearch] = useState("");
+  const [queueFilter, setQueueFilter] = useState<QueueFilterId>("all");
+  const [registerBusy, setRegisterBusy] = useState(false);
+  const [lesionOpen, setLesionOpen] = useState(false);
+  const [lookOpen, setLookOpen] = useState(false);
+  const [referralOpen, setReferralOpen] = useState(false);
+  const [icInfoOpen, setIcInfoOpen] = useState(false);
+  const [sameDayOpen, setSameDayOpen] = useState(false);
+  const sameDayPassRef = useRef(false);
+  const [currentRxByEncounter, setCurrentRxByEncounter] = useState<Record<string, RxLine[]>>(
+    {},
+  );
+  const [selectedMediaId, setSelectedMediaId] = useState<string | null>(null);
+  const [ccText, setCcText] = useState("");
+  const [showDevPanels, setShowDevPanels] = useState(false);
+  const [localDxByEncounter, setLocalDxByEncounter] = useState<
+    Record<string, DiagnosisRow[]>
+  >({});
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [activeShortcutKey, setActiveShortcutKey] = useState<string | null>(null);
+  const [paletteOpen, setPaletteOpen] = useState(false);
+  const [clinicTab, setClinicTab] = useState<ClinicTab>(seekBoot ? "chart" : "list");
+  const [registerOptionsOpen, setRegisterOptionsOpen] = useState(false);
+  const [patientEditOpen, setPatientEditOpen] = useState(false);
+  const [certificateOpen, setCertificateOpen] = useState(false);
+  const [otherMenuOpen, setOtherMenuOpen] = useState(false);
+  const [chartRailTab, setChartRailTab] = useState<ChartRailTab>("waiting");
+  const [historyVisit, setHistoryVisit] = useState<HistoryVisit | null>(null);
+  const [saveLayerOpen, setSaveLayerOpen] = useState(false);
+  const [saveDraft, setSaveDraft] = useState<VisitSaveDraft>(() =>
+    buildVisitSaveDraft({ selected: null, diagnoses: [], currentRx: [] }),
+  );
+  const [saveCommitted, setSaveCommitted] = useState<Record<string, boolean>>({});
+  const [cardNote, setCardNote] = useState<string | null>(null);
+  const [printNote, setPrintNote] = useState<string | null>(null);
+  const [registerOpen, setRegisterOpen] = useState(false);
+  const [registerForm, setRegisterForm] = useState<RegisterEditForm>(() => emptyRegisterForm());
+  /** 掛號前確認存檔（F2 找人／F9 讀卡） */
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [insertAsk, setInsertAsk] = useState<{
+    gap: number;
+    tail: number;
+    go: (n: number) => void;
+  } | null>(null);
+  const [confirmForm, setConfirmForm] = useState<RegisterEditForm>(() => emptyRegisterForm());
+  const [finderOpen, setFinderOpen] = useState(false);
+  const [finderSeed, setFinderSeed] = useState("");
+  const queueSearchRef = useRef<HTMLInputElement>(null);
+  const [seqBusy, setSeqBusy] = useState(false);
+  const [seqNote, setSeqNote] = useState<string | null>(null);
+  const [registerError, setRegisterError] = useState<string | null>(null);
+  const [confirmError, setConfirmError] = useState<string | null>(null);
+  const [depositAsk, setDepositAsk] = useState<{
+    name: string;
+    deposit: string;
+    regFee: string;
+    date: string;
+  } | null>(null);
+  const [cardDiagnose, setCardDiagnose] = useState<CardFaultReport | null>(null);
+  const [chartFocus, setChartFocus] = useState<ChartEditFocus>("history");
+  const [dxQuery, setDxQuery] = useState("");
+  const [rxQuery, setRxQuery] = useState("");
+  const [selectedDxIndex, setSelectedDxIndex] = useState(0);
+  const [selectedRxIndex, setSelectedRxIndex] = useState(-1);
+  const [seekEnteredBanner, setSeekEnteredBanner] = useState<string | null>(null);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleteBusy, setDeleteBusy] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [stubId, setStubId] = useState<HisStubId | null>(null);
+  const [refundOpen, setRefundOpen] = useState(false);
+  const [session, setSession] = useState<ClinicSession | null>(() => seekBoot ?? loadClinicSession());
+  const [entered, setEntered] = useState(seekBoot != null);
+  const [gateOpen, setGateOpen] = useState(seekBoot == null);
+  const [chartVitals, setChartVitals] = useState<ChartVitals>(EMPTY_VITALS);
+  const [clockText, setClockText] = useState(() =>
+    new Date().toLocaleTimeString("zh-TW", { hour12: false }),
+  );
+  /**
+   * Screen-only edits until F9. For unfinished visits, ESC keeps a local draft
+   * (pause mark). For finished visits, ESC discards without writing.
+   */
+  const [apiRxOverlay, setApiRxOverlay] = useState<RxLine[] | null>(null);
+  const [apiDxOverlay, setApiDxOverlay] = useState<DiagnosisRow[] | null>(null);
+  const [visitDrafts, setVisitDrafts] = useState<
+    Record<string, { cc: string; dx: DiagnosisRow[]; rx: RxLine[] }>
+  >({});
+  const ccDirtyRef = useRef(false);
+  const chartDirtyRef = useRef(false);
+  const [leaveAsk, setLeaveAsk] = useState(false);
+  const leaveIntentRef = useRef<
+    | { kind: "list" }
+    | { kind: "open"; encounterId: string; opts?: { fromSeek?: boolean; label?: string } }
+    | null
+  >(null);
+  const leaveBypassRef = useRef(false);
+  const afterSaveLeaveRef = useRef<(() => void) | null>(null);
+
+  const entryShift = (e: (typeof queue)[number]) => {
+    if (e.shift === "上午" || e.shift === "下午" || e.shift === "晚上") return e.shift;
+    const timeLabel = e.slotTime ?? "";
+    const parts = timeLabel.split(":");
+    const hour = Number(parts[0]);
+    const minute = Number(parts[1]);
+    if (!Number.isFinite(hour)) return "";
+    const clock = new Date();
+    clock.setHours(hour, Number.isFinite(minute) ? minute : 0, 0, 0);
+    return shiftForClock(clock);
+  };
+
+  const shiftQueue = useMemo(() => {
+    return queue.filter((e) => {
+      if (!session?.shift) return true;
+      const sh = entryShift(e);
+      if (sh && sh !== session.shift) return false;
+      return true;
+    });
+  }, [queue, session?.shift]);
+
+  const filteredQueue = useMemo(() => {
+    return shiftQueue
+      .filter((e) => {
+        if (queueFilter === "waiting") return e.queueStatus === "waiting";
+        if (queueFilter === "finished") return e.queueStatus === "finished";
+        if (queueFilter === "hold") return e.queueStatus === "in_progress";
+        if (queueFilter === "er") return e.treatmentItem === "04" || /急診/.test(e.reasonText || "");
+        return true;
+      })
+      .filter((e) => {
+        const q = queueSearch.trim().toLowerCase();
+        if (!q) return true;
+        const blob = [e.patientDisplay, e.medicalNo, e.reasonText, String(e.queueNumber)]
+          .join(" ")
+          .toLowerCase();
+        return blob.includes(q);
+      })
+      .slice()
+      .sort(compareClinicQueue);
+  }, [shiftQueue, queueFilter, queueSearch]);
+
+  useEffect(() => {
+    if (!entered || shiftQueue.length === 0) return;
+    const seekId = searchParams.get("from") === "emr" ? searchParams.get("encounter") || "" : "";
+    if (seekId && queue.some((e) => e.encounterId === seekId)) {
+      if (selectedEncounterId !== seekId) setSelectedEncounterId(seekId);
+      const row = queue.find((e) => e.encounterId === seekId);
+      const sh = row ? entryShift(row) : "";
+      if ((sh === "上午" || sh === "下午" || sh === "晚上") && session?.shift !== sh) {
+        setSession((prev) => (prev ? { ...prev, shift: sh } : prev));
+      }
+      return;
+    }
+    const stillThere = shiftQueue.some((e) => e.encounterId === selectedEncounterId);
+    if (stillThere) return;
+    const last = shiftQueue.reduce((best, row) =>
+      (Number(row.queueNumber) || 0) >= (Number(best.queueNumber) || 0) ? row : best,
+    );
+    setSelectedEncounterId(last.encounterId);
+    requestAnimationFrame(() => queuePanelRef.current?.focus());
+  }, [entered, shiftQueue, selectedEncounterId, setSelectedEncounterId, searchParams, queue, session?.shift]);
+  const committedFpRef = useRef<Record<string, string>>({});
+
+  const queuePanelRef = useRef<HTMLElement>(null);
+  const mainPanelRef = useRef<HTMLElement>(null);
+  const historyPanelRef = useRef<HTMLDivElement>(null);
+  /** Ignore left-zone onFocus right after clicking 候診／歷史／內服 (unmount focus bounce). */
+  const railTabClickGuardRef = useRef(0);
+  const lesionSectionRef = useRef<HTMLElement>(null);
+  const commandFocusBump = useRef(0);
+
+  const mockCurrentRx =
+    (selectedEncounterId && currentRxByEncounter[selectedEncounterId]) ||
+    emptyCurrentRx();
+  const currentRxRaw = apiMode
+    ? (apiRxOverlay ?? apiCurrentRx ?? [])
+    : mockCurrentRx;
+  // Display names from MEDICAL.MAKING; never collapse same-NHI variants (e.g. BETAMT vs BETAT)
+  const currentRx = useMemo(
+    () => applyClinicDrugDisplayNames(currentRxRaw, catalog.drugs, catalog.usages),
+    [currentRxRaw, catalog.drugs, catalog.usages],
+  );
+  const displayHistoryVisits = useMemo(
+    () =>
+      historyVisits.map((v) => ({
+        ...v,
+        medications: applyClinicDrugDisplayNames(v.medications ?? [], catalog.drugs, catalog.usages),
+      })),
+    [historyVisits, catalog.drugs, catalog.usages],
+  );
+
+  const displayDiagnoses = apiMode
+    ? (apiDxOverlay ?? diagnoses)
+    : [
+        ...diagnoses,
+        ...(selectedEncounterId ? localDxByEncounter[selectedEncounterId] ?? [] : []),
+      ];
+  const dxListRef = useRef<DiagnosisRow[]>([]);
+  const dxQueueRef = useRef<Promise<void>>(Promise.resolve());
+  useEffect(() => {
+    const pending = dxListRef.current;
+    const visible = displayDiagnoses;
+    const pendingExtendsVisible =
+      pending.length > visible.length &&
+      visible.every((row, index) => diagnosisKey(row) === diagnosisKey(pending[index]));
+    if (pendingExtendsVisible) return;
+    dxListRef.current = visible;
+  }, [displayDiagnoses]);
+
+  const isList = clinicTab === "list";
+  const isChart = clinicTab === "chart";
+  const needsPatientTab =
+    clinicTab === "chart" || clinicTab === "history" || clinicTab === "alerts" || clinicTab === "radiology";
+
+  const visitFingerprint = JSON.stringify({
+    cc: ccText.trim(),
+    dx: displayDiagnoses.map((d) => `${d.icd10}|${d.text}`),
+    rx: currentRx.map((r) => `${r.nhiCode}|${r.sig}|${r.days}|${r.qty ?? 1}`),
+    vitals: chartVitals,
+  });
+  const saveLocked = Boolean(
+    selectedEncounterId &&
+      saveCommitted[selectedEncounterId] &&
+      committedFpRef.current[selectedEncounterId] === visitFingerprint,
+  );
+
+  useEffect(() => {
+    if (!selectedEncounterId) return;
+    if (!saveCommitted[selectedEncounterId]) return;
+    if (committedFpRef.current[selectedEncounterId] === visitFingerprint) return;
+    setSaveCommitted((prev) => ({ ...prev, [selectedEncounterId]: false }));
+  }, [selectedEncounterId, saveCommitted, visitFingerprint]);
+
+  const historyFontPx = prefs.historyFontSizePx ?? 15;
+  const allergyEmpty = prefs.allergyEmptyText ?? t.allergy.none;
+
+  // Reload edit surface only when switching encounter (not on workspace refresh)
+  useEffect(() => {
+    if (!selectedEncounterId) return;
+    const draft = visitDrafts[selectedEncounterId];
+    ccDirtyRef.current = false;
+    chartDirtyRef.current = false;
+    setSelectedMediaId(null);
+    setActionError(null);
+    setSelectedDxIndex(0);
+    setSelectedRxIndex(0);
+    if (draft) {
+      ccDirtyRef.current = true;
+      setCcText(draft.cc);
+      setApiDxOverlay(draft.dx);
+      setApiRxOverlay(draft.rx);
+      return;
+    }
+    setCcText("");
+    setApiRxOverlay(null);
+    setApiDxOverlay(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- restore draft once per encounter switch
+  }, [selectedEncounterId]);
+
+  useEffect(() => {
+    if (ccDirtyRef.current) return;
+    if (visitDrafts[selectedEncounterId || ""]) return;
+    const wsId = String((ws.encounterResource as { id?: string } | null)?.id || "");
+    if (selectedEncounterId && wsId && wsId !== selectedEncounterId) return;
+    setCcText(visibleComplaint(ccFromWs));
+  }, [ccFromWs, selectedEncounterId, visitDrafts, ws.encounterResource]);
+
+  useEffect(() => {
+    setSelectedMediaId(lesionMedia[lesionMedia.length - 1]?.id ?? null);
+  }, [selectedEncounterId, lesionMedia]);
+
+  useEffect(() => {
+    const w =
+      vitalsFromWs.weight ||
+      (selected?.weight ? String(selected.weight).replace(/\s*kg/i, "") : "") ||
+      "0.0";
+    const next = {
+      ...EMPTY_VITALS,
+      weight: w,
+      temperature: vitalsFromWs.temperature || "0.0",
+      bpSys: vitalsFromWs.bpSys || "0",
+      bpDia: vitalsFromWs.bpDia || "0",
+    };
+    setChartVitals((prev) =>
+      prev.weight === next.weight &&
+      prev.temperature === next.temperature &&
+      prev.bpSys === next.bpSys &&
+      prev.bpDia === next.bpDia
+        ? prev
+        : next,
+    );
+  }, [selectedEncounterId, vitalsFromWs, selected?.weight]);
+
+  useEffect(() => {
+    const id = window.setInterval(() => {
+      setClockText(new Date().toLocaleTimeString("zh-TW", { hour12: false }));
+    }, 1000);
+    return () => window.clearInterval(id);
+  }, []);
+
+  const runAction = useCallback(async (fn: () => Promise<void>) => {
+    setSaving(true);
+    setActionError(null);
+    try {
+      await fn();
+    } catch (e) {
+      setActionError(e instanceof Error ? e.message : "操作失敗");
+      console.error(e);
+    } finally {
+      setSaving(false);
+    }
+  }, []);
+
+  const setMockCurrentRx = useCallback(
+    (lines: RxLine[]) => {
+      if (!selectedEncounterId) return;
+      setCurrentRxByEncounter((prev) => ({ ...prev, [selectedEncounterId]: lines }));
+    },
+    [selectedEncounterId],
+  );
+
+  const applyQtyPadToken = useCallback(
+    (token: string) => {
+      if (!currentRx.length) return;
+      const idx =
+        selectedRxIndex >= 0 && selectedRxIndex < currentRx.length ? selectedRxIndex : 0;
+      const frac: Record<string, number> = { "1/2": 0.5, "1/3": 1 / 3, "1/4": 0.25 };
+      const isLetter = /^[A-M]$/i.test(token);
+      const qtyVal =
+        token in frac ? frac[token] : /^\d+(\.\d+)?$/.test(token) ? Number(token) : null;
+      const next = currentRx.map((line, i) => {
+        if (i !== idx) return line;
+        if (isLetter) {
+          return { ...line, memo: token.toUpperCase() };
+        }
+        if (qtyVal != null) {
+          return { ...line, qty: Math.round(qtyVal * 100) / 100 };
+        }
+        return line;
+      });
+      if (apiMode) setApiRxOverlay(next);
+      else setMockCurrentRx(next);
+      chartDirtyRef.current = true;
+      setChartFocus("rx");
+      setChartRailTab((prev) =>
+        prev === "waiting" || prev === "history" ? "common" : prev,
+      );
+    },
+    [apiMode, currentRx, selectedRxIndex, setMockCurrentRx],
+  );
+
+  const markChartDirty = useCallback(() => {
+    chartDirtyRef.current = true;
+  }, []);
+
+  const placeDiagnosisRows = useCallback(
+    (incoming: DiagnosisRow[], note?: string): true | string => {
+      const base = dxListRef.current;
+      const { accepted, overflow, duplicateName } = takeDiagnosisSlots(base, incoming);
+      if (!accepted.length) {
+        if (overflow) {
+          setActionError(CLAIM_DX_FULL);
+          return CLAIM_DX_FULL;
+        }
+        if (duplicateName) {
+          const msg = `病名「${duplicateName}」已經有了，同一筆看診不重複。`;
+          setActionError(msg);
+          return msg;
+        }
+        return "沒有寫進病名";
+      }
+      const next = [...base, ...accepted];
+      dxListRef.current = next;
+      if (apiMode) setApiDxOverlay(next);
+      else if (selectedEncounterId) {
+        const serverCount = diagnoses.length;
+        setLocalDxByEncounter((prev) => ({
+          ...prev,
+          [selectedEncounterId]: next.slice(serverCount),
+        }));
+      }
+      if (note) setCcText((prev) => appendChiefNotes(prev, [note]));
+      return true;
+    },
+    [apiMode, diagnoses.length, selectedEncounterId],
+  );
+
+  const addDiagnosis = useCallback(
+    (row: DiagnosisRow): true | string => {
+      markChartDirty();
+      const code = (row.icd10 || row.nhiIcd10 || "").trim();
+      if (!readyIcd9(code)) {
+        return placeDiagnosisRows([row]);
+      }
+      const job = dxQueueRef.current.then(async () => {
+        let rows = [row];
+        let note = "";
+        try {
+          const resolved = await resolveIcd9Row(row);
+          if (resolved.choices.length > 1) {
+            const msg = "這個 ICD-9 會對到兩個 ICD-10，請雙擊病名勾一個或兩個再寫入。";
+            setActionError(msg);
+            return;
+          }
+          rows = resolved.rows;
+          note = resolved.note;
+        } catch {
+          rows = [row];
+        }
+        placeDiagnosisRows(rows, note);
+      });
+      dxQueueRef.current = job.then(
+        () => undefined,
+        () => undefined,
+      );
+      return true;
+    },
+    [markChartDirty, placeDiagnosisRows],
+  );
+
+  const changeDiagnosisAt = useCallback(
+    (index: number, row: DiagnosisRow): true | string => {
+      markChartDirty();
+      const base = apiMode
+        ? (apiDxOverlay ?? diagnoses)
+        : [
+            ...diagnoses,
+            ...(selectedEncounterId ? localDxByEncounter[selectedEncounterId] ?? [] : []),
+          ];
+      const next = base.map((d, i) => (i === index ? { ...d, ...row, id: row.id || d.id } : d));
+      if (diagnosisTaken(base, next[index], index)) {
+        const msg = `病名「${row.text || row.nhiIcd10 || row.icd10}」已經有了，同一筆看診不重複。`;
+        setActionError(msg);
+        return msg;
+      }
+      dxListRef.current = next;
+      if (apiMode) {
+        setApiDxOverlay(next);
+        return true;
+      }
+      if (!selectedEncounterId) return "沒有選到這筆看診";
+      const localOnly = next.slice(diagnoses.length);
+      setLocalDxByEncounter((prev) => ({ ...prev, [selectedEncounterId]: localOnly }));
+      return true;
+    },
+    [
+      apiMode,
+      apiDxOverlay,
+      diagnoses,
+      localDxByEncounter,
+      markChartDirty,
+      selectedEncounterId,
+    ],
+  );
+
+  const removeDiagnosisAt = useCallback(
+    (index: number) => {
+      markChartDirty();
+      const base = apiMode
+        ? (apiDxOverlay ?? diagnoses)
+        : [
+            ...diagnoses,
+            ...(selectedEncounterId ? localDxByEncounter[selectedEncounterId] ?? [] : []),
+          ];
+      const next = base.filter((_, i) => i !== index);
+      dxListRef.current = next;
+      setSelectedDxIndex(Math.max(0, Math.min(index, Math.max(next.length - 1, 0))));
+      if (apiMode) {
+        setApiDxOverlay(next);
+        return;
+      }
+      if (!selectedEncounterId) return;
+      const localOnly = next.slice(Math.min(diagnoses.length, next.length));
+      setLocalDxByEncounter((prev) => ({ ...prev, [selectedEncounterId]: localOnly }));
+    },
+    [
+      apiMode,
+      apiDxOverlay,
+      diagnoses,
+      localDxByEncounter,
+      markChartDirty,
+      selectedEncounterId,
+    ],
+  );
+
+  const addRxLines = useCallback(
+    (lines: RxLine[]) => {
+      if (!lines.length) return;
+
+      for (const line of lines) {
+        const collision = allergies.find((a) => {
+          const sub = (a.substance || "").toLowerCase().trim();
+          const txt = (a.text || "").toLowerCase().trim();
+          const name = (line.name || "").toLowerCase().trim();
+          const code = (line.nhiCode || "").toLowerCase().trim();
+          if (sub && (name.includes(sub) || sub.includes(name) || code === sub)) return true;
+          if (txt && (name.includes(txt) || txt.includes(name))) return true;
+          return false;
+        });
+
+        if (collision) {
+          if (collision.level === "high") {
+            alert(
+              `\u26a0\ufe0f \u81e8\u5e8a\u98a8\u63a7\u786c\u6027\u963b\u65b7\uff01\n\n\u85e5\u7269\u3010${line.name}\u3011\u8207\u75c5\u60a3\u7684\u91cd\u5ea6\u904e\u654f\u539f\u3010${collision.text}\u3011\u56b4\u91cd\u885d\u7a81\uff0c\u7cfb\u7d71\u5df2\u5f37\u5236\u9396\u6b7b\u8a72\u8655\u65b9\uff01`,
+            );
+            return;
+          }
+          if (
+            !confirm(
+              `\u26a0\ufe0f \u81e8\u5e8a\u904e\u654f\u8b66\u544a\uff01\n\n\u85e5\u54c1\u3010${line.name}\u3011\u8207\u75c5\u60a3\u7684\u904e\u654f\u6b77\u53f2\u3010${collision.text}\u3011\u7591\u4f3c\u5b58\u5728\u885d\u7a81\u3002\n\n\u60a8\u78ba\u5b9a\u4ecd\u8981\u958b\u7acb\u6b64\u8655\u65b9\u55ce\uff1f`,
+            )
+          ) {
+            return;
+          }
+        }
+      }
+
+      markChartDirty();
+      if (apiMode) {
+        const base = apiRxOverlay ?? apiCurrentRx ?? [];
+        const cloned = cloneRxLines(lines);
+        // 同一筆可以兩條一樣的藥（例如一條健保、一條自費）
+        setApiRxOverlay([...base, ...cloned]);
+        return;
+      }
+      setMockCurrentRx([...mockCurrentRx, ...lines]);
+    },
+    [
+      apiMode,
+      apiRxOverlay,
+      apiCurrentRx,
+      cloneRxLines,
+      markChartDirty,
+      mockCurrentRx,
+      setMockCurrentRx,
+      allergies,
+    ],
+  );
+
+  const saveCc = useCallback(() => {
+    if (!apiMode || !ccText.trim()) return;
+    const assessment = displayDiagnoses[0]?.text;
+    runAction(() => persistChiefComplaint(ccText, assessment));
+  }, [apiMode, ccText, displayDiagnoses, persistChiefComplaint, runAction]);
+
+  const openSaveLayer = useCallback(async () => {
+    if (!isChart || !selectedEncounterId) {
+      setActionError("請先 F4／Enter 進入看診再 F9 存檔");
+      return;
+    }
+    if (displayDiagnoses.length > CLAIM_DX_LIMIT) {
+      setActionError(CLAIM_DX_SAVE);
+      return;
+    }
+    if (saveLocked) return;
+    const defaults = loadClinicRegisterDefaults();
+    let doctorLabel = doctorDisplayName(selected?.doctorName, selected?.doctorId);
+    let doctorId = selected?.doctorId || defaults.defaultDoctorId || "";
+    if (!doctorLabel) {
+      try {
+        const staff = await fetchStaff();
+        const doc =
+          (doctorId ? staff.find((s) => s.id === doctorId) : undefined) ||
+          staff.find((s) => s.id === defaults.defaultDoctorId) ||
+          pickClinicDoctor(staff);
+        if (doc) {
+          doctorId = doc.id;
+          doctorLabel = doctorDisplayName(doc.name, doc.id) || doc.name;
+        }
+      } catch {
+        doctorLabel = doctorId;
+      }
+    }
+    setSaveDraft(
+      buildVisitSaveDraft({
+        selected,
+        diagnoses: displayDiagnoses,
+        currentRx,
+        doctor: doctorLabel,
+        doctorId,
+        consultFeeDefault: defaults.consultFeeDefault,
+      }),
+    );
+    setCardNote(null);
+    setSaveLayerOpen(true);
+  }, [isChart, selectedEncounterId, saveLocked, selected, displayDiagnoses, currentRx]);
+
+  const confirmSave = useCallback(async () => {
+    if (!selectedEncounterId || saveLocked) return;
+    if (displayDiagnoses.length > CLAIM_DX_LIMIT) {
+      setActionError(CLAIM_DX_SAVE);
+      return;
+    }
+    setSaving(true);
+    setActionError(null);
+    setCardNote(null);
+    let hisOk = false;
+    try {
+      if (apiMode) {
+        let doctorId = selected?.doctorId || loadClinicRegisterDefaults().defaultDoctorId || undefined;
+        if (!doctorId) {
+          try {
+            const doc = pickClinicDoctor(await fetchStaff());
+            if (doc) doctorId = doc.id;
+          } catch {
+            doctorId = undefined;
+          }
+        }
+        await patchEncounterReg(selectedEncounterId, {
+          patientId: selected?.patientId || "",
+          caseNo: saveDraft.caseNo !== "—" ? saveDraft.caseNo : undefined,
+          copayCode: saveDraft.copayCode !== "—" ? saveDraft.copayCode : undefined,
+          payType: saveDraft.payType !== "—" ? saveDraft.payType : undefined,
+          dispense: saveDraft.dispense !== "—" ? saveDraft.dispense : undefined,
+          treatSeq: saveDraft.treatSeq !== "—" ? saveDraft.treatSeq : undefined,
+          pharmacist: selected?.pharmacist,
+          doctorId,
+          doctorName: doctorDisplayName(saveDraft.doctor, doctorId) || undefined,
+          regFee: saveDraft.regFee !== "—" ? saveDraft.regFee : undefined,
+          drugFee: saveDraft.drugFee !== "—" ? saveDraft.drugFee : undefined,
+          materialFee: saveDraft.materialFee !== "—" ? saveDraft.materialFee : undefined,
+          consultFee: saveDraft.consultFee !== "—" ? saveDraft.consultFee : undefined,
+          burdenFee: saveDraft.burden !== "—" ? saveDraft.burden : undefined,
+          copayAmt: saveDraft.burden !== "—" ? saveDraft.burden : undefined,
+        });
+        let ccForSave = ccText;
+        let dxForSave = displayDiagnoses;
+        try {
+          const mapped = await mapDiagnosisList(displayDiagnoses);
+          if (mapped.needsChoice) {
+            setActionError("\u6709\u8a3a\u65b7\u5f9e\u4e00\u500b ICD-9 \u5c0d\u5230\u5169\u500b ICD-10\uff0c\u8acb\u96d9\u64ca\u90a3\u4e00\u5217\u52fe\u4e00\u500b\u6216\u5169\u500b\u518d\u5b58\u6a94\u3002");
+            setSaving(false);
+            return;
+          }
+          ccForSave = appendChiefNotes(ccText, mapped.notes);
+          dxForSave = mapped.rows;
+          if (dxForSave.length > CLAIM_DX_LIMIT) {
+            setActionError(CLAIM_DX_SAVE);
+            setSaving(false);
+            return;
+          }
+          if (ccForSave !== ccText) setCcText(ccForSave);
+          const changed =
+            mapped.rows.length !== displayDiagnoses.length ||
+            mapped.rows.some((row, i) => row.icd10 !== displayDiagnoses[i]?.icd10);
+          if (changed) setApiDxOverlay(dxForSave);
+        } catch {
+          ccForSave = ccText;
+          dxForSave = displayDiagnoses;
+        }
+        await persistVisit(ccForSave, dxForSave, currentRx);
+        try {
+          await persistVitals({
+            weight: chartVitals.weight,
+            temperature: chartVitals.temperature,
+            bpSys: chartVitals.bpSys,
+            bpDia: chartVitals.bpDia,
+          });
+        } catch {
+          /* vitals best-effort; SOAP/Rx already saved */
+        }
+        hisOk = true;
+        try {
+          const ref = await replyReferral({
+            encounterId: selectedEncounterId,
+            doctorId,
+            diagnosis: (dxForSave[0]?.icd10 || dxForSave[0]?.nhiIcd10 || "").trim(),
+            note: ccForSave.trim(),
+            expectReferral: saveDraft.caseNo === "\u8f49",
+          });
+          if (ref.uploaded) {
+            setCardNote(`\u5df2\u4e0a\u50b3\u8f49\u8a3a\u56de\u5fa9\uff0c\u5e8f\u865f ${ref.serial}`);
+          } else if (!ref.skipped && ref.reason) {
+            setActionError(ref.reason);
+          }
+        } catch (refErr) {
+          setActionError(refErr instanceof Error ? refErr.message : "\u8f49\u8a3a\u56de\u5fa9\u6c92\u9001\u51fa");
+        }
+      }
+      if (saveDraft.writeCard) {
+        if (!apiMode) {
+          throw new Error("寫雲端需 API 與讀卡機／VPN，未假裝寫入。");
+        }
+        const wr = await writeVisitToCard({
+          encounterId: selectedEncounterId,
+          writeDx: saveDraft.writeDx,
+          writeOrders: saveDraft.writeOrders,
+        });
+        if (wr.written && selected?.patientId) {
+          try {
+            await patchEncounterReg(selectedEncounterId, {
+              patientId: selected.patientId,
+              cardWritten: true,
+            });
+          } catch {
+            /* 清單圈記失敗不推翻已寫入的雲端 */
+          }
+        }
+      }
+      if (apiMode) {
+        try {
+          await handleStatusChange(selectedEncounterId, "finished");
+        } catch {
+          /* status update best-effort */
+        }
+      }
+      if (saveDraft.printRx) {
+        const clinic = readLocalClinicBundle();
+        setPrintNote("\u5df2\u958b\u555f\u9810\u89bd\u3002\u78ba\u5b9a\u5f8c\u518d\u6309\u9810\u89bd\u4e0a\u7684\u5217\u5370\u3002");
+        void openPrintPreview({
+          kind: "bag",
+          title: "\u85e5\u888b\uff0f\u8655\u65b9\u6458\u8981",
+          clinicName: clinic.profile.clinicName,
+          patientName: selected?.patientDisplay,
+          medicalNo: selected?.medicalNo,
+          lines: [
+            { label: "\u91ab\u5e2b", value: saveDraft.doctor },
+            { label: "\u5929\u6578", value: saveDraft.rxDays },
+            { label: "\u639b\u865f\u8cbb", value: saveDraft.regFee },
+            { label: "\u85e5\u8cbb", value: saveDraft.drugFee },
+            { label: "\u8a3a\u5bdf\u8cbb", value: saveDraft.consultFee },
+          ],
+          bodyHtml: currentRx
+            .map((r) => `${r.nhiCode || ""} ${r.name} ${r.sig} ${r.days}\u5929 x${r.qty ?? 1}`)
+            .join("\n"),
+        })
+          .then((result) => {
+            setPrintNote(result.printed ? `\u5df2\u9001\u5230 ${result.printer}` : "\u9810\u89bd\u5df2\u95dc\u9589\uff0c\u5c1a\u672a\u9001\u51fa\u3002");
+          })
+          .catch((err: unknown) => {
+            setPrintNote(err instanceof Error ? err.message : "\u9001\u5230\u5370\u8868\u6a5f\u5931\u6557");
+          });
+      }
+      committedFpRef.current[selectedEncounterId] = visitFingerprint;
+      setSaveCommitted((prev) => ({ ...prev, [selectedEncounterId]: true }));
+      const leaveAfter = afterSaveLeaveRef.current;
+      afterSaveLeaveRef.current = null;
+      if (leaveAfter) leaveAfter();
+      setVisitDrafts((prev) => {
+        if (!prev[selectedEncounterId]) return prev;
+        const next = { ...prev };
+        delete next[selectedEncounterId];
+        return next;
+      });
+      setApiRxOverlay(null);
+      setApiDxOverlay(null);
+      ccDirtyRef.current = false;
+      chartDirtyRef.current = false;
+    } catch (e) {
+      const raw = e instanceof Error ? e.message : "存檔失敗";
+      const msg = hisOk ? `病歷已寫入本機。${raw}` : raw;
+      setCardNote(msg);
+      setActionError(msg);
+    } finally {
+      setSaving(false);
+    }
+  }, [
+    selectedEncounterId,
+    saveLocked,
+    apiMode,
+    persistVisit,
+    persistVitals,
+    chartVitals,
+    ccText,
+    displayDiagnoses,
+    currentRx,
+    saveDraft,
+    visitFingerprint,
+    selected,
+    handleStatusChange,
+  ]);
+
+  const printVisitReceipt = useCallback(() => {
+    const clinic = readLocalClinicBundle();
+    const setup = findPrintSetup(loadPrintSettings(), "simple");
+    const profile = clinic.profile;
+    setPrintNote("\u5df2\u958b\u555f\u9810\u89bd\u3002\u78ba\u5b9a\u5f8c\u518d\u6309\u9810\u89bd\u4e0a\u7684\u5217\u5370\u3002");
+    void openPrintPreview({
+      kind: "receipt",
+      layout: "simple-split",
+      setupId: "simple",
+      title: "\u7c21\u5f0f\u4ea4\u4ed8\u8655\u65b9\u7c3d",
+      bodyHtml: buildSimpleSlipHtml({
+        medicalNo: selected?.medicalNo || "",
+        name: selected?.patientDisplay || "",
+        sex: selected?.sex || selected?.ageSex || "",
+        idNo: selected?.idNo || selected?.id || "",
+        birthday: selected?.birthday || "",
+        age: selected?.age || "",
+        visitDate: currentDate,
+        dept: saveDraft.dept || profile.mainDept || "",
+        caseNo: saveDraft.caseNo,
+        cardNo: saveDraft.cardNo,
+        doctor: saveDraft.doctor,
+        pharmacist: selected?.pharmacist || session?.pharmacist || "",
+        chief: ccText,
+        diagnoses: displayDiagnoses,
+        drugs: currentRx,
+        room: selected?.room || "",
+        queueNo: selected ? String(selected.queueNumber) : "",
+        deposit: selected?.deposit || "",
+        regFee: saveDraft.regFee,
+        burden: saveDraft.burden,
+        selfPay: "",
+        clinicName: profile.clinicName,
+        address: profile.address,
+        clinicCode: profile.clinicCode,
+        phone: profile.phone,
+        dispenseDate: currentDate,
+        pharmacy: saveDraft.dispense || "\u672c\u9662\u6240",
+        consultFee: saveDraft.consultFee,
+        drugFee: saveDraft.drugFee,
+        materialFee: saveDraft.materialFee,
+        footer: setup.footer,
+      }),
+      lines: [],
+    })
+      .then((result) => {
+        setPrintNote(
+          result.printed ? `\u5df2\u9001\u5230 ${result.printer}` : "\u9810\u89bd\u5df2\u95dc\u9589\uff0c\u5c1a\u672a\u9001\u51fa\u3002",
+        );
+      })
+      .catch((err: unknown) => {
+        const msg = err instanceof Error ? err.message : "\u9001\u5230\u5370\u8868\u6a5f\u5931\u6557";
+        setPrintNote(msg);
+      });
+  }, [currentDate, saveDraft, selected, ccText, displayDiagnoses, currentRx, session?.pharmacist]);
+
+  const onF9 = useCallback(() => {
+    if (saveLocked) return;
+    if (!saveLayerOpen) {
+      void openSaveLayer();
+      return;
+    }
+    void confirmSave();
+  }, [saveLocked, saveLayerOpen, openSaveLayer, confirmSave]);
+
+  const dittoRx = useCallback(
+    (lines: RxLine[]) => {
+      if (!lines.length) return;
+      addRxLines(cloneRxLines(lines));
+    },
+    [addRxLines, cloneRxLines],
+  );
+
+  const dittoCc = useCallback(
+    (text: string, _visitDate: string, force?: boolean) => {
+      if (!force && !prefs.dittoCc) return;
+      const copied = text.trim();
+      if (!copied) return;
+      ccDirtyRef.current = true;
+      chartDirtyRef.current = true;
+      setCcText((prev) => (prev ? `${prev} ${copied}` : copied));
+    },
+    [prefs.dittoCc],
+  );
+
+  const dittoDx = useCallback(
+    (rows: DiagnosisRow[], force?: boolean) => {
+      if (!force && !prefs.dittoDx) return;
+      for (const row of rows) addDiagnosis(row);
+    },
+    [addDiagnosis, prefs.dittoDx],
+  );
+
+  const dittoVisit = useCallback(
+    (visit: HistoryVisit) => {
+      dittoCc(visit.chiefComplaint, visit.visitDate);
+      dittoDx(visit.diagnoses);
+      dittoRx(visit.medications);
+    },
+    [dittoCc, dittoDx, dittoRx],
+  );
+
+  const transferVisit = useCallback(
+    (visit: HistoryVisit) => {
+      dittoCc(visit.chiefComplaint, visit.visitDate, true);
+      dittoDx(visit.diagnoses, true);
+      dittoRx(visit.medications);
+    },
+    [dittoCc, dittoDx, dittoRx],
+  );
+
+  const transferVisitNoCc = useCallback(
+    (visit: HistoryVisit) => {
+      dittoDx(visit.diagnoses, true);
+      dittoRx(visit.medications);
+    },
+    [dittoDx, dittoRx],
+  );
+
+  const copyPrevRx = useCallback(() => {
+    dittoRx(historyVisit?.medications?.length ? historyVisit.medications : prevRx);
+  }, [dittoRx, historyVisit, prevRx]);
+
+  const barItems = useMemo(
+    () =>
+      isList
+        ? CLINIC_LIST_SHORTCUT_BAR
+        : CLINIC_CHART_SHORTCUT_BAR.filter((item) => item.key === "F9"),
+    [isList],
+  );
+
+  const clearChartOverlays = useCallback(() => {
+    setLesionOpen(false);
+    setLookOpen(false);
+    setPaletteOpen(false);
+    setSaveLayerOpen(false);
+    setOtherMenuOpen(false);
+  }, []);
+
+  /** Left zone click -> right rail shows matching picker (YiSheng parity) */
+  const activateChartZone = useCallback((zone: ChartEditFocus) => {
+    setChartFocus(zone);
+    if (Date.now() < railTabClickGuardRef.current) return;
+    if (zone === "cc" || zone === "dx" || zone === "rx") {
+      setChartRailTab((prev) => {
+        // 候診／歷史：點左欄才回到常用選單
+        if (prev === "waiting" || prev === "history") return "common";
+        // 內服只對處置區；點主訴／病名時退回常用（對齊醫聖）
+        if (prev === "oral" && zone !== "rx") return "common";
+        return prev;
+      });
+    }
+  }, []);
+
+  const openChart = useCallback(
+    (encounterId: string, opts?: { fromSeek?: boolean; label?: string }) => {
+      if (leaveBypassRef.current) {
+        leaveBypassRef.current = false;
+      } else if (
+        selectedEncounterId &&
+        encounterId !== selectedEncounterId &&
+        (chartDirtyRef.current || ccDirtyRef.current)
+      ) {
+        const cur = queue.find((e) => e.encounterId === selectedEncounterId);
+        const saved =
+          cur?.queueStatus === "finished" ||
+          cur?.queueStatus === "no_show" ||
+          Boolean(committedFpRef.current[selectedEncounterId]);
+        if (saved) {
+          leaveIntentRef.current = { kind: "open", encounterId, opts };
+          setLeaveAsk(true);
+          return;
+        }
+      }
+      const entry = queue.find((e) => e.encounterId === encounterId);
+      const finished =
+        entry?.queueStatus === "finished" || entry?.queueStatus === "no_show";
+      const draft = visitDrafts[encounterId];
+
+      setSelectedEncounterId(encounterId);
+      setClinicTab("chart");
+      // Default right rail: waiting/family (YiSheng)
+      setChartRailTab(opts?.fromSeek ? "common" : "waiting");
+      setChartFocus(opts?.fromSeek ? "rx" : "cc");
+      setDxQuery("");
+      setRxQuery("");
+      setSelectedDxIndex(0);
+      setSelectedRxIndex(-1);
+      commandFocusBump.current += 1;
+      chartDirtyRef.current = false;
+
+      if (finished) {
+        // Re-open saved visit: always server truth until F9
+        setVisitDrafts((prev) => {
+          if (!prev[encounterId]) return prev;
+          const next = { ...prev };
+          delete next[encounterId];
+          return next;
+        });
+        setApiRxOverlay(null);
+        setApiDxOverlay(null);
+        ccDirtyRef.current = false;
+      } else if (draft) {
+        ccDirtyRef.current = true;
+        setCcText(draft.cc);
+        setApiDxOverlay(draft.dx);
+        setApiRxOverlay(draft.rx);
+      }
+
+      if (opts?.fromSeek) {
+        setSeekEnteredBanner(
+          opts.label ||
+            "\u8abf\u95b1\u9032\u5165\uff1a\u53ef\u589e\u522a\u8655\u65b9\u5f8c F9 \u5b58\u6a94\uff08\u8cc7\u6599\u5beb\u5165\u5f71\u5b50\u5eab\uff0fFHIR\uff09",
+        );
+      } else {
+        setSeekEnteredBanner(null);
+      }
+    },
+    [queue, setSelectedEncounterId, visitDrafts, selectedEncounterId],
+  );
+
+  const closeChartNow = useCallback(
+    (discardEdits: boolean) => {
+    const eid = selectedEncounterId;
+    const status = selected?.queueStatus;
+    const finished = status === "finished" || status === "no_show";
+    const dirty = chartDirtyRef.current || ccDirtyRef.current;
+
+    if (eid) {
+      if (discardEdits || finished) {
+        // Already saved: discard uncommitted edits (YiSheng)
+        setVisitDrafts((prev) => {
+          if (!prev[eid]) return prev;
+          const next = { ...prev };
+          delete next[eid];
+          return next;
+        });
+        setApiRxOverlay(null);
+        setApiDxOverlay(null);
+        ccDirtyRef.current = false;
+        chartDirtyRef.current = false;
+      } else if (dirty) {
+        // Not yet F9-saved: keep screen draft + pause mark
+        setVisitDrafts((prev) => ({
+          ...prev,
+          [eid]: {
+            cc: ccText,
+            dx: displayDiagnoses,
+            rx: currentRx,
+          },
+        }));
+        void handleStatusChange(eid, "in_progress").then(() => refreshQueue());
+      }
+    }
+
+    setSeekEnteredBanner(null);
+    clearChartOverlays();
+    if (searchParams.get("from") === "emr") {
+      navigate("/emr-lookup");
+      return;
+    }
+    setClinicTab("list");
+    requestAnimationFrame(() => queuePanelRef.current?.focus());
+    },
+  [
+    selectedEncounterId,
+    selected?.queueStatus,
+    ccText,
+    displayDiagnoses,
+    currentRx,
+    handleStatusChange,
+    refreshQueue,
+    clearChartOverlays,
+    navigate,
+    searchParams,
+  ]);
+
+  const closeChart = useCallback(() => {
+    const eid = selectedEncounterId;
+    const saved =
+      selected?.queueStatus === "finished" ||
+      selected?.queueStatus === "no_show" ||
+      Boolean(eid && committedFpRef.current[eid]);
+    const dirty = chartDirtyRef.current || ccDirtyRef.current;
+    if (eid && saved && dirty) {
+      leaveIntentRef.current = { kind: "list" };
+      setLeaveAsk(true);
+      return;
+    }
+    closeChartNow(false);
+  }, [selectedEncounterId, selected?.queueStatus, closeChartNow]);
+
+  const runLeaveIntent = useCallback(
+    (discard: boolean) => {
+      const intent = leaveIntentRef.current;
+      leaveIntentRef.current = null;
+      setLeaveAsk(false);
+      if (intent?.kind === "open") {
+        if (discard && selectedEncounterId) {
+          setVisitDrafts((prev) => {
+            if (!prev[selectedEncounterId]) return prev;
+            const next = { ...prev };
+            delete next[selectedEncounterId];
+            return next;
+          });
+          setApiRxOverlay(null);
+          setApiDxOverlay(null);
+          ccDirtyRef.current = false;
+          chartDirtyRef.current = false;
+        }
+        leaveBypassRef.current = true;
+        openChart(intent.encounterId, intent.opts);
+        return;
+      }
+      closeChartNow(discard);
+    },
+    [selectedEncounterId, openChart, closeChartNow],
+  );
+
+  const handleClinicTabChange = useCallback(
+    (tab: ClinicTab) => {
+      if (tab !== "list" && !selectedEncounterId) {
+        setActionError("請先在清單選一筆病患");
+        return;
+      }
+      setActionError(null);
+      if (tab === "list") {
+        closeChart();
+        return;
+      }
+      setClinicTab(tab);
+      if (tab === "chart") {
+        setChartRailTab("waiting");
+      }
+    },
+    [selectedEncounterId, closeChart],
+  );
+
+  const fillConfirmFromCard = useCallback(async () => {
+    if (!apiMode) throw new Error("需 API 模式");
+    setCardDiagnose(null);
+    const res = await readCardRegisterPatient();
+    setConfirmForm((prev) => ({
+      ...prev,
+      patientId: res.patientId,
+      idNo: res.validation?.idNo ?? prev.idNo,
+      birthday: res.validation?.birthdayRoc ?? prev.birthday,
+      sex: res.validation?.sex ?? prev.sex,
+      patientName: res.validation?.patientName || prev.patientName,
+      cardId: res.validation?.cardId ?? prev.cardId,
+      icException: "ic",
+      pharmacist: prev.pharmacist || session?.pharmacist || lastPharmacist(),
+    }));
+    if (res.cardBridgeNote) setSeqNote(res.cardBridgeNote);
+  }, [apiMode, readCardRegisterPatient, session]);
+
+  /** F3：編輯已掛一筆 */
+  const openRegisterDialog = useCallback(
+    (seed?: Partial<RegisterEditForm>) => {
+      setRegisterError(null);
+      setSeqNote(null);
+      setCardDiagnose(null);
+      const next = { ...emptyRegisterForm(), ...seed };
+      next.pharmacist = seed?.pharmacist || session?.pharmacist || lastPharmacist();
+      setRegisterForm(next);
+      setRegisterOpen(true);
+    },
+    [session],
+  );
+
+  const openConfirmFromSeed = useCallback(
+    (seed: Partial<RegisterEditForm>) => {
+      setConfirmError(null);
+      setSeqNote(null);
+      setCardDiagnose(null);
+      const next = { ...emptyRegisterForm(), ...seed };
+      next.pharmacist = seed.pharmacist || session?.pharmacist || lastPharmacist();
+      if (session?.shift) next.shift = session.shift;
+      if (!seed.visitClock) next.visitClock = nowClock();
+      setConfirmForm(next);
+      setConfirmOpen(true);
+    },
+    [session],
+  );
+
+  /** F9 讀卡成功後，有空號先問要不要插入，再進存檔。 */
+  const offerQueueNumber = useCallback(
+    (go: (n: number) => void) => {
+      const shift = session?.shift || "";
+      const plan = planQueueNumber(shiftQueueNumbers(queue, shift));
+      if (plan.contiguous) go(plan.next);
+      else setInsertAsk({ gap: plan.gap, tail: plan.tail, go });
+    },
+    [queue, session?.shift],
+  );
+
+  const answerInsert = (yes: boolean) => {
+    const cur = insertAsk;
+    if (!cur) return;
+    setInsertAsk(null);
+    cur.go(yes ? cur.gap : cur.tail);
+  };
+
+  const goRegisterByCard = useCallback(() => {
+    if (!apiMode) {
+      setActionError("讀卡需 API 模式");
+      return;
+    }
+    setConfirmError(null);
+    setCardDiagnose(null);
+    setSeqNote(null);
+    const shift = session?.shift || "";
+    void (async () => {
+      try {
+        const res = await readCardRegisterPatient();
+        const seed: Partial<RegisterEditForm> = {
+          pharmacist: session?.pharmacist || lastPharmacist(),
+          icException: "ic",
+          shift,
+          visitClock: nowClock(),
+          patientId: res.patientId,
+          idNo: res.validation?.idNo,
+          birthday: res.validation?.birthdayRoc,
+          sex: res.validation?.sex,
+          patientName: res.validation?.patientName,
+          cardId: res.validation?.cardId,
+        };
+        if (res.cardBridgeNote) setSeqNote(res.cardBridgeNote);
+        offerQueueNumber((n) => openConfirmFromSeed({ ...seed, queueNumber: String(n) }));
+      } catch (e) {
+        openConfirmFromSeed({
+          pharmacist: session?.pharmacist || lastPharmacist(),
+          icException: "ic",
+          shift,
+          visitClock: nowClock(),
+        });
+        setConfirmError(e instanceof Error ? e.message : "讀卡失敗");
+        setCardDiagnose(e instanceof CardReadError ? e.diagnose : null);
+      }
+    })();
+  }, [apiMode, offerQueueNumber, openConfirmFromSeed, readCardRegisterPatient, session]);
+
+  const applyRegisterHub = useCallback(
+    (label: string) => {
+      const act = registerHubAction(label);
+      if (act.kind === "readCard") {
+        goRegisterByCard();
+        return;
+      }
+      if (act.kind === "icInfo") {
+        setIcInfoOpen(true);
+        return;
+      }
+      if (act.kind === "go") {
+        navigate(act.path);
+        return;
+      }
+      if (act.kind === "referral") {
+        if (!selected && !selectedEncounterId) {
+          setActionError("請先選病患");
+          return;
+        }
+        setReferralOpen(true);
+        return;
+      }
+      if (act.kind === "cloud") {
+        openNhiCloudRx();
+        return;
+      }
+      if (act.kind === "allergy") {
+        if (!selected && !selectedEncounterId) {
+          setActionError("請先選病患");
+          return;
+        }
+        setClinicTab("alerts");
+        return;
+      }
+      if (act.kind === "say") {
+        setActionError(act.text);
+        return;
+      }
+      if (act.kind === "refund") {
+        setRefundOpen(true);
+        return;
+      }
+      setStubId(act.id);
+    },
+    [goRegisterByCard, navigate, selected, selectedEncounterId],
+  );
+
+  const openFinder = useCallback((seed = queueSearch) => {
+    setFinderSeed(seed.trim());
+    setFinderOpen(true);
+  }, [queueSearch]);
+
+  const onPatientPickedForRegister = useCallback(
+    (hit: PatientHit) => {
+      setFinderOpen(false);
+      offerQueueNumber((n) =>
+        openConfirmFromSeed({
+          patientId: hit.id,
+          idNo: hit.idNo,
+          birthday: hit.birthdayRoc,
+          sex: hit.sex || "F",
+          patientName: hit.name,
+          icException: "deposit",
+          noCardReason: "",
+          deposit: loadClinicRegisterDefaults().depositAmount,
+          prebook: false,
+          pharmacist: session?.pharmacist || lastPharmacist(),
+          queueNumber: String(n),
+        }),
+      );
+    },
+    [offerQueueNumber, openConfirmFromSeed, session],
+  );
+
+  const seedFromEntry = useCallback((entry: NonNullable<typeof selected>): Partial<RegisterEditForm> => {
+    const iso = entry.birthday || "";
+    let roc = iso.replace(/\D/g, "");
+    if (iso.includes("-")) {
+      const [y, m, d] = iso.split("-");
+      const yy = Number(y);
+      if (yy >= 1911) roc = `${String(yy - 1911).padStart(3, "0")}${m}${d}`;
+    }
+    return {
+      encounterId: entry.encounterId,
+      patientId: entry.patientId,
+      idNo: entry.idNo || "",
+      birthday: roc.slice(0, 7),
+      sex: entry.sex || (entry.ageSex?.endsWith("M") ? "M" : "F"),
+      patientName: entry.patientDisplay,
+      reasonText: entry.reasonText || "",
+      caseNo: entry.caseNo && entry.caseNo !== "—" ? entry.caseNo : "01",
+      copayCode: entry.copayCode || "",
+      payType: entry.payType || "4",
+      dispense: entry.dispense || "自行調劑",
+      shift: entry.shift || emptyRegisterForm().shift,
+      room: entry.room || "",
+      treatmentItem: entry.treatmentItem || "01",
+      afterCheck: entry.afterCheck === "2" ? "2" : "1",
+      icException: (entry.icException as RegisterEditForm["icException"]) || "ic",
+      noCardReason: entry.noCardReason || "",
+      pharmacist: entry.pharmacist || session?.pharmacist || lastPharmacist(),
+      paperCard: Boolean(entry.paperCard),
+      treatSeq: entry.treatSeq || "",
+      treatmentNumber: entry.treatmentNumber || "",
+      treatDateTime: entry.treatDateTime || "",
+      queueNumber: entry.queueNumber != null ? String(entry.queueNumber) : "",
+      visitClock: entry.slotTime || "",
+      cardId: entry.hcId || "",
+      regFee: entry.regFee || "",
+      copayAmt: entry.copayAmt || "",
+      deposit: entry.deposit || "",
+      consultFee: entry.consultFee || "",
+      drugFee: entry.drugFee || "",
+      materialFee: entry.materialFee || "",
+      burdenFee: entry.burdenFee || "",
+    };
+  }, [session]);
+
+  const openF3RegisterEdit = useCallback(() => {
+    const entry =
+      selected ??
+      queue.find((q) => q.encounterId === selectedEncounterId) ??
+      null;
+    if (!entry) {
+      setActionError("請先在清單點選一筆，再按 F3 編輯此次掛號資料");
+      return;
+    }
+    setSelectedEncounterId(entry.encounterId);
+    openRegisterDialog(seedFromEntry(entry));
+  }, [selected, queue, selectedEncounterId, openRegisterDialog, seedFromEntry, setSelectedEncounterId]);
+
+  const openDeleteDialog = useCallback(() => {
+    if (!selectedEncounterId) {
+      setActionError("請先在清單點選一筆再刪除掛號");
+      return;
+    }
+    setDeleteError(null);
+    setDeleteOpen(true);
+  }, [selectedEncounterId]);
+
+  const openPatientEdit = useCallback(() => {
+    const entry =
+      selected ?? queue.find((q) => q.encounterId === selectedEncounterId) ?? null;
+    if (!entry?.patientId) {
+      setActionError("請先在清單選一筆再 F5 病患");
+      return;
+    }
+    setSelectedEncounterId(entry.encounterId);
+    setPatientEditOpen(true);
+  }, [selected, queue, selectedEncounterId, setSelectedEncounterId]);
+
+  const runShortcut = useCallback(
+    (action: (typeof barItems)[number]["action"]) => {
+      const item = barItems.find((b) => b.action === action);
+      if (item) setActiveShortcutKey(item.key);
+
+      switch (action) {
+        case "queueList":
+        case "register":
+          setRegisterOptionsOpen(true);
+          break;
+        case "registerEdit":
+          openF3RegisterEdit();
+          break;
+        case "clinicMain":
+          if (isList) {
+            if (selectedEncounterId) openChart(selectedEncounterId);
+            else setActionError("請先點清單一筆，再按 F4 看診");
+          } else if (selectedEncounterId) {
+            openChart(selectedEncounterId);
+          }
+          break;
+        case "clinicalAlerts":
+          if (!selectedEncounterId) {
+            setActionError("請先選病患");
+            return;
+          }
+          setClinicTab("alerts");
+          break;
+        case "historyChart":
+          if (!selectedEncounterId) {
+            setActionError("請先選病患");
+            return;
+          }
+          if (isList) {
+            setClinicTab("history");
+          } else {
+            setChartRailTab("history");
+            setChartFocus("history");
+            historyPanelRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+            historyPanelRef.current?.focus();
+          }
+          break;
+        case "editPatient":
+          openPatientEdit();
+          break;
+        case "radiology":
+          if (!selectedEncounterId) {
+            setActionError("請先選病患");
+            return;
+          }
+          setClinicTab("radiology");
+          break;
+        case "query":
+          openFinder(queueSearch);
+          break;
+        case "deleteReg":
+          openDeleteDialog();
+          break;
+        case "emrLookup":
+          navigate("/emr-lookup");
+          break;
+        case "escapeHome":
+          navigate("/");
+          break;
+        case "bigPalette":
+          setPaletteOpen(true);
+          break;
+        case "saveChart":
+          onF9();
+          break;
+        case "refundDeposit":
+          setRefundOpen(true);
+          break;
+        case "receipt":
+          if (!selected && !selectedEncounterId) {
+            setActionError("請先選病患");
+            return;
+          }
+          printVisitReceipt();
+          break;
+        case "icCard":
+          setIcInfoOpen(true);
+          break;
+        case "dittoRx":
+          copyPrevRx();
+          break;
+        case "lesionPhoto":
+          setLesionOpen((open) => !open);
+          break;
+        case "readCard":
+          goRegisterByCard();
+          break;
+        case "certificate":
+          setCertificateOpen(true);
+          break;
+        case "otherFunctions":
+          setCertificateOpen(true);
+          setOtherMenuOpen(false);
+          break;
+        default:
+          break;
+      }
+    },
+    [
+      barItems,
+      copyPrevRx,
+      onF9,
+      openFinder,
+      goRegisterByCard,
+      openF3RegisterEdit,
+      openPatientEdit,
+      isList,
+      selectedEncounterId,
+      openChart,
+      queueSearch,
+      navigate,
+      openDeleteDialog,
+      printVisitReceipt,
+      selected,
+    ],
+  );
+
+  useEscLayer(
+    [
+      { open: insertAsk != null, close: () => answerInsert(false) },
+      {
+        open: leaveAsk,
+        close: () => {
+          leaveIntentRef.current = null;
+          afterSaveLeaveRef.current = null;
+          setLeaveAsk(false);
+        },
+      },
+      { open: referralOpen, close: () => setReferralOpen(false) },
+      { open: icInfoOpen, close: () => setIcInfoOpen(false) },
+      { open: sameDayOpen, close: () => setSameDayOpen(false) },
+      { open: lookOpen, close: () => setLookOpen(false) },
+      { open: finderOpen, close: () => setFinderOpen(false) },
+      { open: certificateOpen, close: () => setCertificateOpen(false) },
+      { open: patientEditOpen, close: () => setPatientEditOpen(false) },
+      { open: !!stubId, close: () => setStubId(null) },
+      { open: otherMenuOpen, close: () => setOtherMenuOpen(false) },
+      {
+        open: confirmOpen,
+        close: () => {
+          setConfirmOpen(false);
+          setCardDiagnose(null);
+        },
+      },
+      { open: registerOpen, close: () => setRegisterOpen(false) },
+      { open: deleteOpen, close: () => setDeleteOpen(false) },
+      {
+        open: saveLayerOpen,
+        close: () => {
+          setSaveLayerOpen(false);
+          afterSaveLeaveRef.current = null;
+        },
+      },
+      { open: paletteOpen, close: () => setPaletteOpen(false) },
+      { open: lesionOpen, close: () => setLesionOpen(false) },
+      { open: registerOptionsOpen, close: () => setRegisterOptionsOpen(false) },
+      { open: needsPatientTab, close: () => closeChart() },
+      { open: true, close: () => navigate("/") },
+    ],
+    !gateOpen,
+  );
+
+  useEffect(() => {
+    const onKey = (ev: KeyboardEvent) => {
+      if (gateOpen) return;
+      if (ev.key === "Escape") return;
+      if (
+        registerOpen ||
+        confirmOpen ||
+        finderOpen ||
+        deleteOpen ||
+        stubId ||
+        icInfoOpen ||
+        referralOpen ||
+        registerOptionsOpen ||
+        patientEditOpen ||
+        certificateOpen
+      ) {
+        return;
+      }
+      const typing =
+        document.activeElement &&
+        (document.activeElement.tagName === "INPUT" ||
+          document.activeElement.tagName === "TEXTAREA" ||
+          document.activeElement.tagName === "BUTTON" ||
+          document.activeElement.getAttribute("contenteditable") === "true" ||
+          document.activeElement.getAttribute("role") === "textbox");
+      if (isList && ev.key === "F2") {
+        ev.preventDefault();
+        setRegisterOptionsOpen(true);
+        return;
+      }
+      if (isList && ev.key === "F3") {
+        ev.preventDefault();
+        openF3RegisterEdit();
+        return;
+      }
+      if (isList && ev.key === "F4" && selectedEncounterId) {
+        ev.preventDefault();
+        openChart(selectedEncounterId);
+        return;
+      }
+      if (!isList && ev.key === "F8") {
+        ev.preventDefault();
+        setIcInfoOpen(true);
+        return;
+      }
+      if (isList && ev.altKey) {
+        const k = ev.key.toLowerCase();
+        const stubHit: Record<string, HisStubId> = {
+          v: "vaccine",
+          h: "virtual",
+          c: "chronic",
+          s: "sale",
+          i: "refund",
+          k: "track",
+        };
+        if (stubHit[k]) {
+          ev.preventDefault();
+          setStubId(stubHit[k]);
+          return;
+        }
+        if (k === "x") {
+          ev.preventDefault();
+          navigate("/");
+          return;
+        }
+        if (k === "a") {
+          ev.preventDefault();
+          navigate("/patients?add=1");
+          return;
+        }
+      }
+      if (ev.key === "F9") {
+        if (isChart) {
+          ev.preventDefault();
+          onF9();
+        }
+        return;
+      }
+      if (isList && ev.key === "Enter" && selectedEncounterId) {
+        if (typing) return;
+        ev.preventDefault();
+        openChart(selectedEncounterId);
+        return;
+      }
+      if (isList && (ev.key === "Delete" || ev.key === "Del") && selectedEncounterId) {
+        if (typing) return;
+        ev.preventDefault();
+        openDeleteDialog();
+        return;
+      }
+      if (isList && (ev.key === "ArrowUp" || ev.key === "ArrowDown" || ev.key === "PageUp" || ev.key === "PageDown" || ev.key === "Home" || ev.key === "End")) {
+        const pageNav = ev.key === "PageUp" || ev.key === "PageDown" || ev.key === "Home" || ev.key === "End";
+        if (!pageNav && typing) return;
+
+        const currentIndex = filteredQueue.findIndex((q) => q.encounterId === selectedEncounterId);
+        if (filteredQueue.length === 0) return;
+        ev.preventDefault();
+        const scroller = queuePanelRef.current?.querySelector("[data-queue-scroller]") as HTMLElement | null;
+        const rowEls = scroller
+          ? Array.from(scroller.querySelectorAll<HTMLElement>("[data-qid]"))
+          : [];
+        const rowPx = rowEls[0]?.getBoundingClientRect().height || 18;
+        const headerPx = scroller?.querySelector("thead")?.getBoundingClientRect().height || 0;
+        const page = Math.max(
+          1,
+          Math.floor(((scroller?.clientHeight || rowPx * 12) - headerPx) / rowPx),
+        );
+        const last = filteredQueue.length - 1;
+        let newIndex = currentIndex;
+        if (ev.key === "Home") newIndex = 0;
+        else if (ev.key === "End") newIndex = last;
+        else if (currentIndex === -1) {
+          newIndex = ev.key === "ArrowUp" || ev.key === "PageUp" ? last : 0;
+        } else if (ev.key === "ArrowUp") {
+          newIndex = Math.max(0, currentIndex - 1);
+        } else if (ev.key === "ArrowDown") {
+          newIndex = Math.min(last, currentIndex + 1);
+        } else if (ev.key === "PageUp") {
+          newIndex = Math.max(0, currentIndex - page);
+        } else {
+          newIndex = Math.min(last, currentIndex + page);
+        }
+        if (newIndex !== currentIndex && filteredQueue[newIndex]) {
+          setSelectedEncounterId(filteredQueue[newIndex].encounterId);
+        }
+        if (scroller) {
+          const clampedTop = newIndex === 0 && (ev.key === "Home" || ev.key === "PageUp");
+          const clampedBottom = newIndex === last && (ev.key === "End" || ev.key === "PageDown");
+          if (clampedTop || ev.key === "Home") {
+            scroller.scrollTop = 0;
+          } else if (clampedBottom || ev.key === "End") {
+            scroller.scrollTop = scroller.scrollHeight;
+          } else if ((ev.key === "PageUp" || ev.key === "PageDown") && rowEls[newIndex]) {
+            const curEl = currentIndex >= 0 ? rowEls[currentIndex] : null;
+            const rel = curEl ? curEl.offsetTop - scroller.scrollTop : 0;
+            scroller.scrollTop = Math.max(0, rowEls[newIndex].offsetTop - rel);
+          } else if (rowEls[newIndex]) {
+            rowEls[newIndex].scrollIntoView({ block: "nearest" });
+          }
+        }
+        return;
+      }
+      if (typing) return;
+      const action = barItems.find((b) => b.key === ev.key)?.action;
+      if (!action) return;
+      ev.preventDefault();
+      runShortcut(action);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [
+    runShortcut,
+    lesionOpen,
+    paletteOpen,
+    selectedEncounterId,
+    navigate,
+    queue,
+    saveLayerOpen,
+    onF9,
+    setSelectedEncounterId,
+    needsPatientTab,
+    closeChart,
+    openChart,
+    registerOpen,
+    confirmOpen,
+    finderOpen,
+    deleteOpen,
+    barItems,
+    filteredQueue,
+    stubId,
+    icInfoOpen,
+    referralOpen,
+    gateOpen,
+    openFinder,
+    queueSearch,
+    isList,
+    isChart,
+    registerOptionsOpen,
+    patientEditOpen,
+    certificateOpen,
+    otherMenuOpen,
+    openF3RegisterEdit,
+    openDeleteDialog,
+  ]);
+
+  const appliedPackageRef = useRef<string | null>(null);
+  useEffect(() => {
+    const pkgId = searchParams.get("package");
+    if (!pkgId || appliedPackageRef.current === pkgId) return;
+    if (!selectedEncounterId || !isChart) return;
+    const pkg = catalog.packages.find((p) => p.id === pkgId || p.code === pkgId);
+    if (!pkg) return;
+    const lines = resolvePackageLines(pkg, catalog.drugs);
+    appliedPackageRef.current = pkgId;
+    if (lines.length) addRxLines(lines);
+    navigate("/clinic", { replace: true });
+  }, [searchParams, selectedEncounterId, isChart, catalog.packages, catalog.drugs, addRxLines, navigate]);
+
+  /** 調閱／深連結：`/clinic?encounter=&tab=chart&from=emr` */
+  const appliedEncounterDeepLink = useRef<string | null>(null);
+  useEffect(() => {
+    const eid = searchParams.get("encounter");
+    if (!eid) return;
+    const key = `${eid}|${searchParams.get("tab") || ""}|${searchParams.get("from") || ""}`;
+    if (appliedEncounterDeepLink.current === key) return;
+    appliedEncounterDeepLink.current = key;
+    const fromSeek = searchParams.get("from") === "emr";
+    const tab = searchParams.get("tab");
+    if (fromSeek) {
+      setEntered(true);
+      setGateOpen(false);
+      const boot = readEmrSeek(searchParams);
+      if (boot) {
+        setSession(boot);
+        setCurrentDate(boot.date);
+      }
+    }
+    openChart(eid, {
+      fromSeek,
+      label: fromSeek ? `調閱進入 ${eid}` : undefined,
+    });
+    if (tab === "history" || tab === "alerts" || tab === "radiology") {
+      setClinicTab(tab);
+    }
+    if (!fromSeek) navigate("/clinic", { replace: true });
+  }, [searchParams, openChart, navigate, setCurrentDate]);
+
+  const onStatusChange = async (
+    encounterId: string,
+    status: Parameters<typeof handleStatusChange>[1],
+  ) => {
+    try {
+      await handleStatusChange(encounterId, status);
+      await refreshQueue();
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const applySession = (next: ClinicSession, firstEnter: boolean) => {
+    saveClinicSession(next);
+    setSession(next);
+    setCurrentDate(next.date);
+    setGateOpen(false);
+    if (firstEnter) setEntered(true);
+    else closeChart();
+  };
+
+  const confirmRegisterEdit = async () => {
+    if (!apiMode) {
+      setRegisterError("掛號需 API 模式");
+      return;
+    }
+    setRegisterError(null);
+    setSeqNote(null);
+    setSeqBusy(true);
+    setRegisterBusy(true);
+    try {
+      await submitRegisterEdit(registerForm, (fields) => {
+        const { seqNote: note, ...rest } = fields;
+        setRegisterForm((prev) => ({ ...prev, ...rest }));
+        setSeqNote(note);
+      });
+      const pharmacistName = (registerForm.pharmacist ?? "").trim();
+      if (pharmacistName) {
+        const prev = loadClinicSession();
+        saveClinicSession({
+          date: currentDate,
+          pharmacist: pharmacistName,
+          shift: prev?.shift || session?.shift || "上午",
+          dept: prev?.dept || session?.dept || "皮膚科",
+        });
+        setSession((s) =>
+          s
+            ? { ...s, pharmacist: pharmacistName }
+            : {
+                date: currentDate,
+                pharmacist: pharmacistName,
+                shift: "上午",
+                dept: "皮膚科",
+              },
+        );
+      }
+      setRegisterOpen(false);
+    } catch (e) {
+      setRegisterError(e instanceof Error ? e.message : "掛號失敗");
+    } finally {
+      setSeqBusy(false);
+      setRegisterBusy(false);
+    }
+  };
+
+  const confirmNewRegister = async () => {
+    if (!apiMode) {
+      setConfirmError("掛號需 API 模式");
+      return;
+    }
+    const hits = findSameDayHits(queue, confirmForm.patientId || "", confirmForm.idNo || "");
+    if (hits.length && !sameDayPassRef.current) {
+      setSameDayOpen(true);
+      return;
+    }
+    sameDayPassRef.current = false;
+    setConfirmError(null);
+    setSeqNote(null);
+    const skipSeq =
+      Boolean(confirmForm.prebook) ||
+      isDepositHold(confirmForm) ||
+      confirmForm.icException === "selfPay";
+    if (!skipSeq) setSeqBusy(true);
+    setRegisterBusy(true);
+    try {
+      const depositHold = isDepositHold(confirmForm);
+      const pageShift = session?.shift || confirmForm.shift;
+      const toSave = {
+        ...(depositHold
+          ? {
+              ...confirmForm,
+              noCardReason: "",
+              deposit: confirmForm.deposit.trim() || loadClinicRegisterDefaults().depositAmount,
+            }
+          : confirmForm),
+        shift: pageShift,
+        visitClock: normalizeClock(confirmForm.visitClock || nowClock()),
+      };
+      await submitRegisterEdit(toSave, (fields) => {
+        const { seqNote: note, ...rest } = fields;
+        setConfirmForm((prev) => ({ ...prev, ...rest }));
+        setSeqNote(note);
+      });
+      const pharmacistName = (confirmForm.pharmacist ?? "").trim();
+      if (pharmacistName) {
+        const prev = loadClinicSession();
+        saveClinicSession({
+          date: currentDate,
+          pharmacist: pharmacistName,
+          shift: prev?.shift || session?.shift || "上午",
+          dept: prev?.dept || session?.dept || "皮膚科",
+        });
+        setSession((s) =>
+          s
+            ? { ...s, pharmacist: pharmacistName }
+            : {
+                date: currentDate,
+                pharmacist: pharmacistName,
+                shift: "上午",
+                dept: "皮膚科",
+              },
+        );
+      }
+      setConfirmOpen(false);
+      if (depositHold) {
+        setDepositAsk({
+          name: toSave.patientName,
+          deposit: toSave.deposit || "—",
+          regFee: toSave.regFee || "—",
+          date: currentDate,
+        });
+      }
+    } catch (e) {
+      setConfirmError(e instanceof Error ? e.message : "掛號失敗");
+    } finally {
+      setSeqBusy(false);
+      setRegisterBusy(false);
+    }
+  };
+
+  const stubValues: Record<string, string> = {
+    姓名: selected?.patientDisplay || registerForm.patientName || "",
+    病歷號: selected?.medicalNo || "",
+    身分證: selected?.idNo || registerForm.idNo || "",
+    生日: selected?.birthday || registerForm.birthday || "",
+    性別: selected?.sex || registerForm.sex || "",
+    卡號: registerForm.cardId || selected?.hcId || "",
+    就醫序號: selected?.treatSeq || registerForm.treatSeq || "",
+    就醫識別碼: selected?.treatmentNumber || registerForm.treatmentNumber || "",
+    就醫日期時間: selected?.treatDateTime || registerForm.treatDateTime || "",
+    看診日: currentDate,
+    時段: selected?.shift || registerForm.shift || "",
+    診間: selected?.room || registerForm.room || "",
+    掛號費: selected?.regFee || registerForm.regFee || "",
+    藥費: selected?.drugFee || registerForm.drugFee || "",
+    藥品費: selected?.drugFee || registerForm.drugFee || "",
+    材料費: selected?.materialFee || registerForm.materialFee || "",
+    診察費: selected?.consultFee || registerForm.consultFee || "",
+    押金: selected?.deposit || registerForm.deposit || "",
+    目前藥師: selected?.pharmacist || registerForm.pharmacist || "",
+    病患: selected?.patientDisplay || "",
+  };
+
+  const handleDeleteRegister = async (mode: "local" | "ic" | "both") => {
+    if (!selectedEncounterId) return;
+    setDeleteBusy(true);
+    setDeleteError(null);
+    try {
+      const res = await cancelRegister({ encounterId: selectedEncounterId, mode });
+      await refreshQueue();
+      if (res.localCancelled) setSelectedEncounterId(null);
+      setDeleteOpen(false);
+    } catch (e) {
+      setDeleteError(e instanceof Error ? e.message : "刪除掛號失敗");
+    } finally {
+      setDeleteBusy(false);
+    }
+  };
+
+  const allergyBannerClass =
+    allergies.length === 0
+      ? "border-slate-300 bg-slate-100 text-slate-700"
+      : allergies.some((a) => a.level === "high")
+        ? "border-red-900 bg-red-700 text-white"
+        : "border-red-800 bg-red-100 text-red-900";
+
+  const selectedMedia = lesionMedia.find((m) => m.id === selectedMediaId);
+  const waiting = shiftQueue.filter((e) => e.queueStatus === "waiting").length;
+  const inProgress = shiftQueue.filter((e) => e.queueStatus === "in_progress").length;
+  const finishedCount = shiftQueue.filter((e) => e.queueStatus === "finished").length;
+  const noShowCount = shiftQueue.filter((e) => e.queueStatus === "no_show").length;
+  const erCount = shiftQueue.filter(
+    (e) => e.treatmentItem === "04" || /急診/.test(e.reasonText || ""),
+  ).length;
+
+  const patientEditSeed = useMemo((): PatientEditSeed | null => {
+    const entry =
+      selected ?? queue.find((q) => q.encounterId === selectedEncounterId) ?? null;
+    if (!entry?.patientId) return null;
+    const iso = entry.birthday || "";
+    let roc = iso.replace(/\D/g, "");
+    if (iso.includes("-")) {
+      const [y, m, d] = iso.split("-");
+      const yy = Number(y);
+      if (yy >= 1911) roc = `${String(yy - 1911).padStart(3, "0")}${m}${d}`;
+    }
+    return {
+      patientId: entry.patientId,
+      name: entry.patientDisplay,
+      idNo: entry.idNo || "",
+      birthday: roc.slice(0, 7),
+      sex: entry.sex || (entry.ageSex?.endsWith("M") ? "M" : "F"),
+      medicalNo: entry.medicalNo,
+    };
+  }, [selected, queue, selectedEncounterId]);
+
+  const certificateSeed = useMemo(() => {
+    const dx = displayDiagnoses
+      .map((d) => `${d.icd10 || d.nhiIcd10 || ""} ${d.text}`.trim())
+      .filter(Boolean)
+      .join("\n");
+    return {
+      patientDisplay: selected?.patientDisplay,
+      idNo: selected?.idNo,
+      birthday: patientEditSeed?.birthday || selected?.birthday,
+      sex: selected?.sex === "M" ? "\u7537" : selected?.sex === "F" ? "\u5973" : selected?.sex || selected?.ageSex,
+      age: selected?.age,
+      medicalNo: selected?.medicalNo,
+      address: selected?.address,
+      dept: "11 \u76ae\u819a\u79d1",
+      doctorName: selected?.doctorName,
+      visitDate: currentDate,
+      diagnosesText: dx,
+    };
+  }, [selected, patientEditSeed?.birthday, currentDate, displayDiagnoses]);
+
+  const historyRxPanel = (
+    <HistoryRxPanel
+      visits={displayHistoryVisits}
+      columns={currentRxColumns}
+      fontSizePx={historyFontPx}
+      hideIcd={prefs.hideHistoryIcd === true}
+      showVisitDateOnRx={prefs.showHistoryRxVisitDate !== false}
+      dittoCcEnabled={prefs.dittoCc !== false}
+      dittoDxEnabled={prefs.dittoDx !== false}
+      onDittoCc={dittoCc}
+      onDittoDx={dittoDx}
+      onDittoRx={dittoRx}
+      onDittoVisit={dittoVisit}
+      onTransferVisit={transferVisit}
+      onTransferVisitNoCc={transferVisitNoCc}
+      onSelectedChange={setHistoryVisit}
+      onEnsureDetail={async (visit) => {
+        const full = await ensureVisitDetail(visit);
+        return {
+          ...full,
+          medications: applyClinicDrugDisplayNames(
+            full.medications ?? [],
+            catalog.drugs,
+            catalog.usages || [],
+          ),
+        };
+      }}
+      onSaveHistory={async (visit) => {
+        await runAction(() => persistHistoryVisit(visit));
+      }}
+    />
+  );
+
+  if (!entered) {
+    return (
+      <div className="h-[calc(100vh-1rem)]" style={{ background: HIS.chrome }}>
+        <ClinicSessionGate
+          preferToday
+          initial={session}
+          onConfirm={(next) => applySession(next, true)}
+          onCancel={() => navigate("/")}
+        />
+      </div>
+    );
+  }
+
+  return (
+    <div
+      className="relative flex h-[calc(100vh-1rem)] flex-col overflow-hidden border"
+      style={{ borderColor: HIS.chromeDark, background: HIS.chrome }}
+    >
+      {loading && (
+        <p className="bg-sky-50 px-2 py-0 text-xs text-sky-900">載入門診工作台…</p>
+      )}
+      {error && (
+        <p className="bg-amber-100 px-2 py-0 text-xs text-amber-900">
+          {error}（請確認後端 API 已啟動）
+        </p>
+      )}
+      {actionError && (
+        <p className="bg-red-100 px-2 py-0 text-xs text-red-900">{actionError}</p>
+      )}
+      {saving && <p className="bg-sky-100 px-2 py-0 text-xs text-sky-900">寫入 FHIR…</p>}
+      {seekEnteredBanner && (
+        <p
+          className="flex items-center gap-2 px-2 py-0.5 text-[11px] font-bold text-black"
+          style={{ background: HIS.rowSelected }}
+        >
+          <span className="min-w-0 flex-1">{seekEnteredBanner}</span>
+          <button
+            type="button"
+            className="shrink-0 border px-1 text-[10px]"
+            style={{ borderColor: HIS.chromeDark }}
+            onClick={() => setSeekEnteredBanner(null)}
+          >
+            關閉
+          </button>
+        </p>
+      )}
+
+      <div
+        className="flex shrink-0 items-center gap-2 px-2 py-0 text-[10px] font-semibold leading-none text-white"
+        style={{
+          background: `linear-gradient(180deg,${HIS.titleBarFrom},${HIS.titleBarTo} 40%,${HIS.titleBarFrom})`,
+          borderBottom: `1px solid ${HIS.titleBarBorder}`,
+          minHeight: 18,
+          ...hisFontStyle,
+        }}
+      >
+        <span>
+          {isChart
+            ? `診療作業 — ${selected?.patientDisplay || ""}　年齡 ${selected?.age || "—"}`
+            : isList
+              ? "診療作業 — 掛號清單"
+              : `診療作業 — ${CLINIC_MODULE_TABS.find((t) => t.id === clinicTab)?.label || ""}`}
+        </span>
+        <span className="ml-auto font-normal opacity-90">
+          {currentDate} · {session?.shift || ""} · {session?.pharmacist || "—"}
+        </span>
+        <button
+          type="button"
+          className="border border-white/40 bg-white/15 px-1.5 py-0 text-[10px] font-bold hover:bg-white/25"
+          onClick={() => setGateOpen(true)}
+        >
+          換日
+        </button>
+      </div>
+
+      {!isList && selectedEncounterId ? (
+        <ChartPatientHead
+          selected={selected}
+          patientResource={patientResource as Record<string, unknown> | null}
+          visitDate={currentDate}
+        />
+      ) : null}
+
+      <ClinicModuleTabs
+        active={clinicTab}
+        onChange={handleClinicTabChange}
+        hasPatient={Boolean(selectedEncounterId)}
+        chartSuffix={selected?.medicalNo || null}
+      />
+
+      <div className="flex min-h-0 flex-1 overflow-hidden">
+        {isList ? (
+          <div className="flex min-h-0 w-full flex-1 flex-col">
+            <div
+              className="flex shrink-0 flex-wrap items-center gap-3 border-b px-2 py-0.5 font-bold text-black"
+              style={{
+                borderColor: HIS.chromeDark,
+                background: HIS.chrome,
+                fontSize: HIS.fs.secondary,
+                ...hisFontStyle,
+              }}
+            >
+              {QUEUE_FILTERS.map((f) => {
+                const count =
+                  f.id === "all"
+                    ? shiftQueue.length
+                    : f.id === "finished"
+                      ? finishedCount
+                      : f.id === "waiting"
+                        ? waiting
+                        : f.id === "hold"
+                          ? inProgress
+                          : erCount;
+                return (
+                  <label key={f.id} className="flex cursor-pointer items-center gap-1">
+                    <input
+                      type="radio"
+                      name="queue-filter"
+                      checked={queueFilter === f.id}
+                      onChange={() => setQueueFilter(f.id)}
+                    />
+                    {f.label}({count})
+                  </label>
+                );
+              })}
+              <input
+                ref={queueSearchRef}
+                type="search"
+                placeholder="身分證／手機／生日 → Enter 找人"
+                value={queueSearch}
+                onChange={(e) => setQueueSearch(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    openFinder(queueSearch);
+                  }
+                }}
+                className="w-56 border bg-white px-1 py-0 font-normal focus:outline-none"
+                style={{
+                  borderColor: HIS.chromeDark,
+                  fontSize: HIS.fs.secondary,
+                }}
+              />
+              <span className="ml-auto font-normal">
+                全部人數 {shiftQueue.length}　完診人數 {finishedCount}　缺診人數 {noShowCount}　候診人數 {waiting}
+                {inProgress ? `　暫診 ${inProgress}` : ""}
+              </span>
+            </div>
+            {!loading && shiftQueue.length === 0 && (
+              <div className="shrink-0 border-b border-amber-300 bg-amber-50 px-3 py-2 text-[11px] text-amber-950">
+                <p className="font-bold">{currentDate} 沒有掛號紀錄</p>
+                <div className="mt-1.5 flex flex-wrap gap-2">
+                  {queueHints.nearestBefore && (
+                    <button
+                      type="button"
+                      className="rounded border border-amber-600 bg-white px-2 py-0.5 font-bold text-amber-900 hover:bg-amber-100"
+                      onClick={() => {
+                        setCurrentDate(queueHints.nearestBefore!.date);
+                        saveClinicSession({
+                          date: queueHints.nearestBefore!.date,
+                          pharmacist: session?.pharmacist || "",
+                          shift: session?.shift || "上午",
+                          dept: session?.dept || "皮膚科",
+                        });
+                        setSession((s) =>
+                          s
+                            ? { ...s, date: queueHints.nearestBefore!.date }
+                            : {
+                                date: queueHints.nearestBefore!.date,
+                                pharmacist: "",
+                                shift: "上午",
+                                dept: "皮膚科",
+                              },
+                        );
+                      }}
+                    >
+                      上一有診日 {queueHints.nearestBefore.date}（
+                      {queueHints.nearestBefore.count} 人）
+                    </button>
+                  )}
+                  {queueHints.nearestAfter && (
+                    <button
+                      type="button"
+                      className="rounded border border-amber-600 bg-white px-2 py-0.5 font-bold text-amber-900 hover:bg-amber-100"
+                      onClick={() => {
+                        setCurrentDate(queueHints.nearestAfter!.date);
+                        saveClinicSession({
+                          date: queueHints.nearestAfter!.date,
+                          pharmacist: session?.pharmacist || "",
+                          shift: session?.shift || "上午",
+                          dept: session?.dept || "皮膚科",
+                        });
+                        setSession((s) =>
+                          s
+                            ? { ...s, date: queueHints.nearestAfter!.date }
+                            : {
+                                date: queueHints.nearestAfter!.date,
+                                pharmacist: "",
+                                shift: "上午",
+                                dept: "皮膚科",
+                              },
+                        );
+                      }}
+                    >
+                      下一有診日 {queueHints.nearestAfter.date}（
+                      {queueHints.nearestAfter.count} 人）
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    className="rounded border border-slate-500 bg-white px-2 py-0.5 font-bold text-slate-700 hover:bg-slate-100"
+                    onClick={() => setGateOpen(true)}
+                  >
+                    換日／換藥師
+                  </button>
+                </div>
+              </div>
+            )}
+            <EncounterQueuePanel
+              entries={filteredQueue}
+              selectedId={selectedEncounterId}
+              onSelect={setSelectedEncounterId}
+              onOpen={openChart}
+              onStatusChange={onStatusChange}
+              mode="table"
+              variant="page"
+              showChrome={false}
+              columnLabels={queueColumns}
+              columnKeys={queueColumnKeys}
+              fontSizePx={sections.queuePanel?.fontSizePx ?? HIS.fs.primary}
+              highlighted={activeShortcutKey === "F4"}
+              panelRef={queuePanelRef}
+            />
+          </div>
+        ) : clinicTab === "history" ? (
+          <div
+            className="flex min-h-0 w-full flex-1 flex-col overflow-hidden gap-0 p-0"
+            style={{ background: HIS.chrome }}
+          >
+            <div className="shrink-0">
+              <PatientHeaderWidget
+                clinicalProfile={clinicalProfile}
+                selected={selected}
+                patientResource={patientResource}
+                apiMode={apiMode}
+                showDevPanels={showDevPanels}
+                setShowDevPanels={setShowDevPanels}
+              />
+            </div>
+            <div
+              className="min-h-0 flex-1 overflow-hidden border bg-white"
+              style={{ borderColor: HIS.chromeDark }}
+            >
+              {historyRxPanel}
+            </div>
+          </div>
+        ) : clinicTab === "alerts" ? (
+          <div className="min-h-0 w-full flex-1 overflow-hidden bg-white">
+            <ClinicalAlertsPanel
+              open
+              embedded
+              onClose={closeChart}
+              patientDisplay={selected?.patientDisplay}
+              allergies={allergies}
+              allergyEmpty={allergyEmpty}
+              reasonText={selected?.reasonText ?? ccText}
+              preVisitCompleted={selected?.preVisitCompleted}
+              hasAllergyAlert={selected?.hasAllergyAlert}
+            />
+          </div>
+        ) : clinicTab === "radiology" ? (
+          <div className="min-h-0 w-full flex-1 overflow-y-auto bg-white p-4 text-sm">
+            <h2 className="text-sm font-bold text-slate-900">F6 放射科檢查</h2>
+            <p className="mt-2 text-slate-600">
+              病患：<span className="font-semibold text-slate-900">{selected?.patientDisplay ?? "—"}</span>
+            </p>
+            <p className="mt-4 rounded border border-slate-200 bg-slate-50 px-3 py-4 text-xs text-slate-500">
+              無放射檢查資料（—）。不編造報告、不上傳健保。
+            </p>
+          </div>
+        ) : (
+          <>
+            <main
+              ref={mainPanelRef}
+              className="flex min-w-0 flex-[65] flex-col gap-0 overflow-hidden border-r p-0"
+              style={{
+                background: "#FFFFFF",
+                borderColor: HIS.chromeDark,
+                ...hisFontStyle,
+              }}
+            >
+              {/* 醫聖：主訴+vitals → 病名 → 藥名 → 數量鍵盤 → 底列 */}
+              <div className="flex min-h-0 flex-1 flex-col gap-0">
+                <div className="flex h-auto min-h-[3.5rem] max-h-[5rem] shrink-0 gap-0.5 px-0.5 pt-0.5">
+                  <div className="min-w-0 flex-1">
+                    <ChiefComplaintWidget
+                      apiMode={apiMode}
+                      saving={saving}
+                      ccText={ccText}
+                      setCcText={(v) => {
+                        ccDirtyRef.current = true;
+                        chartDirtyRef.current = true;
+                        setCcText(v);
+                      }}
+                      ccChips={ccChips}
+                      saveCc={saveCc}
+                      active={chartFocus === "cc"}
+                      onActivate={() => activateChartZone("cc")}
+                    />
+                  </div>
+                  <ChartVitalsColumn
+                    value={chartVitals}
+                    onChange={(patch) => {
+                      chartDirtyRef.current = true;
+                      setChartVitals((prev) => ({ ...prev, ...patch }));
+                    }}
+                  />
+                </div>
+                <div className="h-auto min-h-[4.5rem] max-h-[7rem] shrink-0 px-0.5">
+                  <DiagnosesWidget
+                    maxDiagnoses={CLAIM_DX_LIMIT}
+                    catalog={catalog.diagnoses}
+                    displayDiagnoses={displayDiagnoses}
+                    addDiagnosis={addDiagnosis}
+                    onChangeDiagnosis={changeDiagnosisAt}
+                    onChiefNote={(note) => setCcText((prev) => appendChiefNotes(prev, [note]))}
+                    onRemove={removeDiagnosisAt}
+                    historyFontPx={HIS.fs.body}
+                    active={chartFocus === "dx"}
+                    onActivate={() => activateChartZone("dx")}
+                    selectedIndex={selectedDxIndex}
+                    onSelectIndex={(i) => {
+                      setSelectedDxIndex(i);
+                    }}
+                  />
+                </div>
+                <div className="min-h-0 flex-1 px-0.5">
+                  <CurrentRxWidget
+                    catalog={catalog}
+                    addRxLines={(lines) => {
+                      addRxLines(lines);
+                    }}
+                    currentRx={currentRx}
+                    currentRxColumns={currentRxColumns}
+                    apiMode={apiMode}
+                    historyFontPx={HIS.fs.body}
+                    mockCurrentRx={apiMode ? currentRx : mockCurrentRx}
+                    setMockCurrentRx={(lines) => {
+                      chartDirtyRef.current = true;
+                      if (apiMode) setApiRxOverlay(lines);
+                      else setMockCurrentRx(lines);
+                    }}
+                    onChangeLine={(id, patch) => {
+                      chartDirtyRef.current = true;
+                      const next = currentRx.map((l) => (l.id === id ? { ...l, ...patch } : l));
+                      if (apiMode) setApiRxOverlay(next);
+                      else setMockCurrentRx(next);
+                    }}
+                    sections={sections}
+                    prefs={prefs}
+                    selectedEncounterId={selectedEncounterId}
+                    commandFocusBump={commandFocusBump}
+                    defaultUsages={defaultUsages}
+                    usages={catalog.usages || []}
+                    routes={catalog.routes || []}
+                    onOpenPalette={() => setPaletteOpen(true)}
+                    active={chartFocus === "rx"}
+                    onActivate={() => activateChartZone("rx")}
+                    selectedIndex={selectedRxIndex}
+                    onSelectIndex={(i) => {
+                      setSelectedRxIndex(i);
+                    }}
+                    rxQuery={rxQuery}
+                    setRxQuery={setRxQuery}
+                  />
+                </div>
+                <ChartQtyPad onInsert={applyQtyPadToken} />
+              </div>
+              {lesionOpen && (
+                <div className="h-28 shrink-0">
+                  <LesionPhotosWidget
+                    lesionEnabled
+                    lesionSectionRef={lesionSectionRef}
+                    lesionMedia={lesionMedia}
+                    selectedMediaId={selectedMediaId}
+                    setSelectedMediaId={setSelectedMediaId}
+                    selectedMedia={selectedMedia}
+                  />
+                </div>
+              )}
+              <div
+                className="flex shrink-0 items-center gap-3 border-t px-2 py-0.5 text-[11px]"
+                style={{ borderColor: HIS.chromeDark, background: HIS.chrome }}
+              >
+                <button
+                  type="button"
+                  className="border border-[#808080] bg-[#FFFF80] px-2 py-0 font-bold"
+                  onClick={() => openNhiCloudRx()}
+                  title="開啟健保雲端藥歷"
+                >
+                  {selected?.patientDisplay || "—"}
+                </button>
+                <span className="font-mono font-bold">年齡 {selected?.age || "—"}</span>
+                <span
+                  className={`px-2 py-0 font-extrabold ${allergyBannerClass}`}
+                  style={{
+                    background: allergies.length ? HIS.allergyBar : "#808080",
+                    color: "#fff",
+                    minWidth: 120,
+                  }}
+                >
+                  過敏　{allergies.length ? allergies.map((a) => a.text).join("、") : allergyEmpty}
+                </span>
+                <span className="ml-auto font-mono">{clockText}</span>
+              </div>
+            </main>
+            <div
+              ref={historyPanelRef}
+              tabIndex={-1}
+              className={`flex w-[35%] min-w-[18rem] shrink-0 flex-col overflow-hidden border-l bg-white outline-none ${
+                activeShortcutKey === "F4" || chartRailTab === "history"
+                  ? "ring-1 ring-inset ring-[#808080]"
+                  : ""
+              }`}
+              style={{ borderColor: HIS.chromeDark }}
+            >
+              <div
+                className="flex shrink-0 border-b"
+                style={{ borderColor: HIS.chromeDark, background: HIS.chrome }}
+              >
+                {(
+                  [
+                    { id: "common" as const, label: "\u5e38\u7528" },
+                    { id: "full" as const, label: "\u5b8c\u5168" },
+                    { id: "oral" as const, label: "\u5167\u670d" },
+                    { id: "waiting" as const, label: "\u5019\u8a3a/\u5bb6\u65cf" },
+                    { id: "history" as const, label: "\u6b77\u53f2\u75c5\u6b77" },
+                  ] as const
+                ).map((t) => (
+                  <button
+                    key={t.id}
+                    type="button"
+                    className="flex-1 px-0.5 py-1 text-[12px] font-bold leading-none"
+                    style={{
+                      background:
+                        chartRailTab === t.id ? HIS.tabActive : HIS.tabIdle,
+                      color:
+                        chartRailTab === t.id ? HIS.tabActiveText : HIS.tabIdleText,
+                      borderRight: `1px solid ${HIS.chromeDark}`,
+                      minHeight: 24,
+                    }}
+                    onMouseDown={(e) => {
+                      // Prevent focus bounce: left CC/dx onFocus would force rail →「常用」.
+                      e.preventDefault();
+                      railTabClickGuardRef.current = Date.now() + 400;
+                      setChartRailTab(t.id);
+                      if (t.id === "oral") setChartFocus("rx");
+                      else if (t.id === "waiting" || t.id === "history") {
+                        historyPanelRef.current?.focus({ preventScroll: true });
+                      }
+                    }}
+                  >
+                    {t.label}
+                  </button>
+                ))}
+              </div>
+              <div className="min-h-0 flex-1 overflow-hidden">
+                {chartRailTab === "waiting" && (
+                  <OutpatientSidebarQueue
+                    queue={filteredQueue}
+                    selectedEncounterId={selectedEncounterId}
+                    setSelectedEncounterId={setSelectedEncounterId}
+                    onOpenChart={openChart}
+                    currentDate={currentDate}
+                    patientId={selected?.patientId}
+                  />
+                )}
+                {chartRailTab === "history" && historyRxPanel}
+                {(chartRailTab === "common" ||
+                  chartRailTab === "full" ||
+                  chartRailTab === "oral") && (
+                  <ChartContextRail
+                    focus={chartFocus === "history" ? "dx" : chartFocus}
+                    railMode={chartRailTab}
+                    diagnoses={catalog.diagnoses}
+                    drugs={catalog.drugs}
+                    packages={catalog.packages}
+                    ccChips={ccChips}
+                    dxQuery={dxQuery}
+                    setDxQuery={setDxQuery}
+                    rxQuery={rxQuery}
+                    setRxQuery={setRxQuery}
+                    onAddDx={(row) => {
+                      addDiagnosis(row);
+                      const next =
+                        displayDiagnoses.length + 1 < CLAIM_DX_LIMIT
+                          ? displayDiagnoses.length + 1
+                          : displayDiagnoses.length;
+                      setSelectedDxIndex(next);
+                      setChartFocus("dx");
+                    }}
+                    onAddRx={(lines) => {
+                      addRxLines(lines);
+                      setSelectedRxIndex(currentRx.length + Math.max(lines.length, 1));
+                      setChartFocus("rx");
+                    }}
+                    onAddCc={(text) => {
+                      ccDirtyRef.current = true;
+                      chartDirtyRef.current = true;
+                      setCcText((prev) => (prev.trim() ? `${prev.trim()}; ${text}` : text));
+                      setChartFocus("cc");
+                    }}
+                    fontSizePx={14}
+                  />
+                )}
+              </div>
+            </div>
+          </>
+        )}
+      </div>
+
+      <ClinicShortcutBar
+        items={isChart ? [] : barItems}
+        activeKey={activeShortcutKey}
+        disabledKeys={saveLocked ? ["F9"] : []}
+        onActivate={runShortcut}
+        trailing={
+          <div className="flex items-center gap-1">
+            {isChart ? (
+              <button
+                type="button"
+                className="border px-2 py-1 text-xs font-extrabold text-[#004000]"
+                style={{ borderColor: HIS.chromeDark, background: "#C8F0C8" }}
+                disabled={saveLocked}
+                onClick={() => onF9()}
+              >
+                F9 存檔
+              </button>
+            ) : null}
+            <button
+              type="button"
+              className="border px-2 py-1 text-xs font-semibold text-black hover:bg-[#E8E4DC]"
+              style={{ borderColor: HIS.chromeDark, background: HIS.chrome }}
+              onClick={() => setCertificateOpen(true)}
+            >
+              其他功能
+            </button>
+          </div>
+        }
+        thinBar={
+          isList ? (
+            <>
+              <span>F7</span>
+              <span>F8</span>
+              <span>F11</span>
+              <span>F12</span>
+              <button
+                type="button"
+                className="flex min-w-0 flex-1 items-center justify-center border border-[#808080] bg-[#D4D0C8] px-1 text-[13px] font-bold"
+                onClick={() => {
+                  if (!selectedEncounterId) {
+                    setActionError("請先在清單選一位病人");
+                    return;
+                  }
+                  setLookOpen(true);
+                }}
+              >
+                LOOK
+              </button>
+              <button type="button" className="flex min-w-0 flex-1 items-center justify-center border border-[#808080] bg-[#D4D0C8] px-1 text-[13px] font-bold" onClick={() => openNhiCloudRx()}>
+                雲端藥歷
+              </button>
+              <button type="button" className="flex min-w-0 flex-1 items-center justify-center border border-[#808080] bg-[#D4D0C8] px-1 text-[13px] font-bold" onClick={() => setPaletteOpen(true)}>
+                藥組
+              </button>
+              <button type="button" className="flex min-w-0 flex-1 items-center justify-center border border-[#808080] bg-[#D4D0C8] px-1 text-[13px] font-bold" onClick={() => setIcInfoOpen(true)}>
+                IC資訊
+              </button>
+              <button
+                type="button"
+                className="flex min-w-0 flex-1 items-center justify-center border border-[#808080] bg-[#D4D0C8] px-1 text-[13px] font-bold"
+                onClick={() => {
+                  if (selectedEncounterId) handleClinicTabChange("alerts");
+                }}
+              >
+                過敏藥物
+              </button>
+              <button type="button" className="flex min-w-0 flex-1 items-center justify-center border border-[#808080] bg-[#D4D0C8] px-1 text-[13px] font-bold" onClick={() => setReferralOpen(true)}>
+                轉診作業
+              </button>
+              <span>F9</span>
+              <span>Esc</span>
+            </>
+          ) : (
+            <>
+              <button type="button" className="flex min-w-0 flex-1 items-center justify-center border border-[#808080] bg-[#D4D0C8] px-1 text-[13px] font-bold" onClick={() => setLookOpen(true)}>
+                LOOK
+              </button>
+              <button type="button" className="flex min-w-0 flex-1 items-center justify-center border border-[#808080] bg-[#D4D0C8] px-1 text-[13px] font-bold" onClick={() => setPaletteOpen(true)}>
+                建議
+              </button>
+              <button type="button" className="flex min-w-0 flex-1 items-center justify-center border border-[#808080] bg-[#D4D0C8] px-1 text-[13px] font-bold" onClick={() => setPaletteOpen(true)}>
+                藥組
+              </button>
+              <button type="button" className="flex min-w-0 flex-1 items-center justify-center border border-[#808080] bg-[#D4D0C8] px-1 text-[13px] font-bold" onClick={() => setIcInfoOpen(true)}>
+                IC資訊
+              </button>
+              <button type="button" className="flex min-w-0 flex-1 items-center justify-center border border-[#808080] bg-[#D4D0C8] px-1 text-[13px] font-bold" onClick={() => setReferralOpen(true)}>
+                轉診
+              </button>
+              <button
+                type="button"
+                className="flex min-w-0 flex-1 items-center justify-center border border-[#808080] bg-[#C8F0C8] px-1 text-[13px] font-extrabold text-[#004000]"
+                disabled={saveLocked}
+                onClick={() => onF9()}
+              >
+                F9 存檔
+              </button>
+              <button type="button" className="flex min-w-0 flex-1 items-center justify-center border border-[#808080] bg-[#FFFF80] px-1 text-[13px] font-bold" onClick={closeChart}>
+                {searchParams.get("from") === "emr" ? "回調閱" : "Esc 回清單"}
+              </button>
+            </>
+          )
+        }
+      />
+
+      <ReferralSlipDialog
+        open={referralOpen}
+        encounterId={selectedEncounterId || ""}
+        onClose={() => setReferralOpen(false)}
+        seed={{
+          name: selected?.patientDisplay || "",
+          sex: selected?.sex === "M" ? "男" : selected?.sex === "F" ? "女" : selected?.sex || "",
+          birthday: String((patientResource as { birthDate?: string } | null)?.birthDate || ""),
+          medicalNo: selected?.medicalNo || "",
+          idNo: selected?.idNo || "",
+          phone: selected?.phone || "",
+          address: selected?.address || "",
+          chief: ccText,
+          diagnoses: displayDiagnoses
+            .map((d) => [d.icd10 || d.nhiIcd10 || "", d.text].filter((part) => part.trim()).join(" ").trim())
+            .filter(Boolean)
+            .join("\n"),
+          meds: "",
+          doctorName: selected?.doctorName || "",
+          allergy: allergies.map((a) => a.text).filter(Boolean).join("、"),
+        }}
+      />
+      <SameDayRegisterDialog
+        open={sameDayOpen}
+        hits={findSameDayHits(queue, confirmForm.patientId || "", confirmForm.idNo || "")}
+        onCancel={() => setSameDayOpen(false)}
+        onConfirm={() => {
+          sameDayPassRef.current = true;
+          setSameDayOpen(false);
+          void confirmNewRegister();
+        }}
+      />
+      <PatientLookDialog
+        open={lookOpen}
+        patientId={selected?.patientId ?? null}
+        patientName={selected?.patientDisplay || ""}
+        medicalNo={selected?.medicalNo || ""}
+        onClose={() => setLookOpen(false)}
+      />
+
+      <VisitSaveConfirmPanel
+        open={saveLayerOpen}
+        locked={saveLocked}
+        saving={saving}
+        cardNote={cardNote}
+        selected={selected}
+        ccText={ccText}
+        currentRx={currentRx}
+        draft={saveDraft}
+        waiting={shiftQueue
+          .filter((e) => e.queueStatus === "waiting" || e.queueStatus === "in_progress")
+          .slice()
+          .sort((a, b) => (Number(a.queueNumber) || 0) - (Number(b.queueNumber) || 0))
+          .map((e) => ({
+            encounterId: e.encounterId,
+            queueNumber: e.queueNumber,
+            patientDisplay: e.patientDisplay,
+            queueStatus: e.queueStatus,
+          }))}
+        onChange={(patch) => {
+          setSaveDraft((d) => ({ ...d, ...patch }));
+          if (selectedEncounterId) {
+            setSaveCommitted((prev) => ({ ...prev, [selectedEncounterId]: false }));
+          }
+        }}
+        onClose={() => setSaveLayerOpen(false)}
+        onConfirm={() => void confirmSave()}
+        onPrint={printVisitReceipt}
+        printNote={printNote}
+        onPickWaiting={(id) => {
+          setSaveLayerOpen(false);
+          openChart(id);
+        }}
+      />
+
+      <ClinicBigPalette
+        open={paletteOpen}
+        onClose={() => setPaletteOpen(false)}
+        drugs={catalog.drugs}
+        diagnoses={catalog.diagnoses}
+        packages={catalog.packages}
+        onAddRx={addRxLines}
+        onAddDx={addDiagnosis}
+      />
+      <RegisterOptionsDialog
+        open={registerOptionsOpen}
+        onClose={() => setRegisterOptionsOpen(false)}
+        initialQuery={queueSearch}
+        pharmacist={session?.pharmacist || lastPharmacist()}
+        selectedLabel={
+          selected
+            ? `${selected.patientDisplay || ""} [${selected.medicalNo || ""}] \u6848\u4ef6:${selected.caseNo || "\u2014"} \u5e8f:${selected.queueNumber ?? "\u2014"}`
+            : undefined
+        }
+        onIcRegister={() => goRegisterByCard()}
+        onSearchPatients={(q) => openFinder(q)}
+        onPatientPicked={onPatientPickedForRegister}
+        onNoCardRegister={(q) => {
+          if (selected?.patientId && !q) {
+            openConfirmFromSeed({
+              patientId: selected.patientId,
+              idNo: selected.idNo || "",
+              birthday: patientEditSeed?.birthday || "",
+              sex: selected.sex || "F",
+              patientName: selected.patientDisplay,
+              icException: "deposit",
+              noCardReason: "",
+              deposit: loadClinicRegisterDefaults().depositAmount,
+              prebook: false,
+              pharmacist: session?.pharmacist || lastPharmacist(),
+            });
+            return;
+          }
+          openFinder(q || queueSearch);
+        }}
+        onEditSelected={() => openF3RegisterEdit()}
+        onIcRelated={applyRegisterHub}
+        onOtherQuery={applyRegisterHub}
+      />
+      <PatientEditDialog
+        open={patientEditOpen}
+        onClose={() => setPatientEditOpen(false)}
+        seed={patientEditSeed}
+        onSaved={() => void refreshQueue()}
+      />
+      <CertificateDialog
+        open={certificateOpen}
+        onClose={() => setCertificateOpen(false)}
+        onOpenReferral={() => {
+          setCertificateOpen(false);
+          setReferralOpen(true);
+        }}
+        seed={certificateSeed}
+      />
+      <PatientFinderDialog
+        open={finderOpen}
+        initialQuery={finderSeed}
+        onClose={() => setFinderOpen(false)}
+        onSelect={onPatientPickedForRegister}
+      />
+      <InsertNumberDialog
+        open={insertAsk != null}
+        gap={insertAsk?.gap ?? 0}
+        onYes={() => answerInsert(true)}
+        onNo={() => answerInsert(false)}
+      />
+      <RegisterConfirmDialog
+        open={confirmOpen}
+        encounterDate={currentDate}
+        busy={registerBusy}
+        seqBusy={seqBusy}
+        seqNote={seqNote}
+        error={confirmError}
+        diagnose={cardDiagnose}
+        form={confirmForm}
+        onChange={(patch) => setConfirmForm((prev) => ({ ...prev, ...patch }))}
+        onClose={() => {
+          setConfirmOpen(false);
+          setCardDiagnose(null);
+        }}
+        onConfirm={confirmNewRegister}
+        lockedShift={session?.shift}
+        onReadCard={async () => {
+          try {
+            setConfirmError(null);
+            setCardDiagnose(null);
+            await fillConfirmFromCard();
+          } catch (e) {
+            setConfirmError(e instanceof Error ? e.message : "讀卡失敗");
+            setCardDiagnose(e instanceof CardReadError ? e.diagnose : null);
+          }
+        }}
+      />
+      {depositAsk && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40">
+          <div
+            className="w-[22rem] border-2 bg-[#ECE9D8] p-3 shadow-lg"
+            style={{ borderColor: "#404040", fontFamily: HIS_FONT }}
+          >
+            <h3 className="mb-2 text-[14px] font-bold">無卡掛號已存檔</h3>
+            <p className="mb-3 text-[12px]">
+              {depositAsk.name || "病患"}　押金 {depositAsk.deposit} 元。是否列印押金單？
+            </p>
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                className="border px-3 py-1 text-[12px] font-bold"
+                style={{ borderColor: "#808080", background: "#FFFFC0" }}
+                onClick={() => {
+                  openPrintPreview({
+                    kind: "receipt",
+                    title: "押金單",
+                    patientName: depositAsk.name,
+                    lines: [
+                      { label: "看診日", value: depositAsk.date },
+                      { label: "押金", value: depositAsk.deposit },
+                      { label: "掛號費", value: depositAsk.regFee },
+                      { label: "說明", value: "請於七天內攜帶健保卡辦理退押" },
+                    ],
+                  });
+                  setDepositAsk(null);
+                }}
+              >
+                是，印押金單
+              </button>
+              <button
+                type="button"
+                className="border px-3 py-1 text-[12px] font-bold"
+                style={{ borderColor: "#808080", background: "#fff" }}
+                onClick={() => setDepositAsk(null)}
+              >
+                否
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      <RegisterEditDialog
+        open={registerOpen}
+        title="掛號編輯（已掛一筆／診療作業）"
+        busy={registerBusy}
+        seqBusy={seqBusy}
+        seqNote={seqNote}
+        error={registerError}
+        form={registerForm}
+        onChange={(patch) => setRegisterForm((prev) => ({ ...prev, ...patch }))}
+        onClose={() => {
+          setRegisterOpen(false);
+        }}
+        onReadCard={async () => {
+          try {
+            setRegisterError(null);
+            const res = await readCardRegisterPatient();
+            setRegisterForm((prev) => ({
+              ...prev,
+              patientId: res.patientId,
+              idNo: res.validation?.idNo ?? prev.idNo,
+              birthday: res.validation?.birthdayRoc ?? prev.birthday,
+              sex: res.validation?.sex ?? prev.sex,
+              patientName: res.validation?.patientName || prev.patientName,
+              cardId: res.validation?.cardId ?? prev.cardId,
+            }));
+            if (res.cardBridgeNote) setSeqNote(res.cardBridgeNote);
+          } catch (e) {
+            setRegisterError(e instanceof Error ? e.message : "讀卡失敗");
+          }
+        }}
+        onConfirm={confirmRegisterEdit}
+      />
+      {leaveAsk && (
+        <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/35">
+          <div
+            className="w-[min(26rem,92vw)] border bg-[#F0F0F0] shadow-lg"
+            style={{ borderColor: HIS.chromeDark, fontFamily: HIS_FONT }}
+          >
+            <div className="bg-[#2060A0] px-2 py-1 text-xs font-bold text-white">
+              資料有異動您確定要離開嗎？
+            </div>
+            <p className="px-3 py-4 text-[13px] leading-relaxed text-black">
+              資料有異動你確定不存檔離開嗎
+            </p>
+            <div className="flex justify-end gap-1 border-t px-2 py-2" style={{ borderColor: HIS.chromeDark }}>
+              <button
+                type="button"
+                className="border px-2 py-0.5 text-xs font-bold"
+                style={{ borderColor: "#404040", background: "#FFFF80" }}
+                onClick={() => {
+                  const intent = leaveIntentRef.current;
+                  setLeaveAsk(false);
+                  afterSaveLeaveRef.current = () => {
+                    leaveIntentRef.current = null;
+                    if (intent?.kind === "open") {
+                      leaveBypassRef.current = true;
+                      openChart(intent.encounterId, intent.opts);
+                      return;
+                    }
+                    closeChartNow(true);
+                  };
+                  void openSaveLayer();
+                }}
+              >
+                存檔離開
+              </button>
+              <button
+                type="button"
+                className="border px-2 py-0.5 text-xs font-bold"
+                style={{ borderColor: "#404040", background: "#F0F0F0" }}
+                onClick={() => runLeaveIntent(true)}
+              >
+                不存檔離開
+              </button>
+              <button
+                type="button"
+                className="border px-2 py-0.5 text-xs"
+                style={{ borderColor: "#404040", background: "#F0F0F0" }}
+                onClick={() => {
+                  leaveIntentRef.current = null;
+                  afterSaveLeaveRef.current = null;
+                  setLeaveAsk(false);
+                }}
+              >
+                取消
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      <DeleteRegisterDialog
+        open={deleteOpen}
+        busy={deleteBusy}
+        error={deleteError}
+        patientDisplay={selected?.patientDisplay}
+        hasTreatSeq={Boolean(selected?.treatSeq)}
+        onClose={() => setDeleteOpen(false)}
+        onDelete={handleDeleteRegister}
+      />
+      {gateOpen && entered && (
+        <ClinicSessionGate
+          initial={session}
+          onConfirm={(next) => applySession(next, false)}
+          onCancel={() => setGateOpen(false)}
+        />
+      )}
+      <IcCardInfoDialog
+        open={icInfoOpen}
+        onClose={() => setIcInfoOpen(false)}
+        treatSeq={selected?.treatSeq}
+        treatmentNumber={selected?.treatmentNumber}
+        treatDateTime={selected?.treatDateTime}
+        cardNo={selected?.hcId}
+      />
+      <HisStubDialog
+        stubId={stubId}
+        patientDisplay={selected?.patientDisplay}
+        values={stubValues}
+        onClose={() => setStubId(null)}
+      />
+      <RefundDepositDialog
+        open={refundOpen}
+        initialIdNo={selected?.idNo}
+        onClose={() => setRefundOpen(false)}
+        onDone={() => void refreshQueue()}
+      />
+    </div>
+  );
+}

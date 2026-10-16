@@ -1,0 +1,147 @@
+import type { CatalogDrug, CatalogDiagnosis } from "@/types/clinicCatalog";
+
+export function matchQuery(text: string, query: string): boolean {
+  const q = query.trim().toLowerCase();
+  if (!q) return false;
+  return text.toLowerCase().includes(q);
+}
+
+function rankDrugs(pool: CatalogDrug[], query: string, limit: number): CatalogDrug[] {
+  const q = query.trim();
+  if (!q) return pool.slice(0, limit);
+  const lower = q.toLowerCase();
+  const scored = pool
+    .map((d) => {
+      const alias = (d.alias || d.shortName || "").toLowerCase();
+      let score = 0;
+      if (alias) {
+        if (alias === lower) score += 200;
+        else if (alias.startsWith(lower)) score += 120;
+        else if (alias.includes(lower)) score += 40;
+      }
+      const fields = [d.customName, d.nhiCode, d.drugNo, d.name, d.generic];
+      for (const f of fields) {
+        if (!f) continue;
+        const fl = f.toLowerCase();
+        if (fl === lower) score += 100;
+        else if (fl.startsWith(lower)) score += 50;
+        else if (fl.includes(lower)) score += 10;
+      }
+      return { d, score };
+    })
+    .filter((x) => x.score > 0)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, limit);
+  return scored.map((x) => x.d);
+}
+
+export function searchDrugs(drugs: CatalogDrug[], query: string, limit = 12): CatalogDrug[] {
+  const opened = drugs.filter((d) => d.clinicIndex === true);
+  const pool = opened.length ? opened : drugs;
+  return rankDrugs(pool, query, limit);
+}
+
+function hasCjk(value: string): boolean {
+  return /[\u3400-\u9fff]/.test(value);
+}
+
+function fieldScore(value: string | undefined, query: string): number {
+  const text = (value || "").trim().toLowerCase();
+  if (!text || !query) return 0;
+  if (text === query) return 300;
+  if (text.startsWith(query)) return 160;
+  if (text.includes(query)) return 40;
+  return 0;
+}
+
+/** English unless the doctor typed Chinese. Rows with no English name stay in Chinese. */
+export function diagnosisLabel(hit: CatalogDiagnosis, query = ""): string {
+  const q = query.trim();
+  const en = (hit.nameEn || "").trim();
+  const zh = (hit.nameZh || "").trim();
+  const text = (hit.text || "").trim();
+  const enLabel = en && !hasCjk(en) ? en : text && !hasCjk(text) ? text : "";
+  if (q && hasCjk(q)) {
+    if (zh && hasCjk(zh)) return zh;
+    if (hasCjk(text)) return text;
+  }
+  return enLabel || zh || text;
+}
+
+function sameDiagnosis(row: CatalogDiagnosis, query: string): string {
+  return [
+    (row.icd9 || row.aCode || "").replace(/\./g, "").trim().toUpperCase(),
+    (row.icd10 || row.nhiIcd10 || "").replace(/\./g, "").trim().toUpperCase(),
+    diagnosisLabel(row, query).trim().toLowerCase(),
+  ].join("|");
+}
+
+function uniqueDiagnoses(rows: CatalogDiagnosis[], query: string): CatalogDiagnosis[] {
+  const seen = new Set<string>();
+  const out: CatalogDiagnosis[] = [];
+  for (const row of rows) {
+    const key = sameDiagnosis(row, query);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(row);
+  }
+  return out;
+}
+
+export function searchDiagnoses(
+  items: CatalogDiagnosis[],
+  query: string,
+  limit = 12,
+  dedupe = true,
+): CatalogDiagnosis[] {
+  const q = query.trim();
+  const opened = items.filter((d) => d.enabled !== "N");
+  const pool = opened.length ? opened : items;
+  if (!q) return uniqueDiagnoses(pool, "").slice(0, limit);
+  const lower = q.toLowerCase();
+  const cjk = hasCjk(q);
+  const codeQuery = lower.replace(/\./g, "");
+  const ranked = pool
+    .map((d, index) => {
+      const en = Math.max(fieldScore(d.nameEn, lower), fieldScore(d.text, lower));
+      const zh = fieldScore(d.nameZh, lower);
+      const code = Math.max(
+        fieldScore(d.short, lower),
+        fieldScore(d.icd9, codeQuery),
+        fieldScore((d.icd10 || "").replace(/\./g, ""), codeQuery),
+        fieldScore((d.nhiIcd10 || "").replace(/\./g, ""), codeQuery),
+        fieldScore(d.aCode, codeQuery),
+      );
+      let score = Math.max(en, code);
+      if (cjk) score = Math.max(score, zh + (zh >= 300 ? 20 : 0));
+      else if (zh > 0) score = Math.max(score, Math.min(zh, 30));
+      const typed = (d.nameEn || d.text || "").trim();
+      if (!cjk && typed === q) score += 5;
+      return { d, score, index };
+    })
+    .filter((row) => row.score > 0)
+    .sort((a, b) => b.score - a.score || a.index - b.index)
+    .map((row) => row.d);
+  const list = dedupe ? uniqueDiagnoses(ranked, q) : ranked;
+  return list.slice(0, limit);
+}
+
+/** 右欄瀏覽：無字顯示診所常用清單；有字再篩選 */
+export function browseDiagnoses(
+  items: CatalogDiagnosis[],
+  query: string,
+  limit = 200,
+): CatalogDiagnosis[] {
+  return searchDiagnoses(items, query, limit);
+}
+
+export function browseDrugs(
+  drugs: CatalogDrug[],
+  query: string,
+  limit = 5000,
+  indexedOnly = true,
+): CatalogDrug[] {
+  const opened = drugs.filter((d) => d.clinicIndex === true);
+  const pool = indexedOnly && opened.length ? opened : drugs;
+  return rankDrugs(pool, query, limit);
+}

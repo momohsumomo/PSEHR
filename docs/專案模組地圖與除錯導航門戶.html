@@ -1,0 +1,582 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Wundadi FHIR HIS — 專案模組地圖與除錯導航門戶</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&family=Noto+Sans+TC:wght@300;400;500;700&display=swap');
+
+    :root {
+      --bg: #090b11;
+      --surface: #131722;
+      --surface-hover: #1b2030;
+      --border: #22293a;
+      --border-focus: #3e4d6f;
+      --text: #f0f3f8;
+      --text-muted: #8892b0;
+      --primary: #4f46e5;
+      --primary-glow: rgba(79, 70, 229, 0.4);
+      --success: #10b981;
+      --warning: #f59e0b;
+      --danger: #ef4444;
+      --info: #06b6d4;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: 'Outfit', 'Noto Sans TC', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+      padding: 40px 24px;
+      max-width: 1400px;
+      margin: 0 auto;
+    }
+
+    header {
+      margin-bottom: 40px;
+      position: relative;
+      padding-bottom: 20px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    header h1 {
+      font-size: 2.2rem;
+      font-weight: 700;
+      background: linear-gradient(135deg, #a5b4fc 0%, #6366f1 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      margin-bottom: 8px;
+      letter-spacing: -0.02em;
+    }
+
+    header p {
+      color: var(--text-muted);
+      font-size: 1rem;
+    }
+
+    .badge-bar {
+      display: flex;
+      gap: 10px;
+      margin-top: 12px;
+      flex-wrap: wrap;
+    }
+
+    .badge {
+      font-size: 0.75rem;
+      padding: 4px 10px;
+      border-radius: 20px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid var(--border);
+      color: var(--text-muted);
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .badge.active {
+      background: rgba(99, 102, 241, 0.15);
+      border-color: rgba(99, 102, 241, 0.4);
+      color: #a5b4fc;
+    }
+
+    .search-container {
+      margin-bottom: 30px;
+      position: relative;
+    }
+
+    .search-input {
+      width: 100%;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      padding: 16px 20px;
+      border-radius: 12px;
+      color: var(--text);
+      font-size: 1.05rem;
+      transition: all 0.25s ease;
+      font-family: inherit;
+    }
+
+    .search-input:focus {
+      outline: none;
+      border-color: var(--border-focus);
+      box-shadow: 0 0 15px rgba(99, 102, 241, 0.1);
+    }
+
+    .modules-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(420px, 1fr));
+      gap: 24px;
+    }
+
+    @media (max-width: 768px) {
+      .modules-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .module-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .module-card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 4px;
+      height: 100%;
+      background: var(--primary);
+      opacity: 0.8;
+    }
+
+    .module-card:hover {
+      transform: translateY(-4px);
+      border-color: var(--border-focus);
+      box-shadow: 0 10px 25px -10px rgba(0, 0, 0, 0.5);
+      background: var(--surface-hover);
+    }
+
+    .card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 16px;
+    }
+
+    .card-title {
+      font-size: 1.3rem;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .card-title span.icon {
+      font-size: 1.6rem;
+    }
+
+    .sandbox-tag {
+      font-size: 0.72rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      padding: 3px 8px;
+      border-radius: 4px;
+      letter-spacing: 0.05em;
+    }
+
+    .tag-s1 { background: rgba(6, 182, 212, 0.15); color: var(--info); border: 1px solid rgba(6, 182, 212, 0.3); }
+    .tag-s2 { background: rgba(99, 102, 241, 0.15); color: #a5b4fc; border: 1px solid rgba(99, 102, 241, 0.3); }
+    .tag-s3 { background: rgba(245, 158, 11, 0.15); color: var(--warning); border: 1px solid rgba(245, 158, 11, 0.3); }
+    .tag-infra { background: rgba(16, 185, 129, 0.15); color: var(--success); border: 1px solid rgba(16, 185, 129, 0.3); }
+
+    .module-desc {
+      color: var(--text-muted);
+      font-size: 0.92rem;
+      margin-bottom: 20px;
+      min-height: 48px;
+    }
+
+    .section-title {
+      font-size: 0.8rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-muted);
+      margin-bottom: 8px;
+      font-weight: 700;
+    }
+
+    .file-list {
+      list-style: none;
+      margin-bottom: 20px;
+    }
+
+    .file-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 10px;
+      background: rgba(255, 255, 255, 0.02);
+      border: 1px solid rgba(255, 255, 255, 0.04);
+      border-radius: 6px;
+      font-size: 0.82rem;
+      margin-bottom: 6px;
+      font-family: 'Consolas', monospace;
+      color: #cbd5e1;
+      transition: all 0.2s ease;
+      cursor: pointer;
+    }
+
+    .file-item:hover {
+      background: rgba(255, 255, 255, 0.06);
+      border-color: rgba(255, 255, 255, 0.1);
+      color: #fff;
+    }
+
+    .file-item .file-icon {
+      font-size: 1rem;
+      opacity: 0.7;
+    }
+
+    .copy-btn {
+      margin-left: auto;
+      background: none;
+      border: none;
+      color: var(--text-muted);
+      cursor: pointer;
+      opacity: 0;
+      transition: opacity 0.2s ease;
+      padding: 2px;
+    }
+
+    .file-item:hover .copy-btn {
+      opacity: 1;
+    }
+
+    .copy-btn:hover {
+      color: #fff;
+    }
+
+    .trouble-box {
+      background: rgba(239, 68, 68, 0.04);
+      border: 1px dashed rgba(239, 68, 68, 0.2);
+      border-radius: 10px;
+      padding: 14px;
+      font-size: 0.88rem;
+      margin-top: auto;
+    }
+
+    .trouble-symptom {
+      color: #fca5a5;
+      font-weight: 600;
+      margin-bottom: 4px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .trouble-solution {
+      color: var(--text-muted);
+      line-height: 1.4;
+    }
+
+    .trouble-solution code {
+      background: rgba(0, 0, 0, 0.2);
+      padding: 1px 4px;
+      border-radius: 4px;
+      color: #fbcfe8;
+      font-family: monospace;
+    }
+
+    /* Color code cards differently based on their primary roles */
+    .module-card.s1::before { background: var(--info); }
+    .module-card.s2::before { background: var(--primary); }
+    .module-card.s3::before { background: var(--warning); }
+    .module-card.infra::before { background: var(--success); }
+
+    .bottom-tips {
+      margin-top: 40px;
+      padding: 20px;
+      border-radius: 12px;
+      background: rgba(255, 255, 255, 0.02);
+      border: 1px solid var(--border);
+      text-align: center;
+      font-size: 0.9rem;
+      color: var(--text-muted);
+    }
+
+    .bottom-tips code {
+      color: #a5b4fc;
+      background: rgba(0, 0, 0, 0.3);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-family: monospace;
+    }
+
+    .hidden {
+      display: none !important;
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <h1>Wundadi FHIR HIS — 專案模組地圖與除錯門戶</h1>
+    <p>提供人類友好的直覺入口，協助任何人（與未來的你）在 3 秒內定位問題與故障檔案</p>
+    <div class="badge-bar">
+      <span class="badge active">🧭 全專案導覽</span>
+      <span class="badge">🚀 沙盒 1 (前端 UI)</span>
+      <span class="badge">⚙️ 沙盒 2 (後端 APIs)</span>
+      <span class="badge">🔌 沙盒 3 (健保卡讀卡)</span>
+      <span class="badge">💾 基礎資料庫</span>
+    </div>
+  </header>
+
+  <div class="search-container">
+    <input type="text" id="searchInput" class="search-input" placeholder="🔍 輸入關鍵字搜尋模組（例如：讀卡、開藥、Allergy、Database...）" />
+  </div>
+
+  <main class="modules-grid" id="modulesGrid">
+    <!-- 讀卡與掛號模組 -->
+    <article class="module-card s3" data-keywords="讀卡 健保卡 PCSC nhi reader 註冊 診間掛號">
+      <div class="card-header">
+        <h2 class="card-title"><span class="icon">🚪</span>讀卡與掛號模組</h2>
+        <span class="sandbox-tag tag-s3">沙盒 3</span>
+      </div>
+      <p class="module-desc">負責與物理健保卡讀卡機（PCSC 通訊協定）連線，並銜接虛擬健保卡 API / 掛號進場註冊流程。</p>
+      
+      <h3 class="section-title">核心程式碼檔案路徑</h3>
+      <ul class="file-list">
+        <li class="file-item" onclick="copyPath('utils/nhi_reader.py')">
+          <span class="file-icon">🐍</span> utils/nhi_reader.py
+          <span class="copy-btn" title="複製路徑">📋</span>
+        </li>
+        <li class="file-item" onclick="copyPath('src/api/routers/patient.py')">
+          <span class="file-icon">🐍</span> src/api/routers/patient.py
+          <span class="copy-btn" title="複製路徑">📋</span>
+        </li>
+        <li class="file-item" onclick="copyPath('src/api/routers/nhi.py')">
+          <span class="file-icon">🐍</span> src/api/routers/nhi.py
+          <span class="copy-btn" title="複製路徑">📋</span>
+        </li>
+      </ul>
+
+      <div class="trouble-box">
+        <h4 class="trouble-symptom">❌ 卡片讀不到 / 連線超時？</h4>
+        <p class="trouble-solution">
+          1. 執行 <code>python utils/nhi_reader.py pcsc</code> 檢測硬體驅動。<br>2. 確認健保卡控制軟體 6.0 於背景 Port <code>5066</code> 正常運作。<br>3. 檢查後端 <code>src/api/routers/nhi.py</code> 串接格式。
+        </p>
+      </div>
+    </article>
+
+    <!-- 藥品與處方管理 -->
+    <article class="module-card s2" data-keywords="藥品 處方 開藥 健保碼 藥理 過敏 cdss drug code">
+      <div class="card-header">
+        <h2 class="card-title"><span class="icon">💊</span>藥品與處方管理</h2>
+        <span class="sandbox-tag tag-s2">沙盒 2 / 1</span>
+      </div>
+      <p class="module-desc">負責處理當次就醫的開藥處方、健保申報碼對照、RxNorm 以及藥物與患者病歷的過敏 CDSS 防撞機制。</p>
+      
+      <h3 class="section-title">核心程式碼檔案路徑</h3>
+      <ul class="file-list">
+        <li class="file-item" onclick="copyPath('src/api/routers/medication_request.py')">
+          <span class="file-icon">🐍</span> src/api/routers/medication_request.py
+          <span class="copy-btn" title="複製路徑">📋</span>
+        </li>
+        <li class="file-item" onclick="copyPath('frontend/src/pages/DrugCatalogPage.tsx')">
+          <span class="file-icon">⚛️</span> frontend/src/pages/DrugCatalogPage.tsx
+          <span class="copy-btn" title="複製路徑">📋</span>
+        </li>
+        <li class="file-item" onclick="copyPath('frontend/src/components/clinic/widgets/CurrentRxWidget.tsx')">
+          <span class="file-icon">⚛️</span> widgets/widgets/CurrentRxWidget.tsx
+          <span class="copy-btn" title="複製路徑">📋</span>
+        </li>
+      </ul>
+
+      <div class="trouble-box">
+        <h4 class="trouble-symptom">❌ 藥物過敏警告未彈出 / 找不到藥？</h4>
+        <p class="trouble-solution">
+          1. 檢查後端 <code>allergy_intolerance.py</code> 的過敏檢索匹配邏輯。<br>2. 檢查前端 <code>CurrentRxWidget.tsx</code> 是否在處方變更時觸發防撞 API。
+        </p>
+      </div>
+    </article>
+
+    <!-- 病人資料與預診 -->
+    <article class="module-card s1" data-keywords="病人 病歷 預診 previsit patient soap 主訴 CC">
+      <div class="card-header">
+        <h2 class="card-title"><span class="icon">👤</span>病人資料與預診</h2>
+        <span class="sandbox-tag tag-s1">沙盒 1 / 2</span>
+      </div>
+      <p class="module-desc">患者自訴預診填寫頁面、病人基本資料整合、歷次看診 SOAP 病歷摘要與生命徵象拉取。</p>
+      
+      <h3 class="section-title">核心程式碼檔案路徑</h3>
+      <ul class="file-list">
+        <li class="file-item" onclick="copyPath('frontend/src/pages/PatientPreVisitPage.tsx')">
+          <span class="file-icon">⚛️</span> frontend/src/pages/PatientPreVisitPage.tsx
+          <span class="copy-btn" title="複製路徑">📋</span>
+        </li>
+        <li class="file-item" onclick="copyPath('src/api/routers/outpatient.py')">
+          <span class="file-icon">🐍</span> src/api/routers/outpatient.py
+          <span class="copy-btn" title="複製路徑">📋</span>
+        </li>
+        <li class="file-item" onclick="copyPath('frontend/src/components/clinic/widgets/ChiefComplaintWidget.tsx')">
+          <span class="file-icon">⚛️</span> widgets/widgets/ChiefComplaintWidget.tsx
+          <span class="copy-btn" title="複製路徑">📋</span>
+        </li>
+      </ul>
+
+      <div class="trouble-box">
+        <h4 class="trouble-symptom">❌ 雙擊排隊名單無法載入病歷？</h4>
+        <p class="trouble-solution">
+          1. 排查 <code>outpatient.py</code> 的 <code>/workspace/{encounterId}</code> 是否噴 500。<br>2. 確認 SQLite 中的 <code>Encounter</code> 與 <code>Patient</code> 的 ID 關聯沒有損毀。
+        </p>
+      </div>
+    </article>
+
+    <!-- UI/UX診間工作台 -->
+    <article class="module-card s1" data-keywords="ui ux 診間 雙欄 版面 快捷鍵 f2 f10 drag custom layout">
+      <div class="card-header">
+        <h2 class="card-title"><span class="icon">💻</span>UI/UX診間工作台</h2>
+        <span class="sandbox-tag tag-s1">沙盒 1</span>
+      </div>
+      <p class="module-desc">負責皮膚科醫生雙欄看診工作台的配置驅動排版、各類看板組件渲染，以及診間快速鍵監聽。</p>
+      
+      <h3 class="section-title">核心程式碼檔案路徑</h3>
+      <ul class="file-list">
+        <li class="file-item" onclick="copyPath('frontend/src/pages/ClinicOutpatientPage.tsx')">
+          <span class="file-icon">⚛️</span> frontend/src/pages/ClinicOutpatientPage.tsx
+          <span class="copy-btn" title="複製路徑">📋</span>
+        </li>
+        <li class="file-item" onclick="copyPath('frontend/src/config/ui-config.json')">
+          <span class="file-icon">⚙️</span> frontend/src/config/ui-config.json
+          <span class="copy-btn" title="複製路徑">📋</span>
+        </li>
+      </ul>
+
+      <div class="trouble-box">
+        <h4 class="trouble-symptom">❌ 元件版面崩壞 / 快捷鍵失效？</h4>
+        <p class="trouble-solution">
+          1. 檢查 <code>ui-config.json</code> 是否是合法的 JSON。<br>2. 確認 Widget 元件最外層是否保留了 <code>w-full h-full min-h-0</code>。<br>3. 至 <code>ClinicOutpatientPage.tsx</code> 搜尋快速鍵監聽器。
+        </p>
+      </div>
+    </article>
+
+    <!-- 雙層SQLite資料庫 -->
+    <article class="module-card infra" data-keywords="資料庫 SQLite shadow db fhir cache 貼紙 基礎建設 SQL">
+      <div class="card-header">
+        <h2 class="card-title"><span class="icon">🗄️</span>雙層SQLite資料庫</h2>
+        <span class="sandbox-tag tag-infra">基礎建設</span>
+      </div>
+      <p class="module-desc">系統的儲存底座。實作雙層快取機制：一層完整 FHIR JSON (<code>resource_cache</code>) ＋另一層供快速查詢的 SQL 索引貼紙表。</p>
+      
+      <h3 class="section-title">核心程式碼檔案路徑</h3>
+      <ul class="file-list">
+        <li class="file-item" onclick="copyPath('src/infrastructure/sqlite_shadow_store.py')">
+          <span class="file-icon">🐍</span> src/infrastructure/sqlite_shadow_store.py
+          <span class="copy-btn" title="複製路徑">📋</span>
+        </li>
+        <li class="file-item" onclick="copyPath('data/shadow.db')">
+          <span class="file-icon">💾</span> data/shadow.db
+          <span class="copy-btn" title="複製路徑">📋</span>
+        </li>
+        <li class="file-item" onclick="copyPath('src/infrastructure/sync_worker.py')">
+          <span class="file-icon">🐍</span> src/infrastructure/sync_worker.py
+          <span class="copy-btn" title="複製路徑">📋</span>
+        </li>
+      </ul>
+
+      <div class="trouble-box">
+        <h4 class="trouble-symptom">❌ 存入資料後用 SQL 查不到？</h4>
+        <p class="trouble-solution">
+          1. 後端寫入時是否同步更新了對應的快取貼紙表（如 <code>_update_patient_index</code>）。<br>2. 呼叫 <code>GET /sandbox/dual-layer/{type}/{id}</code> 比對雙層落庫一致性。
+        </p>
+      </div>
+    </article>
+
+    <!-- 皮膚病灶影像模組 -->
+    <article class="module-card s2" data-keywords="病灶 影像 照片 media base64 photo lesion">
+      <div class="card-header">
+        <h2 class="card-title"><span class="icon">📸</span>皮膚病灶影像模組</h2>
+        <span class="sandbox-tag tag-s2">沙盒 2 / 1</span>
+      </div>
+      <p class="module-desc">提供皮膚科的核心價值：影像記錄。管理病灶縮圖、時間軸、放大對照以及 Base64 照片落庫關聯機制。</p>
+      
+      <h3 class="section-title">核心程式碼檔案路徑</h3>
+      <ul class="file-list">
+        <li class="file-item" onclick="copyPath('src/api/routers/media.py')">
+          <span class="file-icon">🐍</span> src/api/routers/media.py
+          <span class="copy-btn" title="複製路徑">📋</span>
+        </li>
+        <li class="file-item" onclick="copyPath('frontend/src/components/clinic/widgets/LesionPhotosWidget.tsx')">
+          <span class="file-icon">⚛️</span> widgets/widgets/LesionPhotosWidget.tsx
+          <span class="copy-btn" title="複製路徑">📋</span>
+        </li>
+      </ul>
+
+      <div class="trouble-box">
+        <h4 class="trouble-symptom">❌ 照片上傳後無法顯示 / 空白？</h4>
+        <p class="trouble-solution">
+          1. 檢查 <code>media.py</code> 是否收到正確的 Base64 格式，並確認存入 DB。<br>2. 檢查前端 <code>LesionPhotosWidget.tsx</code> 是否能正確轉換 Base64 URL 渲染。
+        </p>
+      </div>
+    </article>
+  </main>
+
+  <div class="bottom-tips">
+    💡 貼心提示：我們已為您在此專案的根目錄建立了 <code>Wundadi-FHIR.code-workspace</code> 工作區設定檔。<br>
+    使用 VS Code 或 Cursor 打開該工作區，您將在左側側邊欄看到<b>「中文命名、依模組劃分」</b>的虛擬資料夾結構，既不影響真實路徑，又極其一目瞭然！
+    <br><br>
+    🔄 此地圖支援自動更新！若新增檔案，可在檔案開頭加上 <code># @module: 模組名稱</code> (Python) 或 <code>// @module: 模組名稱</code> (TSX)，並執行：<br>
+    <code>python scripts/update_project_map.py</code> 即可實時重新整理此網頁。
+  </div>
+
+  <script>
+    // Search function
+    const searchInput = document.getElementById('searchInput');
+    const cards = document.querySelectorAll('.module-card');
+    
+    searchInput.addEventListener('input', function() {
+      const query = this.value.toLowerCase().trim();
+      
+      cards.forEach(card => {
+        const keywords = card.getAttribute('data-keywords').toLowerCase();
+        const title = card.querySelector('.card-title').textContent.toLowerCase();
+        const desc = card.querySelector('.module-desc').textContent.toLowerCase();
+        
+        if (keywords.includes(query) || title.includes(query) || desc.includes(query)) {
+          card.classList.remove('hidden');
+        } else {
+          card.classList.add('hidden');
+        }
+      });
+    });
+
+    // Copy path function
+    function copyPath(path) {
+      navigator.clipboard.writeText(path).then(() => {
+        // Simple visual feedback
+        const el = event.currentTarget;
+        const originalText = el.innerHTML;
+        el.style.backgroundColor = 'rgba(16, 185, 129, 0.2)';
+        el.style.borderColor = 'rgba(16, 185, 129, 0.4)';
+        
+        setTimeout(() => {
+          el.style.backgroundColor = '';
+          el.style.borderColor = '';
+        }, 1000);
+      });
+    }
+
+    // Filter by badges
+    const badges = document.querySelectorAll('.badge');
+    badges.forEach(badge => {
+      badge.addEventListener('click', function() {
+        badges.forEach(b => b.classList.remove('active'));
+        this.classList.add('active');
+        
+        const filterText = this.textContent;
+        cards.forEach(card => {
+          card.classList.remove('hidden');
+          if (filterText.includes('沙盒 1') && !card.classList.contains('s1')) card.classList.add('hidden');
+          if (filterText.includes('沙盒 2') && !card.classList.contains('s2')) card.classList.add('hidden');
+          if (filterText.includes('沙盒 3') && !card.classList.contains('s3')) card.classList.add('hidden');
+          if (filterText.includes('基礎資料庫') && !card.classList.contains('infra')) card.classList.add('hidden');
+        });
+      });
+    });
+  </script>
+</body>
+</html>

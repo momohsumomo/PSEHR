@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "note": "\u958b\u6e90\u9810\u8a2d\u53ea\u8d70\u5065\u4fdd\u586b\u8868\u8aaa\u660e\uff1a\u516c\u544a\u6162\u6027\u75c5\u4e14\u7d66\u85e5\u6eff\u5929\u6578\u70ba 04\uff1b\u540c\u4e00\u7b46\u540c\u6642\u6709\u516c\u544a\u6162\u6027\u75c5\u8207\u5176\u4ed6\u75c5\u540d\u70ba 09\uff1b\u4e00\u822c\u6848\u4ef6\u4ea4\u4ed8\u8abf\u5291\u70ba 09\u3002\u8655\u7f6e\u4ee3\u78bc\u8207\u81ea\u8a02\u6162\u6027\u75c5\u78bc\u53ea\u6709\u5728 clinic.enabled \u70ba true \u6642\u624d\u751f\u6548\u3002\u958b\u555f\u8a3a\u6240\u898f\u5247\u7684\u9662\u6240\u81ea\u884c\u8ca0\u8cac\u8a72\u7533\u5831\u3002exampleNotApplied \u4e0d\u6703\u88ab\u7a0b\u5f0f\u8b80\u53d6\uff0c\u53ea\u4f9b\u9662\u6240\u8907\u88fd\u3002",
+  "core": {
+    "officialChronicMinDays": 7,
+    "acutePlusChronicTo09": true,
+    "generalOutsideDispenseTo09": true
+  },
+  "clinic": {
+    "enabled": false,
+    "extraChronicIcd10": [],
+    "orderCodesTo09": [],
+    "orderTo09BeatenBy04": true,
+    "case09FixedConsult": false
+  },
+  "exampleNotApplied": {
+    "enabled": true,
+    "orderCodesTo09": ["51020C", "51022C", "51004C"],
+    "extraChronicIcd10": [],
+    "case09FixedConsult": true
+  }
+}

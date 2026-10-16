@@ -1,0 +1,37 @@
+{
+  "folders": [
+    {
+      "name": "🚪 [讀卡掛號模組] NHI Reader & Register (Python / Batch)",
+      "path": "utils"
+    },
+    {
+      "name": "💊 [藥品與處方管理] Backend API Routers (FastAPI)",
+      "path": "src/api/routers"
+    },
+    {
+      "name": "🗄️ [雙層 SQLite 資料庫] Database & Infrastructure",
+      "path": "src/infrastructure"
+    },
+    {
+      "name": "💻 [診間 UI/UX 模組] Frontend App Source (React / Vite)",
+      "path": "frontend/src"
+    },
+    {
+      "name": "📝 [開發手冊與規格文件] Docs",
+      "path": "docs"
+    },
+    {
+      "name": "📁 [專案完整原始目錄] Project Root",
+      "path": "."
+    }
+  ],
+  "settings": {
+    "files.exclude": {
+      "**/__pycache__": true,
+      "**/*.pyc": true,
+      "**/node_modules": true,
+      "**/dist": true,
+      "**/.git": true
+    }
+  }
+}

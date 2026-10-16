@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>FHIR 專案進度儀表板</title>
+  <style>
+    :root {
+      --bg: #0f1117;
+      --surface: #181b24;
+      --border: #2a3040;
+      --text: #e8eaef;
+      --muted: #8b93a7;
+      --accent: #4c8bf5;
+      --done: #3dba7a;
+      --active: #4c8bf5;
+      --paused: #c9a227;
+      --pending: #5c6478;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: "Segoe UI", system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.5;
+      padding: 24px 20px 48px;
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+    header { margin-bottom: 28px; }
+    h1 { font-size: 1.75rem; font-weight: 600; letter-spacing: -0.02em; }
+    .sub { color: var(--muted); font-size: 0.9rem; margin-top: 6px; }
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      gap: 12px;
+      margin-bottom: 24px;
+    }
+    .stat {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 16px;
+    }
+    .stat .n { font-size: 1.8rem; font-weight: 700; }
+    .stat .l { font-size: 0.75rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+    .stat.done .n { color: var(--done); }
+    .stat.active .n { color: var(--active); }
+    .stat.paused .n { color: var(--paused); }
+    .bar-wrap {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 16px 18px;
+      margin-bottom: 28px;
+    }
+    .bar-label { display: flex; justify-content: space-between; font-size: 0.85rem; margin-bottom: 10px; }
+    .bar {
+      display: flex;
+      height: 12px;
+      border-radius: 6px;
+      overflow: hidden;
+      background: var(--border);
+    }
+    .bar span { display: block; height: 100%; }
+    .bar .d { background: var(--done); }
+    .bar .a { background: var(--active); }
+    .bar .p { background: var(--paused); }
+    .legend { display: flex; gap: 16px; margin-top: 10px; font-size: 0.75rem; color: var(--muted); flex-wrap: wrap; }
+    .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 6px; vertical-align: middle; }
+    .lanes {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+      margin-bottom: 32px;
+    }
+    @media (max-width: 900px) { .lanes { grid-template-columns: 1fr; } }
+    .lane {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+    .lane-head {
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+    }
+    .lane-head h2 { font-size: 1rem; font-weight: 600; }
+    .lane-head .port { font-size: 0.75rem; color: var(--muted); margin-top: 4px; }
+    .pct {
+      font-size: 0.85rem;
+      font-weight: 700;
+      padding: 4px 10px;
+      border-radius: 20px;
+      background: var(--border);
+    }
+    .pct.high { background: rgba(61, 186, 122, 0.2); color: var(--done); }
+    .pct.mid { background: rgba(76, 139, 245, 0.2); color: var(--active); }
+    .pct.low { background: rgba(92, 100, 120, 0.3); color: var(--muted); }
+    .items { padding: 8px 0; flex: 1; }
+    .item {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      padding: 10px 16px;
+      font-size: 0.88rem;
+      border-bottom: 1px solid rgba(42, 48, 64, 0.5);
+    }
+    .item:last-child { border-bottom: none; }
+    .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      margin-top: 6px;
+      flex-shrink: 0;
+    }
+    .dot.completed { background: var(--done); }
+    .dot.in_progress { background: var(--active); }
+    .dot.pending { background: var(--pending); }
+    .dot.cancelled { background: var(--paused); }
+    .item.cancelled .txt { opacity: 0.55; text-decoration: line-through; }
+    .filters { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 20px; }
+    .filters button {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 8px 14px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 0.85rem;
+    }
+    .filters button.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+    section h2 { font-size: 1.1rem; margin-bottom: 12px; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.88rem;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      overflow: hidden;
+    }
+    th, td { padding: 10px 14px; text-align: left; border-bottom: 1px solid var(--border); }
+    th { color: var(--muted); font-weight: 500; font-size: 0.75rem; text-transform: uppercase; }
+    tr:last-child td { border-bottom: none; }
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    .badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 0.75rem;
+      font-weight: 500;
+    }
+    .badge.done { background: rgba(61,186,122,0.2); color: var(--done); }
+    .badge.progress { background: rgba(76,139,245,0.2); color: var(--active); }
+    .badge.pause { background: rgba(201,162,39,0.2); color: var(--paused); }
+    .badge.todo { background: rgba(92,100,120,0.3); color: var(--muted); }
+    .launch {
+      margin-top: 24px;
+      padding: 16px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      font-size: 0.88rem;
+    }
+    .launch code { color: var(--accent); font-size: 0.82rem; }
+    .hidden { display: none !important; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>FHIR 專案進度儀表板</h1>
+    <p class="sub">三沙盒 + 北極星(KAN-23) + Phase · API v0.11.0 · 更新 2026-06-05</p>
+  </header>
+
+  <div class="stats" id="stats"></div>
+  <div class="bar-wrap">
+    <div class="bar-label"><span>整體 checklist</span><span id="bar-text"></span></div>
+    <div class="bar" id="bar"></div>
+    <div class="legend">
+      <span><i style="background:var(--done)"></i>完成</span>
+      <span><i style="background:var(--active)"></i>進行/待辦</span>
+      <span><i style="background:var(--paused)"></i>暫停</span>
+    </div>
+  </div>
+
+  <div class="filters">
+    <button type="button" class="on" data-f="all">全部</button>
+    <button type="button" data-f="completed">只看完成</button>
+    <button type="button" data-f="in_progress">進行中</button>
+    <button type="button" data-f="pending">待辦</button>
+    <button type="button" data-f="cancelled">暫停</button>
+  </div>
+
+  <div class="lanes" id="lanes"></div>
+
+  <section>
+    <h2>Jira 對照</h2>
+    <table>
+      <thead><tr><th>Key</th><th>模組</th><th>狀態</th><th>備註</th></tr></thead>
+      <tbody id="jira"></tbody>
+    </table>
+  </section>
+
+  <section style="margin-top:24px">
+    <h2>產品北極星 Wundadi（<a href="https://momohsu.atlassian.net/browse/KAN-23">KAN-23</a>）</h2>
+    <p class="sub" style="margin-bottom:12px">新核心取代醫聖 · 醫美知識庫保留 UI · <code>docs/產品願景-Wundadi.md</code></p>
+    <div class="lane" style="margin-bottom:20px">
+      <div class="items" id="vision-items"></div>
+    </div>
+    <h2>Phase 路線（全產品 · 0/3）</h2>
+    <div class="lane" style="margin-top:12px">
+      <div class="items" id="phase-items"></div>
+    </div>
+  </section>
+
+  <div class="launch">
+    <strong>門診閉環必做</strong> — <code>測試-沙盒2-門診一日閉環-自動驗收.bat</code> · <code>docs/必做流程清單.md</code><br /><br />
+    <strong>本機啟動</strong><br />
+    後端：<code>啟動-沙盒2-FHIR後端API-Swagger-5000.bat</code> → <a href="http://127.0.0.1:5000/docs">127.0.0.1:5000/docs</a><br />
+    前端 Mock：<code>啟動-沙盒1-門診UI-Mock-3000.bat</code> → <a href="http://127.0.0.1:3000">127.0.0.1:3000</a><br />
+    前端 API：<code>啟動-沙盒1-門診UI-接後端5000.bat</code>
+  </div>
+
+  <script>
+    const JIRA = "https://momohsu.atlassian.net/browse/";
+    const LANES = [
+      { id: "s1", title: "沙盒 1", sub: "門診 UI · Mock + API 閉環", port: ":3000" },
+      { id: "s2", title: "沙盒 2", sub: "FHIR 後端 · Swagger", port: ":5000" },
+      { id: "s3", title: "沙盒 3", sub: "Mock 橋接完成", port: ":5066 主控台待對齊" },
+    ];
+    const ITEMS = [
+      { lane: "s1", text: "Vite + Medblocks 門診骨架 (KAN-14)", status: "completed" },
+      { lane: "s1", text: "ClinicOutpatientPage 皮膚科雙欄 v0.2", status: "completed" },
+      { lane: "s1", text: "PatientClinicalAvatar (KAN-17)", status: "completed" },
+      { lane: "s1", text: "病患預診頁 /previsit", status: "completed" },
+      { lane: "s1", text: "啟動 Mock / API 閉環 bat", status: "completed" },
+      { lane: "s1", text: "default_ui_config 載入 (KAN-21)", status: "completed" },
+      { lane: "s1", text: "user_preferences 寫入 DB", status: "pending" },
+      { lane: "s1", text: "全面取代 clinicMocks (KAN-15)", status: "cancelled" },
+      { lane: "s2", text: "SQLite 雙層影子庫 (KAN-10)", status: "completed" },
+      { lane: "s2", text: "核心 FHIR API (KAN-12)", status: "completed" },
+      { lane: "s2", text: "NHI Patient/SOAP/Obs/Allergy", status: "completed" },
+      { lane: "s2", text: "NHI 掛號/診斷/處方 (KAN-20)", status: "completed" },
+      { lane: "s2", text: "門診閉環 workspace + 預診", status: "completed" },
+      { lane: "s2", text: "Media + lesionMedia (KAN-18)", status: "completed" },
+      { lane: "s2", text: "sync mark-synced (KAN-22)", status: "completed" },
+      { lane: "s2", text: "一日閉環 E2E bat", status: "completed" },
+      { lane: "s2", text: "TW Profile 文件 (KAN-13)", status: "in_progress" },
+      { lane: "s2", text: "GCP 正式上雲 (KAN-11)", status: "pending" },
+      { lane: "s3", text: "讀卡 Mock 橋接 (KAN-19)", status: "completed" },
+      { lane: "s3", text: "署方主控台正式路徑 (KAN-7)", status: "pending" },
+    ];
+    const VISION_ITEMS = [
+      { text: "★ 取代醫聖 + SMART on FHIR (KAN-23)", status: "in_progress" },
+      { text: "醫美知識庫 Adapter·不魔改舊 UI (KAN-24 待餵碼)", status: "pending" },
+      { text: "病歷/Media 禁止 DELETE (KAN-25)", status: "pending" },
+      { text: "健保申報 XML 取代醫聖 (KAN-6)", status: "pending" },
+    ];
+    const PHASE_ITEMS = [
+      { text: "Phase 1 FIDO2 (KAN-1)", status: "pending" },
+      { text: "Phase 3 AI / 破窗 (KAN-5/KAN-3)", status: "pending" },
+      { text: "Phase 6 社交恢復 (KAN-9)", status: "pending" },
+    ];
+    const JIRA_ROWS = [
+      ["KAN-23", "★ 產品北極星", "progress", "取代醫聖·醫美整合"],
+      ["KAN-24", "醫美知識庫", "todo", "待餵碼"],
+      ["KAN-25", "禁止 DELETE", "todo", ""],
+      ["KAN-2", "模組零", "progress", ""],
+      ["KAN-4", "模組四", "progress", "KAN-20"],
+      ["KAN-6", "健保申報", "todo", "取代醫聖"],
+      ["KAN-8", "模組六 UI", "progress", "KAN-21"],
+      ["KAN-20", "門診 E2E", "done", ""],
+      ["KAN-15", "全面整合", "pause", "≠知識庫UI"],
+    ];
+    let filter = "all";
+
+    function counts(items) {
+      const c = { completed: 0, in_progress: 0, pending: 0, cancelled: 0 };
+      items.forEach((i) => c[i.status]++);
+      return c;
+    }
+
+    function renderStats() {
+      const c = counts(ITEMS);
+      const done = c.completed;
+      const active = c.in_progress + c.pending;
+      const paused = c.cancelled;
+      const total = ITEMS.length;
+      const pct = Math.round((done / total) * 100);
+      document.getElementById("stats").innerHTML = `
+        <div class="stat done"><div class="n">${done}</div><div class="l">三沙盒已完成</div></div>
+        <div class="stat active"><div class="n">${active}</div><div class="l">進行/待辦</div></div>
+        <div class="stat paused"><div class="n">${paused}</div><div class="l">暫停</div></div>
+        <div class="stat"><div class="n">${pct}%</div><div class="l">三沙盒完成率</div></div>`;
+      document.getElementById("bar-text").textContent = `${done} / ${total}（Phase 路線另計 0/4）`;
+      document.getElementById("bar").innerHTML = `
+        <span class="d" style="width:${(done/total)*100}%"></span>
+        <span class="a" style="width:${(active/total)*100}%"></span>
+        <span class="p" style="width:${(paused/total)*100}%"></span>`;
+    }
+
+    function renderLanes() {
+      const root = document.getElementById("lanes");
+      root.innerHTML = LANES.map((lane) => {
+        const items = ITEMS.filter((i) => i.lane === lane.id);
+        const c = counts(items);
+        const done = c.completed;
+        const pct = items.length ? Math.round((done / items.length) * 100) : 0;
+        const pctClass = pct >= 80 ? "high" : pct > 0 ? "mid" : "low";
+        const rows = items
+          .filter((i) => filter === "all" || i.status === filter)
+          .map(
+            (i) =>
+              `<div class="item ${i.status}" data-status="${i.status}">
+                <span class="dot ${i.status}"></span>
+                <span class="txt">${i.text}</span>
+              </div>`
+          )
+          .join("");
+        return `<article class="lane">
+          <div class="lane-head">
+            <div><h2>${lane.title}</h2><div class="port">${lane.sub} · ${lane.port}</div></div>
+            <span class="pct ${pctClass}">${pct}%</span>
+          </div>
+          <div class="items">${rows || '<div class="item"><span class="txt" style="color:var(--muted)">此篩選無項目</span></div>'}</div>
+        </article>`;
+      }).join("");
+    }
+
+    function renderJira() {
+      const map = { done: "完成", progress: "進行中", pause: "暫停", todo: "待辦" };
+      document.getElementById("jira").innerHTML = JIRA_ROWS.map(
+        ([k, m, s, n]) =>
+          `<tr><td><a href="${JIRA}${k}" target="_blank" rel="noopener">${k}</a></td><td>${m}</td>
+           <td><span class="badge ${s}">${map[s]}</span></td><td>${n}</td></tr>`
+      ).join("");
+    }
+
+    document.querySelectorAll(".filters button").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        document.querySelectorAll(".filters button").forEach((b) => b.classList.remove("on"));
+        btn.classList.add("on");
+        filter = btn.dataset.f;
+        renderLanes();
+      });
+    });
+
+    function renderVision() {
+      document.getElementById("vision-items").innerHTML = VISION_ITEMS.map(
+        (i) =>
+          `<div class="item ${i.status}">
+            <span class="dot ${i.status}"></span>
+            <span class="txt">${i.text}</span>
+          </div>`
+      ).join("");
+    }
+
+    function renderPhase() {
+      document.getElementById("phase-items").innerHTML = PHASE_ITEMS.map(
+        (i) =>
+          `<div class="item ${i.status}">
+            <span class="dot ${i.status}"></span>
+            <span class="txt">${i.text}</span>
+          </div>`
+      ).join("");
+    }
+
+    renderStats();
+    renderLanes();
+    renderVision();
+    renderPhase();
+    renderJira();
+  </script>
+</body>
+</html>

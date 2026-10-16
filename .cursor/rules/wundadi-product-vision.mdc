@@ -1,0 +1,41 @@
+---
+description: Wundadi 產品北極星—取代醫聖、醫美知識庫 Adapter、FHIR Media、禁止 DELETE
+alwaysApply: true
+---
+
+# Wundadi 產品願景（必讀）
+
+完整說明：`docs/產品願景-Wundadi.md` · **原則權威**：`docs/專案憲章-原則與方向.md` · Jira 母卡 **KAN-23**
+
+## 北極星
+
+- **Wundadi** = 獨立 **SMART on FHIR** 醫療系統，最終**全面取代醫聖看診/申報**。
+- 現行 repo 開發 = **新核心**（三沙盒、門診閉環）；與願景**無衝突**。
+
+## 醫美相片知識庫（Layer B — 暫不寫碼）
+
+- **不魔改**知識庫前端 UI。
+- 只做**資料對接模組**：`姓名+生日+電話+性別` 模糊比對 → 補 `idNo` → **FHIR Media**（POST/PUT）寫入沙盒 2。
+- 等使用者提供知識庫程式與資料結構後再開工（**KAN-24**）。
+
+## 資料治理
+
+- 病歷／Media：**程式層禁止 DELETE**，僅 POST/PUT（**KAN-25**）。
+
+## 開發優先順序
+
+1. 新核心門診 + NHI + 申報路徑（KAN-4/6/7/11）
+2. 知識庫 Adapter（KAN-24，待規格）
+3. 全面取代醫聖上線
+
+勿提前實作 KAN-24；勿將 KAN-15 與「不魔改知識庫 UI」混為一談。
+
+## 功能邊界與 Cursor 前提（必讀）
+
+- **A 主幹**：產品內建（門診、藥價 Pack、月申報…）。
+- **B 時令專案**：診所＋**Cursor 開本專案**讀公文／找人／組檔；VPN 網頁上傳留人工。
+- **C 不做**：一鍵達標、代操指標、自動操駕健保 VPN 網頁。
+
+規則詳見：`.cursor/rules/clinic-cursor-self-serve.mdc`  
+診所說明：`docs/診所端-用Cursor處理時令專案.md`  
+開啟：`開啟-用Cursor問本專案.bat`

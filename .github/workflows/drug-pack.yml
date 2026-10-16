@@ -1,0 +1,54 @@
+name: drug-pack
+
+on:
+  schedule:
+    # 02:00 Taipei on the 2nd of each month
+    - cron: "0 18 1 * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/cache@v4
+        with:
+          path: data/hub_workspace
+          key: drug-hub-${{ github.run_id }}
+          restore-keys: drug-hub-
+      - run: pip install -r requirements.txt
+      - name: Build pack
+        run: python -m hub.run > hub-result.json
+      - name: Publish Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          python - <<'PY'
+          import json, subprocess
+          from pathlib import Path
+          result = json.loads(Path("hub-result.json").read_text(encoding="utf-8"))
+          print(result.get("status"), result.get("publishedVersion"), result.get("diagnosis"))
+          if result.get("status") != "success" or not result.get("publishedVersion"):
+              raise SystemExit(0)
+          version = result["publishedVersion"]
+          files = [
+              f"data/hub_packages/{version}.json",
+              f"data/hub_packages/{version}.summary.json",
+          ]
+          missing = [p for p in files if not Path(p).is_file()]
+          if missing:
+              raise SystemExit("missing " + ", ".join(missing))
+          subprocess.check_call([
+              "gh", "release", "create", f"drug-pack-{version}",
+              *files,
+              "--title", f"drug pack {version}",
+              "--notes", "Open-data drug pack. On a clinic PC run scripts/tools fetch bat.",
+          ])
+          PY

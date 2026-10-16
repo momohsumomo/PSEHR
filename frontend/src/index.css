@@ -1,0 +1,140 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*
+ * Wundadi HIS theme lock:
+ * - Ignore Chrome OS / browser dark mode (color-scheme: only light)
+ * - Ignore forced-colors remapping where possible
+ * - Explicit canvas/text/form colors so pages look identical on every client
+ * Values mirror frontend/src/lib/hisTheme.ts (HIS.*)
+ */
+:root {
+  color-scheme: only light;
+  --his-chrome: #ece9d8;
+  --his-chrome-dark: #aca899;
+  --his-chrome-border: #808080;
+  --his-title-from: #0a5ad6;
+  --his-title-to: #3c91fe;
+  --his-title-border: #003c74;
+  --his-header-bg: #d8d4c8;
+  --his-header-bg-green: #c0dcc0;
+  --his-tab-idle: #d4d0c8;
+  --his-tab-idle-text: #000000;
+  --his-tab-active: #206868;
+  --his-tab-active-text: #ffffff;
+  --his-canvas: #d4d0c8;
+  --his-surface: #ffffff;
+  --his-text: #000000;
+  --his-text-muted: #404040;
+  --his-input-bg: #ffffff;
+  --his-input-text: #0000cc;
+  --his-input-border: #808080;
+  --his-row-selected: #ffff80;
+  --his-list-selected: #316ac5;
+  --his-list-selected-text: #ffffff;
+  --his-patient-face: #c8f0b8;
+  --his-cc-bg: #ffffff;
+  --his-dx-bg: #e8ffe8;
+  --his-rx-bg: #fffff0;
+  --his-font: "新細明體", "PMingLiU", MingLiU, "Microsoft JhengHei", Tahoma, sans-serif;
+  --his-fbar-f2: #90ee90;
+  --his-fbar-f3: #dda0dd;
+  --his-fbar-f4: #ffff80;
+  --his-fbar-f5: #ff6b6b;
+  --his-fbar-f9: #7fffd4;
+  --his-fbar-esc: #d4d0c8;
+}
+
+html {
+  color-scheme: only light;
+  background: var(--his-canvas);
+  color: var(--his-text);
+}
+
+html.wundadi-his,
+html.wundadi-his body {
+  color-scheme: only light;
+}
+
+body {
+  margin: 0;
+  min-height: 100%;
+  font-family: var(--his-font);
+  background: var(--his-canvas);
+  color: var(--his-text);
+  /* Prevent Chrome "Auto Dark Mode for Web Contents" from recoloring */
+  forced-color-adjust: none;
+  -webkit-font-smoothing: auto;
+}
+
+#root {
+  min-height: 100vh;
+  background: var(--his-canvas);
+  color: var(--his-text);
+  color-scheme: only light;
+  forced-color-adjust: none;
+}
+
+/* Form controls: never inherit browser dark widgets */
+.wundadi-his input,
+.wundadi-his select,
+.wundadi-his textarea,
+.wundadi-his button {
+  color-scheme: only light;
+  forced-color-adjust: none;
+}
+
+.wundadi-his input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]),
+.wundadi-his select,
+.wundadi-his textarea {
+  background-color: var(--his-input-bg);
+  color: var(--his-text);
+  border-color: var(--his-input-border);
+}
+
+/* Neutralize prefers-color-scheme if any third-party CSS listens to it */
+@media (prefers-color-scheme: dark) {
+  html.wundadi-his,
+  html.wundadi-his body,
+  html.wundadi-his #root {
+    color-scheme: only light;
+    background: var(--his-canvas);
+    color: var(--his-text);
+  }
+}
+
+@media (forced-colors: active) {
+  html.wundadi-his,
+  html.wundadi-his body,
+  html.wundadi-his #root {
+    forced-color-adjust: none;
+  }
+}
+
+/* Medblocks / Shoelace 與 Tailwind 並存 */
+mb-fhir-form {
+  display: block;
+  width: 100%;
+}
+
+/* 診間病患基本資料高對比度瀏覽模式樣式 */
+.high-contrast-form input[readonly],
+.high-contrast-form textarea[readonly],
+.high-contrast-form input:disabled:not([type="checkbox"]):not([type="radio"]),
+.high-contrast-form select:disabled,
+.high-contrast-form textarea:disabled {
+  background-color: #ffffff !important;
+  color: #000000 !important;
+  opacity: 1 !important;
+  border-color: #80c080 !important;
+  -webkit-text-fill-color: #000000 !important;
+  cursor: default !important;
+}
+
+.high-contrast-form input[type="checkbox"]:disabled,
+.high-contrast-form input[type="radio"]:disabled {
+  opacity: 0.9 !important;
+  filter: contrast(1.4) !important;
+  cursor: default !important;
+}

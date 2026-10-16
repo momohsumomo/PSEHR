@@ -1,0 +1,467 @@
+{
+  "version": "1.4.0-yisheng-history-4cell",
+  "source": "E:\\SC Sc.ini [DOCTOR] + DoctBrw.Set + CC.DAT (clinic sample)",
+  "layout": "yisheng-doctor-3pane-v1",
+  "layoutGrid": {
+    "columns": 12,
+    "rows": 12,
+    "components": [
+      { "id": "queue-panel", "type": "QueuePanel", "grid": { "x": 0, "y": 0, "w": 2, "h": 12 }, "visible": true, "title": "掛號清單" },
+      { "id": "allergy-banner", "type": "AllergyBanner", "grid": { "x": 2, "y": 0, "w": 7, "h": 1 }, "visible": true, "title": "過敏警示帶" },
+      { "id": "patient-header", "type": "PatientHeader", "grid": { "x": 2, "y": 1, "w": 7, "h": 1 }, "visible": true, "title": "病患標題列" },
+      { "id": "lesion-photos", "type": "LesionPhotos", "grid": { "x": 2, "y": 2, "w": 7, "h": 3 }, "visible": true, "title": "病灶照片區" },
+      { "id": "chief-complaint", "type": "ChiefComplaint", "grid": { "x": 2, "y": 5, "w": 7, "h": 2 }, "visible": true, "title": "主訴 CC" },
+      { "id": "diagnoses", "type": "Diagnoses", "grid": { "x": 2, "y": 7, "w": 7, "h": 2 }, "visible": true, "title": "診斷病名" },
+      { "id": "current-rx", "type": "CurrentRx", "grid": { "x": 2, "y": 9, "w": 7, "h": 3 }, "visible": true, "title": "處方開立" },
+      { "id": "right-panel", "type": "RightPanel", "grid": { "x": 9, "y": 0, "w": 3, "h": 12 }, "visible": true, "title": "快捷與歷史" }
+    ]
+  },
+  "sections": {
+    "allergyBanner": {
+      "sticky": true,
+      "enabled": true
+    },
+    "lesionPhotos": {
+      "heightRatio": 0.28,
+      "minHeightPx": 160,
+      "enabled": false
+    },
+    "commandLine": {
+      "enabled": true,
+      "autoFocus": true
+    },
+    "rightPanel": {
+      "mode": "history",
+      "defaultExpanded": true,
+      "widthPx": 320
+    },
+    "queuePanel": {
+      "mode": "table",
+      "fontSizePx": 14
+    },
+    "prevRxAboveCurrent": false,
+    "rightRailCollapsedByDefault": false
+  },
+  "doctorPreferences": {
+    "rightPanelMode": "history",
+    "entryFocus": "command",
+    "drugDisplayMode": "customName",
+    "historyFontSizePx": 14,
+    "historyRxColWidthCh": 40,
+    "useBigRxPalette": false,
+    "newHistoryPanel": true,
+    "dittoCc": true,
+    "dittoDx": true,
+    "dittoRxSkipDuplicate": true,
+    "dittoCcStampVisitDate": true,
+    "hideHistoryIcd": false,
+    "showHistoryRxVisitDate": true,
+    "allergyEmptyText": "無",
+    "rxSearchOrder": "customName",
+    "dxSearchOrder": "diagnosisName",
+    "enableQuickPriceF2": false
+  },
+  "queueColumns": [
+    "完",
+    "序號",
+    "時間",
+    "病歷號",
+    "姓名",
+    "年齡",
+    "性別",
+    "病名",
+    "時段",
+    "註",
+    "預",
+    "案",
+    "自付",
+    "押金",
+    "掛費",
+    "藥費",
+    "總計",
+    "備註記載"
+  ],
+  "queueColumnKeys": [
+    "doneMark",
+    "queueNumber",
+    "slotTime",
+    "medicalNo",
+    "patientDisplay",
+    "age",
+    "sex",
+    "diseaseName",
+    "shift",
+    "note",
+    "preVisit",
+    "caseNo",
+    "copay",
+    "deposit",
+    "regFee",
+    "drugFee",
+    "totalFee",
+    "reasonText"
+  ],
+  "currentRxColumns": [
+    {
+      "key": "payMark",
+      "label": "",
+      "widthCh": 2
+    },
+    {
+      "key": "name",
+      "label": "處置名稱",
+      "widthCh": 22
+    },
+    {
+      "key": "qty",
+      "label": "數量",
+      "widthCh": 5
+    },
+    {
+      "key": "route",
+      "label": "途徑",
+      "widthCh": 4
+    },
+    {
+      "key": "sig",
+      "label": "用法",
+      "widthCh": 8
+    },
+    {
+      "key": "days",
+      "label": "天",
+      "widthCh": 3
+    },
+    {
+      "key": "totalAmount",
+      "label": "總量",
+      "widthCh": 6
+    },
+    {
+      "key": "memo",
+      "label": "註",
+      "widthCh": 4
+    },
+    {
+      "key": "bodySite",
+      "label": "部位",
+      "widthCh": 14
+    },
+    {
+      "key": "tag",
+      "label": "標",
+      "widthCh": 3
+    }
+  ],
+  "rxPickerColumns": [
+    {
+      "key": "customName",
+      "label": "自定名稱"
+    },
+    {
+      "key": "shortName",
+      "label": "簡稱"
+    },
+    {
+      "key": "nhiCode",
+      "label": "健"
+    },
+    {
+      "key": "selfPay",
+      "label": "自"
+    },
+    {
+      "key": "route",
+      "label": "進"
+    }
+  ],
+  "ccChips": [
+    "診斷名稱",
+    "Abscess",
+    "Acanthosis nigricans",
+    "Acne",
+    "Acne conglobata",
+    "Acne cosmetica",
+    "Acne cystica",
+    "Acne excoree",
+    "Acne keloidalis",
+    "Acne pustulosa",
+    "Acne scar",
+    "Acne vulgaris"
+  ],
+  "ccTemplates": [
+    {
+      "id": "S001",
+      "text": "診斷名稱",
+      "type": ""
+    },
+    {
+      "id": "S002",
+      "text": "Abscess",
+      "type": ""
+    },
+    {
+      "id": "S003",
+      "text": "Acanthosis nigricans",
+      "type": ""
+    },
+    {
+      "id": "S004",
+      "text": "Acne",
+      "type": ""
+    },
+    {
+      "id": "S005",
+      "text": "Acne conglobata",
+      "type": ""
+    },
+    {
+      "id": "S006",
+      "text": "Acne cosmetica",
+      "type": ""
+    },
+    {
+      "id": "S007",
+      "text": "Acne cystica",
+      "type": ""
+    },
+    {
+      "id": "S008",
+      "text": "Acne excoree",
+      "type": ""
+    },
+    {
+      "id": "S009",
+      "text": "Acne keloidalis",
+      "type": ""
+    },
+    {
+      "id": "S010",
+      "text": "Acne pustulosa",
+      "type": ""
+    },
+    {
+      "id": "S011",
+      "text": "Acne scar",
+      "type": ""
+    },
+    {
+      "id": "S012",
+      "text": "Acne vulgaris",
+      "type": ""
+    },
+    {
+      "id": "S013",
+      "text": "Acneiform eruption",
+      "type": ""
+    },
+    {
+      "id": "S014",
+      "text": "Acrodermatitis",
+      "type": ""
+    },
+    {
+      "id": "S015",
+      "text": "Actinic keratosis",
+      "type": ""
+    },
+    {
+      "id": "S016",
+      "text": "Acute eczema",
+      "type": ""
+    },
+    {
+      "id": "S017",
+      "text": "Acute febrile neutrophilic dermatosis(sw",
+      "type": ""
+    },
+    {
+      "id": "S018",
+      "text": "Acute urticaria",
+      "type": ""
+    },
+    {
+      "id": "S019",
+      "text": "Adenocarcinoma",
+      "type": ""
+    },
+    {
+      "id": "S020",
+      "text": "Adenoma sebaceum",
+      "type": ""
+    },
+    {
+      "id": "S021",
+      "text": "Adiponecrosis",
+      "type": ""
+    },
+    {
+      "id": "S022",
+      "text": "Albinism",
+      "type": ""
+    },
+    {
+      "id": "S023",
+      "text": "Alopecia",
+      "type": ""
+    },
+    {
+      "id": "S024",
+      "text": "Alopecia androgenetica",
+      "type": ""
+    },
+    {
+      "id": "S025",
+      "text": "Alopecia areata",
+      "type": ""
+    },
+    {
+      "id": "S026",
+      "text": "Alopecia mechanica",
+      "type": ""
+    },
+    {
+      "id": "S027",
+      "text": "Alopecia pityroides",
+      "type": ""
+    },
+    {
+      "id": "S028",
+      "text": "Alopecia prematura",
+      "type": ""
+    },
+    {
+      "id": "S029",
+      "text": "Amyloidosis cutis",
+      "type": ""
+    },
+    {
+      "id": "S030",
+      "text": "Amyloidosis",
+      "type": ""
+    },
+    {
+      "id": "S031",
+      "text": "Angioedema",
+      "type": ""
+    },
+    {
+      "id": "S032",
+      "text": "Angiofibroma",
+      "type": ""
+    },
+    {
+      "id": "S033",
+      "text": "Angiokeratoma",
+      "type": ""
+    },
+    {
+      "id": "S034",
+      "text": "Angioleiomyoma",
+      "type": ""
+    },
+    {
+      "id": "S035",
+      "text": "Angiolipoma",
+      "type": ""
+    },
+    {
+      "id": "S036",
+      "text": "Anidrosis",
+      "type": ""
+    },
+    {
+      "id": "S037",
+      "text": "Annular erythema",
+      "type": ""
+    },
+    {
+      "id": "S038",
+      "text": "Aphthous ulcer",
+      "type": ""
+    },
+    {
+      "id": "S039",
+      "text": "Apocrinitis suppurativa",
+      "type": ""
+    },
+    {
+      "id": "S040",
+      "text": "Arsenical keratosis",
+      "type": ""
+    },
+    {
+      "id": "S041",
+      "text": "Arterial insufficiency",
+      "type": ""
+    },
+    {
+      "id": "S042",
+      "text": "Arthralgia",
+      "type": ""
+    },
+    {
+      "id": "S043",
+      "text": "Asteatotic eczema",
+      "type": ""
+    },
+    {
+      "id": "S044",
+      "text": "Atopic dermatitis",
+      "type": ""
+    },
+    {
+      "id": "S045",
+      "text": "Atrophia cutis senilis",
+      "type": ""
+    },
+    {
+      "id": "S046",
+      "text": "Atrophic scar",
+      "type": ""
+    },
+    {
+      "id": "S047",
+      "text": "Atrophie blanche",
+      "type": ""
+    },
+    {
+      "id": "S048",
+      "text": "Atypical mycobacteria infection",
+      "type": ""
+    }
+  ],
+  "shortcutBar": [
+    { "key": "F2", "label": "掛號", "action": "register", "enabled": true },
+    { "key": "F3", "label": "診療作業", "action": "clinicMain", "enabled": true },
+    { "key": "F4", "label": "歷史病歷", "action": "historyChart", "enabled": true },
+    { "key": "F5", "label": "過敏/檢查", "action": "clinicalAlerts", "enabled": true },
+    { "key": "F6", "label": "放射科檢查", "action": "radiology", "enabled": true },
+    { "key": "F7", "label": "Ditto處方", "action": "dittoRx", "enabled": true },
+    { "key": "F8", "label": "IC卡內容", "action": "icCard", "enabled": true },
+    { "key": "F9", "label": "存檔", "action": "saveChart", "enabled": true }
+  ],
+  "shortcuts": {
+    "F7": "dittoRx",
+    "F8": "icCard"
+  },
+  "defaultUsages": [
+    "QD",
+    "BID",
+    "TID",
+    "QID",
+    "QID/AC",
+    "TID/AC",
+    "HS",
+    "PRN",
+    "STAT",
+    "QOD",
+    "QW",
+    "BIW",
+    "TIW",
+    "QAM",
+    "QPM",
+    "AC",
+    "PC"
+  ]
+}

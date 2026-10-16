@@ -1,0 +1,53 @@
+# Python
+.venv/
+venv/
+env/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+dist/
+build/
+
+# Clinic machine only: charts, keys, local price packs
+data/
+*.db
+.env
+.env.*
+*.SAM
+*.sam
+*.zip
+
+# Local backups, dumps, and third-party installers
+BkZip/
+scratch/
+temp_utf8/
+_claude*/
+_tmp_*.py
+_list_gap.py
+card_reader_test.py
+sc_ini_utf8.txt
+docs/醫聖對照/
+醫聖介面截圖參考/
+申報格式/
+電子轉診平台說明/
+ICD9與ICD10對應/
+讀卡機控制軟體6.0*
+
+# Loose reference files at the repo root
+/*.pdf
+/*.xlsx
+/*.jpg
+/*.JPG
+/*.jpeg
+/*.png
+
+# Frontend build output
+frontend/node_modules/
+frontend/dist/
+frontend/tsconfig.tsbuildinfo
+
+# Editor
+.idea/
+.vscode/
+.cursor/settings.json

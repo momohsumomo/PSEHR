@@ -1,0 +1,75 @@
+import type { ApiPatient } from "@/api/clinicApi";
+
+/** 櫃台共用選人結果（掛號／調閱病歷同一個找人窗）。 */
+export type PatientHit = {
+  id: string;
+  name: string;
+  idNo: string;
+  birthdayRoc: string;
+  birthDateIso: string;
+  sex: string;
+  medicalNo: string;
+  phone: string;
+};
+
+export function isoBirthDateToRoc(isoDate: string | undefined): string {
+  if (!isoDate) return "";
+  const parts = isoDate.split("-");
+  if (parts.length < 3) return isoDate.replace(/\D/g, "").slice(0, 7);
+  const ceYear = parseInt(parts[0], 10);
+  if (!Number.isFinite(ceYear)) return "";
+  const rocYear = ceYear - 1911;
+  return `${String(rocYear).padStart(3, "0")}${parts[1]}${parts[2]}`;
+}
+
+export function rocBirthdayToIso(roc: string): string {
+  const digits = roc.replace(/\D/g, "");
+  if (digits.length < 7) return "";
+  const y = parseInt(digits.slice(0, 3), 10) + 1911;
+  const m = digits.slice(3, 5);
+  const d = digits.slice(5, 7);
+  if (!Number.isFinite(y) || !m || !d) return "";
+  return `${y}-${m}-${d}`;
+}
+
+/** 從 FHIR Patient 抽出櫃台列表用欄位。 */
+export function mapApiPatientToHit(p: ApiPatient): PatientHit {
+  const family = p.name?.[0]?.family || "";
+  const given = p.name?.[0]?.given?.join("") || "";
+  const name = p.name?.[0]?.text || `${family}${given}` || "無姓名";
+  const idNo =
+    p.identifier?.find((i) => i.use === "official" || i.system?.includes("id"))?.value || "";
+  const medicalNo =
+    p.identifier?.find(
+      (i) =>
+        i.use === "secondary" ||
+        i.system?.includes("chart") ||
+        i.system?.includes("chart-number"),
+    )?.value || "";
+  const nhiBasic = p.extension?.find((e) => e.url?.includes("nhi-card-basic"));
+  let birthdayRoc =
+    nhiBasic?.extension?.find((sub) => sub.url === "birthdayRoc")?.valueString || "";
+  if (!birthdayRoc && p.birthDate) {
+    birthdayRoc = isoBirthDateToRoc(p.birthDate);
+  }
+  const sexCode =
+    nhiBasic?.extension?.find((sub) => sub.url === "sex")?.valueString ||
+    (p.gender === "female" ? "F" : p.gender === "male" ? "M" : "");
+  const phone =
+    p.telecom?.find((t) => t.system === "phone" && t.use === "mobile")?.value ||
+    p.telecom?.find((t) => t.system === "phone")?.value ||
+    "";
+  return {
+    id: p.id,
+    name,
+    idNo,
+    birthdayRoc,
+    birthDateIso: p.birthDate || rocBirthdayToIso(birthdayRoc),
+    sex: sexCode === "女" ? "F" : sexCode === "男" ? "M" : sexCode || "",
+    medicalNo,
+    phone,
+  };
+}
+
+/** 掛號預設：轉出口至 clinicProfile（影子庫權威＋本機快取）。 */
+export { loadClinicRegisterDefaults, PROFILE_KEY } from "@/lib/clinicProfile";
