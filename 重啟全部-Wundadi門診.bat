@@ -1,12 +1,12 @@
 @echo off
 setlocal
 chcp 65001 >nul
-title Restart Wundadi
+title 重啟 北極星自主電子病歷系統
 cd /d "%~dp0"
 
 echo.
 echo ========================================
-echo   Restart Wundadi (API + UI)
+echo   重啟 北極星自主電子病歷系統
 echo   API  http://127.0.0.1:5000/docs
 echo   UI   http://127.0.0.1:3010
 echo ========================================

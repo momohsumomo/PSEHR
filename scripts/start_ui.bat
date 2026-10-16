@@ -1,6 +1,6 @@
 @echo off
 setlocal
-title Wundadi UI :3010
+title 北極星 UI :3010
 cd /d "%~dp0.."
 chcp 65001 >nul
 set "PATH=%CD%\frontend\node_modules\.bin;%CD%\.venv\Scripts;%PATH%"

@@ -27,7 +27,7 @@ from src.infrastructure.sqlite_shadow_store import SqliteShadowStore
 
 FIDO2_KEY_EXTENSION_URL = "https://wundadi.tw/fhir/StructureDefinition/patient-fido2-key"
 DEFAULT_RP_ID = "localhost"
-DEFAULT_RP_NAME = "Wundadi HIS"
+DEFAULT_RP_NAME = "北極星自主電子病歷系統"
 DEFAULT_ORIGINS = ["http://localhost:3010", "http://127.0.0.1:3010"]
 
 

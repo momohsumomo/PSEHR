@@ -1,12 +1,12 @@
 @echo off
 setlocal EnableDelayedExpansion
 chcp 65001 >nul
-title Wundadi 門診
+title 北極星自主電子病歷系統
 cd /d "%~dp0"
 
 echo.
 echo ========================================
-echo   Wundadi 門診
+echo   北極星自主電子病歷系統
 echo   後端  http://127.0.0.1:5000/docs
 echo   畫面  http://127.0.0.1:3010
 echo ========================================
@@ -31,7 +31,7 @@ if errorlevel 1 (
 echo [1/3] 後端 :5000
 curl.exe -s -o nul -m 2 http://127.0.0.1:5000/health >nul 2>&1
 if errorlevel 1 (
-  start "Wundadi-API-5000" cmd /k "%~dp0scripts\start_api.bat"
+  start "北極星-API-5000" cmd /k "%~dp0scripts\start_api.bat"
 ) else (
   echo       已在跑，沿用現有後端。
 )
@@ -39,7 +39,7 @@ if errorlevel 1 (
 echo [2/3] 畫面 :3010
 curl.exe -s -o nul -m 2 http://127.0.0.1:3010 >nul 2>&1
 if errorlevel 1 (
-  start "Wundadi-UI-3010" cmd /k "%~dp0scripts\start_ui.bat"
+  start "北極星-UI-3010" cmd /k "%~dp0scripts\start_ui.bat"
 ) else (
   echo       已在跑，沿用現有畫面。
 )
@@ -50,7 +50,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -Command ^
 
 if errorlevel 1 (
   echo [WARN] 等了約 45 秒仍未全開，仍會打開瀏覽器。
-  echo       請看「Wundadi-API-5000」「Wundadi-UI-3010」兩個視窗有沒有紅字。
+  echo       請看「北極星-API-5000」「北極星-UI-3010」兩個視窗有沒有紅字。
 ) else (
   echo       後端與畫面都已就緒。
 )

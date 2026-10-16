@@ -1,6 +1,6 @@
 @echo off
 setlocal
-title Wundadi API :5000
+title 北極星 API :5000
 cd /d "%~dp0.."
 chcp 65001 >nul
 set "PYTHONPATH=%CD%"
