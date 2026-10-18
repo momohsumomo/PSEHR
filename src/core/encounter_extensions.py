@@ -48,6 +48,8 @@ REG_STRING_KEYS = (
     "opdDate",
     "referralSeq",
     "referralHospId",
+    "referralHospName",
+    "acceptReferral",
     "referralDate",
     "referralLocalId",
     "referralNhiId",

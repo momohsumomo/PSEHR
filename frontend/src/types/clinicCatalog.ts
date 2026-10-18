@@ -13,6 +13,8 @@ export type CatalogDrug = {
   selfPay: boolean;
   /** MEDICAL.ISSELF：空白健保、自、交（交付檢驗） */
   payMark?: "" | "\u81ea" | "\u4ea4";
+  /** MEDICAL.MEMO：開立時帶入的註記，例如 [ */
+  memo?: string;
   /** MEDICAL.TRADE_NAME 健保商品名 */
   name: string;
   /** MEDICAL.NOTE 成分說明 */

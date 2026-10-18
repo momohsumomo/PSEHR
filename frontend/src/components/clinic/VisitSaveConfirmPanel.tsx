@@ -1,7 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import { useListNav } from "@/hooks/useListNav";
 import { thisPcPrintsOnSave, thisPcUploadsCloudOnSave } from "@/lib/clinicDevice";
+import { HIS, HIS_FONT } from "@/lib/hisTheme";
+import { skipsCloudWrite } from "@/lib/queueOrder";
 import type { DiagnosisRow, QueueEntry, RxLine } from "@/mocks/clinicMocks";
+import { formatBirthdayRoc } from "@/lib/patientSearch";
 
 export type VisitSaveDraft = {
   caseNo: string;
@@ -21,6 +24,10 @@ export type VisitSaveDraft = {
   materialFee: string;
   consultFee: string;
   burden: string;
+  /** Ceiled sum of self-pay drugs and procedures. Shown in parentheses. */
+  selfPayBasis: string;
+  /** Amount actually charged. Starts as the ceiling and can be typed over. */
+  selfPay: string;
   orderCode: string;
   orderStaff: string;
   orderTime: string;
@@ -31,7 +38,42 @@ export type VisitSaveDraft = {
   printRx: boolean;
 };
 
-const DASH = "—";
+const DASH = "\u2014";
+
+function yuanNumber(v: unknown): number | null {
+  const s = String(v ?? "").trim();
+  if (!s || s === DASH || s === "-") return null;
+  const n = Number(s.replace(/[^\d.-]/g, ""));
+  return Number.isFinite(n) ? n : null;
+}
+
+function ceilYuan(n: number): number {
+  const nearest = Math.round(n);
+  if (Math.abs(n - nearest) < 0.001) return nearest;
+  return Math.ceil(n - 1e-9);
+}
+
+/** Self-pay drugs and procedures, then round up to the next yuan. */
+export function selfPayCeiling(rows: RxLine[]): number {
+  const raw = rows.reduce((sum, row) => {
+    const mark = (row.payMark || (row.selfPay ? "\u81ea" : "")).trim();
+    const memo = (row.memo || "").trim();
+    const counted = mark === "\u81ea" || mark === "\u6750" || memo.includes("[") || memo.includes("@");
+    if (!counted) return sum;
+    const price = Number(row.unitPrice);
+    if (!Number.isFinite(price) || price === 0) return sum;
+    const qty = Number(row.qty);
+    const q = Number.isFinite(qty) && qty > 0 ? qty : 1;
+    return sum + price * q;
+  }, 0);
+  return ceilYuan(raw);
+}
+
+function moneyText(n: number): string {
+  if (!Number.isFinite(n)) return "0";
+  const rounded = Math.round(n * 100) / 100;
+  return Number.isInteger(rounded) ? String(rounded) : String(rounded);
+}
 
 function dash(v: unknown): string {
   const s = String(v ?? "").trim();
@@ -70,6 +112,8 @@ export function buildVisitSaveDraft(args: {
     args.doctor?.trim() ||
     (args.selected as { doctorName?: string } | null)?.doctorName ||
     DASH;
+  const selfBasis = selfPayCeiling(args.currentRx);
+  const storedSelf = yuanNumber(args.selected?.selfPay);
   return {
     caseNo: args.selected?.caseNo && args.selected.caseNo !== DASH ? args.selected.caseNo : "01",
     copayCode:
@@ -106,11 +150,13 @@ export function buildVisitSaveDraft(args: {
         : DASH,
     consultFee: consult,
     burden,
+    selfPayBasis: String(selfBasis),
+    selfPay: storedSelf != null && storedSelf > 0 ? moneyText(storedSelf) : String(selfBasis),
     orderCode: DASH,
     orderStaff: "",
     orderTime: "",
     surgeryCode: "",
-    writeCard: thisPcUploadsCloudOnSave(),
+    writeCard: args.selected && skipsCloudWrite(args.selected) ? false : thisPcUploadsCloudOnSave(),
     writeDx: true,
     writeOrders: true,
     printRx: thisPcPrintsOnSave(),
@@ -142,26 +188,52 @@ type Props = {
   onPickWaiting?: (encounterId: string) => void;
 };
 
+function patientIdText(selected: QueueEntry | null): string {
+  const raw = String(selected?.idNo || "").trim();
+  if (!raw || raw.startsWith("local-") || raw.includes("encounter")) return DASH;
+  return raw;
+}
+
+function boxCh(minChars: number, value: string): number {
+  let units = 0;
+  for (const ch of String(value ?? "")) {
+    const code = ch.codePointAt(0) || 0;
+    units += code > 255 ? 2 : 1;
+  }
+  return Math.max(minChars, units) + 1.5;
+}
+
 function Field({
   label,
   value,
   onChange,
   readOnly,
-  mono,
+  chars = 8,
+  highlight,
+  big,
 }: {
   label: string;
   value: string;
   onChange?: (v: string) => void;
   readOnly?: boolean;
-  mono?: boolean;
+  chars?: number;
+  highlight?: boolean;
+  big?: boolean;
 }) {
   return (
-    <label className="flex items-center gap-1 text-[11px]">
-      <span className="w-20 shrink-0 text-slate-600">{label}</span>
+    <label className="inline-flex items-center" style={{ gap: "0.3em", fontSize: big ? "1.5em" : "1em" }}>
+      <span className="shrink-0">{label}</span>
       <input
-        className={`min-w-0 flex-1 rounded border px-1.5 py-0.5 ${
-          readOnly ? "border-slate-200 bg-slate-50 text-slate-600" : "border-slate-300 bg-white"
-        } ${mono ? "font-mono" : ""}`}
+        className="border border-[#808080] px-[0.35em]"
+        style={{
+          boxSizing: "content-box",
+          width: `${boxCh(chars, value)}ch`,
+          height: "1.35em",
+          fontSize: "1em",
+          lineHeight: 1.15,
+          color: HIS.inputBlue,
+          background: highlight ? "#7EC8F0" : readOnly ? "#F4F4F4" : "#fff",
+        }}
         value={value}
         readOnly={readOnly}
         onChange={(e) => onChange?.(e.target.value)}
@@ -219,94 +291,108 @@ export function VisitSaveConfirmPanel({
   });
 
   if (!open) return null;
+  const noCloud = selected ? skipsCloudWrite(selected) : false;
+  const charged = yuanNumber(draft.selfPay) ?? 0;
+  const deposit = yuanNumber(selected?.deposit) ?? 0;
+  const total =
+    (yuanNumber(draft.regFee) ?? 0) + (yuanNumber(draft.burden) ?? 0) + deposit + charged;
+  const head = "mb-0.5 border-b border-[#808080] pb-0.5 font-bold leading-tight";
+  const zone = "border border-[#808080] bg-white px-1.5 py-1";
+  const row = "flex flex-wrap items-center gap-x-3 gap-y-0.5";
 
   return (
-    <div className="absolute inset-0 z-30 flex flex-col bg-slate-200">
-      <header className="flex shrink-0 items-center justify-between border-b border-slate-400 bg-slate-800 px-3 py-1.5 text-xs text-white">
-        <span className="font-bold">F9 存檔確認（批價／重要醫令／寫健保雲端）</span>
-        <span className="text-slate-300">
-          {locked ? "已存檔" : "再按 F9 確定存檔 · Esc 回診療"}
+    <div className="absolute inset-0 z-30 flex flex-col" style={{ fontFamily: HIS_FONT, background: HIS.chrome, fontSize: 24 }}>
+      <header className="flex shrink-0 items-center justify-between px-2 py-1 text-white" style={{ background: HIS.titleBarFrom }}>
+        <span className="font-bold">{"F9 \u5b58\u6a94\u78ba\u8a8d"}</span>
+        <span>
+          {locked ? "\u5df2\u5b58\u6a94" : "\u518d\u6309 F9 \u78ba\u5b9a\u5b58\u6a94 \u00b7 Esc \u56de\u8a3a\u7642"}
         </span>
       </header>
 
       {cardNote && (
-        <p className="shrink-0 bg-red-100 px-3 py-1 text-xs text-red-900">{cardNote}</p>
+        <p className="shrink-0 bg-red-100 px-3 py-1 text-red-900">{cardNote}</p>
       )}
 
       <div className="flex min-h-0 flex-1">
-      <div className="min-h-0 flex-1 overflow-auto p-2">
-        <div className="grid grid-cols-2 gap-2">
-          <section className="rounded border border-slate-300 bg-white p-2">
-            <h3 className="mb-2 border-b pb-1 text-xs font-bold">病患</h3>
-            <div className="space-y-1">
-              <Field label="姓名" value={dash(selected?.patientDisplay)} readOnly />
-              <Field label="病歷號" value={dash(selected?.medicalNo)} readOnly mono />
-              <Field label="身分證" value={dash(selected?.id)} readOnly mono />
-              <Field label="生日" value={dash(selected?.birthday)} readOnly mono />
-              <Field label="性別" value={dash(selected?.sex || selected?.ageSex)} readOnly />
-              <Field label="序號" value={selected ? String(selected.queueNumber) : DASH} readOnly mono />
+      <div className="min-h-0 flex-1 overflow-auto p-1">
+        <div className="grid grid-cols-2 items-start gap-1">
+          <section className={zone}>
+            <h3 className={head}>{"\u75c5\u60a3"}</h3>
+            <div className={row}>
+              <Field label={"\u59d3\u540d"} value={dash(selected?.patientDisplay)} readOnly chars={8} />
+              <Field label={"\u75c5\u6b77\u865f"} value={dash(selected?.medicalNo)} readOnly chars={8} />
+              <Field label={"\u8eab\u5206\u8b49"} value={patientIdText(selected)} readOnly chars={12} />
+              <Field label={"\u751f\u65e5"} value={dash(selected?.birthday ? formatBirthdayRoc(selected.birthday) : "")} readOnly chars={9} />
+              <Field label={"\u6027\u5225"} value={dash(selected?.sex || selected?.ageSex)} readOnly chars={3} />
+              <Field label={"\u5e8f\u865f"} value={selected ? String(selected.queueNumber) : DASH} readOnly chars={3} />
             </div>
           </section>
-
-          <section className="rounded border border-slate-300 bg-white p-2">
-            <h3 className="mb-2 border-b pb-1 text-xs font-bold">申報必要</h3>
-            <div className="space-y-1">
-              <Field label="案件分類" value={draft.caseNo} onChange={(v) => onChange({ caseNo: v })} mono />
-              <Field label="部份負擔" value={draft.copayCode} onChange={(v) => onChange({ copayCode: v })} mono />
-              <Field label="給付類別" value={draft.payType} onChange={(v) => onChange({ payType: v })} mono />
-              <Field label="調劑方式" value={draft.dispense} onChange={(v) => onChange({ dispense: v })} />
-              <Field label="給藥天數" value={draft.rxDays} onChange={(v) => onChange({ rxDays: v })} mono />
-              <Field label="就醫序號" value={draft.treatSeq} onChange={(v) => onChange({ treatSeq: v })} mono />
-              <Field label="IC卡號" value={draft.cardNo} onChange={(v) => onChange({ cardNo: v })} mono />
-              <Field label="A_Code" value={draft.aCode} onChange={(v) => onChange({ aCode: v })} mono />
-              <Field label="醫師" value={draft.doctor} onChange={(v) => onChange({ doctor: v })} />
-              <Field label="科別" value={draft.dept} onChange={(v) => onChange({ dept: v })} />
-              <Field label="主診斷" value={draft.dxText} onChange={(v) => onChange({ dxText: v })} />
-              <Field label="ICD" value={draft.icd10} onChange={(v) => onChange({ icd10: v })} mono />
+          <section className={zone}>
+            <h3 className={head}>{"\u7533\u5831\u5fc5\u8981"}</h3>
+            <div className={row}>
+              <Field label={"\u6848\u4ef6"} value={draft.caseNo} onChange={(v) => onChange({ caseNo: v })} chars={4} />
+              <Field label={"\u90e8\u8ca0"} value={draft.copayCode} onChange={(v) => onChange({ copayCode: v })} chars={4} />
+              <Field label={"\u7d66\u4ed8"} value={draft.payType} onChange={(v) => onChange({ payType: v })} chars={3} />
+              <Field label={"\u8abf\u5291"} value={draft.dispense} onChange={(v) => onChange({ dispense: v })} chars={6} />
+              <Field label={"\u5929\u6578"} value={draft.rxDays} onChange={(v) => onChange({ rxDays: v })} chars={3} />
+              <Field label={"\u5c31\u91ab\u5e8f\u865f"} value={draft.treatSeq} onChange={(v) => onChange({ treatSeq: v })} chars={6} />
+              <Field label={"IC\u5361\u865f"} value={draft.cardNo} onChange={(v) => onChange({ cardNo: v })} chars={14} />
+              <Field label={"\u91ab\u5e2b"} value={draft.doctor} onChange={(v) => onChange({ doctor: v })} chars={8} />
+              <Field label={"\u79d1\u5225"} value={draft.dept} onChange={(v) => onChange({ dept: v })} chars={6} />
+              <Field label={"\u4e3b\u8a3a\u65b7"} value={draft.dxText} onChange={(v) => onChange({ dxText: v })} chars={16} />
+              <Field label="ICD" value={draft.icd10} onChange={(v) => onChange({ icd10: v })} chars={8} />
             </div>
           </section>
-
-          <section className="rounded border border-slate-300 bg-white p-2">
-            <h3 className="mb-2 border-b pb-1 text-xs font-bold">費用（Recive.Set）</h3>
-            <p className="mb-1 text-[10px] text-slate-500">
-              可改；存檔會寫回本次 Encounter。沒有值可留 —。
+          <section className={zone}>
+            <h3 className={head}>{"\u8cbb\u7528"}</h3>
+            <div className={row}>
+              <Field label={"\u639b\u865f\u8cbb"} value={draft.regFee} readOnly chars={5} />
+              <Field label={"\u85e5\u8cbb"} value={draft.drugFee} readOnly chars={5} />
+              <Field label={"\u6750\u6599"} value={draft.materialFee} readOnly chars={5} />
+              <Field label={"\u8a3a\u5bdf"} value={draft.consultFee} readOnly chars={5} />
+              <Field label={"\u90e8\u5206\u8ca0\u64d4"} value={draft.burden} readOnly chars={5} />
+              <Field label={"\u62bc\u91d1"} value={dash(selected?.deposit)} readOnly chars={5} />
+              <Field label={"\u81ea\u8cbb"} value={draft.selfPay} onChange={(v) => onChange({ selfPay: v })} chars={6} highlight big />
+              <span className="inline-flex items-center font-bold" style={{ gap: "0.3em", fontSize: "1.5em" }}>
+                {"\u7e3d\u50f9"}
+                <span style={{ color: HIS.inputBlue }}>{moneyText(total)}</span>
+              </span>
+            </div>
+            <p className="mt-0.5 leading-tight" style={{ fontSize: "0.8em" }}>
+              {"\u9032\u4f4d "}
+              {draft.selfPayBasis}
+              {"\u3002\u9019\u88e1\u53ea\u6539\u81ea\u8cbb\uff0c\u7e3d\u50f9\u8ddf\u8457\u8b8a\u3002\u639b\u865f\u3001\u90e8\u5206\u8ca0\u64d4\u3001\u62bc\u91d1\u5230 F3 \u6539\u3002"}
             </p>
-            <div className="space-y-1">
-              <Field label="掛號費用" value={draft.regFee} onChange={(v) => onChange({ regFee: v })} mono />
-              <Field label="藥品費用" value={draft.drugFee} onChange={(v) => onChange({ drugFee: v })} mono />
-              <Field label="材料費用" value={draft.materialFee} onChange={(v) => onChange({ materialFee: v })} mono />
-              <Field label="診察費用" value={draft.consultFee} onChange={(v) => onChange({ consultFee: v })} mono />
-              <Field label="診療負擔" value={draft.burden} onChange={(v) => onChange({ burden: v })} mono />
-            </div>
           </section>
-
-          <section className="rounded border border-slate-300 bg-white p-2">
-            <h3 className="mb-2 border-b pb-1 text-xs font-bold">重要醫令</h3>
-            <div className="space-y-1">
-              <Field label="醫令代碼" value={draft.orderCode} onChange={(v) => onChange({ orderCode: v })} mono />
-              <Field label="執行人員" value={draft.orderStaff} onChange={(v) => onChange({ orderStaff: v })} />
-              <Field label="執行時間" value={draft.orderTime} onChange={(v) => onChange({ orderTime: v })} />
-              <Field label="手術碼" value={draft.surgeryCode} onChange={(v) => onChange({ surgeryCode: v })} mono />
+          <section className={zone}>
+            <h3 className={head}>{"\u91cd\u8981\u91ab\u4ee4"}</h3>
+            <div className={row}>
+              <Field label={"\u91ab\u4ee4"} value={draft.orderCode} onChange={(v) => onChange({ orderCode: v })} chars={8} />
+              <Field label={"\u4eba\u54e1"} value={draft.orderStaff} onChange={(v) => onChange({ orderStaff: v })} chars={6} />
+              <Field label={"\u6642\u9593"} value={draft.orderTime} onChange={(v) => onChange({ orderTime: v })} chars={12} />
+              <Field label={"\u624b\u8853"} value={draft.surgeryCode} onChange={(v) => onChange({ surgeryCode: v })} chars={8} />
             </div>
-            <h3 className="mb-1 mt-3 border-b pb-1 text-xs font-bold">存檔勾選</h3>
-            <div className="space-y-1 text-[11px]">
+            <h3 className={`${head} mt-1`}>{"\u5b58\u6a94\u52fe\u9078"}</h3>
+            <div className="space-y-0.5">
               <label className="flex items-center gap-2">
                 <input
                   type="checkbox"
-                  checked={draft.writeCard}
-                  disabled={locked}
+                  checked={noCloud ? false : draft.writeCard}
+                  disabled={locked || noCloud}
                   onChange={(e) => onChange({ writeCard: e.target.checked })}
                 />
                 {"\u5beb\u5165\u5065\u4fdd\u96f2\u7aef\uff086.0\uff1b\u975e\u5beb\u6676\u7247\uff09"}
               </label>
-              <p className="pl-5 text-[10px] leading-snug text-slate-600">
-                {"\u9019\u53f0\u96fb\u8166\u7684\u9810\u8a2d\u5728\u9662\u6240\u8cc7\u6599\u2192\u672c\u6a5f\u5de5\u4f5c\u7ad9\u3002\u770b\u8a3a\u4e0d\u52fe\uff0c\u6ac3\u53f0\u63d2\u5361\u518d\u5b58\u6a94\u6642\u624d\u52fe\u3002\u9019\u88e1\u6539\u7684\u53ea\u5f71\u97ff\u9019\u4e00\u6b21\u3002"}
+              <p className="pl-5 leading-tight" style={{ fontSize: "0.8em" }}>
+                {noCloud
+                  ? "\u62bc\u91d1\u548c\u81ea\u8cbb\u53ea\u7559\u5728\u9019\u53f0\u96fb\u8166\uff0c\u52fe\u4e86\u4e5f\u4e0d\u5beb\u5065\u4fdd\u96f2\u7aef\u3002"
+                  : "\u9019\u53f0\u96fb\u8166\u7684\u9810\u8a2d\u5728\u9662\u6240\u8cc7\u6599\u2192\u672c\u6a5f\u5de5\u4f5c\u7ad9\u3002\u9019\u88e1\u6539\u7684\u53ea\u5f71\u97ff\u9019\u4e00\u6b21\u3002"}
               </p>
               <label className="flex items-center gap-2">
                 <input
                   type="checkbox"
                   checked={draft.writeDx}
-                  disabled={locked || !draft.writeCard}
+                  disabled={locked || noCloud || !draft.writeCard}
                   onChange={(e) => onChange({ writeDx: e.target.checked })}
                 />
                 連同診斷＋費用（WriteCodeFee）
@@ -315,7 +401,7 @@ export function VisitSaveConfirmPanel({
                 <input
                   type="checkbox"
                   checked={draft.writeOrders}
-                  disabled={locked || !draft.writeCard}
+                  disabled={locked || noCloud || !draft.writeCard}
                   onChange={(e) => onChange({ writeOrders: e.target.checked })}
                 />
                 連同處方醫令（Prescription/Write）
@@ -329,19 +415,19 @@ export function VisitSaveConfirmPanel({
                 />
                 印處方簽（印表機未接則不印）
               </label>
-              <p className="pl-5 text-[10px] leading-snug text-slate-600">
+              <p className="pl-5 leading-tight text-slate-600" style={{ fontSize: "0.8em" }}>
                 {"\u9019\u53f0\u96fb\u8166\u7684\u9810\u8a2d\u5728\u9662\u6240\u8cc7\u6599\u2192\u672c\u6a5f\u5de5\u4f5c\u7ad9\u3002\u770b\u8a3a\u3001\u85e5\u5c40\u9810\u8a2d\u8981\u8df3\u5217\u5370\uff0c\u639b\u865f\u53f0\u9810\u8a2d\u53ea\u5b58\u6a94\u3002\u9019\u88e1\u6539\u7684\u53ea\u5f71\u97ff\u9019\u4e00\u6b21\u3002"}
               </p>
             </div>
           </section>
         </div>
 
-        <section className="mt-2 rounded border border-slate-300 bg-white p-2">
-          <h3 className="mb-1 text-xs font-bold">主述／處方摘要</h3>
-          <pre className="max-h-16 overflow-auto whitespace-pre-wrap text-[11px] text-slate-700">
+        <section className={`${zone} mt-1`}>
+          <div className={head}>{"\u4e3b\u8ff0\uff0f\u8655\u65b9"}</div>
+          <pre className="max-h-12 overflow-auto whitespace-pre-wrap leading-tight" style={{ fontSize: "0.9em" }}>
             {ccText.trim() || DASH}
           </pre>
-          <ul className="mt-1 max-h-24 overflow-auto text-[11px]">
+          <ul className="mt-0.5 max-h-16 overflow-auto leading-tight" style={{ fontSize: "0.9em" }}>
             {currentRx.length === 0 ? (
               <li className="text-slate-400">{DASH}</li>
             ) : (
@@ -354,8 +440,8 @@ export function VisitSaveConfirmPanel({
           </ul>
         </section>
       </div>
-      <aside className="flex w-52 shrink-0 flex-col border-l border-slate-400 bg-slate-100">
-        <div className="border-b border-slate-400 bg-slate-300 px-2 py-1 text-xs font-bold">
+      <aside className="flex w-64 shrink-0 flex-col border-l border-slate-400 bg-slate-100">
+        <div className="border-b border-slate-400 bg-slate-300 px-2 py-1 font-bold">
           候診名單（{waiting.length}）
         </div>
         <ul
@@ -372,13 +458,13 @@ export function VisitSaveConfirmPanel({
           }}
         >
           {waiting.length === 0 ? (
-            <li className="px-2 py-3 text-[11px] text-slate-500">這個時段沒有待診</li>
+            <li className="px-2 py-3 text-slate-500">這個時段沒有待診</li>
           ) : (
             waiting.map((row, i) => (
               <li key={row.encounterId} data-list-row="">
                 <button
                   type="button"
-                  className={`flex w-full items-center gap-1 px-2 py-1 text-left text-[12px] hover:bg-amber-100 ${
+                  className={`flex w-full items-center gap-1 px-2 py-1 text-left hover:bg-amber-100 ${
                     i === waitIndex
                       ? "bg-[#000080] font-bold text-white"
                       : row.encounterId === selected?.encounterId
@@ -397,7 +483,7 @@ export function VisitSaveConfirmPanel({
             ))
           )}
         </ul>
-        <p className="border-t border-slate-300 px-2 py-1 text-[10px] text-slate-600">
+        <p className="border-t border-slate-300 px-2 py-1 text-slate-600" style={{ fontSize: "0.85em" }}>
           點名就切到下一位看診
         </p>
       </aside>
@@ -407,27 +493,27 @@ export function VisitSaveConfirmPanel({
         <button
           type="button"
           disabled={locked || saving}
-          className="rounded border border-slate-500 bg-white px-3 py-1 text-xs font-bold disabled:bg-slate-200 disabled:text-slate-400"
+          className="rounded border border-slate-500 bg-white px-3 py-1 font-bold disabled:bg-slate-200 disabled:text-slate-400"
           onClick={onConfirm}
         >
-          <span className="font-mono text-[10px]">F9</span> {locked ? "已存檔" : "存檔"}
+          <span className="font-mono" style={{ fontSize: "0.8em" }}>F9</span> {locked ? "已存檔" : "存檔"}
         </button>
         <button
           type="button"
-          className="rounded border border-slate-700 bg-[#ffe14a] px-3 py-1 text-xs font-bold"
+          className="rounded border border-slate-700 bg-[#ffe14a] px-3 py-1 font-bold"
           onClick={onPrint}
         >
-          <span className="font-mono text-[10px]">P</span> 列印
+          <span className="font-mono" style={{ fontSize: "0.8em" }}>P</span> 列印
         </button>
-        {printNote ? <span className="min-w-0 flex-1 text-[12px] font-bold text-slate-900">{printNote}</span> : null}
+        {printNote ? <span className="min-w-0 flex-1 font-bold text-slate-900">{printNote}</span> : null}
         <button
           type="button"
-          className="rounded border border-slate-500 bg-white px-3 py-1 text-xs"
+          className="rounded border border-slate-500 bg-white px-3 py-1"
           onClick={onClose}
         >
           Esc 離開
         </button>
-        {saving && <span className="text-[11px] text-sky-800">寫入中…</span>}
+        {saving && <span className="text-sky-800">寫入中…</span>}
       </footer>
     </div>
   );

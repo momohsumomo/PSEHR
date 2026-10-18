@@ -52,28 +52,53 @@ class SeqResult:
     raw: dict[str, Any] | None = None
 
 
+def _signature_ready(signed: dict[str, Any]) -> bool:
+    code = signed.get("statusCode")
+    return code in (None, 0) and bool(signed.get("signature")) and bool(signed.get("clientRandom"))
+
+
 def _sign_hc(*, console_base: str, service_type: str = "03") -> dict[str, Any]:
+    """Sign the card already in the reader. Scan every reader only if that fails."""
     client = Cshis6Client(console_base)
     try:
         client.ensure_session()
     except Exception as exc:
         raise RuntimeError(f"主控台初始化／驗證 SAM 失敗：{exc}") from exc
-    card = read_card_profile(use_mock=False, console_base=console_base)
-    if not card.profile:
-        raise RuntimeError(card.consoleError or "讀不到健保卡基本資料，無法簽章取號。")
+    signed: dict[str, Any] = {}
     try:
         signed = client.hc_signature(service_type)
-    except Exception as exc:
-        raise RuntimeError(f"主控台簽章失敗：{exc}") from exc
+    except Exception:
+        signed = {}
+    profile: dict[str, str] = {}
+    if not _signature_ready(signed):
+        card = read_card_profile(use_mock=False, console_base=console_base)
+        if not card.profile:
+            raise RuntimeError(card.consoleError or "讀不到健保卡基本資料，無法簽章取號。")
+        profile = card.profile
+        try:
+            signed = client.hc_signature(service_type)
+        except Exception as exc:
+            raise RuntimeError(f"主控台簽章失敗：{exc}") from exc
     code = signed.get("statusCode")
     if code not in (None, 0):
         raise RuntimeError(f"主控台簽章失敗：{status_hint(int(code))}")
     if not signed.get("signature") or not signed.get("clientRandom"):
         raise RuntimeError("主控台簽章回傳不完整（缺 signature／clientRandom）。")
     if not signed.get("hcId"):
-        signed["hcId"] = card.profile.get("cardId") or ""
+        signed["hcId"] = profile.get("cardId") or ""
     if not signed.get("hcIdNo"):
-        signed["hcIdNo"] = card.profile.get("idNo") or ""
+        signed["hcIdNo"] = profile.get("idNo") or ""
+    if not signed.get("hcId") or not signed.get("hcIdNo"):
+        try:
+            from src.core.nhi_card_init_sop import map_hc_basic
+
+            mapped = map_hc_basic(client.hc_basic()) or {}
+        except Exception:
+            mapped = {}
+        if not signed.get("hcId"):
+            signed["hcId"] = mapped.get("cardId") or ""
+        if not signed.get("hcIdNo"):
+            signed["hcIdNo"] = mapped.get("idNo") or ""
     if not signed.get("hospitalId"):
         signed["hospitalId"] = DEFAULT_HOSPITAL_ID
     if not signed.get("samId"):
@@ -203,6 +228,7 @@ def request_no_card(
         reason="健保局已核發無卡就醫識別碼",
         treatmentNumber=treat_no,
         treatmentDateTime=str(data.get("treatmentDateTime") or "") or None,
+        samId=str(signed.get("samId") or "") or None,
         statusCode=0,
         hcIdNo=id_no,
         raw=data,

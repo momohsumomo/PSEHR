@@ -84,7 +84,7 @@ export function catalogDrugToRxLine(drug: CatalogDrug, usages?: CatalogUsage[]):
     route: drug.route,
     selfPay: drug.payMark === "\u81ea" || drug.selfPay,
     payMark: drug.payMark || (drug.selfPay ? "\u81ea" : ""),
-    memo: "",
+    memo: (drug.memo || "").trim(),
   };
   return withComputedTotal(line, usages);
 }

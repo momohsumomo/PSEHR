@@ -175,6 +175,12 @@ export type ApiQueueEntry = {
     forespeak?: string;
     prebook?: boolean;
     cardWritten?: boolean;
+    referralSeq?: string;
+    referralHospId?: string;
+    referralHospName?: string;
+    referralDate?: string;
+    referralLocalId?: string;
+    acceptReferral?: string;
     timesNo?: number;
     oweCard?: boolean;
     regCc?: string;
@@ -400,6 +406,31 @@ export async function fetchWorkspace(
   return request<WorkspaceResponse>(`/nhi/v1/outpatient/workspace/${encounterId}${q}`);
 }
 
+const CHART_IN_USE = "\u6b63\u5728\u88ab\u5176\u4ed6\u4eba\u4f7f\u7528\u4e2d";
+
+export async function claimChartOpen(encounterId: string, deviceId: string): Promise<void> {
+  await request("/nhi/v1/outpatient/chart-open", {
+    method: "POST",
+    body: JSON.stringify({ encounterId, deviceId }),
+  });
+}
+
+export function releaseChartOpen(encounterId: string, deviceId: string): void {
+  const body = JSON.stringify({ encounterId, deviceId });
+  try {
+    void fetch(`${API_BASE}/nhi/v1/outpatient/chart-open/release`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body,
+      keepalive: true,
+    });
+  } catch {
+    /* the hold expires on its own */
+  }
+}
+
+export { CHART_IN_USE };
+
 export async function patchQueueStatus(
   encounterId: string,
   queue_status: string,
@@ -428,20 +459,40 @@ export async function fetchCcPhrases(): Promise<string[]> {
   return data.items || [];
 }
 
-export async function lookupIntake(rocBirthday: string): Promise<Array<{ encounterId: string; maskedName: string; idTail: string }>> {
-  const data = await request<{ items?: Array<{ encounterId: string; maskedName: string; idTail: string }> }>(
-    "/nhi/v1/kiosk/intake/lookup",
-    { method: "POST", body: JSON.stringify({ rocBirthday }) },
-  );
-  return data.items || [];
+export async function fetchCcSuggest(frag: string, prev: string): Promise<string> {
+  const q = new URLSearchParams();
+  q.set("frag", frag);
+  q.set("prev", prev);
+  const data = await request<{ suffix?: string }>(`/nhi/v1/cc/suggest?${q.toString()}`);
+  return data.suffix || "";
+}
+
+export async function lookupIntake(rocBirthday: string): Promise<{
+  items: Array<{ encounterId: string; maskedName: string; idTail: string; filled?: boolean; sex?: string; access?: string }>;
+}> {
+  const data = await request<{
+    items?: Array<{ encounterId: string; maskedName: string; idTail: string; filled?: boolean; sex?: string; access?: string }>;
+  }>("/nhi/v1/kiosk/intake/lookup", { method: "POST", body: JSON.stringify({ rocBirthday }) });
+  return { items: data.items || [] };
 }
 
 export async function submitIntake(body: {
   encounterId: string;
-  location: string;
+  location?: string;
+  sites?: string[];
   symptoms: string[];
-  duration: string;
-  priorTopical: boolean;
+  duration?: string;
+  days?: string;
+  course?: string;
+  severity?: string;
+  priorTopical?: boolean;
+  seenOtherDoctor?: boolean;
+  refillOnly?: boolean;
+  replace?: boolean;
+  visitKind?: string;
+  intent?: string;
+  concerns?: string[];
+  prior?: string;
 }): Promise<void> {
   await request("/nhi/v1/kiosk/intake/submit", { method: "POST", body: JSON.stringify(body) });
 }
@@ -649,6 +700,12 @@ export type EncounterRegisterBody = {
   consultFee?: string;
   drugFee?: string;
   totalFee?: string;
+  selfPay?: string;
+  referralSeq?: string;
+  referralHospId?: string;
+  referralHospName?: string;
+  referralDate?: string;
+  acceptReferral?: string;
   materialFee?: string;
   burdenFee?: string;
   prebook?: boolean;
@@ -865,6 +922,14 @@ export async function saveReferralSlip(body: Partial<ReferralSlipRow> & { kind: 
   return data.item;
 }
 
+export type ReferralSlipHit = {
+  serial: string;
+  hospId: string;
+  openDate: string;
+  kind: string;
+  summary: string;
+};
+
 export async function queryReferral(body: { encounterId?: string; idNo?: string }): Promise<{
   ok: boolean;
   reason: string;
@@ -872,6 +937,7 @@ export async function queryReferral(body: { encounterId?: string; idNo?: string 
   openDate?: string;
   retry?: boolean;
   count?: number;
+  slips?: ReferralSlipHit[];
 }> {
   return request("/nhi/v1/referral/query", {
     method: "POST",
@@ -1014,8 +1080,52 @@ export type PatientRosterItem = {
   idCategory: string;
 };
 
+let rosterCache: { total: number; items: PatientRosterItem[] } | null = null;
+let rosterFlight: Promise<{ total: number; items: PatientRosterItem[] }> | null = null;
+
+export function invalidatePatientRoster(): void {
+  rosterCache = null;
+}
+
+function rosterFromPayload(res: {
+  total?: number;
+  items?: PatientRosterItem[];
+  rows?: string[][];
+}): { total: number; items: PatientRosterItem[] } {
+  if (res.items) return { total: res.total ?? res.items.length, items: res.items };
+  const items = (res.rows || []).map((r) => ({
+    id: r[0] || "",
+    medicalNo: r[1] || "",
+    name: r[2] || "",
+    idNo: r[3] || "",
+    birthdayRoc: r[4] || "",
+    phone: r[5] || "",
+    idCategory: r[6] || "",
+  }));
+  return { total: res.total ?? items.length, items };
+}
+
 export async function fetchPatientRoster(): Promise<{ total: number; items: PatientRosterItem[] }> {
-  return request("/fhir/Patient/roster");
+  if (rosterCache) return rosterCache;
+  if (!rosterFlight) {
+    rosterFlight = request<{ total?: number; items?: PatientRosterItem[]; rows?: string[][] }>(
+      "/fhir/Patient/roster",
+    )
+      .then((res) => {
+        rosterCache = rosterFromPayload(res);
+        rosterFlight = null;
+        return rosterCache;
+      })
+      .catch((err) => {
+        rosterFlight = null;
+        throw err;
+      });
+  }
+  return rosterFlight;
+}
+
+export function prefetchPatientRoster(): void {
+  void fetchPatientRoster().catch(() => undefined);
 }
 
 export type FamilyMember = {
@@ -1150,6 +1260,7 @@ export async function fetchMediaDataUrl(mediaId: string): Promise<string | null>
 }
 
 export async function updatePatient(patientId: string, body: any, pin?: string): Promise<ApiPatient> {
+  invalidatePatientRoster();
   const headers: Record<string, string> = {};
   if (pin) {
     headers["X-PIN-Code"] = pin;
@@ -1162,6 +1273,7 @@ export async function updatePatient(patientId: string, body: any, pin?: string):
 }
 
 export async function createPatient(body: any, pin?: string): Promise<ApiPatient> {
+  invalidatePatientRoster();
   const headers: Record<string, string> = {};
   if (pin) {
     headers["X-PIN-Code"] = pin;
@@ -1176,6 +1288,14 @@ export async function createPatient(body: any, pin?: string): Promise<ApiPatient
 export async function fetchNextMedicalNo(): Promise<string> {
   const res = await request<{ medicalNo: string }>("/fhir/Patient/next-medical-no");
   return res.medicalNo;
+}
+
+export async function fetchHomeAddressByPhone(
+  phone: string,
+  exceptId = "",
+): Promise<{ address: string; postalCode: string }> {
+  const q = new URLSearchParams({ phone, exceptId });
+  return request<{ address: string; postalCode: string }>(`/fhir/Patient/address-by-phone?${q.toString()}`);
 }
 
 export type AuditStatus = {
@@ -1214,6 +1334,7 @@ export async function fetchPatient(patientId: string): Promise<ApiPatient> {
 }
 
 export async function deletePatient(patientId: string, pin?: string): Promise<void> {
+  invalidatePatientRoster();
   const headers: Record<string, string> = {};
   if (pin) {
     headers["X-PIN-Code"] = pin;
@@ -1347,6 +1468,60 @@ export async function fetchClinicProfile(): Promise<{ ok: boolean; source: strin
   return request(`/clinic/settings/profile`);
 }
 
+export type AddressDistrict = { name: string; zip: string };
+export type AddressCity = { name: string; districts: AddressDistrict[] };
+export type AddressFavorite = { city: string; district: string; road: string };
+
+export async function fetchAddressTree(): Promise<{
+  updated: string;
+  source: string;
+  cities: AddressCity[];
+  favorites: AddressFavorite[];
+}> {
+  return request("/clinic/address/tree");
+}
+
+export async function fetchAddressRoads(
+  city: string,
+  district: string,
+): Promise<{ zip: string; roads: string[]; local: string[] }> {
+  const q = new URLSearchParams({ city, district });
+  return request(`/clinic/address/roads?${q.toString()}`);
+}
+
+export async function addAddressRoad(city: string, district: string, road: string): Promise<{ ok: boolean }> {
+  return request("/clinic/address/roads", {
+    method: "POST",
+    body: JSON.stringify({ city, district, road }),
+  });
+}
+
+export async function addAddressFavorite(
+  city: string,
+  district: string,
+  road: string,
+): Promise<{ favorites: AddressFavorite[] }> {
+  return request("/clinic/address/favorites", {
+    method: "POST",
+    body: JSON.stringify({ city, district, road }),
+  });
+}
+
+export async function removeAddressFavorite(
+  city: string,
+  district: string,
+  road: string,
+): Promise<{ favorites: AddressFavorite[] }> {
+  return request("/clinic/address/favorites/remove", {
+    method: "POST",
+    body: JSON.stringify({ city, district, road }),
+  });
+}
+
+export async function refreshAddressBook(force = false): Promise<{ ok: boolean; skipped?: boolean; updated: string }> {
+  return request(`/clinic/address/refresh?force=${force ? "true" : "false"}`, { method: "POST" });
+}
+
 export async function saveClinicProfile(data: ClinicProfileBundle): Promise<{ ok: boolean; data: ClinicProfileBundle }> {
   return request(`/clinic/settings/profile`, {
     method: "PUT",
@@ -1437,6 +1612,8 @@ export type SciniRow = {
   combox?: string;
   picture?: string;
   desc?: string;
+  group?: string;
+  group1?: string;
   suggestedScope?: "clinic" | "role" | "device";
 };
 
@@ -1515,6 +1692,17 @@ export type LocalPrintHealth = {
   sumatra?: boolean;
   printers?: Array<{ name?: string; online?: boolean | null; default?: boolean; device?: boolean }>;
 };
+
+export async function installLocalSumatra(): Promise<string> {
+  const res = await localPrintFetch("/tools/sumatra", { method: "POST" });
+  const data = (await res.json().catch(() => ({}))) as { message?: string; detail?: string };
+  if (!res.ok) throw new Error(data.message || data.detail || "\u5217\u5370\u7a0b\u5f0f\u4e0b\u8f09\u5931\u6557");
+  return data.message || "SumatraPDF";
+}
+
+export function openLocalFix(kind: "print" | "sumatra"): void {
+  window.location.href = `psehr://fix/${kind}`;
+}
 
 export async function fetchLocalPrintHealth(): Promise<LocalPrintHealth | null> {
   try {
@@ -1666,6 +1854,7 @@ export type SameDayResult = {
     doctorName?: string;
     hospitalId?: string;
     source?: string;
+    prebook?: boolean;
   }>;
   cloudOk?: boolean;
   cloudError?: string;

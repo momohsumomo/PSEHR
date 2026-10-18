@@ -49,7 +49,7 @@ function SplitList({
             <tr
               key={`${row.icd9}-${row.icd10}`}
               className={row.icd10 === active ? "bg-[#FFF2A8]" : "bg-white"}
-              onDoubleClick={(ev) => {
+              onClick={(ev) => {
                 ev.preventDefault();
                 ev.stopPropagation();
                 onPick(row);
@@ -77,6 +77,7 @@ export function IcdShortcutDialog({
 }: Props) {
   const [text, setText] = useState(query);
   const [index, setIndex] = useState(0);
+  const [armed, setArmed] = useState(false);
   const [pickError, setPickError] = useState("");
   const [fullOpen, setFullOpen] = useState(false);
   const splitMap = useIcdSplits();
@@ -96,6 +97,7 @@ export function IcdShortcutDialog({
 
   useEffect(() => {
     setIndex(0);
+    setArmed(false);
   }, [text]);
 
   useEffect(() => {
@@ -104,14 +106,16 @@ export function IcdShortcutDialog({
       if (ev.key === "ArrowDown") {
         ev.preventDefault();
         ev.stopPropagation();
+        setArmed(true);
         setIndex((i) => Math.min(i + 1, Math.max(rows.length - 1, 0)));
       }
       if (ev.key === "ArrowUp") {
         ev.preventDefault();
         ev.stopPropagation();
+        setArmed(true);
         setIndex((i) => Math.max(i - 1, 0));
       }
-      if (ev.key === "Enter" && current) {
+      if (ev.key === "Enter" && armed && current) {
         ev.preventDefault();
         ev.stopImmediatePropagation();
         pick(current);
@@ -119,7 +123,7 @@ export function IcdShortcutDialog({
     };
     window.addEventListener("keydown", onKey, true);
     return () => window.removeEventListener("keydown", onKey, true);
-  }, [current, fullOpen, onPick, rows.length]);
+  }, [armed, current, fullOpen, onPick, rows.length]);
 
   return createPortal(
     <div
@@ -193,11 +197,7 @@ export function IcdShortcutDialog({
                     <tr
                       key={`${row.short || ""}-${row.icd10}-${i}`}
                       className={i === index ? "bg-[#316AC5] text-white" : i % 2 ? "bg-[#FFF8DC]" : "bg-white"}
-                      onMouseDown={(ev) => {
-                        ev.stopPropagation();
-                        setIndex(i);
-                      }}
-                      onDoubleClick={(ev) => {
+                      onClick={(ev) => {
                         ev.preventDefault();
                         ev.stopPropagation();
                         pick(row);
@@ -249,6 +249,7 @@ export function Icd10ConditionDialog({
 }: Omit<Props, "field" | "onBrowseChapters">) {
   const [text, setText] = useState(query);
   const [index, setIndex] = useState(0);
+  const [armed, setArmed] = useState(false);
   const [pickError, setPickError] = useState("");
   const [fullOpen, setFullOpen] = useState(false);
   const splitMap = useIcdSplits();
@@ -261,6 +262,7 @@ export function Icd10ConditionDialog({
 
   useEffect(() => {
     setIndex(0);
+    setArmed(false);
   }, [text]);
 
   useEscLayer([{ open: true, close: onClose }]);
@@ -273,7 +275,19 @@ export function Icd10ConditionDialog({
   useEffect(() => {
     const onKey = (ev: KeyboardEvent) => {
       if (fullOpen) return;
-      if (ev.key === "Enter" && current) {
+      if (ev.key === "ArrowDown") {
+        ev.preventDefault();
+        ev.stopPropagation();
+        setArmed(true);
+        setIndex((i) => Math.min(i + 1, Math.max(rows.length - 1, 0)));
+      }
+      if (ev.key === "ArrowUp") {
+        ev.preventDefault();
+        ev.stopPropagation();
+        setArmed(true);
+        setIndex((i) => Math.max(i - 1, 0));
+      }
+      if (ev.key === "Enter" && armed && current) {
         ev.preventDefault();
         ev.stopImmediatePropagation();
         pick(current);
@@ -281,7 +295,7 @@ export function Icd10ConditionDialog({
     };
     window.addEventListener("keydown", onKey, true);
     return () => window.removeEventListener("keydown", onKey, true);
-  }, [current, fullOpen, onPick]);
+  }, [armed, current, fullOpen, onPick, rows.length]);
 
   return createPortal(
     <div
@@ -325,11 +339,7 @@ export function Icd10ConditionDialog({
                 <tr
                   key={`${row.icd10}-${row.short || i}`}
                   className={i === index ? "bg-[#316AC5] text-white" : "bg-white"}
-                  onMouseDown={(ev) => {
-                    ev.stopPropagation();
-                    setIndex(i);
-                  }}
-                  onDoubleClick={(ev) => {
+                  onClick={(ev) => {
                     ev.preventDefault();
                     ev.stopPropagation();
                     pick(row);

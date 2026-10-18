@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useRef, useCallback, type RefObject } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { mockPatients } from "@/mocks";
-import { isApiMode, fetchPatient, fetchPatientRoster, updatePatient, createPatient, type ApiPatient, fetchIdCategorySettings, fetchNextMedicalNo, fetchPatientModifications, type PatientModification, fetchAuditStatus, type IdCategorySetting, type PatientRosterItem } from "@/api/clinicApi";
+import { isApiMode, fetchPatient, fetchPatientRoster, updatePatient, createPatient, deletePatient, type ApiPatient, fetchIdCategorySettings, fetchNextMedicalNo, fetchPatientModifications, type PatientModification, fetchAuditStatus, type IdCategorySetting, type PatientRosterItem } from "@/api/clinicApi";
 import { useEscLayer } from "@/hooks/useEscLayer";
 import { useListNav } from "@/hooks/useListNav";
 import { Fido2BindingModal } from "@/components/Fido2BindingModal";
@@ -14,6 +14,7 @@ import {
 } from "@/lib/patientMaster";
 import { HisWinTitle, HisCatalogFBar } from "@/components/clinic/HisPageFrame";
 import { HIS, HIS_FBAR_COLORS, hisFontStyle } from "@/lib/hisTheme";
+import { formatBirthdayRoc } from "@/lib/patientSearch";
 
 export function PatientListPage() {
   const navigate = useNavigate();
@@ -271,6 +272,32 @@ export function PatientListPage() {
     void openRecord(hit.id);
     setSearchParams({}, { replace: true });
   }, [roster, searchParams, setSearchParams]);
+
+  const handleDelete = async () => {
+    if (!editForm?.id || mode !== "browse") return;
+    const ok = window.confirm(
+      "\u522a\u9664\u9019\u7b46\u8aa4\u5efa\u7684\u75c5\u6b77\uff1f\u5df2\u7d93\u6709\u770b\u8a3a\u7d00\u9304\u7684\u4e0d\u6703\u522a\u3002",
+    );
+    if (!ok) return;
+    setLoading(true);
+    setError("");
+    setSuccess("");
+    try {
+      if (apiMode) await deletePatient(editForm.id);
+      recordCache.current.delete(editForm.id);
+      const removed = editForm.id;
+      setRoster((prev) => prev.filter((p) => p.id !== removed));
+      setTotalCount((n) => Math.max(0, n - 1));
+      setEditForm(null);
+      setOriginalForm(null);
+      setSelectedPatientId(null);
+      setSuccess("\u5df2\u522a\u9664\u9019\u7b46\u75c5\u6b77");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "\u522a\u9664\u5931\u6557");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleFilterFocus = () => {
     if (searchInputRef.current) {
@@ -627,6 +654,13 @@ export function PatientListPage() {
             onClick: () => void handleOpenAudit(),
             disabled: !editForm || mode !== "browse",
           },
+          {
+            key: "F7",
+            label: "\u522a\u9664",
+            color: HIS_FBAR_COLORS.F7,
+            onClick: () => void handleDelete(),
+            disabled: !editForm || mode !== "browse",
+          },
           { key: "F9", label: "存檔", color: HIS_FBAR_COLORS.F9, onClick: () => void handleSave(), disabled: mode === "browse" },
           {
             key: "Esc",
@@ -724,7 +758,7 @@ export function PatientListPage() {
               <div className="text-[14px] font-black tracking-widest">{editForm.name}</div>
               <div className="text-[10px] text-slate-600 flex gap-3">
                 <span>{editForm.sex === "男" ? "♂" : "♀"} {editForm.sex}</span>
-                <span>出生: {editForm.birthday}</span>
+                <span>出生: {formatBirthdayRoc(editForm.birthday) || editForm.birthday}</span>
               </div>
               
               {/* 條碼圖案 (SVG 繪製) */}

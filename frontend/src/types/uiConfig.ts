@@ -30,6 +30,7 @@ export type ShortcutBarAction =
   | "icCard"
   | "refundDeposit"
   | "receipt"
+  | "printVisit"
   | "deleteReg"
   | "emrLookup"
   | "query"

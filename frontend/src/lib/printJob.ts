@@ -21,8 +21,8 @@ export type PrintJob = {
   bodyHtml?: string;
   /** 院所列印設定的那一列。有設就用該列的長寬。 */
   setupId?: PrintSetupId;
-  /** 簡式收據：左右同寬、內容不同。paged：每一段各佔一張紙。bodyHtml 就是整張。 */
-  layout?: "simple-split" | "paged";
+  /** 簡式收據：左右同寬、內容不同。paged：每一段各佔一張紙。sheet：bodyHtml 就是這一張，不再另包標題。 */
+  layout?: "simple-split" | "paged" | "sheet";
 };
 
 export type PrintSendResult = { printed: boolean; printer: string };
@@ -102,14 +102,15 @@ function buildPrintHtml(
   <div class="meta">${escapeHtml(job.patientName || "")} ${escapeHtml(job.medicalNo || "")}</div>
   <table>${rows}</table>
   <div class="body">${job.bodyHtml || ""}</div>`;
-  const dual = job.layout !== "simple-split" && (job.kind === "receipt" || orderDual);
-  const body =
-    (job.layout === "simple-split" || job.layout === "paged") && job.bodyHtml
-      ? job.bodyHtml
-      : dual
-        ? `<div class="sheet"><section class="half">${oneCopy}</section><section class="half">${oneCopy}</section></div>`
-        : oneCopy;
-  const lockOnePage = job.layout === "simple-split";
+  const ownPage =
+    (job.layout === "simple-split" || job.layout === "paged" || job.layout === "sheet") && !!job.bodyHtml;
+  const dual = !ownPage && (job.kind === "receipt" || orderDual);
+  const body = ownPage
+    ? job.bodyHtml || ""
+    : dual
+      ? `<div class="sheet"><section class="half">${oneCopy}</section><section class="half">${oneCopy}</section></div>`
+      : oneCopy;
+  const lockOnePage = job.layout === "simple-split" || job.layout === "sheet";
   const paged = job.layout === "paged";
   const pageSize = paper.trim().split(/\s+/);
   const pageW = pageSize[0] || "210mm";
@@ -119,15 +120,23 @@ function buildPrintHtml(
     ? `width:${pageW};height:${pageH};overflow:hidden;`
     : "";
   const pagedCss = paged
-    ? `.slip-page{box-sizing:border-box;width:${pageW};height:${pageH};padding:8mm;overflow:hidden;break-after:page;page-break-after:always;}
+    ? `.slip-page{box-sizing:border-box;width:${pageW};height:${pageH};margin:0;padding:0;overflow:hidden;display:flex;flex-direction:column;break-after:page;page-break-after:always;}
   .slip-page:last-child{break-after:auto;page-break-after:auto;}`
     : "";
-  return `<!doctype html><html><head><meta charset="utf-8"/>
+  return `<!doctype html><html style="color-scheme:only light;background:#fff;color:#000;forced-color-adjust:none"><head><meta charset="utf-8"/>
+<meta name="color-scheme" content="only light"/>
 <title>${escapeHtml(job.title)}</title>
 <style>
   @page { size: ${paper}; margin: ${pageMargin}mm; }
-  html, body { margin: 0; padding: 0; ${pageBox} }
-  body { font-family: "Microsoft JhengHei", sans-serif; font-size: ${fontSizePx}px; color: #111; }
+  html { color-scheme: only light; }
+  html, body {
+    margin: 0; padding: 0; ${pageBox}
+    background: #fff !important; color: #000 !important;
+    forced-color-adjust: none;
+    -webkit-print-color-adjust: exact; print-color-adjust: exact;
+  }
+  body { font-family: "Microsoft JhengHei", sans-serif; font-size: ${fontSizePx}px; }
+  .slip-page { background: #fff; color: #000; }
   h1 { font-size: ${fontSizePx + 2}px; margin: 0 0 4px; }
   .meta { color: #555; margin-bottom: 4px; }
   table { width: 100%; border-collapse: collapse; }
@@ -146,4 +155,25 @@ function escapeHtml(s: string): string {
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;");
+}
+
+/** Draw the slip inside this page. A separate frame gets repainted by Chrome dark mode. */
+export function previewSheetMarkup(html: string): string {
+  const raw = Array.from(html.matchAll(/<style[^>]*>([\s\S]*?)<\/style>/gi))
+    .map((match) => match[1])
+    .join("\n");
+  const styles = raw.replace(/([^{}@]+)\{/g, (match, selector: string) => {
+    const trimmed = selector.trim();
+    if (!trimmed || trimmed.startsWith("@")) return match;
+    const scoped = trimmed
+      .split(",")
+      .map((part) => {
+        const one = part.trim().replace(/^(html|body)\b/, ".his-paper");
+        return one.startsWith(".his-paper") ? one : `.his-paper ${one}`;
+      })
+      .join(",");
+    return `${scoped}{`;
+  });
+  const body = html.match(/<body[^>]*>([\s\S]*)<\/body>/i);
+  return `<style>${styles}</style>${body ? body[1] : html}`;
 }

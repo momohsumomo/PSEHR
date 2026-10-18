@@ -10,6 +10,7 @@ from pydantic import BaseModel, Field
 
 from src.app.bootstrap import get_shadow_store
 from src.core import clinic_reports, db_backup
+from src.core.desktop_window import open_desktop_window
 
 router = APIRouter(prefix="/maintenance", tags=["Maintenance"])
 
@@ -21,6 +22,21 @@ class BackupSettingsBody(BaseModel):
 
 class BackupRunBody(BaseModel):
     browserSettings: dict[str, Any] = Field(default_factory=dict)
+
+
+class DesktopWindowBody(BaseModel):
+    target: str = Field("kiosk", max_length=20)
+
+
+@router.post("/desktop-window", summary="Open the lobby or kiosk window on this PC")
+def desktop_window(body: DesktopWindowBody) -> dict[str, Any]:
+    try:
+        kind = open_desktop_window(body.target)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail="\u53ea\u80fd\u958b\u9580\u8a3a\u3001\u81ea\u52a9\u639b\u865f\u6216\u9810\u5148\u554f\u8a3a\u3002") from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return {"ok": True, "target": kind}
 
 
 @router.get("/backup", summary="備份設定、現有備份、目前是否在備份")

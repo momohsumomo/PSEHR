@@ -75,6 +75,10 @@ def list_same_day(
                 "doctorName": reg.get("doctorName") or "",
                 "hospitalId": "",
                 "source": "local_shadow",
+                "prebook": (
+                    (bool(reg.get("prebook")) or str(reg.get("forespeak") or "") == "\u9810")
+                    and str(r[2] or "") == "waiting"
+                ),
             }
         )
 

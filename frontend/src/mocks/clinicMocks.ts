@@ -47,6 +47,8 @@ export interface QueueEntry {
   totalFee?: string;
   materialFee?: string;
   burdenFee?: string;
+  /** REGISTER.SELF_PRICE, the visit self-pay amount already on the fee report. */
+  selfPay?: string;
   primaryDx?: string;
   phone?: string;
   address?: string;
@@ -65,6 +67,12 @@ export interface QueueEntry {
   note?: string;
   /** 完診且健保卡已寫入 */
   cardWritten?: boolean;
+  referralSeq?: string;
+  referralHospId?: string;
+  referralHospName?: string;
+  referralDate?: string;
+  referralLocalId?: string;
+  acceptReferral?: string;
 }
 
 export type BuffTone = "red" | "gold" | "blue" | "emerald";

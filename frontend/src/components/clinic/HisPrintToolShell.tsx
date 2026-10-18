@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
+import { fetchLocalPrintHealth, printToNamedPrinter } from "@/api/clinicApi";
 import { HIS_FONT } from "@/lib/hisTheme";
 import {
   coerceHisPaperId,
@@ -27,6 +28,7 @@ type Props = {
   onClose: () => void;
   children: ReactNode;
   exportText?: string;
+  exportCsv?: string;
   fileBaseName?: string;
   /** Window chrome size (almost fullscreen for reports). */
   size?: "report" | "slip" | "wide";
@@ -81,6 +83,7 @@ export function HisPrintToolShell({
   onClose,
   children,
   exportText = "",
+  exportCsv = "",
   fileBaseName = "wundadi-print",
   size = "wide",
   paper = "a4",
@@ -91,6 +94,7 @@ export function HisPrintToolShell({
   const paperRef = useRef<HTMLDivElement>(null);
   const innerRef = useRef<HTMLDivElement>(null);
   const printRootRef = useRef<HTMLDivElement>(null);
+  const stageRef = useRef<HTMLDivElement>(null);
   const paperId = coerceHisPaperId(paper);
   const profile = resolveHisPaper(paperId);
   const landscape = profile.widthMm > profile.heightMm;
@@ -138,6 +142,30 @@ export function HisPrintToolShell({
 
   const pageCount = explicit ? pages!.length : Math.max(1, fitPages);
   const pageSafe = Math.min(page, pageCount - 1);
+  const pageCountRef = useRef(pageCount);
+  pageCountRef.current = pageCount;
+
+  useEffect(() => {
+    if (!open) return;
+    const el = stageRef.current;
+    if (!el) return;
+    let acc = 0;
+    let lockedUntil = 0;
+    const onWheel = (ev: WheelEvent) => {
+      if (pageCountRef.current <= 1) return;
+      ev.preventDefault();
+      const now = Date.now();
+      if (now < lockedUntil) return;
+      acc += ev.deltaY;
+      if (Math.abs(acc) < 30) return;
+      const dir = acc > 0 ? 1 : -1;
+      acc = 0;
+      lockedUntil = now + 140;
+      setPage((p) => Math.min(pageCountRef.current - 1, Math.max(0, p + dir)));
+    };
+    el.addEventListener("wheel", onWheel, { passive: false });
+    return () => el.removeEventListener("wheel", onWheel);
+  }, [open]);
 
   if (!open) return null;
 
@@ -189,7 +217,7 @@ export function HisPrintToolShell({
       return;
     }
     if (id === "saveExcel") {
-      const body = exportText || paperRef.current?.innerText || "";
+      const body = exportCsv || exportText || paperRef.current?.innerText || "";
       if (!body.trim()) {
         setHint("沒有可匯出的內容。");
         return;
@@ -201,21 +229,10 @@ export function HisPrintToolShell({
     if (id === "print") {
       const el = paperRef.current;
       if (!el) return;
-      const iframe = document.createElement("iframe");
-      iframe.setAttribute("aria-hidden", "true");
-      iframe.style.cssText = "position:fixed;right:0;bottom:0;width:0;height:0;border:0";
-      document.body.appendChild(iframe);
-      const doc = iframe.contentDocument;
-      const win = iframe.contentWindow;
-      if (!doc || !win) {
-        document.body.removeChild(iframe);
-        return;
-      }
-      doc.open();
       const bodyHtml = explicit
         ? printRootRef.current?.innerHTML || ""
         : innerRef.current?.innerHTML || el.innerHTML;
-      doc.write(`<!doctype html><html><head><meta charset="utf-8"/><title>${escapeHtml(title)}</title>
+      const html = `<!doctype html><html><head><meta charset="utf-8"/><title>${escapeHtml(title)}</title>
 <style>
   @page { size: ${profile.pageCss}; margin: ${profile.padYMm}mm ${profile.padXMm}mm; }
   html, body { margin: 0; padding: 0; background: #fff; }
@@ -226,22 +243,44 @@ export function HisPrintToolShell({
   td, th { padding: 1px 2px; }
   .wundadi-print-page { break-after: page; page-break-after: always; }
   .wundadi-print-page:last-child { break-after: auto; page-break-after: auto; }
-</style></head><body>${bodyHtml}</body></html>`);
-      doc.close();
-      const cleanup = () => {
-        try {
-          document.body.removeChild(iframe);
-        } catch {
-          /* ignore */
-        }
-      };
-      win.onafterprint = cleanup;
-      setTimeout(() => {
-        win.focus();
-        win.print();
-        setTimeout(cleanup, 1200);
-      }, 50);
-      setHint(`已叫出系統列印（${profile.label} ${profile.widthMm}×${profile.heightMm}mm）。`);
+</style></head><body>${bodyHtml}</body></html>`;
+      const widthMm = profile.widthMm;
+      const heightMm = profile.heightMm;
+      setHint("\u6b63\u5728\u9001\u51fa\u53bb\u2026");
+      void fetchLocalPrintHealth()
+        .then((health) => {
+          const rows = health?.printers || [];
+          const named =
+            rows.find((row) => row.default && row.device !== false && row.name) ||
+            rows.find((row) => row.default && row.name) ||
+            rows.find((row) => row.device && row.name);
+          if (!named?.name) {
+            throw new Error("\u9019\u53f0\u96fb\u8166\u9084\u6c92\u6709\u9810\u8a2d\u5370\u8868\u6a5f\u3002");
+          }
+          return printToNamedPrinter({
+            printerName: named.name,
+            html,
+            widthMm,
+            heightMm,
+          });
+        })
+        .then((sent) => {
+          setHint(
+            "\u5df2\u9001\u5230 " +
+              sent.printer +
+              "\uff08" +
+              profile.label +
+              " " +
+              widthMm +
+              "\u00d7" +
+              heightMm +
+              "mm\uff09\u3002",
+          );
+        })
+        .catch((err: unknown) => {
+          const msg = err instanceof Error ? err.message : "\u9001\u5230\u5370\u8868\u6a5f\u5931\u6557";
+          setHint(msg);
+        });
     }
   };
 
@@ -311,7 +350,8 @@ export function HisPrintToolShell({
         ) : null}
 
         <div
-          className="min-h-0 flex-1 overflow-auto"
+          ref={stageRef}
+          className={`min-h-0 flex-1 ${pageCount > 1 ? "overflow-hidden" : "overflow-auto"}`}
           style={{
             background: "linear-gradient(180deg,#7A7A7A,#5E5E5E)",
             boxShadow: "inset 0 2px 8px rgba(0,0,0,.35)",
@@ -321,7 +361,7 @@ export function HisPrintToolShell({
             <div style={{ width: layoutW, height: layoutH, position: "relative" }}>
               <div
                 ref={paperRef}
-                className="bg-white text-black"
+                className="his-paper bg-white text-black"
                 style={{
                   width: `${profile.widthMm}mm`,
                   height: `${profile.heightMm}mm`,

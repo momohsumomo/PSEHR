@@ -128,6 +128,7 @@ def map_drug(row: dict[str, str]) -> dict | None:
     mark = _clean(row.get("ISSELF") or "")
     self_pay = mark == "\u81ea" or mark.upper() in {"Y", "1", "T"}
     pay_mark = "\u4ea4" if mark == "\u4ea4" else ("\u81ea" if self_pay else "")
+    memo = _clean(row.get("MEMO") or "")[:2]
     qty = _num(row.get("QTY") or "", 0.0)
     return {
         "drugNo": drug_no,
@@ -141,6 +142,7 @@ def map_drug(row: dict[str, str]) -> dict | None:
         "route": _route(row),
         "selfPay": self_pay,
         "payMark": pay_mark,
+        "memo": memo,
         "clinicIndex": _clean(row.get("INDEX") or "").upper() == "Y",
         "name": trade or custom,
         "generic": note or making,
@@ -303,6 +305,8 @@ def main() -> int:
                 "sig": "MEDICAL.USEAGE",
                 "days": "MEDICAL.DAY",
                 "qty": "MEDICAL.QTY",
+                "payMark": "MEDICAL.ISSELF",
+                "memo": "MEDICAL.MEMO",
                 "usageTable": "USEAGE.Dat",
             },
         },

@@ -191,6 +191,12 @@ def nhi_encounter_to_fhir(intake: NhiEncounterIntake) -> dict[str, Any]:
             "materialFee": intake.materialFee,
             "burdenFee": intake.burdenFee,
             "totalFee": getattr(intake, "totalFee", None),
+            "selfPay": intake.selfPay,
+            "referralSeq": intake.referralSeq,
+            "referralHospId": intake.referralHospId,
+            "referralHospName": intake.referralHospName,
+            "referralDate": intake.referralDate,
+            "acceptReferral": intake.acceptReferral,
             "prebook": intake.prebook,
         },
     )

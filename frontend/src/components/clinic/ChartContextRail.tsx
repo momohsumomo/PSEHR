@@ -24,6 +24,7 @@ type Props = {
   rxQuery: string;
   setRxQuery: (q: string) => void;
   onAddDx: (row: DiagnosisRow) => void;
+  onReject?: (message: string) => void;
   onAddRx: (lines: RxLine[]) => void;
   onAddCc?: (text: string) => void;
   fontSizePx?: number;
@@ -41,6 +42,7 @@ export function ChartContextRail({
   rxQuery,
   setRxQuery,
   onAddDx,
+  onReject,
   onAddRx,
   onAddCc: _onAddCc,
   fontSizePx = 13,
@@ -67,6 +69,14 @@ export function ChartContextRail({
     return list;
   }, [drugs, railMode]);
 
+  const pickDx = (d: CatalogDiagnosis) => {
+    if (!(d.icd10 || "").trim()) {
+      onReject?.("\u9019\u500b\u75c5\u540d\u53ea\u6709\u5feb\u78bc\u3001\u6c92\u6709 ICD-10\uff0c\u4e0d\u80fd\u5beb\u9032\u9019\u6b21\u770b\u8a3a\u3002");
+      return;
+    }
+    onAddDx({ icd10: d.icd10, nhiIcd10: d.icd10, text: d.text });
+    setDxQuery("");
+  };
   const listFocus: ChartEditFocus = focus === "cc" || focus === "history" ? "rx" : focus;
   const dxHits = useMemo(
     () => browseDiagnoses(dxPool, dxQuery, Math.max(dxPool.length, 1)),
@@ -124,9 +134,7 @@ export function ChartContextRail({
             if (e.key !== "Enter") return;
             e.preventDefault();
             if (listFocus === "dx" && dxHits[0]) {
-              const d = dxHits[0];
-              onAddDx({ icd10: d.icd10, nhiIcd10: d.icd10, text: d.text });
-              setDxQuery("");
+              pickDx(dxHits[0]);
             } else if (listFocus === "rx" && rxTab === "drug" && drugHits[0]) {
               onAddRx([catalogDrugToRxLine(drugHits[0])]);
               setRxQuery("");
@@ -172,16 +180,10 @@ export function ChartContextRail({
               <button
                 type="button"
                 className="flex w-full gap-1 px-1 py-0.5 text-left hover:bg-[#FFFF80]"
-                onClick={() => {
-                  onAddDx({ icd10: d.icd10, nhiIcd10: d.icd10, text: d.text });
-                  setDxQuery("");
-                }}
-                onDoubleClick={() => {
-                  onAddDx({ icd10: d.icd10, nhiIcd10: d.icd10, text: d.text });
-                  setDxQuery("");
-                }}
+                onClick={() => pickDx(d)}
+                onDoubleClick={() => pickDx(d)}
               >
-                <span className="w-14 shrink-0 font-mono text-[11px]">{d.icd10 || "—"}</span>
+                <span className="w-16 shrink-0 font-mono text-[11px]">{d.short || d.icd10 || "\u2014"}</span>
                 <span className="min-w-0 flex-1 font-bold">{d.text}</span>
               </button>
             </li>

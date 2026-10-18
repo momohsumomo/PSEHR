@@ -71,6 +71,7 @@ export function DiagnosesWidget({
   const [focusCol, setFocusCol] = useState<Col>(1);
   const [drafts, setDrafts] = useState<string[]>(() => [""]);
   const [pickIdx, setPickIdx] = useState(0);
+  const [handPicked, setHandPicked] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   /** 只有使用者打字後才開下拉（點選空白列不彈） */
   const [typedInRow, setTypedInRow] = useState<number | null>(null);
@@ -118,6 +119,16 @@ export function DiagnosesWidget({
         : addDiagnosis(payload);
     if (typeof result === "string" && result) return result;
     if (result === false) return "沒有寫進病名";
+    const nine = String(hit.icd9 || hit.aCode || "").trim();
+    if (readyIcd9(nine)) {
+      const picked = icd10.replace(/\./g, "").toUpperCase();
+      void crosswalkDiagnosis(nine, text)
+        .then((mapped) => {
+          const mappedCode = (mapped.nhiIcd10 || mapped.icd10 || "").replace(/\./g, "").toUpperCase();
+          if (mapped.chiefNote && picked === mappedCode) onChiefNote?.(mapped.chiefNote);
+        })
+        .catch(() => undefined);
+    }
     if (rowIndex >= displayDiagnoses.length) {
       const di = rowIndex - displayDiagnoses.length;
       setDrafts((d) => {
@@ -174,6 +185,7 @@ export function DiagnosesWidget({
 
   useEffect(() => {
     setPickIdx(0);
+    setHandPicked(false);
     const allow =
       hits.length > 0 &&
       ((editingDraft && typedInRow === selectedIdx && draftText.trim().length > 0) ||
@@ -356,6 +368,7 @@ export function DiagnosesWidget({
     ) {
       if (dir === 1) setPickIdx((i) => Math.min(i + 1, hits.length - 1));
       else setPickIdx((i) => Math.max(i - 1, 0));
+      setHandPicked(true);
       return;
     }
     const next = from + dir;
@@ -425,29 +438,32 @@ export function DiagnosesWidget({
       e.preventDefault();
       e.stopPropagation();
       if (combo || finder) return;
-      if (cover && cover.row === row) {
-        const q = cover.text.trim();
-        const hit = (col === 1 ? hits[pickIdx] : undefined) || (q ? searchDiagnoses(catalog, q, 1)[0] : undefined);
-        if (q && hit) {
-          commitHit(hit, row, q);
-          setCover(null);
-        }
+      const typed =
+        cover && cover.row === row
+          ? cover.text
+          : editingDraft
+            ? draftText
+            : row < displayDiagnoses.length
+              ? col === 0
+                ? displayDiagnoses[row]?.icd9 || ""
+                : col === 2
+                  ? displayDiagnoses[row]?.icd10 || displayDiagnoses[row]?.nhiIcd10 || ""
+                  : displayDiagnoses[row]?.text || ""
+              : drafts[row - displayDiagnoses.length] || "";
+      const query = typed.trim();
+      if (handPicked && hits[pickIdx] && (editingDraft || (cover && cover.row === row))) {
+        commitHit(hits[pickIdx], row, query);
+        setCover(null);
         return;
       }
-      if (editingDraft && hits[pickIdx]) {
-        commitHit(hits[pickIdx], row, draftText);
+      if (query) {
+        setMenuOpen(false);
+        setCover(null);
+        if (col === 2) setIcd10Open({ row, query });
+        else setIcd9Open({ row, field: col === 0 ? "icd9" : "name", query });
         return;
       }
-      const val =
-        row < displayDiagnoses.length
-          ? displayDiagnoses[row]?.text || displayDiagnoses[row]?.icd10 || ""
-          : drafts[row - displayDiagnoses.length] || "";
-      const hit = searchDiagnoses(catalog, val, 1)[0];
-      if (hit) {
-        commitHit(hit, row, val);
-        return;
-      }
-      if (!readyIcd9(val)) {
+      if (!readyIcd9(query)) {
         if (row < displayDiagnoses.length) {
           setEditingKey(null);
           editBackup.current = null;
@@ -455,9 +471,7 @@ export function DiagnosesWidget({
           setSelectedIdx(next);
           requestAnimationFrame(() => focusCell(next, col));
         }
-        return;
       }
-      commitMapped({ icd10: val.trim(), nhiIcd10: val.trim(), text: "" }, row);
     }
   };
 

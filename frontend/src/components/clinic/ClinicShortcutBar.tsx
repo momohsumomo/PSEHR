@@ -25,6 +25,7 @@ const ACTION_ICON: Partial<Record<ShortcutBarItem["action"], string>> = {
   historyChart: "\uD83D\uDCDC",
   readCard: "\uD83D\uDCB3",
   receipt: "\uD83D\uDDA8",
+  printVisit: "\uD83D\uDDA8",
   refundDeposit: "\uD83D\uDCB0",
   certificate: "\uD83D\uDCC4",
   otherFunctions: "\uD83D\uDCC4",

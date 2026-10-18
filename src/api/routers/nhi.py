@@ -45,7 +45,7 @@ from src.core.nhi_card_bridge import (
     console_diagnose,
 )
 from src.core.nhi_seq_bridge import request_seq_rollback, request_visit_number
-from src.core.encounter_extensions import attach_reg_extension, extract_reg_meta
+from src.core.encounter_extensions import attach_reg_extension, extract_reg_meta, put_reg_string
 from src.core.nhi_clinical_mappers import (
     extract_condition_stickers,
     extract_medication_stickers,
@@ -252,6 +252,15 @@ def register_nhi_soap(body: NhiSoapIntake) -> dict[str, Any]:
     enc_patch = {**encounter, **encounter_reason_patch(body.chiefComplaint)}
     repo.update_resource("Encounter", body.encounterId, enc_patch)
 
+    try:
+        from src.core.cc_learn import observe
+
+        observe(store.db_path, body.encounterId, body.chiefComplaint)
+    except Exception:
+        import logging
+
+        logging.getLogger("cc_learn").exception("cc learn observe failed")
+
     dual = store.get_dual_layer("Composition", comp_id)
     stickers = extract_soap_stickers_from_composition(composition)
 
@@ -437,6 +446,15 @@ def submit_previsit(body: NhiPreVisitIntake) -> dict[str, Any]:
     repo = get_fhir_repository()
     updated = repo.update_resource("Encounter", body.encounterId, patched)
 
+    try:
+        from src.core.cc_learn import observe
+
+        observe(store.db_path, body.encounterId, body.chiefComplaint)
+    except Exception:
+        import logging
+
+        logging.getLogger("cc_learn").exception("cc learn observe failed")
+
     return {
         "encounterId": body.encounterId,
         "patientId": patient_id,
@@ -503,6 +521,21 @@ def list_media_by_encounter(encounter_id: str) -> dict[str, Any]:
         "total": len(entries),
         "entry": entries,
     }
+
+
+def _pair_nocard_claim(body: NhiEncounterIntake) -> None:
+    from src.claims.nocard_seq import pair_nocard
+
+    reason, seq = pair_nocard(
+        mode=body.icException or "",
+        reason=body.noCardReason or "",
+        treat_seq=body.treatSeq or "",
+        treatment_number=body.treatmentNumber or "",
+    )
+    if reason:
+        body.noCardReason = reason
+    if seq:
+        body.treatSeq = seq
 
 
 def _require_nhi_visit_for_register(body: NhiEncounterIntake) -> None:
@@ -595,6 +628,7 @@ def register_nhi_encounter(body: NhiEncounterIntake) -> dict[str, Any]:
                 detail=f"patientIdNo 與庫內病人不符（庫內 {stored_id_no}）",
             )
 
+    _pair_nocard_claim(body)
     _require_nhi_visit_for_register(body)
 
     try:
@@ -648,6 +682,7 @@ def register_nhi_encounter(body: NhiEncounterIntake) -> dict[str, Any]:
     summary="修改此次掛號資料（掛號編輯／F3）",
 )
 def patch_encounter_reg(encounter_id: str, body: NhiEncounterIntake) -> dict[str, Any]:
+    _pair_nocard_claim(body)
     store = _store()
     repo = get_fhir_repository()
     existing = repo.read_resource("Encounter", encounter_id)
@@ -686,10 +721,19 @@ def patch_encounter_reg(encounter_id: str, body: NhiEncounterIntake) -> dict[str
             "materialFee": body.materialFee,
             "burdenFee": body.burdenFee,
             "totalFee": body.totalFee,
+            "selfPay": body.selfPay,
+            "referralSeq": body.referralSeq,
+            "referralHospId": body.referralHospId,
+            "referralHospName": body.referralHospName,
+            "referralDate": body.referralDate,
+            "acceptReferral": body.acceptReferral,
             "prebook": body.prebook,
             "cardWritten": body.cardWritten,
         },
     )
+    # Check-in replaces the appointment. forespeak 預 would keep the Yu column.
+    if not body.prebook:
+        put_reg_string(payload, "forespeak", "")
     if body.reasonText:
         payload["reasonCode"] = [{"text": body.reasonText}]
     enc_date = ""
@@ -1068,6 +1112,8 @@ class NhiSeqNextRequest(BaseModel):
 def card_seq_next(body: NhiSeqNextRequest) -> dict[str, Any]:
     """正常 IC＝Next（SAM+健保卡，不需醫事人員卡）。無卡／卡片不良／紙卡＝NoCard。自費才略過。失敗 422。"""
     mode = body.icException or ("paper" if body.paperCard else "ic")
+    if mode == "badCard" and not (body.noCardReason or "").strip():
+        body.noCardReason = "\u5361\u7247\u4e0d\u826f"
     if mode in {"noCard", "childNoCard", "pregnantNoCard", "badCard", "paper"} and not (
         body.noCardReason or ""
     ).strip():
@@ -1179,6 +1225,7 @@ def _cancel_local_encounter(store: SqliteShadowStore, encounter_id: str) -> dict
                     queue_number = int(sub.get("valueInteger") or 0)
     payload = dict(existing)
     payload["status"] = fhir_status_from_queue("cancelled")
+    payload["reasonCode"] = []
     _attach_queue_meta(payload, queue_number, "cancelled")
     store.update_encounter_queue_status(encounter_id, "cancelled", "cancelled")
     return repo.update_resource("Encounter", encounter_id, payload)

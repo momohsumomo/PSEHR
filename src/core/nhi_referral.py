@@ -22,6 +22,7 @@ from src.core.nhi_cshis6_client import (
     request_json,
     status_hint,
 )
+from src.core.nhi_card_init_sop import KIND_HC, lock_card_reader
 
 QUERY_URL = "https://medws.nhi.gov.tw/IPI/API/IPIE0001/GetRefData_rc6"
 TEST_PATIENT_ID = "A000000005"
@@ -107,12 +108,16 @@ def _unwrap(payload: Any) -> Any:
 
 
 def _sign(client: Cshis6Client) -> dict[str, Any]:
-    readers = client.list_pcsc_readers()
-    default = client.get_default_pcsc_reader()
-    if readers and default not in readers:
-        client.set_default_pcsc_reader(readers[0])
     client.ensure_session()
-    signed = client.hc_signature("20")
+    signed: dict[str, Any] = {}
+    try:
+        signed = client.hc_signature("20")
+    except Exception:
+        signed = {}
+    code = signed.get("statusCode")
+    if code not in (None, 0) or not signed.get("signature") or not signed.get("hcIdNo"):
+        lock_card_reader(client, KIND_HC)
+        signed = client.hc_signature("20")
     code = signed.get("statusCode")
     if code not in (None, 0):
         raise RuntimeError(status_hint(int(code)) if isinstance(code, int) else "sign failed")

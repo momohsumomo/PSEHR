@@ -11,13 +11,13 @@ export const HIS_FONT =
 
 export const HIS = {
   /** XP dialog face (not Win95 gray) */
-  chrome: "#ECE9D8",
+  chrome: "#C9DEB4",
   chromeDark: "#ACA899",
   chromeBorder: "#808080",
   titleBarFrom: "#0A5AD6",
   titleBarTo: "#3C91FE",
   titleBarBorder: "#003C74",
-  headerBg: "#D8D4C8",
+  headerBg: "#B7CFA0",
   headerBgGreen: "#C0DCC0",
   rowAlt: "#F0FFF0",
   rowFinished: "#C8F0C8",
@@ -28,7 +28,7 @@ export const HIS = {
   listSelectedText: "#FFFFFF",
   listSelectedNavy: "#000080",
   accentCyan: "#00FFFF",
-  ccBg: "#FFFFFF",
+  ccBg: "#F6F1A8",
   ccBorder: "#800080",
   ccText: "#400080",
   dxBg: "#E8FFE8",
@@ -38,7 +38,11 @@ export const HIS = {
   dxSelected: "#FFFF80",
   labelBg: "#D0D0D0",
   labelText: "#003C74",
-  tabIdle: "#D4D0C8",
+  /** Window panels: light grass green. */
+  surface: "#D7E8C6",
+  /** Fields that stand apart from the green ground. */
+  inputBg: "#F6F1A8",
+  tabIdle: "#C9DEB4",
   tabIdleText: "#000000",
   tabActive: "#206868",
   tabActiveText: "#FFFFFF",
@@ -112,7 +116,9 @@ export function applyHisDocumentTheme(): void {
   root.style.setProperty("--his-chrome-dark", HIS.chromeDark);
   root.style.setProperty("--his-chrome-border", HIS.chromeBorder);
   root.style.setProperty("--his-canvas", HIS.tabIdle);
-  root.style.setProperty("--his-surface", "#FFFFFF");
+  root.style.setProperty("--his-surface", HIS.surface);
+  root.style.setProperty("--his-input-bg", HIS.inputBg);
+  root.style.setProperty("--his-cc-bg", HIS.inputBg);
   root.style.setProperty("--his-text", "#000000");
   root.style.setProperty("--his-input-text", HIS.inputBlue);
   root.style.setProperty("--his-patient-face", HIS.patientFace);

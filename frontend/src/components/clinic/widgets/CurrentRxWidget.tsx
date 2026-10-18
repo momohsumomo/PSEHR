@@ -167,9 +167,13 @@ export function CurrentRxWidget({
     if ((draft.route || "").trim() && draft.route !== drug.route) {
       line.route = draft.route;
     }
-    line.payMark = draft.payMark;
-    line.selfPay = draft.selfPay;
-    line.memo = draft.memo;
+    if (draft.payMark) {
+      line.payMark = draft.payMark;
+      line.selfPay = draft.selfPay;
+    }
+    if ((draft.memo || "").trim()) {
+      line.memo = draft.memo;
+    }
     addRxLines([withComputedTotal(line, usages)]);
     setDrafts((rows) => {
       const rest = rows.filter((r) => r.id !== draft.id);
@@ -202,9 +206,9 @@ export function CurrentRxWidget({
       qty: next.qty,
       route: next.route,
       totalAmount: next.totalAmount,
-      payMark: base.payMark,
-      selfPay: base.selfPay,
-      memo: base.memo,
+      payMark: base.payMark || next.payMark,
+      selfPay: base.payMark ? base.selfPay : next.selfPay,
+      memo: base.memo || next.memo,
     });
     setCoverQuery(null);
     return true;

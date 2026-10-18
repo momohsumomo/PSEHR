@@ -55,11 +55,37 @@ def list_patients(
     }
 
 
+@router.get("/Patient/address-by-phone")
+def address_by_phone(
+    phone: str = Query(""),
+    exceptId: str = Query(""),
+) -> dict[str, str]:
+    store = get_shadow_store()
+    if not hasattr(store, "address_for_home_phone"):
+        return {"address": "", "postalCode": ""}
+    return store.address_for_home_phone(phone, exceptId)
+
+
+_ROSTER_CACHE: dict[str, Any] = {"mark": "", "body": None}
+
+
 @router.get("/Patient/roster")
 def patient_roster() -> dict[str, Any]:
-    """右側名單：全部病患的病歷號／姓名／生日／電話，不讀整份病歷。"""
-    items = get_shadow_store().list_patient_roster()
-    return {"total": len(items), "items": items}
+    """右側名單。欄位用陣列，避免十萬筆各自重複鍵名。"""
+    store = get_shadow_store()
+    mark = store.patient_index_mark() if hasattr(store, "patient_index_mark") else ""
+    if mark and _ROSTER_CACHE["mark"] == mark and _ROSTER_CACHE["body"] is not None:
+        return _ROSTER_CACHE["body"]
+    items = store.list_patient_roster()
+    rows = [
+        [it["id"], it["medicalNo"], it["name"], it["idNo"], it["birthdayRoc"], it["phone"], it["idCategory"]]
+        for it in items
+    ]
+    body = {"total": len(rows), "rows": rows}
+    if mark:
+        _ROSTER_CACHE["mark"] = mark
+        _ROSTER_CACHE["body"] = body
+    return body
 
 
 @router.get("/Patient/idCategorySettings")
@@ -181,10 +207,21 @@ def get_patient(patient_id: str) -> dict[str, Any]:
     return resource
 
 
+def _screen_patient_id(payload: dict[str, Any]) -> None:
+    from src.core.nhi_validators import NhiValidationError, screen_desk_id
+    from src.infrastructure.sqlite_shadow_store import _patient_index_fields
+
+    try:
+        screen_desk_id(str(_patient_index_fields(payload).get("id_no") or ""))
+    except NhiValidationError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
 @router.post("/Patient", status_code=201)
 def create_patient(body: PatientBody) -> dict[str, Any]:
     store = get_shadow_store()
     payload = body.to_fhir_dict()
+    _screen_patient_id(payload)
     # 若前端沒帶病歷號，後端自動取號
     has_chart = False
     for ident in payload.get("identifier") or []:
@@ -217,13 +254,21 @@ def update_patient(patient_id: str, body: PatientBody) -> dict[str, Any]:
         raise HTTPException(status_code=404, detail=f"Patient/{patient_id} not found")
     payload = body.to_fhir_dict()
     payload["id"] = patient_id
+    _screen_patient_id(payload)
     return repo.update_resource("Patient", patient_id, payload)
 
 
-@router.delete("/Patient/{patient_id}", status_code=204)
-def delete_patient(patient_id: str) -> None:
+@router.delete("/Patient/{patient_id}")
+def delete_patient(patient_id: str) -> dict[str, str]:
     repo = get_fhir_repository()
     if repo.read_resource("Patient", patient_id) is None:
         raise HTTPException(status_code=404, detail=f"Patient/{patient_id} not found")
+    store = get_shadow_store()
+    if hasattr(store, "count_patient_encounters") and store.count_patient_encounters(patient_id) > 0:
+        raise HTTPException(
+            status_code=409,
+            detail="\u9019\u4f4d\u5df2\u6709\u770b\u8a3a\u7d00\u9304\uff0c\u4e0d\u80fd\u522a\u9664\u75c5\u6b77",
+        )
     repo.delete_resource("Patient", patient_id)
+    return {"ok": "1"}
 

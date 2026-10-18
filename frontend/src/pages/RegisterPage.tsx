@@ -10,6 +10,7 @@ import {
   type RegisterEditForm,
 } from "@/components/clinic/RegisterEditDialog";
 import { RegisterConfirmDialog } from "@/components/clinic/RegisterConfirmDialog";
+import { useIncomingReferralAsk } from "@/components/clinic/ReferralAcceptDialogs";
 import { PatientFinderDialog } from "@/components/clinic/PatientFinderDialog";
 import { DeleteRegisterDialog } from "@/components/clinic/DeleteRegisterDialog";
 import { REGI_COLUMNS } from "@/components/clinic/HisRegisterToolBar";
@@ -17,8 +18,11 @@ import { ClinicShortcutBar } from "@/components/clinic/ClinicShortcutBar";
 import { RegisterOptionsDialog } from "@/components/clinic/RegisterOptionsDialog";
 import { RefundDepositDialog } from "@/components/clinic/RefundDepositDialog";
 import { PatientEditDialog, type PatientEditSeed } from "@/components/clinic/PatientEditDialog";
+import { NewPatientDialog } from "@/components/clinic/NewPatientDialog";
 import { REGISTER_SHORTCUT_BAR } from "@/lib/clinicShortcutSets";
 import { openPrintPreview } from "@/lib/printJob";
+import { buildDepositSlipHtml } from "@/lib/clinicPrintDocs";
+import { readLocalClinicBundle } from "@/lib/clinicProfile";
 import { useEscLayer } from "@/hooks/useEscLayer";
 import { useListNav } from "@/hooks/useListNav";
 import {
@@ -30,12 +34,17 @@ import { HisRocDateField, isoToRoc, rocToIso } from "@/components/clinic/HisRocD
 import { defaultShift, lastPharmacist, loadClinicSession, saveClinicSession, lastClinicDept, type ClinicSession } from "@/lib/clinicSession";
 import { openNhiCloudRx } from "@/lib/nhiCloud";
 import { registerHubAction } from "@/lib/registerHubActions";
-import { isoBirthDateToRoc, loadClinicRegisterDefaults, type PatientHit } from "@/lib/patientSearch";
+import { isoBirthDateToRoc, formatBirthdayRoc, loadClinicRegisterDefaults, type PatientHit } from "@/lib/patientSearch";
 import { isDepositHold } from "@/lib/registerModes";
 import { HIS, HIS_FONT, hisFontStyle } from "@/lib/hisTheme";
-import { clockLabel, normalizeClock, nowClock, planQueueNumber, shiftFromClock, shiftQueueNumbers } from "@/lib/queueOrder";
-import { InsertNumberDialog } from "@/components/clinic/InsertNumberDialog";
-import { findSameDayHits, SameDayRegisterDialog } from "@/components/clinic/SameDayRegisterDialog";
+import { findWaitingAppointment, otherShiftAppointmentNote } from "@/lib/appointmentCheckIn";
+import { clockLabel, compareClinicQueue, normalizeClock, nowClock, planQueueNumber, shiftFromClock, shiftQueueNumbers } from "@/lib/queueOrder";
+import { depositPrintOptions, findPrintSetup, loadPrintSettings } from "@/lib/printSettings";
+import { openDepositSlip, openSavedVisitReceipt } from "@/lib/visitReceiptPrint";
+import { VisitPrintDialog } from "@/components/clinic/VisitPrintDialog";
+import { DoneMarkCell } from "@/components/clinic/EncounterQueuePanel";
+import { AppointmentCheckInDialog, InsertNumberDialog } from "@/components/clinic/InsertNumberDialog";
+import { findSameDayHits, SameDayFlash } from "@/components/clinic/SameDayRegisterDialog";
 import { HisWinTitle } from "@/components/clinic/HisPageFrame";
 
 function dash(v: unknown): string {
@@ -151,6 +160,11 @@ function seedFromEntry(entry: QueueEntry): Partial<RegisterEditForm> {
     regFee: entry.regFee || "",
     copayAmt: entry.copayAmt || "",
     deposit: entry.deposit || "",
+    acceptReferral: entry.acceptReferral || "",
+    referralSeq: entry.referralSeq || "",
+    referralHospId: entry.referralHospId || "",
+    referralHospName: entry.referralHospName || "",
+    referralDate: entry.referralDate || "",
     consultFee: entry.consultFee || "",
     drugFee: entry.drugFee || "",
     materialFee: entry.materialFee || "",
@@ -190,6 +204,7 @@ export function RegisterPage() {
     setCurrentDate,
     addPrebook,
   } = ws;
+  const incoming = useIncomingReferralAsk();
 
   const [localError, setLocalError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -200,9 +215,8 @@ export function RegisterPage() {
   const [regShift, setRegShift] = useState<ClinicSession["shift"]>(
     () => loadClinicSession()?.shift || defaultShift(),
   );
-  const [sameDayOpen, setSameDayOpen] = useState(false);
+  const [sameDayFlash, setSameDayFlash] = useState(false);
   const [careBusy, setCareBusy] = useState(false);
-  const sameDayPassRef = useRef(false);
   const [searchParams, setSearchParams] = useSearchParams();
   const [insertNo, setInsertNo] = useState("");
   const [insertAsk, setInsertAsk] = useState<{
@@ -210,9 +224,17 @@ export function RegisterPage() {
     tail: number;
     go: (n: number) => void;
   } | null>(null);
+  const [checkInAsk, setCheckInAsk] = useState<{
+    encounterId: string;
+    queueNumber: string;
+    visitClock: string;
+    seed: Partial<RegisterEditForm>;
+  } | null>(null);
   const [depositAsk, setDepositAsk] = useState<{
     name: string;
     medicalNo: string;
+    idNo?: string;
+    birthday?: string;
     deposit: string;
     regFee: string;
     date: string;
@@ -220,6 +242,7 @@ export function RegisterPage() {
   const [sortField, setSortField] = useState<string | null>(null);
   const [sortAsc, setSortAsc] = useState(true);
   const [shellNotice, setShellNotice] = useState<string | null>(null);
+  const [printMenuOpen, setPrintMenuOpen] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const queueListRef = useRef<HTMLDivElement>(null);
 
@@ -238,6 +261,7 @@ export function RegisterPage() {
 
   /** 共用找人 */
   const [finderOpen, setFinderOpen] = useState(false);
+  const [newPatientQuery, setNewPatientQuery] = useState<string | null>(null);
   const [finderSeed, setFinderSeed] = useState("");
 
   const [deleteOpen, setDeleteOpen] = useState(false);
@@ -308,6 +332,7 @@ export function RegisterPage() {
     next.pharmacist = seed.pharmacist || lastPharmacist();
     next.shift = regShift;
     if (!seed.visitClock) next.visitClock = nowClock();
+    setRegisterOptionsOpen(false);
     setConfirmForm(next);
     setConfirmOpen(true);
   }, [regShift]);
@@ -321,7 +346,29 @@ export function RegisterPage() {
     [queue],
   );
 
+  const beginCheckIn = useCallback(
+    (
+      row: { encounterId: string; queueNumber?: number; slotTime?: string },
+      seed: Partial<RegisterEditForm>,
+    ) => {
+      setRegisterOptionsOpen(false);
+      setFinderOpen(false);
+      setCheckInAsk({
+        encounterId: row.encounterId,
+        queueNumber: row.queueNumber != null ? String(row.queueNumber) : "",
+        visitClock: row.slotTime || seed.visitClock || "",
+        seed: {
+          ...seed,
+          prebook: false,
+          payType: seed.payType === "prebook" ? "4" : seed.payType || "4",
+        },
+      });
+    },
+    [],
+  );
+
   const openFinder = (seed = searchQuery) => {
+    setRegisterOptionsOpen(false);
     setFinderSeed(seed.trim());
     setFinderOpen(true);
   };
@@ -355,17 +402,55 @@ export function RegisterPage() {
         icException: "ic",
       };
       if (res.cardBridgeNote) setSeqNote(res.cardBridgeNote);
+      const booked = findWaitingAppointment(
+        queue,
+        { patientId: seed.patientId, idNo: seed.idNo },
+        regShift,
+      );
+      if (booked) {
+        beginCheckIn(booked, {
+          ...seedFromEntry(booked),
+          ...seed,
+          icException: "ic",
+          prebook: false,
+          payType: "4",
+          queueNumber: booked.queueNumber != null ? String(booked.queueNumber) : "",
+          visitClock: booked.slotTime || seed.visitClock,
+        });
+        return;
+      }
+      const otherNote = otherShiftAppointmentNote(
+        queue,
+        { patientId: seed.patientId, idNo: seed.idNo },
+        regShift,
+      );
+      if (otherNote) setSeqNote([res.cardBridgeNote, otherNote].filter(Boolean).join(" "));
       offerQueueNumber(regShift, (n) => {
         setConfirmForm({ ...seed, queueNumber: String(n) });
         setConfirmOpen(true);
       });
     } catch (e) {
+      const booked = selected
+        ? findWaitingAppointment(queue, { patientId: selected.patientId, idNo: selected.idNo }, regShift)
+        : null;
+      if (booked) {
+        beginCheckIn(booked, {
+          ...seedFromEntry(booked),
+          icException: "deposit",
+          noCardReason: "",
+          deposit: loadClinicRegisterDefaults().depositAmount,
+          prebook: false,
+          payType: "4",
+          pharmacist: lastPharmacist(),
+        });
+        return;
+      }
       setConfirmForm(next);
       setConfirmOpen(true);
       setConfirmError(e instanceof Error ? e.message : "讀卡失敗");
       setCardDiagnose(e instanceof CardReadError ? e.diagnose : null);
     }
-  }, [apiMode, offerQueueNumber, readCardRegisterPatient, regShift]);
+  }, [apiMode, beginCheckIn, offerQueueNumber, queue, readCardRegisterPatient, regShift, selected]);
 
   const applyRegisterHub = (label: string) => {
     const act = registerHubAction(label);
@@ -405,12 +490,14 @@ export function RegisterPage() {
   };
 
   const confirmSaveRegister = async () => {
-    const hits = findSameDayHits(queue, confirmForm.patientId || "", confirmForm.idNo || "");
-    if (hits.length && !sameDayPassRef.current) {
-      setSameDayOpen(true);
-      return;
-    }
-    sameDayPassRef.current = false;
+    const hits = findSameDayHits(
+      queue,
+      confirmForm.patientId || "",
+      confirmForm.idNo || "",
+      confirmForm.encounterId,
+      regShift,
+    );
+    let bureauSameDay = false;
     setConfirmError(null);
     const skipSeq =
       Boolean(confirmForm.prebook) ||
@@ -437,7 +524,9 @@ export function RegisterPage() {
         const { seqNote: note, ...rest } = fields;
         setConfirmForm((prev) => ({ ...prev, ...rest }));
         setSeqNote(note);
-      });
+        setSeqBusy(false);
+        if ((note || "").includes("\u540c\u65e5\u5c31\u8a3a")) bureauSameDay = true;
+      }, incoming.ask);
       if (confirmForm.pharmacist.trim()) {
         const prev = loadClinicSession();
         saveClinicSession({
@@ -448,12 +537,15 @@ export function RegisterPage() {
         });
       }
       setConfirmOpen(false);
+      if (hits.length || bureauSameDay) setSameDayFlash(true);
       if (depositHold) {
         setDepositAsk({
           name: toSave.patientName,
           medicalNo: "",
-          deposit: toSave.deposit || "—",
-          regFee: toSave.regFee || "—",
+          idNo: toSave.idNo,
+          birthday: toSave.birthday,
+          deposit: toSave.deposit || "\u2014",
+          regFee: toSave.regFee || "\u2014",
           date: currentDate,
         });
       } else {
@@ -476,7 +568,7 @@ export function RegisterPage() {
         const { seqNote: note, ...rest } = fields;
         setEditForm((prev) => ({ ...prev, ...rest }));
         setSeqNote(note);
-      });
+      }, incoming.ask);
       setEditOpen(false);
     } catch (e) {
       setEditError(e instanceof Error ? e.message : "存檔失敗");
@@ -495,6 +587,23 @@ export function RegisterPage() {
 
   const onPatientPicked = (hit: PatientHit) => {
     setFinderOpen(false);
+    const booked = findWaitingAppointment(queue, { patientId: hit.id, idNo: hit.idNo }, regShift);
+    if (booked) {
+      const depositSeed = seedFromPatientHit(hit);
+      beginCheckIn(booked, {
+        ...seedFromEntry(booked),
+        ...depositSeed,
+        icException: "deposit",
+        noCardReason: "",
+        prebook: false,
+        payType: "4",
+        queueNumber: booked.queueNumber != null ? String(booked.queueNumber) : "",
+        visitClock: booked.slotTime || "",
+      });
+      return;
+    }
+    const otherNote = otherShiftAppointmentNote(queue, { patientId: hit.id, idNo: hit.idNo }, regShift);
+    if (otherNote) setSeqNote(otherNote);
     const seed = seedFromPatientHit(hit);
     offerQueueNumber(regShift, (n) =>
       openConfirmFromSeed({ ...seed, queueNumber: String(n), shift: regShift }),
@@ -576,6 +685,13 @@ export function RegisterPage() {
       case "editPatient":
         openPatientEdit();
         break;
+      case "printVisit":
+        if (!selected) {
+          tellShell("\u9019\u500b\u6642\u6bb5\u9084\u6c92\u6709\u9078\u5b9a\u7684\u639b\u865f\u3002");
+          return;
+        }
+        setPrintMenuOpen(true);
+        break;
       case "receipt":
         if (!selected) {
           tellShell("這個時段還沒有選定的掛號。");
@@ -616,6 +732,8 @@ export function RegisterPage() {
   };
 
   useEscLayer([
+    { open: newPatientQuery != null, close: () => setNewPatientQuery(null) },
+    { open: checkInAsk != null, close: () => setCheckInAsk(null) },
     { open: insertAsk != null, close: () => answerInsert(false) },
     { open: finderOpen, close: () => setFinderOpen(false) },
     { open: confirmOpen, close: () => setConfirmOpen(false) },
@@ -625,6 +743,7 @@ export function RegisterPage() {
     { open: icInfoOpen, close: () => setIcInfoOpen(false) },
     { open: pharmacistOpen, close: () => setPharmacistOpen(false) },
     { open: !!stubId, close: () => setStubId(null) },
+    { open: printMenuOpen, close: () => setPrintMenuOpen(false) },
     { open: registerOptionsOpen, close: () => setRegisterOptionsOpen(false) },
     { open: true, close: () => navigate("/") },
   ]);
@@ -632,7 +751,7 @@ export function RegisterPage() {
   useEffect(() => {
     const onKey = (ev: KeyboardEvent) => {
       if (ev.key === "Escape") return;
-      if (finderOpen || confirmOpen || editOpen || deleteOpen || stubId || icInfoOpen || pharmacistOpen || registerOptionsOpen || patientEditOpen) {
+      if (finderOpen || newPatientQuery != null || checkInAsk != null || confirmOpen || editOpen || deleteOpen || stubId || icInfoOpen || pharmacistOpen || registerOptionsOpen || patientEditOpen || printMenuOpen) {
         return;
       }
       const tag = (ev.target as HTMLElement)?.tagName;
@@ -660,7 +779,7 @@ export function RegisterPage() {
       }
       if (ev.key === "F6") {
         ev.preventDefault();
-        runRegisterShortcut("receipt");
+        runRegisterShortcut("printVisit");
         return;
       }
       if (ev.key === "F7") {
@@ -748,6 +867,7 @@ export function RegisterPage() {
     pharmacistOpen,
     registerOptionsOpen,
     patientEditOpen,
+    printMenuOpen,
     handleReadCardConfirm,
   ]);
 
@@ -763,9 +883,10 @@ export function RegisterPage() {
 
   const displayQueue = useMemo(() => {
     const sorted = [...filteredQueue].sort((a, b) => {
-      if (!sortField) return 0;
+      if (!sortField) return compareClinicQueue(a, b);
       return regiCell(a, sortField).localeCompare(regiCell(b, sortField), "zh-Hant", { numeric: true });
     });
+    if (!sortField) return sorted;
     return sortAsc ? sorted : [...sorted].reverse();
   }, [filteredQueue, sortField, sortAsc]);
 
@@ -821,6 +942,7 @@ export function RegisterPage() {
       className="flex h-screen flex-col overflow-hidden text-black select-none"
       style={{ ...hisFontStyle, background: HIS.chrome }}
     >
+      {incoming.dialog}
       <HisWinTitle
         title={`掛號作業　${regShift}　全部:${filteredQueue.length}　完診:${finishedCount}　候診:${waiting}${inProgress ? `　暫診:${inProgress}` : ""}${noShowCount ? `　缺診:${noShowCount}` : ""}`}
         trailing={
@@ -984,8 +1106,12 @@ export function RegisterPage() {
                       borderColor: "#A0A0A0",
                       fontSize: isPrimary ? HIS.fs.primary : HIS.fs.body,
                       fontWeight: isPrimary ? 700 : 400,
+                      textAlign: col.key === "doneMark" ? "center" : undefined,
                     }}
                   >
+                    {col.key === "doneMark" ? (
+                      <DoneMarkCell entry={e} />
+                    ) : (
                     <span
                       style={{
                         color:
@@ -997,6 +1123,7 @@ export function RegisterPage() {
                     >
                       {regiCell(e, col.key)}
                     </span>
+                    )}
                   </td>
                   );
                 })}
@@ -1065,6 +1192,23 @@ export function RegisterPage() {
         </label>
       </div>
 
+      <VisitPrintDialog
+        open={printMenuOpen}
+        patientLabel={selected ? `${selected.patientDisplay || ""} ${selected.medicalNo || ""}`.trim() : ""}
+        onClose={() => setPrintMenuOpen(false)}
+        onDeposit={() => {
+          if (!selected) return;
+          setPrintMenuOpen(false);
+          openDepositSlip(selected, currentDate);
+        }}
+        onReceipt={() => {
+          if (!selected) return;
+          setPrintMenuOpen(false);
+          void openSavedVisitReceipt(selected, currentDate).catch((err: unknown) => {
+            tellShell(err instanceof Error ? err.message : "\u6536\u64da\u6253\u4e0d\u958b");
+          });
+        }}
+      />
       {depositAsk && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40">
           <div
@@ -1083,15 +1227,20 @@ export function RegisterPage() {
                 onClick={() => {
                   openPrintPreview({
                     kind: "receipt",
-                    title: "押金單",
-                    patientName: depositAsk.name,
-                    medicalNo: depositAsk.medicalNo,
-                    lines: [
-                      { label: "看診日", value: depositAsk.date },
-                      { label: "押金", value: depositAsk.deposit },
-                      { label: "掛號費", value: depositAsk.regFee },
-                      { label: "說明", value: "請於七天內攜帶健保卡辦理退押" },
-                    ],
+                    layout: "sheet",
+                    setupId: "deposit",
+                    title: "\u62bc\u91d1\u55ae",
+                    lines: [],
+                    bodyHtml: buildDepositSlipHtml({
+                      clinicName: readLocalClinicBundle().profile.clinicName,
+                      patientName: depositAsk.name,
+                      medicalNo: depositAsk.medicalNo,
+                      idNo: depositAsk.idNo,
+                      birthday: depositAsk.birthday,
+                      date: depositAsk.date,
+                      deposit: depositAsk.deposit,
+                      ...depositPrintOptions(findPrintSetup(loadPrintSettings(), "deposit")),
+                    }),
                   });
                   setDepositAsk(null);
                   tellShell("已開押金單");
@@ -1131,7 +1280,28 @@ export function RegisterPage() {
         onPatientPicked={onPatientPicked}
         onSearchPatients={(q) => openFinder(q)}
         onNoCardRegister={(q) => {
+          const booked = !q && selected
+            ? findWaitingAppointment(queue, { patientId: selected.patientId, idNo: selected.idNo }, regShift)
+            : null;
+          if (booked) {
+            beginCheckIn(booked, {
+              ...seedFromEntry(booked),
+              icException: "deposit",
+              noCardReason: "",
+              deposit: loadClinicRegisterDefaults().depositAmount,
+              prebook: false,
+              payType: "4",
+              pharmacist: lastPharmacist(),
+            });
+            return;
+          }
           if (selected?.patientId && !q) {
+            const otherNote = otherShiftAppointmentNote(
+              queue,
+              { patientId: selected.patientId, idNo: selected.idNo },
+              regShift,
+            );
+            if (otherNote) setSeqNote(otherNote);
             openConfirmFromSeed({
               patientId: selected.patientId,
               idNo: selected.idNo || "",
@@ -1170,8 +1340,36 @@ export function RegisterPage() {
         initialQuery={finderSeed}
         onClose={() => setFinderOpen(false)}
         onSelect={onPatientPicked}
+        allowCreate
+        onCreate={(q) => setNewPatientQuery(q)}
+      />
+      <NewPatientDialog
+        open={newPatientQuery != null}
+        query={newPatientQuery || ""}
+        onClose={() => setNewPatientQuery(null)}
+        onCreated={(hit) => {
+          setNewPatientQuery(null);
+          onPatientPicked(hit);
+        }}
       />
 
+      <AppointmentCheckInDialog
+        open={checkInAsk != null}
+        onYes={() => {
+          const cur = checkInAsk;
+          setCheckInAsk(null);
+          if (!cur) return;
+          openConfirmFromSeed({
+            ...cur.seed,
+            encounterId: cur.encounterId,
+            queueNumber: cur.queueNumber,
+            visitClock: cur.visitClock || cur.seed.visitClock,
+            prebook: false,
+            shift: regShift,
+          });
+        }}
+        onNo={() => setCheckInAsk(null)}
+      />
       <InsertNumberDialog
         open={insertAsk != null}
         gap={insertAsk?.gap ?? 0}
@@ -1248,16 +1446,7 @@ export function RegisterPage() {
         onConfirm={confirmEditRegister}
       />
 
-      <SameDayRegisterDialog
-        open={sameDayOpen}
-        hits={findSameDayHits(queue, confirmForm.patientId || "", confirmForm.idNo || "")}
-        onCancel={() => setSameDayOpen(false)}
-        onConfirm={() => {
-          sameDayPassRef.current = true;
-          setSameDayOpen(false);
-          void confirmSaveRegister();
-        }}
-      />
+      <SameDayFlash open={sameDayFlash} onClose={() => setSameDayFlash(false)} />
       <DeleteRegisterDialog
         open={deleteOpen}
         busy={deleteBusy}
@@ -1316,7 +1505,7 @@ export function RegisterPage() {
           姓名: selected?.patientDisplay || "",
           病歷號: selected?.medicalNo || "",
           身分證: selected?.idNo || "",
-          生日: selected?.birthday || "",
+          生日: formatBirthdayRoc(selected?.birthday || ""),
           看診日: currentDate,
           時段: selected?.shift || "",
           診間: selected?.room || "",

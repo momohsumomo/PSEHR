@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { fetchPatients, isApiMode } from "@/api/clinicApi";
-import { mapApiPatientToHit, type PatientHit } from "@/lib/patientSearch";
+import { mapApiPatientToHit, formatBirthdayRoc, type PatientHit } from "@/lib/patientSearch";
 import { useListNav } from "@/hooks/useListNav";
 
 type Props = {
@@ -10,13 +10,16 @@ type Props = {
   initialQuery?: string;
   onClose: () => void;
   onSelect: (hit: PatientHit) => void;
+  /** 掛號找人：沒有符合就開新建，有符合也留新增按鈕。調閱不開。 */
+  allowCreate?: boolean;
+  onCreate?: (query: string) => void;
 };
 
 /**
  * 醫聖風格共用「找人」視窗。
  * Enter／雙擊＝選定病患（呼叫端決定後續：掛號確認／填病歷條件），不是掛號。
  */
-export function PatientFinderDialog({ open, initialQuery = "", onClose, onSelect }: Props) {
+export function PatientFinderDialog({ open, initialQuery = "", onClose, onSelect, allowCreate, onCreate }: Props) {
   const [query, setQuery] = useState(initialQuery);
   const [hits, setHits] = useState<PatientHit[]>([]);
   const [selectedIdx, setSelectedIdx] = useState(0);
@@ -26,6 +29,7 @@ export function PatientFinderDialog({ open, initialQuery = "", onClose, onSelect
   const [lastSearched, setLastSearched] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
+  const emptyOpened = useRef("");
   const onFinderIndex = useCallback((i: number) => setSelectedIdx(i), []);
   useListNav({
     active: open && hits.length > 0,
@@ -73,6 +77,7 @@ export function PatientFinderDialog({ open, initialQuery = "", onClose, onSelect
 
   useEffect(() => {
     if (!open) return;
+    emptyOpened.current = "";
     setQuery(initialQuery);
     setHits([]);
     setSelectedIdx(0);
@@ -87,6 +92,14 @@ export function PatientFinderDialog({ open, initialQuery = "", onClose, onSelect
       void runSearch(initialQuery);
     }
   }, [open, initialQuery, runSearch]);
+
+  useEffect(() => {
+    if (!open || !allowCreate || !onCreate) return;
+    if (!searched || loading || error || hits.length > 0 || !lastSearched) return;
+    if (emptyOpened.current === lastSearched) return;
+    emptyOpened.current = lastSearched;
+    onCreate(lastSearched);
+  }, [open, allowCreate, onCreate, searched, loading, error, hits.length, lastSearched]);
 
   useEffect(() => {
     if (!open) return;
@@ -197,7 +210,7 @@ export function PatientFinderDialog({ open, initialQuery = "", onClose, onSelect
                   <td className="border border-[#C5EBC5] px-2 py-1 font-mono">{h.medicalNo || "—"}</td>
                   <td className="border border-[#C5EBC5] px-2 py-1 font-mono">{h.idNo || "—"}</td>
                   <td className="border border-[#C5EBC5] px-2 py-1 font-mono">
-                    {h.birthdayRoc || "—"}
+                    {formatBirthdayRoc(h.birthdayRoc) || "\u2014"}
                   </td>
                   <td className="border border-[#C5EBC5] px-2 py-1">
                     {h.sex === "M" ? "男" : h.sex === "F" ? "女" : h.sex || "—"}
@@ -208,7 +221,9 @@ export function PatientFinderDialog({ open, initialQuery = "", onClose, onSelect
             </tbody>
           </table>
           {searched && !loading && hits.length === 0 && !error && (
-            <p className="px-3 py-6 text-center text-xs text-slate-500">查無符合病患</p>
+            <p className="px-3 py-6 text-center text-xs text-slate-500">
+              {allowCreate ? "\u67e5\u7121\u7b26\u5408\u75c5\u60a3\uff0c\u8acb\u65b0\u5efa\u75c5\u6b77" : "\u67e5\u7121\u7b26\u5408\u75c5\u60a3"}
+            </p>
           )}
           {!searched && !loading && (
             <p className="px-3 py-6 text-center text-xs text-slate-500">
@@ -226,6 +241,15 @@ export function PatientFinderDialog({ open, initialQuery = "", onClose, onSelect
           >
             Enter 選定
           </button>
+          {allowCreate ? (
+            <button
+              type="button"
+              className="rounded border border-[#8a6a00] bg-[#ffe14a] px-3 py-1 text-xs font-bold"
+              onClick={() => onCreate?.(query.trim() || lastSearched)}
+            >
+              {"\u65b0\u589e\u75c5\u60a3"}
+            </button>
+          ) : null}
           <button
             type="button"
             className="rounded border border-slate-400 bg-white px-3 py-1 text-xs font-semibold"

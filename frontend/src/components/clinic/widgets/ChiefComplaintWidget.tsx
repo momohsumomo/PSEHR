@@ -1,8 +1,7 @@
 import { useEffect, useState, useRef } from "react";
 import { HIS, HIS_FONT } from "@/lib/hisTheme";
 import { hisTextareaStyle } from "@/components/clinic/HisPageFrame";
-import { fetchCcPhrases } from "@/api/clinicApi";
-import { ccSuffix } from "@/lib/ccSuggest";
+import { fetchCcSuggest } from "@/api/clinicApi";
 
 interface ChiefComplaintWidgetProps {
   apiMode: boolean;
@@ -32,30 +31,60 @@ export function ChiefComplaintWidget({
   void _ccChips;
   void _saveCc;
   const areaRef = useRef<HTMLTextAreaElement>(null);
-  const [phrases, setPhrases] = useState<string[]>([]);
+  const preRef = useRef<HTMLPreElement>(null);
   const [caret, setCaret] = useState(0);
-
-  useEffect(() => {
-    let cancel = false;
-    void fetchCcPhrases()
-      .then((items) => {
-        if (!cancel) setPhrases(items);
-      })
-      .catch(() => undefined);
-    return () => {
-      cancel = true;
-    };
-  }, []);
-
+  const [suffix, setSuffix] = useState("");
   const atEnd = caret === ccText.length;
   const lineStart = ccText.lastIndexOf("\n") + 1;
-  const suffix = atEnd ? ccSuffix(phrases, ccText.slice(lineStart)) : "";
+  const frag = ccText.slice(lineStart);
+  const prev = lineStart > 0 ? (ccText.slice(0, lineStart - 1).split("\n").pop() ?? "") : "";
+
+  useEffect(() => {
+    if (!atEnd) {
+      setSuffix("");
+      return;
+    }
+    let cancel = false;
+    const timer = window.setTimeout(() => {
+      void fetchCcSuggest(frag, prev)
+        .then((next) => {
+          if (!cancel) setSuffix(next);
+        })
+        .catch(() => {
+          if (!cancel) setSuffix("");
+        });
+    }, 80);
+    return () => {
+      cancel = true;
+      window.clearTimeout(timer);
+    };
+  }, [atEnd, frag, prev]);
+  const syncMirror = () => {
+    const area = areaRef.current;
+    const pre = preRef.current;
+    if (!area || !pre) return;
+    pre.style.width = `${area.clientWidth}px`;
+    pre.scrollTop = area.scrollTop;
+  };
+
+  useEffect(() => {
+    const area = areaRef.current;
+    if (!area) return;
+    syncMirror();
+    const watch = new ResizeObserver(() => syncMirror());
+    watch.observe(area);
+    return () => watch.disconnect();
+  }, [ccText, suffix]);
+
   const textStyle = {
     ...hisTextareaStyle,
     fontWeight: 700,
     fontSize: HIS.fs.body,
     lineHeight: 1.25,
     fontFamily: HIS_FONT,
+    whiteSpace: "pre-wrap",
+    wordBreak: "break-word",
+    overflowWrap: "break-word",
   } as const;
 
   return (
@@ -75,8 +104,9 @@ export function ChiefComplaintWidget({
     >
       <div className="relative h-full min-h-0 flex-1">
         <pre
+          ref={preRef}
           aria-hidden
-          className="pointer-events-none absolute inset-0 m-0 overflow-hidden whitespace-pre-wrap break-words p-0.5"
+          className="pointer-events-none absolute left-0 top-0 m-0 h-full overflow-hidden whitespace-pre-wrap break-words p-0.5"
           style={{ ...textStyle, color: HIS.ccText }}
         >
           {ccText}
@@ -91,20 +121,34 @@ export function ChiefComplaintWidget({
             color: "transparent",
             caretColor: HIS.ccText,
             WebkitTextFillColor: "transparent",
+            overflowY: "auto",
+            scrollbarGutter: "stable",
           }}
           value={ccText}
           onChange={(e) => {
             setCcText(e.target.value);
             setCaret(e.target.selectionStart ?? e.target.value.length);
           }}
+          onScroll={() => syncMirror()}
           onSelect={(e) => setCaret(e.currentTarget.selectionStart ?? 0)}
           onKeyDown={(e) => {
-            if (e.key === "Tab" && suffix && !e.shiftKey) {
-              e.preventDefault();
-              const next = ccText + suffix;
-              setCcText(next);
-              setCaret(next.length);
-            }
+            if (e.key !== "Tab" || e.shiftKey || !suffix) return;
+            e.preventDefault();
+            e.stopPropagation();
+            const base = areaRef.current?.value ?? ccText;
+            const next = base + suffix;
+            if (next.length < base.length) return;
+            setSuffix("");
+            setCcText(next);
+            setCaret(next.length);
+            window.requestAnimationFrame(() => {
+              const area = areaRef.current;
+              if (!area) return;
+              area.selectionStart = next.length;
+              area.selectionEnd = next.length;
+              area.scrollTop = area.scrollHeight;
+              syncMirror();
+            });
           }}
           placeholder=""
           aria-label={"\u4e3b\u8a34\uff08\u6253\u5b57\u5f8c Tab \u88dc\u5b8c\uff09"}

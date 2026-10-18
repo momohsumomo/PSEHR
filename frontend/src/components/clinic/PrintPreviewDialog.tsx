@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { printToNamedPrinter } from "@/api/clinicApi";
 import { HIS_FONT } from "@/lib/hisTheme";
-import { bindPrintPreview, type PrintSendResult } from "@/lib/printJob";
+import { bindPrintPreview, previewSheetMarkup, type PrintSendResult } from "@/lib/printJob";
+import { paperDirectionLabel } from "@/lib/printSettings";
 
 type Req = {
   title: string;
@@ -28,40 +29,83 @@ function downloadHtml(title: string, html: string) {
 function PreviewSheet({ req }: { req: Req }) {
   const stageRef = useRef<HTMLDivElement>(null);
   const [scale, setScale] = useState(1);
-  const pages = Math.max(1, (req.html.match(/class="slip-page"/g) || []).length);
+  const [page, setPage] = useState(0);
+  const pageCount = Math.max(1, (req.html.match(/class="slip-page"/g) || []).length);
+  const pageCountRef = useRef(pageCount);
+  pageCountRef.current = pageCount;
   const pxW = (req.widthMm / 25.4) * 96;
   const pxH = (req.heightMm / 25.4) * 96;
-  const frameH = pxH * pages;
+  const frameH = pxH * pageCount;
+  const pageSafe = Math.min(page, pageCount - 1);
+
+  useEffect(() => {
+    setPage(0);
+  }, [req.html]);
 
   useEffect(() => {
     const el = stageRef.current;
     if (!el) return;
     const fit = () => {
-      const w = Math.max(40, el.clientWidth - 48);
-      setScale(Math.min(w / pxW, 1.15));
+      const w = Math.max(40, el.clientWidth - 24);
+      const h = Math.max(40, el.clientHeight - (pageCount > 1 ? 36 : 12));
+      setScale(Math.min(w / pxW, h / pxH));
     };
     fit();
     const ro = new ResizeObserver(fit);
     ro.observe(el);
     return () => ro.disconnect();
-  }, [pxW]);
+  }, [pxW, pxH, pageCount]);
+
+  useEffect(() => {
+    const el = stageRef.current;
+    if (!el) return;
+    let acc = 0;
+    let lockedUntil = 0;
+    const onWheel = (ev: WheelEvent) => {
+      if (pageCountRef.current <= 1) return;
+      ev.preventDefault();
+      const now = Date.now();
+      if (now < lockedUntil) return;
+      acc += ev.deltaY;
+      if (Math.abs(acc) < 30) return;
+      const dir = acc > 0 ? 1 : -1;
+      acc = 0;
+      lockedUntil = now + 140;
+      setPage((p) => Math.min(pageCountRef.current - 1, Math.max(0, p + dir)));
+    };
+    el.addEventListener("wheel", onWheel, { passive: false });
+    return () => el.removeEventListener("wheel", onWheel);
+  }, [req.html]);
 
   return (
-    <div ref={stageRef} className="min-h-0 flex-1 overflow-auto" style={{ background: "#5E5E5E" }}>
-      <div style={{ width: pxW * scale, height: frameH * scale, margin: "24px auto" }}>
-        <iframe
-          title={req.title}
-          srcDoc={req.html}
-          style={{
-            width: pxW,
-            height: frameH,
-            border: 0,
-            background: "#fff",
-            transform: `scale(${scale})`,
-            transformOrigin: "top left",
-            boxShadow: "0 8px 24px rgba(0,0,0,.45)",
-          }}
-        />
+    <div
+      ref={stageRef}
+      className="flex min-h-0 flex-1 flex-col overflow-hidden"
+      style={{ background: "#5E5E5E" }}
+    >
+      {pageCount > 1 ? (
+        <div className="shrink-0 px-3 pt-2 text-center font-mono text-[12px] font-bold text-white">
+          {"\u9801\u6b21: "}
+          {pageSafe + 1} / {pageCount}
+        </div>
+      ) : null}
+      <div className="flex min-h-0 flex-1 items-center justify-center">
+        <div style={{ width: pxW * scale, height: pxH * scale, overflow: "hidden" }}>
+          <div
+            className="his-paper"
+            style={{
+              width: pxW,
+              height: frameH,
+              background: "#ffffff",
+              color: "#000000",
+              transform: `scale(${scale}) translateY(-${pageSafe * pxH}px)`,
+              transformOrigin: "top left",
+              boxShadow: "0 8px 24px rgba(0,0,0,.45)",
+              overflow: "hidden",
+            }}
+            dangerouslySetInnerHTML={{ __html: previewSheetMarkup(req.html) }}
+          />
+        </div>
       </div>
     </div>
   );
@@ -180,7 +224,7 @@ function PreviewWindow({ req, onClose }: { req: Req; onClose: () => void }) {
             {"\u5370\u8868\u6a5f\uff1a"}{printer}
           </span>
           <span className="font-mono text-[11px] text-black">
-            {req.widthMm}{"\u00d7"}{req.heightMm} mm
+            {req.widthMm}{"\u00d7"}{req.heightMm} mm {paperDirectionLabel(req.widthMm, req.heightMm)}
           </span>
         </div>
         <PreviewSheet req={req} />

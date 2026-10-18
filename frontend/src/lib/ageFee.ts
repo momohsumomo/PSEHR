@@ -101,6 +101,16 @@ export function applyAgeFees(args: {
     notes.push(`\u6eff${p.seniorAge}\u6b72\uff0c\u639b\u865f\u8cbb\u6e1b ${p.seniorDiscount}`);
   }
 
+  if (args.selfPay) {
+    return {
+      regFee: money(reg),
+      copayAmt: "0",
+      copayDiscAmt: "0",
+      askStudent,
+      note: notes.join("\u3000"),
+    };
+  }
+
   return {
     regFee: money(reg),
     copayAmt: money(copay),

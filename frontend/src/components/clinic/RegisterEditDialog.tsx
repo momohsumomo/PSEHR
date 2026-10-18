@@ -6,6 +6,7 @@ import type { CardFaultReport } from "@/api/clinicApi";
 import { HisWinTitle } from "@/components/clinic/HisPageFrame";
 import { HIS, HIS_FONT } from "@/lib/hisTheme";
 import { HisFixedClockInput } from "@/components/clinic/HisFixedClockInput";
+import { RocBirthdayInput } from "@/components/clinic/RocBirthdayInput";
 import { NHI_NOCARD_REASONS, needsNhiNoCardReason } from "@/lib/registerModes";
 
 export type IcException =
@@ -61,6 +62,11 @@ export type RegisterEditForm = {
   queueNumber?: string;
   /** 清單上的就診時間 HH:MM */
   visitClock?: string;
+  acceptReferral?: string;
+  referralSeq?: string;
+  referralHospId?: string;
+  referralHospName?: string;
+  referralDate?: string;
 };
 
 const IC_OPTIONS: { value: IcException; label: string }[] = [
@@ -152,7 +158,7 @@ const inputCls =
   "w-full border border-[#808080] bg-white px-1 py-0.5 text-[12px] leading-none outline-none focus:border-[#000080]";
 
 function needsNoCardReason(ex: IcException): boolean {
-  return needsNhiNoCardReason(ex);
+  return needsNhiNoCardReason(ex) && ex !== "badCard";
 }
 
 /**
@@ -215,6 +221,12 @@ export function RegisterEditDialog({
       afterCheck: icException === "afterCheck" ? "2" : "1",
       caseNo: icException === "selfPay" ? "9X" : form.caseNo === "9X" ? "01" : form.caseNo,
       regFee: icException === "selfPay" && !form.regFee ? "300" : form.regFee,
+      noCardReason:
+        icException === "badCard"
+          ? "\u5361\u7247\u4e0d\u826f"
+          : needsNhiNoCardReason(icException)
+            ? form.noCardReason
+            : "",
     });
   };
 
@@ -272,7 +284,7 @@ export function RegisterEditDialog({
                   </span>
                 </Field>
                 <Field label={"\u6c11\u570b\u751f\u65e5"}>
-                  <input className={`${inputCls} font-mono`} maxLength={7} value={form.birthday} onChange={(e) => onChange({ birthday: e.target.value.replace(/\D/g, "") })} />
+                  <RocBirthdayInput className={`${inputCls} font-mono`} value={form.birthday} readOnly={busy} onChange={(birthday) => onChange({ birthday })} />
                 </Field>
                 <Field label={"\u6027\u5225"}>
                   <select className={`${inputCls} bg-[#b6f5b6] font-bold`} value={form.sex} onChange={(e) => onChange({ sex: e.target.value })}>

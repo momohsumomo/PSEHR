@@ -15,7 +15,7 @@ import {
   type QueueStatus,
 } from "@/mocks/clinicMocks";
 import { HIS, HIS_FONT, HIS_QUEUE_COL_WIDTHS } from "@/lib/hisTheme";
-import { clockLabel, compareClinicQueue } from "@/lib/queueOrder";
+import { clockLabel, compareClinicQueue, showsUploadCircle } from "@/lib/queueOrder";
 
 const COL_WIDTH_STORAGE = "wundadi.queue.colWidths.v2";
 
@@ -37,7 +37,7 @@ function loadColWidths(): Record<string, number> {
  * 舊醫聖資料的圈＝健保卡 IC 序號已寫；6.0 以後的圈＝雲端寫入成功。
  * 兩種都留著，歷史才分得出來。以後若不寫卡，新資料就只會是勾。
  */
-function DoneMarkCell({ entry }: { entry: QueueEntry }) {
+export function DoneMarkCell({ entry }: { entry: QueueEntry }) {
   const check = "\u2713";
   if (entry.queueStatus === "in_progress") {
     return (
@@ -53,7 +53,7 @@ function DoneMarkCell({ entry }: { entry: QueueEntry }) {
   if (entry.queueStatus !== "finished" && entry.queueStatus !== "no_show") {
     return <span className="inline-block w-[1.1em] text-center">&nbsp;</span>;
   }
-  if (entry.cardWritten) {
+  if (showsUploadCircle(entry)) {
     return (
       <span
         className="inline-flex h-[1.15em] w-[1.15em] items-center justify-center rounded-full text-[0.75em] font-bold leading-none text-black"
@@ -166,7 +166,7 @@ export function EncounterQueuePanel({
   entries,
   selectedId,
   onSelect,
-  onStatusChange,
+  onStatusChange: _onStatusChange,
   mode = "card",
   columnLabels = [],
   columnKeys = [],
@@ -229,11 +229,8 @@ export function EncounterQueuePanel({
     };
   }, [onResizeMove, onResizeEnd]);
 
-  const enterPatient = (encounterId: string, status: QueueStatus) => {
+  const enterPatient = (encounterId: string) => {
     onSelect(encounterId);
-    if (status === "waiting") {
-      onStatusChange(encounterId, "in_progress");
-    }
     onOpen?.(encounterId);
   };
 
@@ -394,7 +391,7 @@ export function EncounterQueuePanel({
                     color: finished && !selected ? "#666666" : "#000000",
                   }}
                   onClick={() => onSelect(e.encounterId)}
-                  onDoubleClick={() => enterPatient(e.encounterId, e.queueStatus)}
+                  onDoubleClick={() => enterPatient(e.encounterId)}
                 >
                   {tableCols.map((col) => {
                     const isPrimary =
@@ -436,10 +433,10 @@ export function EncounterQueuePanel({
                 type="button"
                 onClick={() =>
                   isPage || onOpen
-                    ? enterPatient(e.encounterId, e.queueStatus)
+                    ? enterPatient(e.encounterId)
                     : onSelect(e.encounterId)
                 }
-                onDoubleClick={() => enterPatient(e.encounterId, e.queueStatus)}
+                onDoubleClick={() => enterPatient(e.encounterId)}
                 className={`w-full border-b border-slate-50 px-2.5 py-2 text-left transition ${
                   selectedId === e.encounterId ? "bg-sky-50" : "hover:bg-slate-50"
                 }`}

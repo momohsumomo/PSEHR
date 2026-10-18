@@ -1,5 +1,6 @@
 import { useCallback, useRef, type CSSProperties, type ReactNode } from "react";
 import { HIS, HIS_FONT, hisFontStyle } from "@/lib/hisTheme";
+import { useEscLayer } from "@/hooks/useEscLayer";
 import { useListNav } from "@/hooks/useListNav";
 
 type Props = {
@@ -190,6 +191,7 @@ export function HisXpDialog({
   footer?: ReactNode;
   width?: number | string;
 }) {
+  useEscLayer([{ open: true, close: onClose ?? (() => undefined) }], Boolean(open && onClose));
   if (!open) return null;
   return (
     <div

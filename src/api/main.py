@@ -18,6 +18,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 
 from src.core.context import current_machine_id, current_operator_identity, current_pin_code
 from src.api.routers import (
+    address_book,
     auth,
     allergy_intolerance,
     claims,
@@ -106,6 +107,7 @@ app.include_router(outpatient.router)
 app.include_router(sandbox.router)
 app.include_router(staff.router)
 app.include_router(clinic_settings.router)
+app.include_router(address_book.router)
 app.include_router(claims.router)
 app.include_router(ic_upload.router)
 app.include_router(same_day.router)
@@ -121,6 +123,9 @@ def on_startup() -> None:
     start_sync_worker(store)
     start_pack_hydrator_worker()
     start_local_print_server()
+    from src.core.cc_learn import start_cc_learner
+
+    start_cc_learner(store.db_path)
 
 
 @app.on_event("shutdown")

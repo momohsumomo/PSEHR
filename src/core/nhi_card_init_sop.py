@@ -361,6 +361,37 @@ def _probe_one_slot(client: CardConsole, name: str) -> SlotProbe:
     )
 
 
+def lock_card_reader(client: CardConsole, kind: str) -> str:
+    """Point the console at the reader that currently holds kind (hc or hpc)."""
+    if kind not in (KIND_HC, KIND_HPC):
+        raise ValueError(kind)
+    listed = client.list_pcsc_readers_safe(timeout_sec=5.0)
+    readers = [str(name) for name in (listed.get("readers") or [])]
+    if not readers:
+        raise RuntimeError("\u6c92\u6709\u8b80\u5361\u6a5f\u3002")
+    try:
+        current = client.get_default_pcsc_reader() or ""
+    except Exception:
+        current = ""
+    order = [current] + [name for name in readers if name != current] if current in readers else list(readers)
+    slots: list[SlotProbe] = []
+    for name in order:
+        slot = _probe_one_slot(client, name)
+        slots.append(slot)
+        if slot.kind == kind:
+            client.set_default_pcsc_reader(name)
+            return name
+    restore = current if current in readers else readers[0]
+    client.set_default_pcsc_reader(restore)
+    if kind == KIND_HC and any(slot.kind == KIND_HPC for slot in slots):
+        raise RuntimeError("\u8b80\u5361\u6a5f\u4e0a\u662f\u91ab\u4e8b\u4eba\u54e1\u5361\uff0c\u6c92\u6709\u5065\u4fdd\u5361\u3002")
+    if kind == KIND_HPC and any(slot.kind == KIND_HC for slot in slots):
+        raise RuntimeError("\u8b80\u5361\u6a5f\u4e0a\u662f\u5065\u4fdd\u5361\uff0c\u6c92\u6709\u91ab\u4e8b\u4eba\u54e1\u5361\u3002")
+    if kind == KIND_HC:
+        raise RuntimeError("\u8b80\u5361\u6a5f\u4e0a\u6c92\u6709\u5065\u4fdd\u5361\u3002")
+    raise RuntimeError("\u8b80\u5361\u6a5f\u4e0a\u6c92\u6709\u91ab\u4e8b\u4eba\u54e1\u5361\u3002")
+
+
 def run_card_init_sop(client: CardConsole) -> InitSopResult:
     """F2／IC讀卡前的硬體無關初始化。成功則帶 profile；失敗則帶該停的那一層。"""
     stages: list[dict[str, Any]] = []

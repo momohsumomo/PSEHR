@@ -230,7 +230,13 @@ def repair_console(*, console_base: str = DEFAULT_CONSOLE_BASE) -> dict[str, Any
         return {
             "ok": False,
             "action": action,
-            "message": f"\u627e\u4e0d\u5230\u4e3b\u63a7\u53f0\u7a0b\u5f0f\uff1a{runtime['exePath']}",
+            "message": (
+                "\u9019\u53f0\u96fb\u8166\u9084\u6c92\u6709\u5065\u4fdd\u8b80\u5361\u8edf\u9ad4 6.0\u3002"
+                "\u8acb\u7528\u5065\u4fdd\u5c08\u7db2\u4e0b\u8f09\u300c\u5065\u4fdd\u8cc7\u8a0a\u7db2\u670d\u52d9\u7cfb\u7d71 6.0\u300d\uff0c"
+                "\u88dd\u5728\u6709\u8b80\u5361\u6a5f\u7684\u90a3\u4e00\u53f0\u3002"
+                "\u8a3a\u6240\u8a8d\u8b49\u91d1\u9470\u662f\u5065\u4fdd\u7f72\u767c\u7d66\u9019\u5bb6\u8a3a\u6240\u7684\uff0c"
+                "\u4e0d\u80fd\u653e\u9032\u7a0b\u5f0f\uff0c\u4e5f\u4e0d\u80fd\u5f9e GitHub \u4e0b\u8f09\u3002"
+            ),
             "runtime": runtime,
         }
 

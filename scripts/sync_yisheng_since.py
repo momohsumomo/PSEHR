@@ -25,6 +25,7 @@ from src.core.encounter_extensions import (
     QUEUE_EXTENSION_URL,
     REG_EXTENSION_URL,
     attach_reg_extension,
+    put_reg_string,
 )
 from src.core.nhi_clinical_mappers import yisheng_selftype_to_pay_mark
 from src.core.yisheng_register_fields import (
@@ -489,6 +490,13 @@ def main() -> int:
                 payload["reasonCode"] = [{"text": chief[:4000]}]
             _set_queue(payload, serno, state["queue_status"], state["fhir_status"])
             payload = attach_reg_extension(payload, fees)
+            if seq and _fee(row["KEYMONEY"]) == 0:
+                remark = _clean(row["REMARK"])[:40]
+                put_reg_string(payload, "noteMark", remark)
+                conn.execute(
+                    "UPDATE encounter_index SET reg_remark=? WHERE resource_id=?",
+                    (remark, eid),
+                )
             conn.execute(
                 """
                 INSERT INTO resource_cache (resource_type, resource_id, payload_json, created_at, updated_at)

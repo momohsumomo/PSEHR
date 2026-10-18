@@ -546,7 +546,7 @@ export function ClinicProfilePage() {
                 </div>
                 <div className="pt-1">
                   <p className="mb-1 text-[11px] text-slate-400">
-                    病患身分類別（USER.TYPE）對到的掛號費／部分負擔。掛號確認會依這張表帶金額。
+                    {"\u8eab\u5206\u985e\u5225\u7684\u639b\u8cbb\u512a\u5f85\u91d1\u984d\uff0c\u4ee5\u53ca\u90e8\u5206\u8ca0\u64d4\u8981\u4e0d\u8981\u512a\u5f85\u3002\u639b\u865f\u78ba\u8a8d\u6703\u4f9d\u9019\u5f35\u8868\u5e36\u5be6\u6536\u3002"}
                   </p>
                   <button
                     type="button"
@@ -564,8 +564,8 @@ export function ClinicProfilePage() {
                       <thead>
                         <tr className="text-left text-slate-400">
                           <th className="border border-slate-700 px-1">身分</th>
-                          <th className="border border-slate-700 px-1">掛號</th>
-                          <th className="border border-slate-700 px-1">部分負擔</th>
+                          <th className="border border-slate-700 px-1">{"\u639b\u8cbb\u512a\u5f85"}</th>
+                          <th className="border border-slate-700 px-1">{"\u8ca0\u64d4\u512a\u5f85"}</th>
                           <th className="border border-slate-700 px-1">年齡</th>
                         </tr>
                       </thead>
@@ -574,7 +574,7 @@ export function ClinicProfilePage() {
                           <tr key={c.code}>
                             <td className="border border-slate-800 px-1 font-bold text-purple-200">{c.code}</td>
                             <td className="border border-slate-800 px-1 font-mono">{c.reg_fee}</td>
-                            <td className="border border-slate-800 px-1 font-mono">{c.copay}</td>
+                            <td className="border border-slate-800 px-1 font-mono">{Number(c.copay) > 0 ? "\u512a\u5f85" : "\u6536"}</td>
                             <td className="border border-slate-800 px-1 font-mono">
                               {c.min_age ?? ""}–{c.max_age ?? ""}
                             </td>

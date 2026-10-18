@@ -88,6 +88,7 @@ export type QueueFilterId = (typeof QUEUE_FILTERS)[number]["id"];
 
 /** 掛號清單欄（對齊醫聖掛號作業 default） */
 export const REGI_COLUMNS: { key: string; label: string }[] = [
+  { key: "doneMark", label: "\u5b8c" },
   { key: "deptSlot", label: "部" },
   { key: "queueNumber", label: "序號" },
   { key: "slotTime", label: "時間" },

@@ -448,9 +448,10 @@ def _copay_code(raw: str | None) -> str:
 
 
 def _treat_seq(raw: str | None) -> str:
-    if not raw:
-        return ""
-    digits = "".join(ch for ch in str(raw) if ch.isdigit())
+    text = str(raw or "").strip().upper()
+    if len(text) >= 4 and text[0].isalpha() and text[:4].isalnum():
+        return text[:4]
+    digits = "".join(ch for ch in text if ch.isdigit())
     if not digits:
         return ""
     return digits[-4:].zfill(4)

@@ -34,6 +34,10 @@ export type PatientRecord = {
   nursingHomeCode: string;
   contactName: string;
   contactPhone: string;
+  /** 家護收案日，民國 7 碼。空白表示未收案。 */
+  familyCareDate: string;
+  /** 家醫計畫個案種類：A 署名單、B 院所自收、C 論質名單。 */
+  familyCareCase: string;
 };
 
 export function emptyPatientRecord(partial?: Partial<PatientRecord>): PatientRecord {
@@ -69,6 +73,8 @@ export function emptyPatientRecord(partial?: Partial<PatientRecord>): PatientRec
     nursingHomeCode: "",
     contactName: "",
     contactPhone: "",
+    familyCareDate: "",
+    familyCareCase: "",
     ...partial,
   };
 }
@@ -141,6 +147,8 @@ export function fhirToPatientRecord(p: ApiPatient): PatientRecord {
   let nursingHomeCode = "";
   let contactName = "";
   let contactPhone = "";
+  let familyCareDate = "";
+  let familyCareCase = "";
 
   const clinicExt = p.extension?.find((e) => e.url?.includes("patient-clinic-ext"));
   if (clinicExt) {
@@ -165,6 +173,8 @@ export function fhirToPatientRecord(p: ApiPatient): PatientRecord {
     nursingHomeCode = g("nursingHomeCode");
     contactName = g("contactName");
     contactPhone = g("contactPhone");
+    familyCareDate = g("familyCareDate");
+    familyCareCase = g("familyCareCase");
   }
   let postalCode = "";
   if (clinicExt) {
@@ -207,6 +217,8 @@ export function fhirToPatientRecord(p: ApiPatient): PatientRecord {
     nursingHomeCode,
     contactName,
     contactPhone,
+    familyCareDate,
+    familyCareCase,
   });
 }
 
@@ -293,6 +305,8 @@ export function patientRecordToFhir(record: PatientRecord): Record<string, unkno
           { url: "nursingHomeCode", valueString: record.nursingHomeCode },
           { url: "contactName", valueString: record.contactName },
           { url: "contactPhone", valueString: record.contactPhone },
+          { url: "familyCareDate", valueString: record.familyCareDate },
+          { url: "familyCareCase", valueString: record.familyCareCase },
         ],
       },
     ],

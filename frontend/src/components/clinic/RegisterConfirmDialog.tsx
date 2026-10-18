@@ -17,11 +17,14 @@ import {
   type RegisterEditForm,
 } from "@/components/clinic/RegisterEditDialog";
 import { applyAgeFees, ageYearsFromRoc, policyFromFees } from "@/lib/ageFee";
+import { formatBirthdayRoc } from "@/lib/patientSearch";
 import { readLocalClinicBundle } from "@/lib/clinicProfile";
 import { loadClinicRegisterDefaults, mapApiPatientToHit } from "@/lib/patientSearch";
 import { canonicalIdCategory, matchIdCategory } from "@/lib/idCategory";
 import { NHI_NOCARD_REASONS, needsNhiNoCardReason } from "@/lib/registerModes";
 import { IdCategoryTableDialog } from "@/components/clinic/IdCategoryTableDialog";
+import { HospitalLookupDialog } from "@/components/clinic/HospitalLookupDialog";
+import { BAD_CARD_REASON } from "@/lib/nocardClaim";
 import { HisFixedClockInput } from "@/components/clinic/HisFixedClockInput";
 import { normalizeClock } from "@/lib/queueOrder";
 
@@ -83,9 +86,7 @@ function isoToRocDots(iso: string): string {
 }
 
 function rocDotsFrom7(roc: string): string {
-  const d = roc.replace(/\D/g, "");
-  if (d.length < 7) return roc || "—";
-  return `${d.slice(0, 3)}.${d.slice(3, 5)}.${d.slice(5, 7)}`;
+  return formatBirthdayRoc(roc) || "\u2014";
 }
 
 function ageFromRoc(roc: string): string {
@@ -105,22 +106,27 @@ const COPAY_FIXED = "50";
 
 function identityFeePatch(
   code: string,
-  hit: { deposit?: number; reg_fee?: number } | undefined,
+  hit: { deposit?: number; reg_fee?: number; copay?: number } | undefined,
   clinicReg: string,
   keepDeposit: boolean,
+  personDisc?: string,
 ): { note: string; patch: Partial<RegisterEditForm> } {
   const id = canonicalIdCategory(code) || code.trim();
-  const reg = id === "A" ? "0" : hit?.reg_fee != null ? String(hit.reg_fee) : clinicReg;
-  const disc = id === "A" ? COPAY_FIXED : "0";
+  const base = Number(clinicReg) || 0;
+  const discount = hit?.reg_fee != null ? Math.max(0, Number(hit.reg_fee) || 0) : 0;
+  const reg = String(Math.max(0, base - discount));
+  const waive = personDisc === "2" || Number(hit?.copay) > 0;
+  const disc = waive ? COPAY_FIXED : "0";
   const patch: Partial<RegisterEditForm> = {
     regFee: reg,
     copayAmt: COPAY_FIXED,
     copayDiscAmt: disc,
   };
   if (keepDeposit && hit?.deposit != null) patch.deposit = String(hit.deposit);
-  const depositNote = patch.deposit != null ? `　押金 ${patch.deposit}` : "";
+  const depositNote = patch.deposit != null ? `\u3000\u62bc\u91d1 ${patch.deposit}` : "";
+  const waiveNote = waive ? `\u3000\u90e8\u5206\u8ca0\u64d4\u512a\u5f85` : "";
   return {
-    note: `身分 ${id || "—"}　掛號費 ${reg}　部分負擔 ${COPAY_FIXED}　負擔優待 ${disc}${depositNote}`,
+    note: `\u8eab\u5206 ${id || "\u2014"}\u3000\u639b\u8cbb\u512a\u5f85 ${discount}\u3000\u5be6\u6536\u639b\u865f ${reg}\u3000\u90e8\u5206\u8ca0\u64d4 ${COPAY_FIXED}${waiveNote}${depositNote}`,
     patch,
   };
 }
@@ -234,22 +240,60 @@ export function RegisterConfirmDialog({
   const [skipCardWarn, setSkipCardWarn] = useState(false);
   const defaults = loadClinicRegisterDefaults();
   const feeBaseRef = useRef<Partial<RegisterEditForm>>({});
+  const nhiQuoteRef = useRef<{ note: string; patch: Partial<RegisterEditForm> } | null>(null);
+  const selfPayLive = useRef(false);
+  const feeEpoch = useRef(0);
   const studentRef = useRef<boolean | null>(null);
+  const personDiscRef = useRef("");
   const [askStudent, setAskStudent] = useState(false);
+  const [hospPickOpen, setHospPickOpen] = useState(false);
 
-  const paintAge = (base: Partial<RegisterEditForm>, student: boolean | null) => {
+  const isSelfPay = (ex?: string, caseNo?: string) => ex === "selfPay" || caseNo === "9X";
+  selfPayLive.current = isSelfPay(form.icException, form.caseNo);
+
+  const paintAge = (base: Partial<RegisterEditForm>, student: boolean | null, selfPay?: boolean) => {
+    const isSelf = selfPay ?? isSelfPay(form.icException, form.caseNo);
     feeBaseRef.current = base;
     const aged = applyAgeFees({
       age: ageYearsFromRoc(form.birthday),
       baseReg: Number(base.regFee) || 0,
-      baseCopay: Number(base.copayAmt) || 0,
-      baseDisc: Number(base.copayDiscAmt) || 0,
-      selfPay: form.icException === "selfPay",
+      baseCopay: isSelf ? 0 : Number(base.copayAmt) || 0,
+      baseDisc: isSelf ? 0 : Number(base.copayDiscAmt) || 0,
+      selfPay: isSelf,
       student,
       policy: policyFromFees(readLocalClinicBundle().fees),
     });
     setAskStudent(aged.askStudent);
     return aged;
+  };
+
+  const enterSelfPayFees = (): Partial<RegisterEditForm> => {
+    feeEpoch.current += 1;
+    const reg = defaults.regFeeSelfPay || form.regFee || "0";
+    const aged = paintAge({ regFee: reg, copayAmt: "0", copayDiscAmt: "0" }, studentRef.current, true);
+    const id = idCategory.trim();
+    setIdFeeNote(
+      [`\u8eab\u5206 ${id || "\u2014"}\u3000\u639b\u865f\u8cbb ${aged.regFee}`, aged.note].filter(Boolean).join("\u3000"),
+    );
+    return { regFee: aged.regFee, copayAmt: "0", copayDiscAmt: "0", copayCode: "" };
+  };
+
+  const leaveSelfPayFees = (): Partial<RegisterEditForm> => {
+    feeEpoch.current += 1;
+    const saved = nhiQuoteRef.current ?? identityFeePatch("", undefined, defaults.regFeeOutpatient, false, personDiscRef.current);
+    const aged = paintAge(saved.patch, studentRef.current, false);
+    setIdFeeNote([saved.note, aged.note].filter(Boolean).join("\u3000"));
+    return { regFee: aged.regFee, copayAmt: aged.copayAmt, copayDiscAmt: aged.copayDiscAmt };
+  };
+
+  const withFee = (next: Partial<RegisterEditForm>): Partial<RegisterEditForm> => {
+    const ex = next.icException ?? form.icException;
+    const caseNo = next.caseNo ?? form.caseNo;
+    const wasSelf = isSelfPay(form.icException, form.caseNo);
+    const willSelf = isSelfPay(ex, caseNo);
+    if (willSelf) return { ...next, ...enterSelfPayFees() };
+    if (wasSelf) return { ...next, ...leaveSelfPayFees() };
+    return next;
   };
 
   const chooseStudent = (yes: boolean) => {
@@ -263,12 +307,15 @@ export function RegisterConfirmDialog({
     });
   };
 
+  const selfPayForm = isSelfPay(form.icException, form.caseNo);
   const dueAmt = useMemo(() => {
     const reg = Number(form.regFee) || 0;
-    const copay = Math.max(0, (Number(form.copayAmt) || 0) - (Number(form.copayDiscAmt) || 0));
+    const copay = selfPayForm
+      ? 0
+      : Math.max(0, (Number(form.copayAmt) || 0) - (Number(form.copayDiscAmt) || 0));
     const sum = reg + copay;
     return sum > 0 ? String(sum) : "0";
-  }, [form.regFee, form.copayAmt, form.copayDiscAmt]);
+  }, [form.regFee, form.copayAmt, form.copayDiscAmt, selfPayForm]);
 
   useEffect(() => {
     if (!open) return;
@@ -343,6 +390,7 @@ export function RegisterConfirmDialog({
       setPhone("");
       setAddress("");
       setIdCategory("");
+      personDiscRef.current = "";
       setIdFeeNote("");
       setPrevVisit("—");
       setSameDayNote(null);
@@ -350,6 +398,7 @@ export function RegisterConfirmDialog({
       return;
     }
     let cancelled = false;
+    const epoch = feeEpoch.current;
     (async () => {
       try {
         const p = await fetchPatient(form.patientId!);
@@ -364,6 +413,11 @@ export function RegisterConfirmDialog({
             ?.find((e) => e.url?.includes("patient-clinic-ext"))
             ?.extension?.find((s) => s.url === "idCategory")?.valueString || "";
         const shown = canonicalIdCategory(cat) || cat;
+        const personDisc =
+          p.extension
+            ?.find((e) => e.url?.includes("patient-clinic-ext"))
+            ?.extension?.find((s) => s.url === "copayDisc")?.valueString || "";
+        personDiscRef.current = personDisc;
         setIdCategory(shown);
         if (cat) {
           try {
@@ -373,15 +427,27 @@ export function RegisterConfirmDialog({
               const noCard = ["deposit", "noCard", "childNoCard", "pregnantNoCard", "badCard", "paper"].includes(
                 form.icException,
               );
-              const applied = identityFeePatch(shown || cat, hit, defaults.regFeeOutpatient, !noCard);
-              const aged = paintAge(applied.patch, studentRef.current);
-              setIdFeeNote([applied.note, aged.note].filter(Boolean).join("\u3000"));
-              onChange({
-                ...applied.patch,
-                regFee: aged.regFee,
-                copayAmt: aged.copayAmt,
-                copayDiscAmt: aged.copayDiscAmt,
-              });
+              const applied = identityFeePatch(shown || cat, hit, defaults.regFeeOutpatient, !noCard, personDisc);
+              nhiQuoteRef.current = applied;
+              if (feeEpoch.current === epoch) {
+                const selfPay = selfPayLive.current;
+                const base = selfPay
+                  ? { ...applied.patch, regFee: defaults.regFeeSelfPay || applied.patch.regFee, copayAmt: "0", copayDiscAmt: "0" }
+                  : applied.patch;
+                const aged = paintAge(base, studentRef.current, selfPay);
+                setIdFeeNote(
+                  selfPay
+                    ? [`\u8eab\u5206 ${shown || "\u2014"}\u3000\u639b\u865f\u8cbb ${aged.regFee}`, aged.note].filter(Boolean).join("\u3000")
+                    : [applied.note, aged.note].filter(Boolean).join("\u3000"),
+                );
+                onChange({
+                  ...base,
+                  regFee: aged.regFee,
+                  copayAmt: aged.copayAmt,
+                  copayDiscAmt: aged.copayDiscAmt,
+                  ...(selfPay ? { copayCode: "" } : {}),
+                });
+              }
             } else {
               setIdFeeNote("此身分類別尚未對到優惠表，請按身份類別旁的 … 設定");
             }
@@ -389,19 +455,31 @@ export function RegisterConfirmDialog({
             setIdFeeNote("");
           }
         } else {
-          const plain = identityFeePatch("", undefined, defaults.regFeeOutpatient, false);
-          const aged = paintAge(plain.patch, studentRef.current);
-          setIdFeeNote(aged.note);
-          onChange({
-            ...plain.patch,
-            regFee: aged.regFee,
-            copayAmt: aged.copayAmt,
-            copayDiscAmt: aged.copayDiscAmt,
-          });
+          const plain = identityFeePatch("", undefined, defaults.regFeeOutpatient, false, personDiscRef.current);
+          nhiQuoteRef.current = plain;
+          if (feeEpoch.current === epoch) {
+            const selfPay = selfPayLive.current;
+            const base = selfPay
+              ? { ...plain.patch, regFee: defaults.regFeeSelfPay || plain.patch.regFee, copayAmt: "0", copayDiscAmt: "0" }
+              : plain.patch;
+            const aged = paintAge(base, studentRef.current, selfPay);
+            setIdFeeNote(
+              selfPay
+                ? [`\u8eab\u5206 \u2014\u3000\u639b\u865f\u8cbb ${aged.regFee}`, aged.note].filter(Boolean).join("\u3000")
+                : aged.note,
+            );
+            onChange({
+              ...base,
+              regFee: aged.regFee,
+              copayAmt: aged.copayAmt,
+              copayDiscAmt: aged.copayDiscAmt,
+              ...(selfPay ? { copayCode: "" } : {}),
+            });
+          }
         }
         try {
           const same = await fetchSameDayEncounters(form.patientId!, encounterDate, {
-            includeCloud: true,
+            includeCloud: false,
           });
           if (!cancelled && same.isSameDay && same.count > 0) {
             const brief = same.encounters
@@ -489,6 +567,7 @@ export function RegisterConfirmDialog({
       }
       if (ev.key === "F9") {
         ev.preventDefault();
+        ev.stopPropagation();
         if (busy || seqBusy) return;
         void onConfirm();
       }
@@ -520,13 +599,13 @@ export function RegisterConfirmDialog({
       next.icException = q.icException;
       next.paperCard = q.icException === "paper";
       next.afterCheck = q.icException === "afterCheck" ? "2" : "1";
-      if (q.icException === "selfPay") {
-        next.caseNo = "9X";
-        if (defaults.regFeeSelfPay) next.regFee = defaults.regFeeSelfPay;
-      }
+      if (q.icException === "selfPay") next.caseNo = "9X";
+    } else if (isSelfPay(form.icException, form.caseNo) && q.kind !== "appointment") {
+      next.icException = "ic";
+      if (form.payType === "4") next.payType = "";
     }
-    if (q.copayCode !== undefined) next.copayCode = q.copayCode;
-    onChange(next);
+    if (q.copayCode !== undefined && q.icException !== "selfPay") next.copayCode = q.copayCode;
+    onChange(withFee(next));
   };
 
   return createPortal(
@@ -616,7 +695,20 @@ export function RegisterConfirmDialog({
                 <select
                   className={pickedCls}
                   value={form.caseNo}
-                  onChange={(e) => onChange({ caseNo: e.target.value })}
+                  onChange={(e) => {
+                    const caseNo = e.target.value;
+                    const next: Partial<RegisterEditForm> = { caseNo };
+                    if (caseNo === "9X") {
+                      next.icException = "selfPay";
+                      next.payType = "4";
+                      next.prebook = false;
+                      next.deposit = "";
+                    } else if (form.icException === "selfPay") {
+                      next.icException = "ic";
+                      if (form.payType === "4") next.payType = "";
+                    }
+                    onChange(withFee(next));
+                  }}
                 >
                   <option value="01">01 西醫門診</option>
                   <option value="04">04 西醫慢性</option>
@@ -628,24 +720,28 @@ export function RegisterConfirmDialog({
               <Row label="IC卡序">
                 <input className={inputCls} readOnly value={form.cardId || "—"} />
               </Row>
-              <Row label="部分代號">
-                <input
-                  className={inputCls}
-                  value={form.copayCode}
-                  onChange={(e) => onChange({ copayCode: e.target.value })}
-                  placeholder="如 D12"
-                />
-              </Row>
-              <Row label="部分負擔">
-                <input className={inputCls} readOnly value={form.copayAmt || COPAY_FIXED} />
-              </Row>
-              <Row label="負擔優待">
-                <input
-                  className={inputCls}
-                  value={form.copayDiscAmt ?? "0"}
-                  onChange={(e) => onChange({ copayDiscAmt: e.target.value.replace(/[^\d]/g, "") })}
-                />
-              </Row>
+              {!selfPayForm && (
+                <>
+                  <Row label="部分代號">
+                    <input
+                      className={inputCls}
+                      value={form.copayCode}
+                      onChange={(e) => onChange({ copayCode: e.target.value })}
+                      placeholder="如 D12"
+                    />
+                  </Row>
+                  <Row label="部分負擔">
+                    <input className={inputCls} readOnly value={form.copayAmt || COPAY_FIXED} />
+                  </Row>
+                  <Row label="負擔優待">
+                    <input
+                      className={inputCls}
+                      value={form.copayDiscAmt ?? "0"}
+                      onChange={(e) => onChange({ copayDiscAmt: e.target.value.replace(/[^\d]/g, "") })}
+                    />
+                  </Row>
+                </>
+              )}
               <label className="flex items-center gap-1 pt-1 text-[11px] text-[#003300]">
                 <input
                   type="checkbox"
@@ -715,13 +811,25 @@ export function RegisterConfirmDialog({
                   value={form.icException}
                   onChange={(e) => {
                     const icException = e.target.value as IcException;
-                    onChange({
+                    const next: Partial<RegisterEditForm> = {
                       icException,
                       paperCard: icException === "paper",
                       afterCheck: icException === "afterCheck" ? "2" : "1",
-                      caseNo:
-                        icException === "selfPay" ? "9X" : form.caseNo === "9X" ? "01" : form.caseNo,
-                    });
+                      caseNo: icException === "selfPay" ? "9X" : form.caseNo === "9X" ? "01" : form.caseNo,
+                    };
+                    if (icException === "badCard") {
+                      next.noCardReason = BAD_CARD_REASON;
+                    } else if (!needsNhiNoCardReason(icException)) {
+                      next.noCardReason = "";
+                    }
+                    if (icException === "selfPay") {
+                      next.payType = "4";
+                      next.prebook = false;
+                      next.deposit = "";
+                    } else if (form.payType === "4") {
+                      next.payType = "";
+                    }
+                    onChange(withFee(next));
                   }}
                 >
                   <option value="ic">正常 IC</option>
@@ -735,7 +843,7 @@ export function RegisterConfirmDialog({
                   <option value="selfPay">自費</option>
                 </select>
               </Row>
-              {needsNhiNoCardReason(form.icException) && (
+              {needsNhiNoCardReason(form.icException) && form.icException !== "badCard" && (
                 <Row label="無卡原因">
                   <select
                     className={form.noCardReason ? pickedCls : inputCls}
@@ -866,6 +974,19 @@ export function RegisterConfirmDialog({
                 </span>
               </div>
               <div className="grid flex-1 grid-cols-3 gap-0.5">
+                <button
+                  type="button"
+                  className={
+                    form.acceptReferral === "1"
+                      ? "col-span-3 rounded-sm border-2 border-[#8a6a00] bg-[#ffe14a] px-0.5 py-1 text-[12px] font-black text-[#3a2a00]"
+                      : "col-span-3 rounded-sm border border-[#2a8a8a] bg-[#40e0d0] px-0.5 py-1 text-[12px] font-bold text-[#003333] hover:bg-[#7fffd4]"
+                  }
+                  onClick={() => setHospPickOpen(true)}
+                >
+                  {form.acceptReferral === "1"
+                    ? `\u63a5\u53d7\u8f49\u8a3a\uff1a${form.referralHospName || form.referralHospId || "\u5df2\u9078\u9662\u6240"}`
+                    : "\u63a5\u53d7\u8f49\u8a3a"}
+                </button>
                 {QUICK_CASES.map((q) => {
                   const on = q.label === activeQuickLabel(form);
                   return (
@@ -966,16 +1087,38 @@ export function RegisterConfirmDialog({
                 setIdFeeNote("此身分類別尚未對到優惠表，請按身份類別旁的 … 設定");
                 return;
               }
-              const applied = identityFeePatch(idCategory, hit, defaults.regFeeOutpatient, true);
-              const aged = paintAge(applied.patch, studentRef.current);
-              setIdFeeNote([applied.note, aged.note].filter(Boolean).join("\u3000"));
+              const applied = identityFeePatch(idCategory, hit, defaults.regFeeOutpatient, true, personDiscRef.current);
+              nhiQuoteRef.current = applied;
+              const selfPay = selfPayLive.current;
+              const base = selfPay
+                ? { ...applied.patch, regFee: defaults.regFeeSelfPay || applied.patch.regFee, copayAmt: "0", copayDiscAmt: "0" }
+                : applied.patch;
+              const aged = paintAge(base, studentRef.current, selfPay);
+              setIdFeeNote(
+                selfPay
+                  ? [`\u8eab\u5206 ${idCategory || "\u2014"}\u3000\u639b\u865f\u8cbb ${aged.regFee}`, aged.note].filter(Boolean).join("\u3000")
+                  : [applied.note, aged.note].filter(Boolean).join("\u3000"),
+              );
               onChange({
-                ...applied.patch,
+                ...base,
                 regFee: aged.regFee,
                 copayAmt: aged.copayAmt,
                 copayDiscAmt: aged.copayDiscAmt,
+                ...(selfPay ? { copayCode: "" } : {}),
               });
             });
+          }}
+        />
+        <HospitalLookupDialog
+          open={hospPickOpen}
+          onClose={() => setHospPickOpen(false)}
+          onPick={(row) => {
+            onChange({
+              acceptReferral: "1",
+              referralHospId: row.code,
+              referralHospName: row.name,
+            });
+            setHospPickOpen(false);
           }}
         />
       </div>

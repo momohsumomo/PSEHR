@@ -11,7 +11,19 @@ from pydantic import BaseModel, Field
 
 from src.app.bootstrap import get_fhir_repository, get_shadow_store
 from src.core.cc_complete import compose_intake, phrase_texts
+from src.core.chart_presence import held_encounter_ids
+from src.core.cc_learn import observe, suggest_suffix, top_phrases
 from src.core.encounter_extensions import attach_previsit_extension, previsit_completed
+from src.core.intake_form import (
+    DAY_LABEL,
+    CONCERN_LABEL,
+    COURSE_LABEL,
+    PRIOR_LABEL,
+    SITE_LABEL,
+    SYMPTOM_LABEL,
+    compose_cosmetic_note,
+    compose_kiosk_note,
+)
 from src.core.nhi_card_bridge import profile_to_patient_intake, read_virtual_card_profile
 from src.core.nhi_validators import NhiValidationError
 
@@ -24,10 +36,21 @@ class IntakeLookupBody(BaseModel):
 
 class IntakeSubmitBody(BaseModel):
     encounterId: str = Field(..., min_length=1)
-    location: str
-    symptoms: list[str] = Field(default_factory=list, max_length=2)
-    duration: str
-    priorTopical: bool
+    location: str = ""
+    sites: list[str] = Field(default_factory=list, max_length=24)
+    visitKind: str = "medical"
+    intent: str = ""
+    concerns: list[str] = Field(default_factory=list, max_length=4)
+    prior: str = ""
+    symptoms: list[str] = Field(default_factory=list, max_length=6)
+    duration: str = ""
+    days: str = ""
+    course: str = ""
+    severity: str = ""
+    priorTopical: bool = False
+    seenOtherDoctor: bool = False
+    refillOnly: bool = False
+    replace: bool = False
 
 
 class VirtualCardBody(BaseModel):
@@ -59,7 +82,13 @@ def _mask_name(name: str) -> str:
 
 @router.get("/cc/phrases")
 def list_cc_phrases() -> dict[str, Any]:
-    return {"items": phrase_texts()}
+    learned = top_phrases(get_shadow_store().db_path)
+    return {"items": learned or phrase_texts()}
+
+
+@router.get("/cc/suggest")
+def cc_suggest(frag: str = "", prev: str = "") -> dict[str, str]:
+    return {"suffix": suggest_suffix(get_shadow_store().db_path, frag, prev)}
 
 
 @router.post("/kiosk/intake/lookup")
@@ -73,7 +102,7 @@ def intake_lookup(body: IntakeLookupBody) -> dict[str, Any]:
     with store._connect() as conn:
         rows = conn.execute(
             """
-            SELECT ei.resource_id, pi.family_name, pi.given_name, pi.id_no, pi.birth_date, ei.queue_status
+            SELECT ei.resource_id, pi.family_name, pi.given_name, pi.id_no, pi.birth_date, ei.queue_status, pi.sex
             FROM encounter_index ei
             LEFT JOIN patient_index pi ON pi.resource_id = ei.patient_id
             WHERE ei.encounter_date = ?
@@ -87,18 +116,30 @@ def intake_lookup(body: IntakeLookupBody) -> dict[str, Any]:
             continue
         encounter_id = str(row[0])
         resource = store.get_cached_resource("Encounter", encounter_id) or {}
-        if previsit_completed(resource):
-            continue
         name = f"{row[1] or ''}{row[2] or ''}".strip()
         id_no = str(row[3] or "").strip().upper()
         tail = id_no[-4:] if len(id_no) >= 4 else ""
+        sex_raw = str(row[6] or "").strip().upper()
+        if sex_raw in {"F", "\u5973", "FEMALE"}:
+            sex = "F"
+        elif sex_raw in {"M", "\u7537", "MALE"}:
+            sex = "M"
+        else:
+            sex = ""
         cards.append(
             {
                 "encounterId": encounter_id,
                 "maskedName": _mask_name(name),
                 "idTail": tail,
+                "filled": previsit_completed(resource),
+                "sex": sex,
+                "access": "open",
             }
         )
+    held = held_encounter_ids([card["encounterId"] for card in cards])
+    for card in cards:
+        if card["encounterId"] in held:
+            card["access"] = "busy"
     return {"items": cards}
 
 
@@ -108,17 +149,59 @@ def intake_submit(body: IntakeSubmitBody) -> dict[str, Any]:
     encounter = store.get_cached_resource("Encounter", body.encounterId.strip())
     if not encounter:
         raise HTTPException(status_code=404, detail="\u627e\u4e0d\u5230\u9019\u7b46\u639b\u865f")
-    if previsit_completed(encounter):
+    if previsit_completed(encounter) and not body.replace:
         raise HTTPException(status_code=409, detail="\u4eca\u5929\u5df2\u7d93\u586b\u904e")
-    symptoms = [s for s in body.symptoms if s][:2]
-    text = compose_intake(body.location, symptoms, body.duration, body.priorTopical)
+    if body.visitKind == "cosmetic":
+        known_sites = [item for item in body.sites if item in SITE_LABEL]
+        known_concerns = [item for item in body.concerns if item in CONCERN_LABEL]
+        course_ok = body.prior == "never" or body.course in COURSE_LABEL
+        if not known_sites or not known_concerns or body.prior not in PRIOR_LABEL or not course_ok:
+            raise HTTPException(status_code=422, detail="\u8cc7\u6599\u4e0d\u9f4a")
+        text = compose_cosmetic_note(
+            sites=known_sites,
+            concerns=known_concerns,
+            prior=body.prior,
+            course=body.course,
+        )
+        tags = [*known_sites, *known_concerns][:20]
+    else:
+        detailed = body.refillOnly or bool(body.sites) or bool(body.days)
+        if detailed:
+            if not body.refillOnly:
+                known_sites = [item for item in body.sites if item in SITE_LABEL]
+                known_symptoms = [item for item in body.symptoms if item in SYMPTOM_LABEL]
+                if (
+                    not known_sites
+                    or not known_symptoms
+                    or body.days not in DAY_LABEL
+                    or body.severity not in {str(n) for n in range(1, 11)}
+                ):
+                    raise HTTPException(status_code=422, detail="\u8cc7\u6599\u4e0d\u9f4a")
+            text = compose_kiosk_note(
+                sites=body.sites,
+                symptoms=body.symptoms,
+                days=body.days,
+                severity=body.severity,
+                seen_other_doctor=body.seenOtherDoctor,
+                refill_only=body.refillOnly,
+            )
+            tags = [item for item in [*body.sites, *body.symptoms] if item][:20]
+        else:
+            tags = [s for s in body.symptoms if s][:2]
+            text = compose_intake(body.location, tags, body.duration, body.priorTopical)
     patched = attach_previsit_extension(
         encounter,
         chief_complaint=text,
-        symptom_tags=symptoms,
+        symptom_tags=tags,
         submitted_at=datetime.now().astimezone().isoformat(timespec="seconds"),
     )
     updated = get_fhir_repository().update_resource("Encounter", body.encounterId.strip(), patched)
+    try:
+        observe(store.db_path, body.encounterId.strip(), text)
+    except Exception:
+        import logging
+
+        logging.getLogger("cc_learn").exception("cc learn observe failed")
     return {"ok": True, "encounterId": updated.get("id") or body.encounterId}
 
 

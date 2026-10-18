@@ -423,6 +423,9 @@ export type CashDetailRow = {
   copayAmt: number;
   drugDisc: number;
   regFee: number;
+  selfPay: number;
+  cardDisc: number;
+  doctor: string;
   received: number;
   arrears: number;
   misc: number;
@@ -460,6 +463,8 @@ export type CashDetailReport = {
     copayAmt: number;
     drugDisc: number;
     regFee: number;
+    selfPay: number;
+    cardDisc: number;
     received: number;
     arrears: number;
     misc: number;
@@ -576,6 +581,9 @@ export function buildCashDetailReport(opts: {
       copayAmt: n(q.copayAmt),
       drugDisc: n(q.drugDisc),
       regFee: n(q.regFee),
+      selfPay: n(q.selfPay),
+      cardDisc: n(q.cardDisc),
+      doctor: String(q.doctorName || ""),
       received: n(q.totalFee),
       arrears: n(q.arrears),
       misc: 0,
@@ -614,6 +622,9 @@ export function buildCashDetailReport(opts: {
       copayAmt: 0,
       drugDisc: 0,
       regFee: 0,
+      selfPay: 0,
+      cardDisc: 0,
+      doctor: "",
       received: 0,
       arrears: 0,
       misc: 0,
@@ -644,6 +655,8 @@ export function buildCashDetailReport(opts: {
     copayAmt: 0,
     drugDisc: 0,
     regFee: 0,
+    selfPay: 0,
+    cardDisc: 0,
     received: 0,
     arrears: 0,
     misc: 0,
@@ -657,6 +670,8 @@ export function buildCashDetailReport(opts: {
     totals.copayAmt += row.copayAmt;
     totals.drugDisc += row.drugDisc;
     totals.regFee += row.regFee;
+    totals.selfPay += row.selfPay;
+    totals.cardDisc += row.cardDisc;
     totals.received += row.received;
     totals.arrears += row.arrears;
     totals.misc += row.misc;
@@ -685,16 +700,46 @@ export function buildCashDetailReport(opts: {
   };
 }
 
+function dispWidth(text: string): number {
+  let w = 0;
+  for (const ch of text) w += (ch.codePointAt(0) || 0) > 255 ? 2 : 1;
+  return w;
+}
+
+function fitCell(text: string, width: number, align: "L" | "R"): string {
+  let s = text;
+  while (dispWidth(s) > width && s.length) s = align === "R" ? s.slice(1) : s.slice(0, -1);
+  const pad = " ".repeat(Math.max(0, width - dispWidth(s)));
+  return align === "R" ? pad + s : s + pad;
+}
+
+function moneyCell(value: number, width: number): string {
+  const shown = value ? value.toLocaleString("en-US") : value === 0 ? "0" : "";
+  return fitCell(shown, width, "R");
+}
+
+const DETAIL_WIDTHS = [3, 5, 10, 6, 2, 4, 4, 10, 6, 2, 4, 8, 8, 9, 6, 8, 6, 8, 9, 4, 12, 12, 11, 12, 11, 12];
+const DETAIL_ALIGN: Array<"L" | "R"> = [
+  "R", "L", "L", "L", "L", "R", "L", "L", "R", "L", "L", "R", "R", "R", "R", "R", "R", "R", "R", "L", "R", "R", "L", "L", "L", "L",
+];
+
+function detailLine(cells: string[]): string {
+  return cells.map((cell, i) => fitCell(cell, DETAIL_WIDTHS[i], DETAIL_ALIGN[i])).join(" ");
+}
+
 export function cashDetailToExportText(r: CashDetailReport): string {
-  const hdr = [
-    `<< 掛號簿 >> ${r.clinicName}`,
-    `期間: ${r.dateFromRoc}～${r.dateToRoc}  時段: ${r.shiftLabel}  醫師: ${r.doctor}  科別: ${r.dept}  案件: ${r.caseFilter}`,
-    `付印: ${r.printedAtRoc} Time: ${r.printedTime} (報表編號: ${r.reportNo})`,
-    "",
-    ["日期", "姓名", "病歷號", "段", "序號", "卡號", "身份證", "押金", "案", "部代", "部額", "藥優", "掛費", "已收", "欠款", "雜費", "還款", "還單"].join("\t"),
+  const titles = [
+    "No.", "\u65e5\u671f", "\u59d3\u540d", "\u75c5\u6b77\u865f", "\u6bb5", "\u5e8f\u865f", "\u5361\u865f", "\u8eab\u5206\u8b49",
+    "\u62bc\u91d1", "\u6848", "\u90e8\u4ee3", "\u90e8\u984d", "\u639b\u8cbb", "\u5df2\u6536", "\u6b20\u6b3e", "\u96dc\u8cbb",
+    "\u9084\u6b3e", "\u9084\u55ae", "\u81ea\u8cbb", "\u91ab\u5e2b",
+    "\u6536\u8cbb\u91d1\u984d(\u4e09)", "\u6536\u8cbb\u91d1\u984d(\u56db)",
+    "\u6536\u8cbb\u4eba\u54e1(\u4e09)", "\u6536\u8cbb\u4eba\u54e1(\u56db)",
+    "\u6536\u8cbb\u65b9\u5f0f(\u4e09)", "\u6536\u8cbb\u65b9\u5f0f(\u56db)",
   ];
-  const lines = r.rows.map((row) =>
-    [
+  const bar = DETAIL_WIDTHS.map((w) => "=".repeat(w)).join(" ");
+  const body = r.rows.map((row, index) =>
+    detailLine([
+      String(index + 1),
       row.dateMd,
       row.name,
       row.chart,
@@ -702,30 +747,65 @@ export function cashDetailToExportText(r: CashDetailReport): string {
       row.seqText,
       row.cardNo,
       row.idNo,
-      row.deposit,
+      moneyCell(row.deposit, DETAIL_WIDTHS[8]),
       row.caseNo,
       row.copayCode,
-      row.copayAmt,
-      row.drugDisc,
-      row.regFee,
-      row.received,
-      row.arrears,
-      row.misc,
-      row.repay,
-      row.returnSlip,
-    ].join("\t"),
+      moneyCell(row.copayAmt, DETAIL_WIDTHS[11]),
+      moneyCell(row.regFee, DETAIL_WIDTHS[12]),
+      moneyCell(row.received, DETAIL_WIDTHS[13]),
+      moneyCell(row.arrears, DETAIL_WIDTHS[14]),
+      moneyCell(row.misc, DETAIL_WIDTHS[15]),
+      moneyCell(row.repay, DETAIL_WIDTHS[16]),
+      moneyCell(row.returnSlip, DETAIL_WIDTHS[17]),
+      moneyCell(row.selfPay, DETAIL_WIDTHS[18]),
+      row.doctor,
+      "", "", "", "", "", "",
+    ]),
   );
   const t = r.totals;
-  lines.push(
-    ["", "", "", "", "", "", "", t.deposit, "", "", t.copayAmt, t.drugDisc, t.regFee, t.received, t.arrears, t.misc, t.repay, t.returnSlip].join("\t"),
+  body.push(
+    detailLine([
+      "", "", "", "", "", "", "", "",
+      moneyCell(t.deposit, DETAIL_WIDTHS[8]),
+      "", "",
+      moneyCell(t.copayAmt, DETAIL_WIDTHS[11]),
+      moneyCell(t.regFee, DETAIL_WIDTHS[12]),
+      moneyCell(t.received, DETAIL_WIDTHS[13]),
+      moneyCell(t.arrears, DETAIL_WIDTHS[14]),
+      moneyCell(t.misc, DETAIL_WIDTHS[15]),
+      moneyCell(t.repay, DETAIL_WIDTHS[16]),
+      moneyCell(t.returnSlip, DETAIL_WIDTHS[17]),
+      moneyCell(t.selfPay, DETAIL_WIDTHS[18]),
+      "", "", "", "", "", "", "",
+    ]),
   );
-  const foot = [
+  return [
+    `<< \u639b \u865f \u7c3f >> ${r.clinicName}`,
+    detailLine(titles),
+    bar,
+    ...body,
     "",
-    `應收現金 : ${r.cashReceivable.toLocaleString("zh-TW")} 元    總人次 : ${r.headCount} 次    總掛號人次 : ${r.visitCount} 次`,
-    ...r.caseBuckets.map(
-      (b) =>
-        `${b.code} ${b.label}： 初診 ${b.firstVisit} 人次、複診 ${b.revisit} 人次、欠卡 ${b.missingCard} 人次、還卡 ${b.returnCard} 人次、還款 ${b.repay} 人次`,
-    ),
+  ].join("\n");
+}
+
+function csvCell(value: string | number): string {
+  const text = String(value ?? "");
+  if (/[",\n]/.test(text)) return `"${text.replace(/"/g, '""')}"`;
+  return text;
+}
+
+export function cashDetailToExportCsv(r: CashDetailReport): string {
+  const header = [
+    "\u65e5\u671f", "\u59d3\u540d", "\u75c5\u6b77\u865f", "\u6bb5", "\u5e8f\u865f", "\u6848\u4ef6", "\u5361\u865f", "\u62bc\u91d1",
+    "\u90e8\u4ee3", "\u90e8\u984d", "\u5361\u512a", "\u85e5\u512a", "\u639b\u8cbb", "\u81ea\u8cbb", "\u5df2\u6536", "\u6b20\u6b3e",
+    "\u96dc\u8cbb", "\u9084\u6b3e", "\u9084\u55ae", "\u91ab\u5e2b",
   ];
-  return [...hdr, ...lines, ...foot].join("\n");
+  const lines = r.rows.map((row) =>
+    [
+      row.dateMd, row.name, row.chart, row.seg, row.seqText, row.caseNo, row.cardNo, row.deposit,
+      row.copayCode, row.copayAmt, row.cardDisc, row.drugDisc, row.regFee, row.selfPay, row.received,
+      row.arrears, row.misc, row.repay, row.returnSlip, row.doctor,
+    ].map(csvCell).join(","),
+  );
+  return [header.join(","), ...lines].join("\n");
 }

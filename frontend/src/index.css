@@ -11,30 +11,30 @@
  */
 :root {
   color-scheme: only light;
-  --his-chrome: #ece9d8;
+  --his-chrome: #c9deb4;
   --his-chrome-dark: #aca899;
   --his-chrome-border: #808080;
   --his-title-from: #0a5ad6;
   --his-title-to: #3c91fe;
   --his-title-border: #003c74;
-  --his-header-bg: #d8d4c8;
+  --his-header-bg: #b7cfa0;
   --his-header-bg-green: #c0dcc0;
-  --his-tab-idle: #d4d0c8;
+  --his-tab-idle: #c9deb4;
   --his-tab-idle-text: #000000;
   --his-tab-active: #206868;
   --his-tab-active-text: #ffffff;
-  --his-canvas: #d4d0c8;
-  --his-surface: #ffffff;
+  --his-canvas: #c9deb4;
+  --his-surface: #d7e8c6;
   --his-text: #000000;
   --his-text-muted: #404040;
-  --his-input-bg: #ffffff;
+  --his-input-bg: #f6f1a8;
   --his-input-text: #0000cc;
   --his-input-border: #808080;
   --his-row-selected: #ffff80;
   --his-list-selected: #316ac5;
   --his-list-selected-text: #ffffff;
   --his-patient-face: #c8f0b8;
-  --his-cc-bg: #ffffff;
+  --his-cc-bg: #f6f1a8;
   --his-dx-bg: #e8ffe8;
   --his-rx-bg: #fffff0;
   --his-font: "新細明體", "PMingLiU", MingLiU, "Microsoft JhengHei", Tahoma, sans-serif;
@@ -93,6 +93,26 @@ body {
   border-color: var(--his-input-border);
 }
 
+/* Child screens: grass-green panels, yellow fields. Paper and the kiosk stay as designed. */
+html.wundadi-his .bg-white {
+  background-color: var(--his-surface);
+}
+
+html.wundadi-his .his-paper,
+html.wundadi-his [data-print-preview] .his-paper,
+html.wundadi-his [data-print-preview] .bg-white,
+html.wundadi-his [data-surface="kiosk"] .bg-white {
+  background-color: #ffffff !important;
+  color: #000000;
+}
+
+/* Selected kiosk answers stay dark with white letters. .bg-white above would otherwise hide them. */
+html.wundadi-his [data-surface="kiosk"] button.kiosk-pick {
+  background-color: #174E78 !important;
+  color: #ffffff !important;
+  border-color: #0E3354 !important;
+}
+
 /* Neutralize prefers-color-scheme if any third-party CSS listens to it */
 @media (prefers-color-scheme: dark) {
   html.wundadi-his,
@@ -124,10 +144,10 @@ mb-fhir-form {
 .high-contrast-form input:disabled:not([type="checkbox"]):not([type="radio"]),
 .high-contrast-form select:disabled,
 .high-contrast-form textarea:disabled {
-  background-color: #ffffff !important;
+  background-color: var(--his-input-bg) !important;
   color: #000000 !important;
   opacity: 1 !important;
-  border-color: #80c080 !important;
+  border-color: #7d9a78 !important;
   -webkit-text-fill-color: #000000 !important;
   cursor: default !important;
 }

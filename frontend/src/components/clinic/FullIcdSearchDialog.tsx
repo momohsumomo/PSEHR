@@ -35,6 +35,7 @@ export function FullIcdSearchDialog({ query, onClose, onPick }: Props) {
   const [text, setText] = useState(query);
   const [rows, setRows] = useState<Icd10BookHit[]>([]);
   const [index, setIndex] = useState(0);
+  const [armed, setArmed] = useState(false);
   const [note, setNote] = useState("");
   const [pickError, setPickError] = useState("");
   const current = rows[index] ?? null;
@@ -42,6 +43,7 @@ export function FullIcdSearchDialog({ query, onClose, onPick }: Props) {
 
   useEffect(() => {
     setIndex(0);
+    setArmed(false);
   }, [text]);
 
   useEffect(() => {
@@ -81,14 +83,16 @@ export function FullIcdSearchDialog({ query, onClose, onPick }: Props) {
       if (ev.key === "ArrowDown") {
         ev.preventDefault();
         ev.stopPropagation();
+        setArmed(true);
         setIndex((i) => Math.min(i + 1, Math.max(rows.length - 1, 0)));
       }
       if (ev.key === "ArrowUp") {
         ev.preventDefault();
         ev.stopPropagation();
+        setArmed(true);
         setIndex((i) => Math.max(i - 1, 0));
       }
-      if (ev.key === "Enter" && current) {
+      if (ev.key === "Enter" && armed && current) {
         ev.preventDefault();
         ev.stopImmediatePropagation();
         pick(current);
@@ -96,7 +100,7 @@ export function FullIcdSearchDialog({ query, onClose, onPick }: Props) {
     };
     window.addEventListener("keydown", onKey, true);
     return () => window.removeEventListener("keydown", onKey, true);
-  }, [current, onPick, rows.length]);
+  }, [armed, current, onPick, rows.length]);
 
   return createPortal(
     <div
@@ -141,11 +145,7 @@ export function FullIcdSearchDialog({ query, onClose, onPick }: Props) {
                 <tr
                   key={`${row.nhiIcd10}-${i}`}
                   className={i === index ? "bg-[#316AC5] text-white" : "bg-white"}
-                  onMouseDown={(ev) => {
-                    ev.stopPropagation();
-                    setIndex(i);
-                  }}
-                  onDoubleClick={(ev) => {
+                  onClick={(ev) => {
                     ev.preventDefault();
                     ev.stopPropagation();
                     pick(row);

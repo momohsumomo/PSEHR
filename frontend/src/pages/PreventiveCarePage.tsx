@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useClinicWorkspace } from "@/hooks/useClinicWorkspace";
 import type { QueueEntry } from "@/mocks/clinicMocks";
+import { formatBirthdayRoc } from "@/lib/patientSearch";
 
 interface EligibilityResult {
   programName: string;
@@ -149,7 +150,7 @@ export function PreventiveCarePage() {
               </div>
               <div className="flex justify-between">
                 <span>生日</span>
-                <span className="font-mono">{activePatient.birthday || "—"}</span>
+                <span className="font-mono">{formatBirthdayRoc(activePatient.birthday) || "\u2014"}</span>
               </div>
             </div>
           )}

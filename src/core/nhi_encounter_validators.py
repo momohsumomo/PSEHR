@@ -6,7 +6,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field, field_validator
 
-from src.core.nhi_validators import NhiValidationError, validate_taiwan_id_no_format
+from src.core.nhi_validators import NhiValidationError
 
 QueueStatus = Literal["waiting", "in_progress"]
 
@@ -32,7 +32,7 @@ class NhiEncounterIntake(BaseModel):
     samId: str | None = Field(None, max_length=12)
     icUploadDate: str | None = Field(None, max_length=10, description="每日上傳歸屬日 YYYY-MM-DD")
     hcId: str | None = Field(None, max_length=12)
-    hcIdNo: str | None = Field(None, max_length=10)
+    hcIdNo: str | None = Field(None, max_length=20)
     icException: str | None = Field(None, max_length=20, description="ic/afterCheck/noCard/badCard/paper/selfPay")
     noCardReason: str | None = Field(None, max_length=80)
     pharmacist: str | None = Field(None, max_length=40)
@@ -47,6 +47,12 @@ class NhiEncounterIntake(BaseModel):
     materialFee: str | None = Field(None, max_length=12)
     burdenFee: str | None = Field(None, max_length=12)
     totalFee: str | None = Field(None, max_length=12)
+    selfPay: str | None = Field(None, max_length=12)
+    referralSeq: str | None = Field(None, max_length=20)
+    referralHospId: str | None = Field(None, max_length=20)
+    referralHospName: str | None = Field(None, max_length=80)
+    referralDate: str | None = Field(None, max_length=12)
+    acceptReferral: str | None = Field(None, max_length=1)
     prebook: bool = False
     queueNumber: int | None = Field(None, description="當次看診序號，可手改")
     visitClock: str | None = Field(None, max_length=8, description="就診時間 HH:MM")
@@ -64,6 +70,10 @@ class NhiEncounterIntake(BaseModel):
     @field_validator("patientIdNo")
     @classmethod
     def _v_id(cls, v: str | None) -> str | None:
+        # 證號在病患資料存檔時檢查。掛號沿用病歷上的值，空白自費不擋。
         if v is None or not str(v).strip():
             return None
-        return validate_taiwan_id_no_format(v)
+        text = str(v).strip().upper()
+        if len(text) > 20:
+            raise NhiValidationError("\u8b49\u865f\u904e\u9577")
+        return text

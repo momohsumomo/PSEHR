@@ -10,6 +10,7 @@ import {
   fetchSeqNext,
   queryReferral,
   patchEncounterReg,
+  type ReferralSlipHit,
   readCardAndRegister,
   registerCondition,
   registerEncounter,
@@ -33,6 +34,8 @@ const EMPTY_WS_VITALS = {
 };
 import type { QueueRegisterForm } from "@/components/clinic/QueueRegisterStrip";
 import type { RegisterEditForm } from "@/components/clinic/RegisterEditDialog";
+import type { IncomingChoice } from "@/components/clinic/ReferralAcceptDialogs";
+import { BAD_CARD_REASON, claimSeqFor } from "@/lib/nocardClaim";
 import {
   buildConditionIntake,
   buildMedicationIntake,
@@ -111,6 +114,16 @@ function mapApiQueue(entries: ApiQueueEntry[]): QueueEntry[] {
     totalFee: e.queueMeta.totalFee,
     materialFee: e.queueMeta.materialFee,
     burdenFee: e.queueMeta.burdenFee,
+    selfPay:
+      e.queueMeta.selfPay != null && String(e.queueMeta.selfPay).trim() !== ""
+        ? String(e.queueMeta.selfPay)
+        : undefined,
+    referralSeq: e.queueMeta.referralSeq,
+    referralHospId: e.queueMeta.referralHospId,
+    referralHospName: e.queueMeta.referralHospName,
+    referralDate: e.queueMeta.referralDate,
+    referralLocalId: e.queueMeta.referralLocalId,
+    acceptReferral: e.queueMeta.acceptReferral,
     id: e.resource.id,
     patientName: e.queueMeta.patientDisplay,
     birthday: e.queueMeta.birthday,
@@ -324,10 +337,16 @@ export function useClinicWorkspace(options?: {
   /** 調閱進入：第一筆就查這天，不要先落到今天。 */
   initialDate?: string;
   initialEncounterId?: string | null;
+  /** 進門選日期之前不要先抓今天，避免先閃出另一天的名單。 */
+  queueEnabled?: boolean;
+  /** 選日期的同時先把這天抓好，確定後直接顯示。 */
+  prefetchDate?: string;
 }) {
   const loadWorkspace = options?.loadWorkspace ?? false;
   const initialDate = options?.initialDate;
   const initialEncounterId = options?.initialEncounterId;
+  const queueEnabled = options?.queueEnabled ?? true;
+  const prefetchDate = options?.prefetchDate || "";
   const apiMode = isApiMode();
   const [currentDate, setCurrentDate] = useState(() => {
     if (initialDate && /^\d{4}-\d{2}-\d{2}$/.test(initialDate)) return initialDate;
@@ -338,17 +357,24 @@ export function useClinicWorkspace(options?: {
     return `${yr}-${mo}-${dy}`;
   });
   const [queue, setQueue] = useState<QueueEntry[]>(apiMode ? [] : mockQueue);
+  const [loading, setLoading] = useState(apiMode && queueEnabled);
+  const [queueEpoch, setQueueEpoch] = useState(currentDate);
+  if (apiMode && queueEpoch !== currentDate) {
+    setQueueEpoch(currentDate);
+    setQueue([]);
+    setLoading(true);
+  }
   const [queueHints, setQueueHints] = useState<QueueDateHints>({});
   const [selectedEncounterId, setSelectedEncounterId] = useState<string | null>(
     () => initialEncounterId || null,
   );
-  const [loading, setLoading] = useState(apiMode);
   const [error, setError] = useState<string | null>(null);
   const [workspaceData, setWorkspaceData] = useState<ReturnType<typeof mapWorkspace> | null>(
     null,
   );
   // 病人歷史 light 清單快取（醫聖式：選過／預載的病人幾乎瞬開）
   const historyCacheRef = useRef(new Map<string, HistoryVisit[]>());
+  const readyQueue = useRef<{ date: string; res: Awaited<ReturnType<typeof fetchQueueForDate>> } | null>(null);
   /** 後到的舊查詢不能蓋掉較新的病名／處置。 */
   const wsGen = useRef(0);
 
@@ -376,7 +402,42 @@ export function useClinicWorkspace(options?: {
   }, [apiMode, currentDate]);
 
   useEffect(() => {
-    if (!apiMode) return;
+    if (!apiMode || queueEnabled || !prefetchDate) return;
+    let cancelled = false;
+    void fetchQueueForDate(prefetchDate)
+      .then((res) => {
+        if (cancelled) return;
+        if (res.autoFallback && res.resolvedDate && res.resolvedDate !== prefetchDate) return;
+        readyQueue.current = { date: prefetchDate, res };
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [apiMode, queueEnabled, prefetchDate]);
+
+  useEffect(() => {
+    if (!apiMode || !queueEnabled) return;
+    const cached = readyQueue.current;
+    if (cached && cached.date === currentDate && !cached.res.autoFallback) {
+      readyQueue.current = null;
+      const mapped = mapApiQueue(cached.res.entry);
+      setQueue(mapped);
+      const res = cached.res;
+      setQueueHints({
+        requestedDate: res.requestedDate,
+        autoFallback: res.autoFallback,
+        dateMin: res.dateMin,
+        dateMax: res.dateMax,
+        suggestedDate: res.suggestedDate,
+        suggestedCount: res.suggestedCount,
+        nearestBefore: res.nearestBefore,
+        nearestAfter: res.nearestAfter,
+      });
+      setLoading(false);
+      setError(null);
+      return;
+    }
     let cancelled = false;
     (async () => {
       try {
@@ -385,27 +446,6 @@ export function useClinicWorkspace(options?: {
         if (cancelled) return;
         const mapped = mapApiQueue(res.entry);
         setQueue(mapped);
-        // 候診名單進站後背景預載 light 歷史（開病人才瞬開）
-        void (async () => {
-          const seen = new Set<string>();
-          for (const e of mapped) {
-            if (cancelled) return;
-            if (e.prebook || e.queueStatus === "finished") continue;
-            const pid = e.patientId?.split("/").pop();
-            if (!pid || seen.has(pid) || historyCacheRef.current.has(pid)) continue;
-            seen.add(pid);
-            try {
-              const hist = await fetchPatientVisits(pid, 200, {
-                light: true,
-                excludeEncounterId: e.encounterId,
-              });
-              if (cancelled) return;
-              historyCacheRef.current.set(pid, mapHistoryVisitsLight(hist.entry || []));
-            } catch {
-              /* ignore prefetch errors */
-            }
-          }
-        })();
         setQueueHints({
           requestedDate: res.requestedDate,
           autoFallback: res.autoFallback,
@@ -429,7 +469,7 @@ export function useClinicWorkspace(options?: {
     return () => {
       cancelled = true;
     };
-  }, [apiMode, currentDate]);
+  }, [apiMode, currentDate, queueEnabled]);
 
   useEffect(() => {
     if (!loadWorkspace) {
@@ -440,6 +480,7 @@ export function useClinicWorkspace(options?: {
       setWorkspaceData(null);
       return;
     }
+    setWorkspaceData(null);
     let cancelled = false;
     const gen = ++wsGen.current;
     (async () => {
@@ -573,6 +614,11 @@ export function useClinicWorkspace(options?: {
         prebook?: boolean;
         queueNumber?: string;
         visitClock?: string;
+        acceptReferral?: string;
+        referralSeq?: string;
+        referralHospId?: string;
+        referralHospName?: string;
+        referralDate?: string;
       },
       targetDate?: string,
     ) => {
@@ -625,6 +671,11 @@ export function useClinicWorkspace(options?: {
         prebook: form.prebook,
         queueNumber: form.queueNumber ? Number(form.queueNumber) : undefined,
         visitClock: form.visitClock,
+        acceptReferral: form.acceptReferral,
+        referralSeq: form.referralSeq,
+        referralHospId: form.referralHospId,
+        referralHospName: form.referralHospName,
+        referralDate: form.referralDate,
       });
       await refreshQueue(encDate);
       setSelectedEncounterId(enc.encounterId);
@@ -637,11 +688,19 @@ export function useClinicWorkspace(options?: {
     async (
       form: RegisterEditForm,
       onSeqFields?: (fields: Partial<RegisterEditForm> & { seqNote: string }) => void,
+      onIncoming?: (slips: ReferralSlipHit[]) => Promise<IncomingChoice | null>,
     ) => {
       if (!apiMode) throw new Error("掛號需 API 模式");
       const mode = form.icException || "ic";
-      if (!form.idNo.trim() || !form.birthday.trim()) {
-        throw new Error("請填身分證與民國生日");
+      if (mode === "badCard" && !form.noCardReason.trim()) {
+        form = { ...form, noCardReason: BAD_CARD_REASON };
+      }
+      if (!form.birthday.trim()) {
+        throw new Error("\u8acb\u586b\u6c11\u570b\u751f\u65e5");
+      }
+      const selfPayVisit = mode === "selfPay" || form.caseNo === "9X";
+      if (!selfPayVisit && !form.idNo.trim()) {
+        throw new Error("\u8acb\u586b\u8eab\u5206\u8b49\u3002\u6c92\u6709\u8b49\u865f\u8acb\u6539\u9078\u81ea\u8cbb\u3002");
       }
       if (needsNhiNoCardReason(mode) && !form.noCardReason.trim()) {
         throw new Error("您未使用押單方式建檔，所以請輸入無卡原因");
@@ -661,6 +720,8 @@ export function useClinicWorkspace(options?: {
 
       if (!alreadyHas && form.prebook) {
         seqNote = "";
+      } else if (!alreadyHas && (mode === "selfPay" || form.caseNo === "9X")) {
+        seqNote = "\u81ea\u8cbb\uff1a\u4e0d\u8b80\u5361\u3001\u4e0d\u53d6\u865f\u3002";
       } else if (!alreadyHas && isDepositHold(form)) {
         seqNote = "押單：未向健保局取號，待補卡。";
       } else if (!alreadyHas) {
@@ -675,14 +736,22 @@ export function useClinicWorkspace(options?: {
           });
           treatSeq = seq.sequenceNumber || "";
           treatmentNumber = seq.treatmentNumber || treatmentNumber;
+          if (noCard && treatmentNumber && !treatSeq) {
+            treatSeq = claimSeqFor(mode, form.noCardReason);
+          }
           treatDateTime = seq.treatmentDateTime || "";
           cardId = seq.hcId || cardId;
           securitySign = seq.signature || securitySign;
           samId = seq.samId || samId;
           const hints: string[] = [];
           if (seq.skipped) hints.push(seq.reason);
-          else if (treatSeq) hints.push(`健保局回覆就醫序號 ${treatSeq}`);
-          else if (treatmentNumber) hints.push(`健保局回覆就醫識別碼 ${treatmentNumber}`);
+          else if (noCard && treatmentNumber) {
+            hints.push(
+              treatSeq
+                ? `\u5065\u4fdd\u5c40\u56de\u8986\u5c31\u91ab\u8b58\u5225\u78bc ${treatmentNumber}\uff0c\u7533\u5831\u5e8f\u865f ${treatSeq}`
+                : `\u5065\u4fdd\u5c40\u56de\u8986\u5c31\u91ab\u8b58\u5225\u78bc ${treatmentNumber}`,
+            );
+          } else if (treatSeq) hints.push(`健保局回覆就醫序號 ${treatSeq}`);
           if (seq.isSameDay) hints.push("同日就診");
           if (seq.hvExpire) hints.push("重大傷病將屆");
           if (seq.treatmentLimit != null) hints.push(`高診次數提醒 ${seq.treatmentLimit}`);
@@ -705,19 +774,32 @@ export function useClinicWorkspace(options?: {
 
       onSeqFields?.({ treatSeq, treatmentNumber, treatDateTime, cardId, securitySign, seqNote });
 
-      const rememberReferral = async (encounterId: string) => {
-        if (mode === "selfPay" || NOCARD_MODES.has(mode) || form.prebook) return;
+      const rememberReferral = async (encounterId: string): Promise<ReferralSlipHit[]> => {
+        if (
+          mode === "selfPay" ||
+          mode === "deposit" ||
+          isDepositHold(form) ||
+          NOCARD_MODES.has(mode) ||
+          form.prebook
+        ) {
+          return [];
+        }
         try {
           const ref = await queryReferral({ encounterId, idNo: form.idNo.trim() });
-          const extra = ref.serial ? `\u8f49\u8a3a\u55ae\u5e8f\u865f ${ref.serial}` : ref.reason;
-          if (!extra) return;
-          onSeqFields?.({
-            treatSeq,
-            treatmentNumber,
-            treatDateTime,
-            cardId,
-            seqNote: [seqNote, extra].filter(Boolean).join(" \u00b7 "),
-          });
+          const slips = ref.slips || [];
+          const extra = slips.length
+            ? `\u6709 ${slips.length} \u7b46\u8f49\u5165\u8cc7\u6599`
+            : ref.reason;
+          if (extra) {
+            onSeqFields?.({
+              treatSeq,
+              treatmentNumber,
+              treatDateTime,
+              cardId,
+              seqNote: [seqNote, extra].filter(Boolean).join(" \u00b7 "),
+            });
+          }
+          return slips;
         } catch (err) {
           onSeqFields?.({
             treatSeq,
@@ -728,7 +810,22 @@ export function useClinicWorkspace(options?: {
               .filter(Boolean)
               .join(" \u00b7 "),
           });
+          return [];
         }
+      };
+
+      const storeIncoming = async (encounterId: string, patientId: string, slips: ReferralSlipHit[]) => {
+        if (!slips.length || !onIncoming) return;
+        const choice = await onIncoming(slips);
+        if (!choice?.accept || !choice.serial) return;
+        await patchEncounterReg(encounterId, {
+          patientId,
+          referralSeq: choice.serial,
+          referralHospId: choice.hospId,
+          referralHospName: choice.hospName,
+          referralDate: choice.openDate,
+          acceptReferral: "1",
+        });
       };
 
       const gross = Number(form.copayAmt) || 0;
@@ -784,13 +881,20 @@ export function useClinicWorkspace(options?: {
           prebook: Boolean(form.prebook),
           queueNumber: form.queueNumber ? Number(form.queueNumber) : undefined,
           visitClock: form.visitClock,
+          acceptReferral: payload.acceptReferral,
+          referralSeq: payload.referralSeq,
+          referralHospId: payload.referralHospId,
+          referralHospName: payload.referralHospName,
+          referralDate: payload.referralDate,
         });
-        await rememberReferral(form.encounterId);
+        const slips = await rememberReferral(form.encounterId);
+        await storeIncoming(form.encounterId, patientId, slips);
         await refreshQueue();
         return { encounterId: form.encounterId, patientId };
       }
       const created = await registerPatientAndEncounter(payload);
-      await rememberReferral(created.encounterId);
+      const slips = await rememberReferral(created.encounterId);
+      await storeIncoming(created.encounterId, created.patientId, slips);
       return created;
     },
     [apiMode, registerPatientAndEncounter, refreshQueue],
@@ -1043,15 +1147,7 @@ export function useClinicWorkspace(options?: {
         return;
       }
       setQueue((prev) =>
-        prev.map((e) => {
-          if (status === "in_progress") {
-            if (e.encounterId === encounterId) return { ...e, queueStatus: status };
-            if (e.queueStatus === "in_progress") return { ...e, queueStatus: "waiting" };
-            return e;
-          }
-          if (e.encounterId === encounterId) return { ...e, queueStatus: status };
-          return e;
-        }),
+        prev.map((e) => (e.encounterId === encounterId ? { ...e, queueStatus: status } : e)),
       );
     },
     [apiMode, refreshWorkspace, selectedEncounterId],

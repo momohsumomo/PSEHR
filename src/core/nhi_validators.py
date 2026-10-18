@@ -65,6 +65,38 @@ def validate_taiwan_id_no_format(id_no: str) -> str:
     return normalized
 
 
+_ARC_SECOND = {"A": 10, "B": 11, "C": 12, "D": 13}
+_ARC_WEIGHTS = (1, 9, 8, 7, 6, 5, 4, 3, 2, 1, 1, 1)
+
+
+def _old_arc_ok(text: str) -> bool:
+    """Old resident certificate: two letters + eight digits."""
+    first = _ID_LETTER_VALUES[text[0]]
+    second = _ARC_SECOND[text[1]]
+    nums = [first // 10, first % 10, second // 10, second % 10]
+    nums.extend(int(ch) for ch in text[2:])
+    return sum(w * n for w, n in zip(_ARC_WEIGHTS, nums, strict=True)) % 10 == 0
+
+
+def screen_desk_id(raw: str | None) -> str:
+    """Desk new-chart id. Blank is allowed. ID-shaped values must pass the check digit.
+
+    Residence permits and other document numbers stay enterable.
+    A string that looks like a national id or an old resident certificate
+    is rejected when the check digit is wrong.
+    """
+    text = (raw or "").strip().upper().replace(" ", "")
+    if not text:
+        return ""
+    if re.fullmatch(r"[A-Z][0-9]{9}", text):
+        return validate_taiwan_id_no(text)
+    if re.fullmatch(r"[A-Z0-9]{4,20}", text):
+        return text
+    raise NhiValidationError(
+        "\u8b49\u865f\u53ea\u80fd\u586b\u82f1\u6578\u3002\u6c92\u6709\u8b49\u865f\u7684\u81ea\u8cbb\u53ef\u4ee5\u7559\u7a7a\u3002"
+    )
+
+
 def validate_taiwan_id_no(id_no: str) -> str:
     """
     Taiwan national ID (10 chars): format + checksum.

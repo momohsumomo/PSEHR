@@ -1,9 +1,11 @@
-import { useState, type CSSProperties } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { useEscLayer } from "@/hooks/useEscLayer";
 import { HIS, HIS_FONT } from "@/lib/hisTheme";
 import type { PatientRecord } from "@/lib/patientMaster";
+import { AddressEditorDialog } from "@/components/clinic/AddressEditorDialog";
 import { IdCategoryTableDialog } from "@/components/clinic/IdCategoryTableDialog";
-import type { IdCategorySetting } from "@/api/clinicApi";
+import { RocBirthdayInput } from "@/components/clinic/RocBirthdayInput";
+import { fetchHomeAddressByPhone, type IdCategorySetting } from "@/api/clinicApi";
 
 export type IdCategoryOption = {
   code: string;
@@ -60,7 +62,7 @@ type Props = {
 };
 
 const lab: CSSProperties = {
-  fontSize: 11,
+  fontSize: 16,
   fontFamily: HIS_FONT,
   color: "#000",
   fontWeight: 700,
@@ -71,8 +73,8 @@ const lab: CSSProperties = {
 };
 
 const inpBase = (ro?: boolean): CSSProperties => ({
-  height: 18,
-  fontSize: 11,
+  height: 30,
+  fontSize: 16,
   fontFamily: HIS_FONT,
   color: HIS.inputBlue,
   border: "1px inset #808080",
@@ -102,8 +104,45 @@ export function PatientMasterForm({
   const ro = !!readOnly;
   const [idTableOpen, setIdTableOpen] = useState(false);
   const [pickOpen, setPickOpen] = useState(false);
+  const [addressOpen, setAddressOpen] = useState(false);
+  const mobileRef = useRef<HTMLInputElement>(null);
+  const addressBtnRef = useRef<HTMLButtonElement>(null);
+  const phoneLenRef = useRef((value.phone || "").length);
+  useEffect(() => {
+    phoneLenRef.current = (value.phone || "").length;
+  }, [value.id]);
+  const onHomePhone = (raw: string) => {
+    const next = raw.slice(0, 10);
+    const finished = phoneLenRef.current < 10 && next.length === 10;
+    phoneLenRef.current = next.length;
+    set("phone", next);
+    if (!finished || ro) return;
+    const current = value;
+    void (async () => {
+      let address = current.address;
+      let postalCode = current.postalCode;
+      if (!address.trim()) {
+        try {
+          const hit = await fetchHomeAddressByPhone(next, current.id || "");
+          if (hit.address) {
+            address = hit.address;
+            if (hit.postalCode) postalCode = hit.postalCode;
+          }
+        } catch {
+          /* leave the address blank */
+        }
+      }
+      if (address !== current.address || postalCode !== current.postalCode) {
+        onChange({ ...current, phone: next, address, postalCode });
+      }
+      mobileRef.current?.focus();
+    })();
+  };
   useEscLayer([{ open: pickOpen, close: () => setPickOpen(false) }]);
   const [localCats, setLocalCats] = useState<IdCategorySetting[] | null>(null);
+  const depositFollow = useRef("");
+  const valueRef = useRef(value);
+  valueRef.current = value;
   const categorySource: IdCategoryOption[] = localCats ?? idCategoryOptions;
   const set = <K extends keyof PatientRecord>(key: K, v: PatientRecord[K]) =>
     onChange({ ...value, [key]: v });
@@ -125,19 +164,31 @@ export function PatientMasterForm({
   const applyIdCategory = (code: string) => {
     const hit = categorySource.find((c) => c.code === code);
     const next: PatientRecord = { ...value, idCategory: code };
-    if (hit && (hit.deposit != null || hit.deposit === 0)) {
-      const prevHit = categorySource.find((c) => c.code === value.idCategory);
-      const prevDeposit = prevHit != null ? String(prevHit.deposit ?? "") : null;
-      const cur = String(value.deposit ?? "").trim();
-      if (!cur || (prevDeposit != null && cur === prevDeposit)) {
-        next.deposit = String(hit.deposit ?? 0);
-      }
-    }
+    if (hit && hit.deposit != null) next.deposit = String(hit.deposit ?? 0);
     // 病歷上幾乎固定的才代選。老+榮、福保、榮民兩種都很多，不代選。
-    const disc = copayDiscForIdentity(code);
-    if (disc) next.copayDisc = disc;
+    if (hit) next.copayDisc = Number(hit.copay) > 0 ? "2" : "1";
+    else {
+      const disc = copayDiscForIdentity(code);
+      if (disc) next.copayDisc = disc;
+    }
     onChange(next);
+    depositFollow.current = `${value.id}|${code}|${hit?.deposit ?? ""}`;
   };
+
+  useEffect(() => {
+    if (ro) return;
+    const current = valueRef.current;
+    const code = (current.idCategory || "").trim();
+    if (!code) return;
+    const hit = categorySource.find((c) => c.code === code);
+    if (!hit || hit.deposit == null) return;
+    const token = `${current.id}|${code}|${hit.deposit}`;
+    if (depositFollow.current === token) return;
+    depositFollow.current = token;
+    const want = String(hit.deposit ?? 0);
+    if (String(current.deposit ?? "").trim() === want) return;
+    onChange({ ...current, deposit: want });
+  }, [value.id, value.idCategory, categorySource, ro, onChange]);
 
   const addrParts = (() => {
     const full = value.address || "";
@@ -153,7 +204,7 @@ export function PatientMasterForm({
   return (
     <div
       className={`flex h-full min-h-0 flex-col overflow-hidden p-1 ${className}`}
-      style={{ fontFamily: HIS_FONT, background: HIS.patientFace, fontSize: 11 }}
+      style={{ fontFamily: HIS_FONT, background: HIS.patientFace, fontSize: 16 }}
     >
       <datalist id="patient-master-id-categories">
         {categoryCodes.map((cat) => (
@@ -174,10 +225,10 @@ export function PatientMasterForm({
       >
         <Row>
           <span style={lab}>病歷號&lt;M&gt;</span>
-          <input style={{ ...inpBase(true), width: 72 }} value={value.medicalNo} readOnly />
+          <input style={{ ...inpBase(true), width: 120 }} value={value.medicalNo} readOnly />
           <button
             type="button"
-            className="border border-[#808080] bg-[#e8e4dc] px-1 text-[10px]"
+            className="border border-[#808080] bg-[#e8e4dc] px-1 text-[15px]"
             disabled={ro}
             title="自動編證號"
           >
@@ -185,7 +236,7 @@ export function PatientMasterForm({
           </button>
           <span style={lab}>姓　名&lt;N&gt;</span>
           <input
-            style={{ ...inpBase(ro), width: 120 }}
+            style={{ ...inpBase(ro), width: 180 }}
             value={value.name}
             readOnly={ro}
             onChange={(e) => set("name", e.target.value)}
@@ -193,7 +244,7 @@ export function PatientMasterForm({
           {showSpeak ? (
             <button
               type="button"
-              className="border border-[#80C080] bg-[#C5EBC5] px-1 text-[12px]"
+              className="border border-[#80C080] bg-[#C5EBC5] px-1 text-[16px]"
               title="發音叫號"
               onClick={() => {
                 if (!value.name) return;
@@ -208,18 +259,16 @@ export function PatientMasterForm({
         </Row>
         <Row>
           <span style={lab}>生　日&lt;B&gt;</span>
-          <input
-            style={{ ...inpBase(ro), width: 70 }}
+          <RocBirthdayInput
+            style={{ ...inpBase(ro), width: 140 }}
             className="font-mono"
-            maxLength={7}
-            placeholder="0500425"
             value={value.birthday}
             readOnly={ro}
-            onChange={(e) => set("birthday", e.target.value.replace(/\D/g, "").slice(0, 7))}
+            onChange={(birthday) => set("birthday", birthday)}
           />
           <span style={lab}>身分證&lt;I&gt;</span>
           <input
-            style={{ ...inpBase(ro), width: 100 }}
+            style={{ ...inpBase(ro), width: 150 }}
             className="font-mono uppercase"
             value={value.idNo}
             readOnly={ro}
@@ -227,7 +276,7 @@ export function PatientMasterForm({
           />
           <span style={lab}>性　別</span>
           <select
-            style={{ ...inpBase(ro), width: 48 }}
+            style={{ ...inpBase(ro), width: 72 }}
             disabled={ro}
             value={value.sex}
             onChange={(e) => set("sex", e.target.value)}
@@ -238,7 +287,7 @@ export function PatientMasterForm({
           </select>
           <span style={lab}>血　型</span>
           <select
-            style={{ ...inpBase(ro), width: 48 }}
+            style={{ ...inpBase(ro), width: 72 }}
             disabled={ro}
             value={value.bloodType}
             onChange={(e) => set("bloodType", e.target.value)}
@@ -253,15 +302,16 @@ export function PatientMasterForm({
         <Row>
           <span style={lab}>電　話&lt;T&gt;</span>
           <input
-            style={{ ...inpBase(ro), width: 90 }}
+            style={{ ...inpBase(ro), width: 150 }}
             className="font-mono"
             value={value.phone}
             readOnly={ro}
-            onChange={(e) => set("phone", e.target.value)}
+            maxLength={10}
+            onChange={(e) => onHomePhone(e.target.value)}
           />
           <span style={lab}>電話二</span>
           <input
-            style={{ ...inpBase(ro), width: 90 }}
+            style={{ ...inpBase(ro), width: 150 }}
             className="font-mono"
             value={value.contactPhone}
             readOnly={ro}
@@ -269,24 +319,33 @@ export function PatientMasterForm({
           />
           <span style={lab}>行動電話</span>
           <input
-            style={{ ...inpBase(ro), width: 100 }}
+            style={{ ...inpBase(ro), width: 150 }}
             className="font-mono"
+            ref={mobileRef}
             value={value.phone2}
             readOnly={ro}
             onChange={(e) => set("phone2", e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !ro) {
+                e.preventDefault();
+                addressBtnRef.current?.focus();
+              }
+            }}
           />
         </Row>
         <Row>
-          <span style={lab}>地址編修A</span>
+          <button ref={addressBtnRef} type="button" style={lab} disabled={ro} onClick={() => setAddressOpen(true)}>
+            {"\u5730\u5740\u7de8\u4fee"}
+          </button>
           <input
-            style={{ ...inpBase(ro), width: 100 }}
+            style={{ ...inpBase(ro), width: 150 }}
             value={addrParts.city}
             readOnly={ro}
             onChange={(e) => setAddressParts(e.target.value, addrParts.detail)}
           />
           <span style={lab}>郵遞區號</span>
           <input
-            style={{ ...inpBase(ro), width: 40 }}
+            style={{ ...inpBase(ro), width: 72 }}
             className="font-mono"
             value={value.postalCode}
             readOnly={ro}
@@ -345,14 +404,14 @@ export function PatientMasterForm({
               <button
                 key={t}
                 type="button"
-                className="flex-1 border border-[#808080] bg-[#ece9d8] py-0.5 text-[10px] leading-tight"
+                className="flex-1 border border-[#808080] bg-[#ece9d8] py-0.5 text-[15px] leading-tight"
                 title={t}
               >
                 {t}
               </button>
             ))}
           </div>
-          <fieldset className="mb-1 border border-[#808080] p-1 text-[11px]">
+          <fieldset className="mb-1 border border-[#808080] p-1 text-[16px]">
             <legend className="px-1 font-bold">部份負擔優待方式</legend>
             {(
               [
@@ -377,7 +436,7 @@ export function PatientMasterForm({
             <div className="mb-0.5 font-bold text-[#800000]">過敏特別記載</div>
             <textarea
               className="w-full rounded border border-[#C08080] bg-[#FFE8E8] px-1 py-0.5 font-bold text-[#4A0080]"
-              style={{ fontFamily: HIS_FONT, fontSize: 12, minHeight: 56 }}
+              style={{ fontFamily: HIS_FONT, fontSize: 16, minHeight: 56 }}
               readOnly={ro}
               value={value.allergicMemo}
               onChange={(e) => set("allergicMemo", e.target.value)}
@@ -410,13 +469,13 @@ export function PatientMasterForm({
             <button
               type="button"
               style={{ ...lab, cursor: "pointer" }}
-              title="進入身分類別設定（押金、掛號費、部份負擔）"
+              title={"\u8eab\u5206\u985e\u5225\uff1a\u62bc\u91d1\u3001\u639b\u8cbb\u512a\u5f85\u3001\u90e8\u5206\u8ca0\u64d4\u512a\u5f85"}
               onClick={() => setIdTableOpen(true)}
             >
               身份類別
             </button>
             <input
-              style={{ ...inpBase(ro), width: 72 }}
+              style={{ ...inpBase(ro), width: 120 }}
               className="font-mono"
               value={value.idCategory}
               readOnly={ro}
@@ -424,7 +483,7 @@ export function PatientMasterForm({
             />
             <button
               type="button"
-              className="border border-[#808080] bg-[#E8F8C8] px-1 text-[11px] font-bold"
+              className="border border-[#808080] bg-[#E8F8C8] px-1 text-[16px] font-bold"
               title="選擇這位病患的身份"
               disabled={ro}
               onClick={() => setPickOpen(true)}
@@ -435,8 +494,8 @@ export function PatientMasterForm({
               const hit = categorySource.find((c) => c.code === value.idCategory);
               if (!hit) return null;
               return (
-                <span className="font-bold text-[#800000]" style={{ fontSize: 11 }}>
-                  押金 {hit.deposit ?? 0}　掛號費 {hit.reg_fee ?? 0}　部份負擔 {hit.copay ?? 0}
+                <span className="font-bold text-[#800000]" style={{ fontSize: 16 }}>
+                  {`\u62bc\u91d1 ${hit.deposit ?? 0}\u3000\u639b\u8cbb\u512a\u5f85 ${hit.reg_fee ?? 0}\u3000\u90e8\u5206\u8ca0\u64d4\u512a\u5f85 ${Number(hit.copay) > 0 ? "\u662f" : "\u5426"}`}
                 </span>
               );
             })()}
@@ -444,7 +503,7 @@ export function PatientMasterForm({
           <Row>
             <span style={lab}>押金金額</span>
             <input
-              style={{ ...inpBase(ro), width: 56 }}
+              style={{ ...inpBase(ro), width: 88 }}
               className="font-mono"
               value={value.deposit}
               readOnly={ro}
@@ -452,7 +511,7 @@ export function PatientMasterForm({
             />
             <span style={lab}>欠　款</span>
             <input
-              style={{ ...inpBase(ro), width: 56 }}
+              style={{ ...inpBase(ro), width: 88 }}
               className="font-mono"
               value={value.arrearage}
               readOnly={ro}
@@ -472,12 +531,37 @@ export function PatientMasterForm({
           <Row>
             <span style={lab}>同胎次序</span>
             <input
-              style={{ ...inpBase(ro), width: 40 }}
+              style={{ ...inpBase(ro), width: 72 }}
               className="font-mono"
               value={value.birthOrder}
               readOnly={ro}
               onChange={(e) => set("birthOrder", e.target.value)}
             />
+          </Row>
+          <Row>
+            <span style={lab}>{"\u5bb6\u8b77\u65e5\u671f"}</span>
+            <RocBirthdayInput
+              style={{ ...inpBase(ro), width: 140 }}
+              className="font-mono"
+              value={value.familyCareDate}
+              readOnly={ro}
+              onChange={(familyCareDate) => set("familyCareDate", familyCareDate)}
+            />
+          </Row>
+          <Row>
+            <span style={lab}>{"\u500b\u6848\u7a2e\u985e"}</span>
+            <select
+              style={{ ...inpBase(ro), width: 148 }}
+              disabled={ro}
+              title={"A \u7f72\u63d0\u4f9b\u540d\u55ae\u4e14\u9662\u6240\u9078\u5b9a\u3000B \u9662\u6240\u81ea\u884c\u6536\u6848\u3000C \u8ad6\u8cea\u65b9\u6848\u540d\u55ae"}
+              value={value.familyCareCase || ""}
+              onChange={(e) => set("familyCareCase", e.target.value)}
+            >
+              <option value="">{""}</option>
+              <option value="A">{"A \u7f72\u63d0\u4f9b\u540d\u55ae"}</option>
+              <option value="B">{"B \u9662\u6240\u81ea\u6536"}</option>
+              <option value="C">{"C \u8ad6\u8cea\u540d\u55ae"}</option>
+            </select>
           </Row>
           <Row>
             <span style={lab}>入住安養</span>
@@ -517,7 +601,7 @@ export function PatientMasterForm({
           <Row>
             <span style={lab}>安養院代</span>
             <input
-              style={{ ...inpBase(ro), width: 90 }}
+              style={{ ...inpBase(ro), width: 150 }}
               value={value.nursingHomeCode}
               readOnly={ro}
               onChange={(e) => set("nursingHomeCode", e.target.value)}
@@ -527,7 +611,7 @@ export function PatientMasterForm({
             <legend className="px-1 font-bold">病史記載</legend>
             <textarea
               className="min-h-[120px] w-full flex-1 border-0 bg-white p-1"
-              style={{ fontFamily: HIS_FONT, fontSize: 12, resize: "none" }}
+              style={{ fontFamily: HIS_FONT, fontSize: 16, resize: "none" }}
               readOnly={ro}
               value={value.medicalHistory}
               onChange={(e) => set("medicalHistory", e.target.value)}
@@ -540,7 +624,7 @@ export function PatientMasterForm({
         <legend className="px-1 font-bold">備註記載</legend>
         <textarea
           className="h-12 w-full border-0 bg-white px-1 py-0.5"
-          style={{ fontFamily: HIS_FONT, fontSize: 12, resize: "none" }}
+          style={{ fontFamily: HIS_FONT, fontSize: 16, resize: "none" }}
           readOnly={ro}
           value={value.memo}
           onChange={(e) => set("memo", e.target.value)}
@@ -562,7 +646,7 @@ export function PatientMasterForm({
             className="flex max-h-[70vh] w-[min(22rem,92vw)] flex-col border-2 bg-[#E8F8C8] shadow-xl"
             style={{ borderColor: "#404040", fontFamily: HIS_FONT }}
           >
-            <header className="bg-[#D8E8A8] px-2 py-1 text-[12px] font-bold">選擇病患身份</header>
+            <header className="bg-[#D8E8A8] px-2 py-1 text-[16px] font-bold">選擇病患身份</header>
             <div className="min-h-0 flex-1 overflow-auto">
               {categoryCodes.map((code) => {
                 const hit = categorySource.find((c) => c.code === code);
@@ -571,7 +655,7 @@ export function PatientMasterForm({
                   <button
                     key={code}
                     type="button"
-                    className="flex w-full items-center gap-2 border-b px-2 py-1 text-left text-[12px]"
+                    className="flex w-full items-center gap-2 border-b px-2 py-1 text-left text-[16px]"
                     style={{ background: on ? "#FFFF80" : "#fff", borderColor: "#C0C080" }}
                     onClick={() => {
                       applyIdCategory(code);
@@ -580,20 +664,27 @@ export function PatientMasterForm({
                   >
                     <span className="w-16 font-mono font-bold">{code}</span>
                     <span>
-                      押金 {hit?.deposit ?? 0}　掛號費 {hit?.reg_fee ?? 0}　部份負擔 {hit?.copay ?? 0}
+                      {`\u62bc\u91d1 ${hit?.deposit ?? 0}\u3000\u639b\u8cbb\u512a\u5f85 ${hit?.reg_fee ?? 0}\u3000\u90e8\u5206\u8ca0\u64d4\u512a\u5f85 ${Number(hit?.copay) > 0 ? "\u662f" : "\u5426"}`}
                     </span>
                   </button>
                 );
               })}
             </div>
             <div className="flex justify-end p-1">
-              <button type="button" className="border border-[#808080] bg-white px-2 py-0.5 text-[12px]" onClick={() => setPickOpen(false)}>
+              <button type="button" className="border border-[#808080] bg-white px-2 py-0.5 text-[16px]" onClick={() => setPickOpen(false)}>
                 關閉
               </button>
             </div>
           </div>
         </div>
       ) : null}
+      <AddressEditorDialog
+        open={addressOpen}
+        address={value.address}
+        postalCode={value.postalCode}
+        onClose={() => setAddressOpen(false)}
+        onSave={(nextAddress, nextPostal) => onChange({ ...value, address: nextAddress, postalCode: nextPostal })}
+      />
     </div>
   );
 }

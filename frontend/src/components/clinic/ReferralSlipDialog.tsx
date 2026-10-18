@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
 import { HIS, HIS_FONT } from "@/lib/hisTheme";
 import { openPrintPreview } from "@/lib/printJob";
+import { buildReferralSlipHtml } from "@/lib/clinicPrintDocs";
 import { doctorDisplayName, pickClinicDoctor } from "@/lib/doctorName";
 import { fetchStaff, saveReferralSlip } from "@/api/clinicApi";
 import { readLocalClinicBundle } from "@/lib/clinicProfile";
 import { HospitalLookupDialog, type NhiHospital } from "@/components/clinic/HospitalLookupDialog";
 import { useEscLayer } from "@/hooks/useEscLayer";
+import { formatBirthdayRoc } from "@/lib/patientSearch";
 
 export type ReferralSeed = {
   name: string;
@@ -290,93 +292,45 @@ export function ReferralSlipDialog({ open, seed, onClose, encounterId, slipId, a
 
   const printSlip = () => {
     const clinic = readLocalClinicBundle().profile;
-    const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-    const mark = (on: boolean) => (on ? "\u25a0" : "\u25a1");
-    const birth = (() => {
-      const s = (seed.birthday || "").trim();
-      const iso = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
-      if (iso) return [String(Number(iso[1]) - 1911), iso[2], iso[3]];
-      const roc = s.match(/(\d+)\D+(\d+)\D+(\d+)/);
-      return roc ? [roc[1], roc[2], roc[3]] : ["", "", ""];
-    })();
-    const opened = today.split(".");
-    const dx = seed.diagnoses.split(/\n/).map((line) => line.trim()).filter(Boolean).slice(0, 3);
-    const splitDx = (line: string) => {
-      const m = line.match(/^([A-Za-z][A-Za-z0-9.]*)\s*(.*)$/);
-      return m ? [m[1], m[2]] : ["", line];
-    };
-    const allergy = settings.includeAllergy ? (seed.allergy || "") : "";
     const copies: Array<[string, string]> = [];
     if (copy1) copies.push(["\u7b2c\u4e00\u806f", "\u63a5\u53d7\u8f49\u8a3a\u91ab\u9662\u3001\u8a3a\u6240\u6240\u7559\u5b58"]);
     if (copy2) copies.push(["\u7b2c\u4e8c\u806f", "\u63a5\u53d7\u8f49\u8a3a\u91ab\u9662\u3001\u8a3a\u6240\u56de\u8986\u8f49\u51fa"]);
     if (copy3) copies.push(["\u7b2c\u4e09\u806f", "\u539f\u8a3a\u7642\u91ab\u9662\u3001\u8a3a\u6240\u7559\u5b58"]);
-    const td = "border:1px solid #000;padding:1px 3px;vertical-align:top;";
-    const pages = (copies.length ? copies : [["\u8f49\u8a3a\u55ae", ""]] as Array<[string, string]>).map(([which, side]) => `
-      <section class="slip-page" style="font-family:'PMingLiU','Microsoft JhengHei',serif;font-size:11px;color:#000;line-height:1.3;">
-        <div style="font-size:12px;">\u9644\u8868\u4e8c\u4fee\u6b63</div>
-        <div style="text-align:center;font-size:18px;font-weight:bold;letter-spacing:1px;">\u5168\u6c11\u5065\u5eb7\u4fdd\u96aa\u3000\u9662(\u6240)\u8f49\u8a3a\u55ae(\u8f49\u8a3a\u81f3 ${esc(hosp || "\u3000\u3000\u3000")} \u9662\u6240)</div>
-        <div>\u4fdd\u96aa\u91ab\u4e8b\u670d\u52d9\u6a5f\u69cb\u4ee3\u865f\uff1a${esc(clinic.clinicCode || "")}</div>
-        <div style="display:flex;align-items:stretch;">
-          <div style="writing-mode:vertical-rl;border:1px solid #000;padding:4px 2px;letter-spacing:2px;">\u539f\u8a3a\u7642\u91ab\u9662\u6458\u8981</div>
-          <table style="flex:1;border-collapse:collapse;width:100%;">
-            <tr>
-              <td style="${td}">\u59d3\u540d ${esc(seed.name || "")}</td>
-              <td style="${td}">\u6027\u5225 ${mark(seed.sex === "\u7537")}\u7537 ${mark(seed.sex === "\u5973")}\u5973</td>
-              <td style="${td}">\u51fa\u751f\u3000\u6c11\u570b ${esc(birth[0])} \u5e74 ${esc(birth[1])} \u6708 ${esc(birth[2])} \u65e5</td>
-              <td style="${td}">\u8eab\u5206\u8b49\u865f ${esc(seed.idNo || "")}</td>
-            </tr>
-            <tr>
-              <td style="${td}" colspan="2">\u806f\u7d61\u4eba</td>
-              <td style="${td}">\u806f\u7d61\u96fb\u8a71 ${esc(seed.phone || "")}</td>
-              <td style="${td}">\u806f\u7d61\u5730\u5740 ${esc(seed.address || "")}</td>
-            </tr>
-            <tr>
-              <td style="${td}" colspan="2">A.\u75c5\u60c5\u6458\u8981(\u4e3b\u8a34\u53ca\u7c21\u77ed\u75c5\u53f2)<div style="min-height:16mm;white-space:pre-wrap;">${esc(seed.chief || "")}</div></td>
-              <td style="${td}" colspan="2">D.\u85e5\u7269\u904e\u654f\u53f2\uff1a<div style="min-height:16mm;white-space:pre-wrap;">${esc(allergy)}</div></td>
-            </tr>
-            <tr>
-              <td style="${td}" colspan="4">B.\u8a3a\u65b7\u3000ICD-10-CM/PCS\u3000\u75c5\u540d
-                ${[0, 1, 2].map((i) => {
-                  const pair = splitDx(dx[i] || "");
-                  return `<div>${i + 1}. ${esc(pair[0])} ${esc(pair[1])}</div>`;
-                }).join("")}
-              </td>
-            </tr>
-            <tr>
-              <td style="${td}" colspan="2">C.\u6aa2\u67e5\u53ca\u6cbb\u7642\u6458\u8981<br/>1.\u6700\u8fd1\u4e00\u6b21\u6aa2\u67e5\u7d50\u679c<br/>\u65e5\u671f\uff1a${esc(seed.examOn || "")}<br/>\u5831\u544a\uff1a<div style="min-height:12mm;white-space:pre-wrap;">${esc(seed.exam || "")}</div></td>
-              <td style="${td}" colspan="2">2.\u6700\u8fd1\u4e00\u6b21\u7528\u85e5\u6216\u624b\u8853\u540d\u7a31<div style="min-height:14mm;white-space:pre-wrap;">${esc(seed.meds || "")}</div>\u65e5\u671f\uff1a${esc(seed.medOn != null ? seed.medOn : today)}</td>
-            </tr>
-            <tr>
-              <td style="${td}" colspan="4">\u8f49\u8a3a\u76ee\u7684\uff1a
-                ${PURPOSES.filter(([code]) => "123456".includes(code)).map(([code, label]) => `${mark(purpose === code)}${code}.${label}`).join("\u3000")}
-                ${purpose === "6" && purposeOther ? "\uff08" + esc(purposeOther) + "\uff09" : ""}
-                ${purpose === "9" || purpose === "A" ? "<div>" + esc(PURPOSES.find(([code]) => code === purpose)?.[1] || "") + "</div>" : ""}
-              </td>
-            </tr>
-            <tr>
-              <td style="${td}" colspan="4">
-                \u8a3a\u7642\u91ab\u9662\u6240 ${esc(clinic.clinicName || "")}\u3000\u4f4f\u5740 ${esc(clinic.address || "")}<br/>
-                \u8a3a\u6cbb\u91ab\u5e2b ${esc(doctor || "")}\u3000\u79d1\u5225 ${esc(ourDept)}\u3000\u806f\u7d61\u96fb\u8a71 ${esc(tel || clinic.phone || "")}\u3000\u50b3\u771f ${esc(fax || "")}\u3000\u96fb\u5b50\u4fe1\u7bb1 ${esc(email || "")}<br/>
-                \u958b\u55ae\u65e5\u671f ${esc(opened[0] || "")} \u5e74 ${esc(opened[1] || "")} \u6708 ${esc(opened[2] || "")} \u65e5
-              </td>
-            </tr>
-            <tr>
-              <td style="${td}" colspan="3">\u5efa\u8b70\u8f49\u8a3a\u9662\u6240\u79d1\u5225\uff1a\u91ab\u9662 ${esc(hosp || "")} ${esc(hospCode)}\u3000\u79d1\u5225 ${esc(dept)}\u3000\u91ab\u5e2b ${esc(suggestDoc || "")}<br/>\u5730\u5740 ${esc(hospAddr)}\u3000\u96fb\u8a71 ${esc(hospTel)}</td>
-              <td style="${td}font-weight:bold;">\u6709\u6548\u671f\u9650<br/>${esc(valid || "")}</td>
-            </tr>
-          </table>
-          <div style="writing-mode:vertical-rl;border:1px solid #000;padding:4px 2px;letter-spacing:1px;">${esc(which)}\uff1a${esc(side)}</div>
-        </div>
-        <div style="display:flex;margin-top:2px;">
-          <div style="writing-mode:vertical-rl;border:1px solid #000;padding:4px 2px;">\u63a5\u53d7\u91ab\u9662\u8a3a\u7642\u6458\u8981</div>
-          <table style="flex:1;border-collapse:collapse;">
-            <tr><td style="${td}" colspan="3">\u8655\u7406\u60c5\u5f62\uff1a1.${mark(false)}\u5df2\u4e88\u6025\u8a3a\u8655\u7f6e\u4e26\u8f49\u8a3a\u81f3\u3000\u91ab\u9662\u30002.${mark(false)}\u5df2\u4e88\u6025\u8a3a\u8655\u7f6e\uff0c\u4e26\u4f4f\u672c\u9662\u3000\u75c5\u623f\u6cbb\u7642\u4e2d\u30003.${mark(false)}\u5df2\u5b89\u6392\u4f4f\u672c\u9662\u3000\u75c5\u623f\u6cbb\u7642\u4e2d\u30004.${mark(false)}\u5df2\u5b89\u6392\u672c\u9662\u3000\u9580\u8a3a\u6cbb\u7642\u4e2d\u30005.${mark(false)}\u5df2\u4e88\u9069\u7576\u8655\u7406\u4e26\u8f49\u56de\u539f\u9662\u6240</td></tr>
-            <tr><td style="${td}">1.\u4e3b\u8a3a\u65b7 ICD-10-CM/PCS\uff1a<br/>\u75c5\u540d\uff1a</td><td style="${td}">2.\u6cbb\u7642\u85e5\u7269\u6216\u624b\u8853\u540d\u7a31</td><td style="${td}">3.\u8f14\u52a9\u8a3a\u65b7\u4e4b\u6aa2\u67e5\u7d50\u679c</td></tr>
-            <tr><td style="${td}">\u8a3a\u6cbb\u91ab\u5e2b\u59d3\u540d\u3000\u79d1\u5225\u3000\u91ab\u5e2b\u7c3d\u7ae0</td><td style="${td}">\u96fb\u8a71\u6216\u50b3\u771f\uff1a<br/>\u96fb\u5b50\u4fe1\u7bb1\uff1a</td><td style="${td}">\u56de\u8986\u65e5\u671f\u3000\u5e74\u3000\u6708\u3000\u65e5</td></tr>
-          </table>
-        </div>
-        <div style="margin-top:2px;">\u203b\u672c\u8f49\u8a3a\u55ae\u9650\u4f7f\u7528\u4e59\u6b21\u3002\u4ee5\u4e0a\u4e0a\u6b04\u4f4d\u5747\u5c6c\u5fc5\u586b\uff0c\u5982\u7121\u5247\u586b\u7121\u3002</div>
-      </section>`).join("");
+    const pages = buildReferralSlipHtml({
+      clinicName: clinic.clinicName || "",
+      clinicCode: clinic.clinicCode || "",
+      clinicAddress: clinic.address || "",
+      clinicPhone: clinic.phone || "",
+      name: seed.name || "",
+      sex: seed.sex || "",
+      birthday: seed.birthday || "",
+      idNo: seed.idNo || "",
+      phone: seed.phone || "",
+      address: seed.address || "",
+      chief: seed.chief || "",
+      allergy: settings.includeAllergy ? (seed.allergy || "") : "",
+      diagnoses: seed.diagnoses || "",
+      examOn: seed.examOn || "",
+      exam: seed.exam || "",
+      meds: seed.meds || "",
+      medOn: seed.medOn != null ? seed.medOn : today,
+      purpose,
+      purposeOther,
+      doctor: doctor || "",
+      ourDept,
+      tel: tel || clinic.phone || "",
+      fax: fax || "",
+      email: email || "",
+      opened: today,
+      hosp: hosp || "",
+      hospCode,
+      dept,
+      suggestDoc: suggestDoc || "",
+      hospAddr,
+      hospTel,
+      valid: valid || "",
+      copies,
+    });
     openPrintPreview({
       kind: "report",
       layout: "paged",
@@ -401,7 +355,7 @@ export function ReferralSlipDialog({ open, seed, onClose, encounterId, slipId, a
         </div>
         <div className="min-h-0 flex-1 overflow-auto p-2 text-[12px]">
           <div className="mb-1 grid grid-cols-2 gap-x-3 border bg-white px-2 py-1" style={{ borderColor: "#808080" }}>
-            <div>{"\u59d3\u540d\uff1a"}{seed.name || "\u2014"}{"\u3000\u6027\u5225\uff1a"}{seed.sex || "\u2014"}{"\u3000\u751f\u65e5\uff1a"}{seed.birthday || "\u2014"}</div>
+            <div>{"\u59d3\u540d\uff1a"}{seed.name || "\u2014"}{"\u3000\u6027\u5225\uff1a"}{seed.sex || "\u2014"}{"\u3000\u751f\u65e5\uff1a"}{formatBirthdayRoc(seed.birthday) || "\u2014"}</div>
             <div>{"\u75c5\u6b77\u865f\u78bc\uff1a"}{seed.medicalNo || "\u2014"}</div>
             <div>{"\u8eab\u5206\u8b49\uff1a"}{seed.idNo || "\u2014"}{"\u3000\u96fb\u8a71\uff1a"}{seed.phone || "\u2014"}</div>
             <div className="truncate">{"\u5730\u5740\uff1a"}{seed.address || "\u2014"}</div>

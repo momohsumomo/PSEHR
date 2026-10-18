@@ -97,6 +97,8 @@ def flatten_catalog_rows(
                 "combox": c.get("combox") or "",
                 "picture": c.get("picture") or "",
                 "desc": c.get("desc") or "",
+                "group": str(c.get("group") or ""),
+                "group1": str(c.get("group1") or ""),
                 "suggestedScope": suggest_scope(entry, section),
             }
         )

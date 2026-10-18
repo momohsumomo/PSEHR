@@ -6,6 +6,7 @@ import {
 } from "@/api/clinicApi";
 import { useEscLayer } from "@/hooks/useEscLayer";
 import { HIS, HIS_FONT } from "@/lib/hisTheme";
+import { formatBirthdayRoc } from "@/lib/patientSearch";
 
 type Props = {
   open: boolean;
@@ -73,7 +74,7 @@ export function IcCardInfoDialog({
     ["卡號", show(profile?.cardId || cardNo)],
     ["姓名", show(profile?.patientName)],
     ["身分證", show(profile?.idNo)],
-    ["生日", show(profile?.birthday)],
+    ["\u751f\u65e5", show(formatBirthdayRoc(profile?.birthday) || profile?.birthday)],
     ["性別", profile ? sexLabel(profile.sex) : "—"],
     ["卡片效期", "—"],
     ["重大傷病", "—"],

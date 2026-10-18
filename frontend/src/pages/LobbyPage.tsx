@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { ClaimsPickDialog } from "@/components/clinic/ClaimsPickDialog";
 import { IcDailyUploadDialog } from "@/components/clinic/IcDailyUploadDialog";
 import { API_ENABLED, SANDBOX_ID } from "@/config/sandbox";
-import { request, fetchCardConsoleStatus, type CardConsoleStatus } from "@/api/clinicApi";
+import { request, fetchCardConsoleStatus, prefetchPatientRoster, type CardConsoleStatus } from "@/api/clinicApi";
 import { CardConsoleDebugButton } from "@/components/clinic/CardConsoleDebugButton";
 import { DeskStatusLamps } from "@/components/clinic/DeskStatusLamps";
 import { readLocalClinicBundle } from "@/lib/clinicProfile";
@@ -49,6 +49,10 @@ export function LobbyPage() {
     next.delete("open");
     setSearchParams(next, { replace: true });
   }, [searchParams, setSearchParams]);
+
+  useEffect(() => {
+    prefetchPatientRoster();
+  }, []);
 
   useEffect(() => {
     const updateTime = () => {
@@ -177,6 +181,17 @@ export function LobbyPage() {
     }
     if (path === "/upload-manager") {
       setUploadOpen(true);
+      return;
+    }
+    if (path === "/kiosk/register" || path === "/kiosk/intake") {
+      const target = path === "/kiosk/intake" ? "intake" : "kiosk";
+      void request<{ ok: boolean }>("/maintenance/desktop-window", {
+        method: "POST",
+        body: JSON.stringify({ target }),
+      }).catch((err: unknown) => {
+        const msg = err instanceof Error ? err.message : "\u8996\u7a97\u6c92\u958b\u8d77\u4f86\u3002";
+        window.alert(msg);
+      });
       return;
     }
     navigate(path);

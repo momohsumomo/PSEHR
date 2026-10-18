@@ -1,5 +1,4 @@
 import { useRef } from "react";
-import { normalizeClock } from "@/lib/queueOrder";
 
 type Props = {
   value: string;
@@ -29,15 +28,6 @@ export function HisFixedClockInput({ value, onChange, className }: Props) {
     onChange(next.join(":"));
   };
 
-  const commit = (idx: number) => {
-    const next = partsOf(normalizeClock(partsOf(value).join(":")));
-    const shown = partsOf(value);
-    const n = Number.parseInt(shown[idx].replace(/\D/g, ""), 10);
-    const v = Number.isFinite(n) ? Math.min(MAX[idx], Math.max(0, n)) : 0;
-    next[idx] = String(v).padStart(2, "0");
-    onChange(next.join(":"));
-  };
-
   return (
     <span className={`inline-flex items-center font-mono ${className || ""}`}>
       {[0, 1, 2].map((idx) => (
@@ -57,7 +47,15 @@ export function HisFixedClockInput({ value, onChange, className }: Props) {
               write(idx, digits);
               if (digits.length === 2) refs[idx + 1]?.current?.focus();
             }}
-            onBlur={() => commit(idx)}
+            onBlur={(e) => {
+              const digits = e.currentTarget.value.replace(/\D/g, "").slice(0, 2);
+              const n = Number.parseInt(digits, 10);
+              const v = Number.isFinite(n) ? Math.min(MAX[idx], Math.max(0, n)) : 0;
+              const next = partsOf(value);
+              next[idx] = String(v).padStart(2, "0");
+              const joined = next.join(":");
+              if (joined !== value) onChange(joined);
+            }}
             onFocus={(e) => e.currentTarget.select()}
             onKeyDown={(e) => {
               if (e.key === "ArrowUp" || e.key === "ArrowDown") {

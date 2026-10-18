@@ -35,6 +35,9 @@ docs/醫聖對照/
 ICD9與ICD10對應/
 讀卡機控制軟體6.0*
 
+# Clinic register samples contain real chart rows. Keep on the PC, never push.
+費用統計格式/
+
 # Loose reference files at the repo root
 /*.pdf
 /*.xlsx

@@ -1,3 +1,5 @@
+import { useEffect, useRef } from "react";
+import { appointmentShift } from "@/lib/appointmentCheckIn";
 import { HIS, HIS_FONT } from "@/lib/hisTheme";
 
 export type SameDayHit = {
@@ -8,20 +10,32 @@ export type SameDayHit = {
 
 export function findSameDayHits(
   queue: Array<{
+    encounterId?: string;
     patientId?: string;
     idNo?: string;
     queueStatus?: string;
     shift?: string;
     queueNumber?: number;
     patientDisplay?: string;
+    prebook?: boolean;
+    slotTime?: string;
   }>,
   patientId: string,
   idNo: string,
+  excludeEncounterId?: string,
+  keepPrebookShift?: string,
 ): SameDayHit[] {
   const pid = patientId.trim();
   const id = idNo.trim().toUpperCase();
+  const skip = (excludeEncounterId || "").split("/").pop() || "";
   return queue
     .filter((e) => e.queueStatus !== "cancelled" && e.queueStatus !== "entered-in-error")
+    .filter((e) => !skip || (e.encounterId || "").split("/").pop() !== skip)
+    .filter((e) => {
+      if (!keepPrebookShift || !e.prebook || e.queueStatus !== "waiting") return true;
+      const sh = appointmentShift(e);
+      return !sh || sh === keepPrebookShift;
+    })
     .filter((e) => (pid && e.patientId === pid) || (id && (e.idNo || "").toUpperCase() === id))
     .map((e) => ({
       shift: e.shift || "",
@@ -36,6 +50,31 @@ type Props = {
   onConfirm: () => void;
   onCancel: () => void;
 };
+
+export function SameDayFlash({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const closeRef = useRef(onClose);
+  closeRef.current = onClose;
+  useEffect(() => {
+    if (!open) return;
+    const timer = window.setTimeout(() => closeRef.current(), 2000);
+    return () => window.clearTimeout(timer);
+  }, [open]);
+  if (!open) return null;
+  return (
+    <button
+      type="button"
+      className="fixed inset-0 z-[120] flex items-center justify-center bg-black/25"
+      onClick={onClose}
+    >
+      <span
+        className="border bg-[#FFF2A8] px-8 py-4 text-2xl font-bold text-black shadow-lg"
+        style={{ borderColor: HIS.chromeDark, fontFamily: HIS_FONT }}
+      >
+        {"\u540c\u65e5\u5c31\u8a3a"}
+      </span>
+    </button>
+  );
+}
 
 export function SameDayRegisterDialog({ open, hits, onConfirm, onCancel }: Props) {
   if (!open) return null;

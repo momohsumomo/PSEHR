@@ -7,7 +7,7 @@ import json
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-from src.core.local_print import desk_print_status, installed_printers, print_html_to_printer
+from src.core.local_print import desk_print_status, ensure_sumatra, installed_printers, print_html_to_printer
 
 HOST = "127.0.0.1"
 PORT = 5310
@@ -49,6 +49,14 @@ class LocalPrintHandler(BaseHTTPRequestHandler):
 
     def do_POST(self) -> None:
         path = self.path.split("?", 1)[0]
+        if path == "/tools/sumatra":
+            try:
+                exe = ensure_sumatra()
+            except Exception as exc:
+                self._json({"ok": False, "message": str(exc)}, 400)
+                return
+            self._json({"ok": True, "message": exe})
+            return
         if path != "/print":
             self._json({"detail": "not found"}, 404)
             return
@@ -103,6 +111,11 @@ def start_local_print_server() -> None:
 
 
 def main() -> None:
+    import sys
+
+    if len(sys.argv) > 1 and sys.argv[1] == "sumatra":
+        print(ensure_sumatra())
+        return
     start_local_print_server()
     threading.Event().wait()
 

@@ -90,7 +90,7 @@ export function IdCategoryTableDialog({ open, onClose, onSaved, onPick }: Props)
           </button>
         </header>
         <p className="px-2 py-1 text-[11px] text-[#404000]">
-          這三欄是要收的金額。優待是少收，不放在這裡。掛號費若和診所不同，直接改數字後按確定。
+          {"\u639b\u8cbb\u512a\u5f85\u662f\u5f9e\u8a3a\u6240\u6a19\u6e96\u639b\u865f\u8cbb\u6263\u6389\u7684\u91d1\u984d\u3002\u90e8\u5206\u8ca0\u64d4\u512a\u5f85\u6253\u52fe\u5c31\u4e0d\u6536\uff0c\u7533\u5831\u4ecd\u5831\u898f\u5b9a\u7684\u90e8\u5206\u8ca0\u64d4\u3002"}
         </p>
         {error ? <p className="bg-red-100 px-2 py-1 text-[12px] text-red-800">{error}</p> : null}
         <div className="min-h-0 flex-1 overflow-auto px-2">
@@ -99,8 +99,8 @@ export function IdCategoryTableDialog({ open, onClose, onSaved, onPick }: Props)
               <tr>
                 <th className="border border-[#808080] px-1">身分類別</th>
                 <th className="border border-[#808080] px-1">押金金額</th>
-                <th className="border border-[#808080] px-1">掛號費</th>
-                <th className="border border-[#808080] px-1">部份負擔</th>
+                <th className="border border-[#808080] px-1">{"\u639b\u8cbb\u512a\u5f85\u91d1\u984d"}</th>
+                <th className="border border-[#808080] px-1">{"\u90e8\u5206\u8ca0\u64d4\u512a\u5f85"}</th>
                 <th className="border border-[#808080] px-1">{"\u9810\u8a2d"}</th>
               </tr>
             </thead>
@@ -118,7 +118,7 @@ export function IdCategoryTableDialog({ open, onClose, onSaved, onPick }: Props)
                       onChange={(e) => patch(idx, { code: e.target.value })}
                     />
                   </td>
-                  {(["deposit", "reg_fee", "copay"] as const).map((key) => (
+                  {(["deposit", "reg_fee"] as const).map((key) => (
                     <td key={key} className="border border-[#A0A080] p-0">
                       <input
                         className="w-full bg-transparent px-1 py-0.5 text-right font-mono outline-none"
@@ -129,6 +129,13 @@ export function IdCategoryTableDialog({ open, onClose, onSaved, onPick }: Props)
                       />
                     </td>
                   ))}
+                  <td className="border border-[#A0A080] text-center">
+                    <input
+                      type="checkbox"
+                      checked={Number(r.copay) > 0}
+                      onChange={(e) => patch(idx, { copay: e.target.checked ? 1 : 0 })}
+                    />
+                  </td>
                   <td className="border border-[#A0A080] text-center">
                     <input
                       type="checkbox"

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { HIS_FONT } from "@/lib/hisTheme";
 import { openPrintPreview } from "@/lib/printJob";
+import { buildCertificateHtml } from "@/lib/clinicPrintDocs";
 import { doctorDisplayName, pickClinicDoctor } from "@/lib/doctorName";
 import { fetchStaff } from "@/api/clinicApi";
 import { readLocalClinicBundle } from "@/lib/clinicProfile";
@@ -103,50 +104,30 @@ export function CertificateDialog({ open, onClose, seed, onOpenReferral }: Props
   const doctor = doctorDisplayName(seed?.doctorName) || seed?.doctorName || clinicDoctor;
 
   const printCertificate = () => {
-    const en = english
-      ? `<div style="text-align:center;font-size:12px;">Medical Certificate</div>`
-      : "";
-    const stamp =
-      "\u672c\u8b49\u660e\u66f8\u9808\u52a0\u84cb\u672c\u9662\u6240\u5370\u7ae0\u5426\u5247\u7121\u6548\u25ce\ufe3b\u5175\u5f79\u8a34\u8a1f\u7121\u6548\ufe3c";
-    const html = `<div style="font-family:'PMingLiU','Microsoft JhengHei',serif;font-size:13px;color:#000;line-height:1.35;">
-      <div>\u91ab\u4e8b\u6a5f\u69cb\u4ee3\u865f\uff1a${esc(show(clinic.clinicCode))}</div>
-      <div style="text-align:center;font-size:22px;font-weight:bold;margin-top:4px;">${esc(show(clinic.clinicName))}</div>
-      <div style="text-align:center;font-size:18px;letter-spacing:0.35em;margin-top:2px;">\u8a3a\u3000\u65b7\u3000\u8b49\u3000\u660e\u3000\u66f8</div>
-      ${en}
-      <div style="text-align:right;margin:6px 0;">\u8a3a\u65b7\u6587\u865f\uff1a${esc(show(docNo))}</div>
-      <table style="width:100%;border-collapse:collapse;border:1px solid #000;">
-        <tr>
-          <td style="border:1px solid #000;padding:4px;">\u59d3\u540d ${esc(show(name))}</td>
-          <td style="border:1px solid #000;padding:4px;">\u6027 \u5225 ${esc(show(sex))}</td>
-          <td style="border:1px solid #000;padding:4px;">\u75c5\u6b77\u865f ${esc(show(seed?.medicalNo))}</td>
-          <td rowspan="5" style="border:1px solid #000;width:28px;text-align:center;writing-mode:vertical-rl;letter-spacing:2px;">${stamp}</td>
-        </tr>
-        <tr>
-          <td colspan="3" style="border:1px solid #000;padding:4px;">\u5e74\u9f61 ${esc(show(seed?.age))} \u51fa\u751f ${esc(show(seed?.birthday))} \u8eab\u5206\u8b49\u5b57\u865f ${esc(show(seed?.idNo))}</td>
-        </tr>
-        <tr>
-          <td colspan="3" style="border:1px solid #000;padding:4px;">\u4f4f\u5740 ${esc(show(seed?.address))}</td>
-        </tr>
-        <tr>
-          <td colspan="3" style="border:1px solid #000;padding:4px;">\u61c9\u8a3a\u65e5\u671f ${esc(show(visitDate))} \u79d1\u5225 ${esc(show(seed?.dept))}</td>
-        </tr>
-        <tr>
-          <td colspan="3" style="border:1px solid #000;padding:6px;height:92mm;vertical-align:top;">
-            <div style="font-weight:bold;">\u75c5\u540d</div>
-            <div style="white-space:pre-wrap;min-height:28mm;">${esc(show(diagnosis))}</div>
-            <div style="font-weight:bold;margin-top:6mm;">\u91ab\u5e2b\u56d1\u8a00</div>
-            <div style="white-space:pre-wrap;">${esc(show(order))}</div>
-          </td>
-        </tr>
-      </table>
-      <div style="margin-top:8px;">\u4ee5\u4e0a\u75c5\u4eba\u7d93\u672c\u9662\u6240\u91ab\u5e2b\u8a3a\u65b7\u5c6c\u5be6\u7279\u4e88\u8b49\u660e</div>
-      <div style="margin-top:8px;font-size:16px;">\u8a3a \u6cbb \u91ab \u5e2b\uff1a${esc(show(doctor))}</div>
-      <div>\u91ab\u5e2b\u8b49\u66f8\u5b57\u865f\uff1a${esc(show(clinic.licenseNo))}</div>
-      <div>\u5730\u5740\uff1a${esc(show(clinic.address))}</div>
-      <div style="text-align:center;margin-top:10px;">\u4e2d \u83ef \u6c11 \u570d ${esc(show(printDate))}</div>
-    </div>`;
+    const html = buildCertificateHtml({
+      clinicCode: clinic.clinicCode,
+      clinicName: clinic.clinicName,
+      licenseNo: clinic.licenseNo,
+      clinicAddress: clinic.address,
+      docNo,
+      name,
+      sex,
+      medicalNo: seed?.medicalNo || "",
+      age: seed?.age || "",
+      birthday: seed?.birthday || "",
+      idNo: seed?.idNo || "",
+      address: seed?.address || "",
+      visitDate,
+      dept: seed?.dept || "",
+      diagnosis,
+      order,
+      doctor,
+      printDate,
+      english,
+    });
     openPrintPreview({
       kind: "report",
+      layout: "sheet",
       setupId: "certificate",
       title: "\u8a3a\u65b7\u8b49\u660e\u66f8",
       lines: [],
@@ -166,6 +147,7 @@ export function CertificateDialog({ open, onClose, seed, onOpenReferral }: Props
     </div>`;
     openPrintPreview({
       kind: "report",
+      layout: "sheet",
       setupId: "certificate",
       title: "\u9810\u7d04\u55ae",
       lines: [],

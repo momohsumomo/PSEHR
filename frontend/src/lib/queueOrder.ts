@@ -5,12 +5,42 @@ export type QueueBandEntry = {
   queueNumber?: number;
   cardWritten?: boolean;
   prebook?: boolean;
+  icException?: string;
+  caseNo?: string;
+  payType?: string;
+  note?: string;
+  deposit?: string;
 };
+
+/** Self-pay and deposit stay on this PC. A circle means the visit was uploaded. */
+export function isDeskOnlyVisit(entry: QueueBandEntry): boolean {
+  const ex = (entry.icException || "").trim();
+  if (ex === "selfPay" || ex === "deposit") return true;
+  const pay = (entry.payType || "").trim();
+  if (pay === "1" || pay === "\u81ea\u8cbb") return true;
+  const caseNo = (entry.caseNo || "").trim();
+  if (caseNo === "9X" || caseNo === "\u81ea" || caseNo === "\u81ea\u8cbb") return true;
+  const note = (entry.note || "").trim();
+  if (note === "\u62bc" || note.startsWith("\u62bc")) return true;
+  return false;
+}
+
+/** Deposit and self-pay stay on this computer. A checked cloud box still does not write. */
+export function skipsCloudWrite(entry: QueueBandEntry): boolean {
+  if (isDeskOnlyVisit(entry)) return true;
+  const raw = String(entry.deposit ?? "").replace(/[^\d.-]/g, "");
+  const amount = Number(raw);
+  return Number.isFinite(amount) && amount > 0;
+}
+
+export function showsUploadCircle(entry: QueueBandEntry): boolean {
+  return Boolean(entry.cardWritten) && !isDeskOnlyVisit(entry);
+}
 
 export function clinicQueueBand(entry: QueueBandEntry): number {
   const status = entry.queueStatus;
   if (status === "finished" || status === "no_show") {
-    return entry.cardWritten ? 0 : 1;
+    return showsUploadCircle(entry) ? 0 : 1;
   }
   if (status === "in_progress") return 2;
   if (entry.prebook && status === "waiting") return 4;

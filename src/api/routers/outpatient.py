@@ -5,8 +5,11 @@ from __future__ import annotations
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query
+from pydantic import BaseModel, Field
 
 from src.app.bootstrap import get_fhir_repository, get_shadow_store
+from src.core.chart_presence import claim as claim_chart
+from src.core.chart_presence import release as release_chart
 from src.core.encounter_extensions import previsit_completed
 from src.core.nhi_allergy_fhir_mapper import extract_allergy_stickers
 from src.core.nhi_soap_fhir_mapper import extract_soap_stickers_from_composition
@@ -154,3 +157,24 @@ def get_outpatient_workspace(
         "historyVisits": history_visits,
         "lesionMedia": lesion_media,
     }
+
+
+class ChartOpenBody(BaseModel):
+    encounterId: str = Field(..., min_length=1)
+    deviceId: str = Field(..., min_length=1)
+
+
+_IN_USE = "\u6b63\u5728\u88ab\u5176\u4ed6\u4eba\u4f7f\u7528\u4e2d"
+
+
+@router.post("/chart-open")
+def chart_open(body: ChartOpenBody) -> dict[str, bool]:
+    if not claim_chart(body.encounterId, body.deviceId):
+        raise HTTPException(status_code=409, detail=_IN_USE)
+    return {"ok": True}
+
+
+@router.post("/chart-open/release")
+def chart_open_release(body: ChartOpenBody) -> dict[str, bool]:
+    release_chart(body.encounterId, body.deviceId)
+    return {"ok": True}

@@ -128,6 +128,13 @@ def main() -> int:
         tel = _clean(r.get("TEL"))
         addr = _clean(r.get("ADDRESS"))
         id_cat = _clean(r.get("TYPE"))
+        hf_meta = parse_roc_date(_clean(r.get("HF_DATE")))
+        case_type = _clean(r.get("CASE_TYPE")).upper()
+        clinic_ext = [{"url": "idCategory", "valueString": id_cat}]
+        if hf_meta:
+            clinic_ext.append({"url": "familyCareDate", "valueString": hf_meta[0]})
+        if case_type in {"A", "B", "C"}:
+            clinic_ext.append({"url": "familyCareCase", "valueString": case_type})
         patient_idx.append(
             (
                 pid,
@@ -159,9 +166,7 @@ def main() -> int:
             "extension": [
                 {
                     "url": "https://clinic.org/fhir/StructureDefinition/patient-clinic-ext",
-                    "extension": [
-                        {"url": "idCategory", "valueString": id_cat},
-                    ],
+                    "extension": clinic_ext,
                 }
             ],
         }

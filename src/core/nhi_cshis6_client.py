@@ -307,8 +307,9 @@ class Cshis6Client:
             return st
         readers = self.list_pcsc_readers()
         default = self.get_default_pcsc_reader()
-        if readers and not default:
-            # 不依廠牌猜槽；真正卡種由 Init SOP 逐台試 HC／HPC。
+        if readers and default not in readers:
+            # Saved name can point at a slot index that Windows renumbered.
+            # Any live reader is enough to initialize cloud SAM.
             self.set_default_pcsc_reader(readers[0])
         sams = self.list_cloud_sam()
         sam_id = None

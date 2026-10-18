@@ -116,25 +116,27 @@ def referral_save_slip(body: ReferralSlipBody) -> dict[str, Any]:
 @router.post("/query")
 def referral_query(body: ReferralQueryBody) -> dict[str, Any]:
     id_no = body.idNo.strip().upper()
-    encounter = None
     if body.encounterId:
         try:
-            encounter, _reg, stored = _load(body.encounterId)
+            _encounter, _reg, stored = _load(body.encounterId)
         except LookupError as exc:
             return {"ok": False, "reason": str(exc), "serial": ""}
         id_no = id_no or stored
     result = query_referrals(id_no)
     chosen = result.get("chosen")
     serial = chosen.serial if chosen else ""
-    if encounter is not None:
-        _save_reg(
-            body.encounterId,
-            encounter,
+    slips = []
+    for row in result.get("slips") or []:
+        if getattr(row, "deleted", False) or not getattr(row, "serial", ""):
+            continue
+        slips.append(
             {
-                "referralSeq": chosen.serial if chosen else "",
-                "referralDate": chosen.open_date if chosen else "",
-                "referralRetry": "0" if chosen or result.get("ok") else "1",
-            },
+                "serial": row.serial,
+                "hospId": row.hosp_seq,
+                "openDate": row.open_date,
+                "kind": row.kind,
+                "summary": (row.summary or "")[:120],
+            }
         )
     return {
         "ok": bool(result.get("ok")),
@@ -142,7 +144,8 @@ def referral_query(body: ReferralQueryBody) -> dict[str, Any]:
         "serial": serial,
         "openDate": chosen.open_date if chosen else "",
         "retry": bool(result.get("retry")),
-        "count": len(result.get("slips") or []),
+        "count": len(slips),
+        "slips": slips,
     }
 
 

@@ -7,7 +7,7 @@ import json
 import re
 import sqlite3
 import threading
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Generator
 
@@ -265,10 +265,11 @@ class SqliteShadowStore(ShadowStore):
     def _seed_id_category_settings(self, conn: sqlite3.Connection) -> None:
         count = conn.execute("SELECT COUNT(*) FROM id_category_settings").fetchone()[0]
         if count == 0:
+            # reg_fee is a discount off the clinic registration fee. copay 1 waives the cash copay.
             defaults = [
-                ("老人優", 400, 100, 50, 70, 999, 0),
-                ("S", 0, 100, 50, 3, 17, 0),
-                ("D", 0, 150, 50, 18, 69, 1),
+                ("老人優", 400, 50, 0, 70, 999, 0),
+                ("S", 0, 0, 0, 3, 17, 0),
+                ("D", 0, 0, 0, 18, 69, 1),
             ]
             conn.executemany(
                 """
@@ -720,7 +721,11 @@ class SqliteShadowStore(ShadowStore):
         else:
             new_deposit = old_deposit
         note = str(meta.get("noteMark") or "")
-        if new_deposit > 0 and not stored_remark.strip() and not note.strip():
+        card_read = bool(str(meta.get("treatSeq") or "").strip())
+        if card_read and new_deposit == 0 and (note.strip() == held or stored_remark.strip() == held):
+            put_reg_string(payload, "noteMark", "")
+            touch["reg_remark"] = ""
+        elif new_deposit > 0 and not card_read and not stored_remark.strip() and not note.strip():
             put_reg_string(payload, "noteMark", held)
             touch["reg_remark"] = held
         elif (
@@ -1545,59 +1550,59 @@ class SqliteShadowStore(ShadowStore):
             )
 
     def encounter_date_span(self) -> dict[str, Any]:
-        """影子庫掛號日範圍與建議預設日（優先最近「有一定人數」的診日）。"""
+        """Date range and a recent busy clinic day. Uses the date index, not a full-history group."""
+        open_filter = (
+            "queue_status != 'cancelled' AND IFNULL(fhir_status, '') != 'cancelled'"
+        )
         with self._connect() as conn:
-            row = conn.execute(
-                """
-                SELECT MIN(encounter_date), MAX(encounter_date), COUNT(*)
-                FROM encounter_index
-                WHERE IFNULL(queue_status, '') != 'cancelled'
-                  AND IFNULL(fhir_status, '') != 'cancelled'
-                """
-            ).fetchone()
-            date_min = row[0] if row else None
-            date_max = row[1] if row else None
-            total = int(row[2] or 0) if row else 0
-            # 最近一筆「有實質人數」的診日：先看人數門檻，再取最近日期
-            busy = conn.execute(
-                """
-                SELECT encounter_date, COUNT(*) AS c
-                FROM encounter_index
-                WHERE IFNULL(queue_status, '') != 'cancelled'
-                  AND IFNULL(fhir_status, '') != 'cancelled'
-                GROUP BY encounter_date
-                ORDER BY
-                  CASE
-                    WHEN COUNT(*) >= 30 THEN 0
-                    WHEN COUNT(*) >= 10 THEN 1
-                    WHEN COUNT(*) >= 5 THEN 2
-                    ELSE 3
-                  END,
-                  encounter_date DESC
+            first = conn.execute(
+                f"""
+                SELECT encounter_date FROM encounter_index
+                WHERE {open_filter}
+                ORDER BY encounter_date ASC
                 LIMIT 1
                 """
             ).fetchone()
-            latest = conn.execute(
-                """
-                SELECT encounter_date, COUNT(*) AS c
-                FROM encounter_index
-                WHERE IFNULL(queue_status, '') != 'cancelled'
-                  AND IFNULL(fhir_status, '') != 'cancelled'
-                GROUP BY encounter_date
+            last = conn.execute(
+                f"""
+                SELECT encounter_date FROM encounter_index
+                WHERE {open_filter}
                 ORDER BY encounter_date DESC
                 LIMIT 1
                 """
             ).fetchone()
-        suggested = None
-        suggested_count = 0
-        if busy:
-            suggested, suggested_count = str(busy[0]), int(busy[1])
-        elif latest:
-            suggested, suggested_count = str(latest[0]), int(latest[1])
+            date_min = str(first[0]) if first else None
+            date_max = str(last[0]) if last else None
+            suggested = None
+            suggested_count = 0
+            if date_max:
+                start = (datetime.strptime(date_max[:10], "%Y-%m-%d") - timedelta(days=400)).date().isoformat()
+                rows = conn.execute(
+                    f"""
+                    SELECT encounter_date, COUNT(*) AS c
+                    FROM encounter_index
+                    WHERE {open_filter}
+                      AND encounter_date >= ?
+                    GROUP BY encounter_date
+                    """,
+                    (start,),
+                ).fetchall()
+                best_tier = 99
+                best_date = ""
+                for day, count in rows:
+                    n = int(count or 0)
+                    tier = 0 if n >= 30 else 1 if n >= 10 else 2 if n >= 5 else 3
+                    day_s = str(day)
+                    if tier < best_tier or (tier == best_tier and day_s > best_date):
+                        best_tier = tier
+                        best_date = day_s
+                        suggested_count = n
+                if best_date:
+                    suggested = best_date
         return {
             "dateMin": date_min,
             "dateMax": date_max,
-            "total": total,
+            "total": 0,
             "suggestedDate": suggested,
             "suggestedCount": suggested_count,
         }
@@ -1605,51 +1610,48 @@ class SqliteShadowStore(ShadowStore):
     def nearest_encounter_dates(self, encounter_date: str) -> dict[str, Any]:
         """指定日期前後最近有掛號的診日（含人數）。"""
         d = encounter_date[:10]
-        with self._connect() as conn:
-            before = conn.execute(
-                """
-                SELECT encounter_date, COUNT(*) AS c
-                FROM encounter_index
-                WHERE encounter_date < ?
-                  AND IFNULL(queue_status, '') != 'cancelled'
-                  AND IFNULL(fhir_status, '') != 'cancelled'
-                GROUP BY encounter_date
-                ORDER BY encounter_date DESC
+        open_filter = (
+            "queue_status != 'cancelled' AND IFNULL(fhir_status, '') != 'cancelled'"
+        )
+
+        def _edge(conn: sqlite3.Connection, cmp_sql: str, order: str) -> dict[str, Any] | None:
+            row = conn.execute(
+                f"""
+                SELECT encounter_date FROM encounter_index
+                WHERE encounter_date {cmp_sql} ?
+                  AND {open_filter}
+                ORDER BY encounter_date {order}
                 LIMIT 1
                 """,
                 (d,),
             ).fetchone()
-            after = conn.execute(
-                """
-                SELECT encounter_date, COUNT(*) AS c
-                FROM encounter_index
-                WHERE encounter_date > ?
-                  AND IFNULL(queue_status, '') != 'cancelled'
-                  AND IFNULL(fhir_status, '') != 'cancelled'
-                GROUP BY encounter_date
-                ORDER BY encounter_date ASC
-                LIMIT 1
-                """,
-                (d,),
-            ).fetchone()
-            same = conn.execute(
-                """
+            if not row:
+                return None
+            day = str(row[0])
+            cnt = conn.execute(
+                f"""
                 SELECT COUNT(*) FROM encounter_index
-                WHERE encounter_date = ?
-                  AND IFNULL(queue_status, '') != 'cancelled'
-                  AND IFNULL(fhir_status, '') != 'cancelled'
+                WHERE encounter_date = ? AND {open_filter}
+                """,
+                (day,),
+            ).fetchone()
+            return {"date": day, "count": int(cnt[0] or 0) if cnt else 0}
+
+        with self._connect() as conn:
+            before = _edge(conn, "<", "DESC")
+            after = _edge(conn, ">", "ASC")
+            same = conn.execute(
+                f"""
+                SELECT COUNT(*) FROM encounter_index
+                WHERE encounter_date = ? AND {open_filter}
                 """,
                 (d,),
             ).fetchone()
         return {
             "requestedDate": d,
             "count": int(same[0] or 0) if same else 0,
-            "nearestBefore": (
-                {"date": str(before[0]), "count": int(before[1])} if before else None
-            ),
-            "nearestAfter": (
-                {"date": str(after[0]), "count": int(after[1])} if after else None
-            ),
+            "nearestBefore": before,
+            "nearestAfter": after,
         }
 
     def get_encounter_queue_meta(self, encounter_id: str) -> dict[str, Any] | None:
@@ -2045,22 +2047,33 @@ class SqliteShadowStore(ShadowStore):
         encounter_ids: list[str] | None = None,
     ) -> list[dict[str, Any]]:
         # Index-first: lean import may have no Condition JSON in resource_cache
-        query = "SELECT * FROM condition_index WHERE 1=1"
+        query = """
+            SELECT ci.* FROM condition_index ci
+            LEFT JOIN encounter_index ei ON ei.resource_id = ci.encounter_id
+            WHERE (
+              ci.encounter_id IS NULL OR TRIM(IFNULL(ci.encounter_id, '')) = ''
+              OR ei.resource_id IS NULL
+              OR (
+                IFNULL(ei.queue_status, '') != 'cancelled'
+                AND IFNULL(ei.fhir_status, '') != 'cancelled'
+              )
+            )
+        """
         params: list[Any] = []
         if patient_id:
-            query += " AND patient_id = ?"
+            query += " AND ci.patient_id = ?"
             params.append(patient_id.split("/")[-1])
         if encounter_id:
-            query += " AND encounter_id = ?"
+            query += " AND ci.encounter_id = ?"
             params.append(encounter_id.split("/")[-1])
         if encounter_ids:
             eids = [e.split("/")[-1] for e in encounter_ids if e]
             if not eids:
                 return []
             placeholders = ",".join("?" for _ in eids)
-            query += f" AND encounter_id IN ({placeholders})"
+            query += f" AND ci.encounter_id IN ({placeholders})"
             params.extend(eids)
-        query += " ORDER BY updated_at DESC"
+        query += " ORDER BY ci.updated_at DESC"
         with self._connect() as conn:
             rows = conn.execute(query, params).fetchall()
         out: list[dict[str, Any]] = []
@@ -2109,22 +2122,33 @@ class SqliteShadowStore(ShadowStore):
         encounter_ids: list[str] | None = None,
     ) -> list[dict[str, Any]]:
         # Index-first: lean import stores meds only in medication_request_index
-        query = "SELECT * FROM medication_request_index WHERE 1=1"
+        query = """
+            SELECT mi.* FROM medication_request_index mi
+            LEFT JOIN encounter_index ei ON ei.resource_id = mi.encounter_id
+            WHERE (
+              mi.encounter_id IS NULL OR TRIM(IFNULL(mi.encounter_id, '')) = ''
+              OR ei.resource_id IS NULL
+              OR (
+                IFNULL(ei.queue_status, '') != 'cancelled'
+                AND IFNULL(ei.fhir_status, '') != 'cancelled'
+              )
+            )
+        """
         params: list[Any] = []
         if patient_id:
-            query += " AND patient_id = ?"
+            query += " AND mi.patient_id = ?"
             params.append(patient_id.split("/")[-1])
         if encounter_id:
-            query += " AND encounter_id = ?"
+            query += " AND mi.encounter_id = ?"
             params.append(encounter_id.split("/")[-1])
         if encounter_ids:
             eids = [e.split("/")[-1] for e in encounter_ids if e]
             if not eids:
                 return []
             placeholders = ",".join("?" for _ in eids)
-            query += f" AND encounter_id IN ({placeholders})"
+            query += f" AND mi.encounter_id IN ({placeholders})"
             params.extend(eids)
-        query += " ORDER BY updated_at DESC"
+        query += " ORDER BY mi.updated_at DESC"
         with self._connect() as conn:
             rows = conn.execute(query, params).fetchall()
         out: list[dict[str, Any]] = []
@@ -2490,6 +2514,45 @@ class SqliteShadowStore(ShadowStore):
             (fields.get("id_category"), patient_id)
         )
 
+
+    def count_patient_encounters(self, patient_id: str) -> int:
+        with self._connect() as conn:
+            row = conn.execute(
+                "SELECT COUNT(*) FROM encounter_index WHERE patient_id = ?",
+                (patient_id,),
+            ).fetchone()
+        return int(row[0] or 0) if row else 0
+
+    def address_for_home_phone(self, phone: str, except_id: str = "") -> dict[str, str]:
+        digits = "".join(ch for ch in (phone or "") if ch.isdigit())
+        if len(digits) < 7:
+            return {"address": "", "postalCode": ""}
+        with self._connect() as conn:
+            row = conn.execute(
+                """
+                SELECT address FROM patient_index
+                WHERE resource_id != ?
+                  AND trim(COALESCE(address, '')) != ''
+                  AND instr(
+                        '/' || replace(replace(replace(replace(COALESCE(phone, ''), '-', ''), ' ', ''), '(', ''), ')', '') || '/',
+                        '/' || ? || '/'
+                      ) > 0
+                LIMIT 1
+                """,
+                (except_id or "", digits),
+            ).fetchone()
+        if not row or not row[0]:
+            return {"address": "", "postalCode": ""}
+        return {"address": str(row[0]), "postalCode": ""}
+
+    def patient_index_mark(self) -> str:
+        with self._connect() as conn:
+            row = conn.execute(
+                "SELECT COUNT(*), COALESCE(MAX(updated_at), '') FROM patient_index"
+            ).fetchone()
+        if not row:
+            return "0:"
+        return f"{row[0]}:{row[1]}"
 
     def list_patient_roster(self) -> list[dict[str, str]]:
         """病患名單只用索引欄，不含整份 JSON。"""
@@ -3972,15 +4035,12 @@ def _apply_patient_fallbacks_to_queue_meta(
     patient_id_no: str,
     patient_clinic: dict[str, str],
 ) -> None:
-    """掛號 Encounter 缺身分證／押金時，回退到病患主檔。"""
+    """Fill a missing ID from the patient master. Visit deposit stays on this encounter."""
     hc_id_no = str(queue_meta.get("hcIdNo") or "").strip().upper()
     resolved_id = hc_id_no or (patient_id_no or "").strip().upper() or patient_clinic.get("idNo") or ""
     if resolved_id:
         queue_meta["hcIdNo"] = resolved_id
         queue_meta["idNo"] = resolved_id
-    deposit = str(queue_meta.get("deposit") or "").strip()
-    if not deposit and patient_clinic.get("keymoney"):
-        queue_meta["deposit"] = patient_clinic["keymoney"]
     if patient_clinic.get("idCategory") and not queue_meta.get("idCategory"):
         queue_meta["idCategory"] = patient_clinic["idCategory"]
     if patient_clinic.get("kind") and not queue_meta.get("kind"):

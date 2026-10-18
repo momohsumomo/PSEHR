@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
 import {
   fetchPatients,
   fetchQueueForDate,
@@ -55,7 +54,6 @@ function idTail(idNo: string): string {
 }
 
 export function SelfRegisterKioskPage() {
-  const navigate = useNavigate();
   const [mode, setMode] = useState<Mode>("home");
   const [walk, setWalk] = useState<WalkKind>("deposit");
   const [digits, setDigits] = useState("");
@@ -74,6 +72,14 @@ export function SelfRegisterKioskPage() {
     setWho("");
     setNote("");
   };
+
+  useEffect(() => {
+    const prev = document.title;
+    document.title = "\u81ea\u52a9\u639b\u865f";
+    return () => {
+      document.title = prev;
+    };
+  }, []);
 
   useEffect(() => {
     let gone = false;
@@ -98,7 +104,7 @@ export function SelfRegisterKioskPage() {
       if (ev.key === "Escape") {
         ev.preventDefault();
         if (busy) return;
-        if (mode === "home" || mode === "done") navigate("/");
+        if (mode === "home" || mode === "done") resetHome();
         else if (mode === "pick") setMode("id");
         else if (mode === "id") setMode("kind");
         else setMode("home");
@@ -119,7 +125,7 @@ export function SelfRegisterKioskPage() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [mode, busy, navigate, digits]);
+  }, [mode, busy, digits]);
 
   const quote = (birthdayRoc: string, selfPay: boolean, baseReg: number) => {
     const fees = readLocalClinicBundle().fees;
@@ -144,9 +150,16 @@ export function SelfRegisterKioskPage() {
   const alreadyToday = async (patientId: string, name: string) => {
     const day = todayIso();
     const same = await fetchSameDayEncounters(patientId, day, { includeCloud: false });
-    const open = (same.encounters || []).find((row) => row.queueStatus !== "cancelled" && row.queueNumber);
+    const rows = (same.encounters || []).filter(
+      (row) => row.source !== "nhi_cloud" && row.queueStatus !== "cancelled",
+    );
+    if (rows.some((row) => row.prebook)) {
+      showDone(name, "", "\u7576\u65e5\u5df2\u6709\u9810\u7d04\uff0c\u8acb\u76f4\u63a5\u8ddf\u6ac3\u53f0\u5831\u5230");
+      return true;
+    }
+    const open = rows.find((row) => row.queueNumber);
     if (!open?.queueNumber) return false;
-    showDone(name, String(open.queueNumber), "\u60a8\u4eca\u5929\u5df2\u7d93\u639b\u904e\u865f");
+    showDone(name, String(open.queueNumber), `\u60a8\u4eca\u5929\u5df2\u7d93\u639b\u904e\u865f\uff0c\u865f\u78bc\u662f${open.queueNumber}\u865f\u3002`);
     return true;
   };
 
@@ -298,6 +311,7 @@ export function SelfRegisterKioskPage() {
 
   return (
     <div
+      data-surface="kiosk"
       className={shell}
       style={{
         background: "linear-gradient(165deg, #f6f3ec 0%, #e5f1f4 46%, #f3eee4 100%)",
@@ -305,13 +319,6 @@ export function SelfRegisterKioskPage() {
       }}
     >
       <header className="relative shrink-0 border-b border-[#d7e3e8] bg-white/70 px-8 pb-4 pt-5 text-center backdrop-blur-sm">
-        <button
-          type="button"
-          className="absolute right-5 top-4 rounded-full px-3 py-1 text-sm text-[#6d8494] hover:bg-[#e7eef1]"
-          onClick={() => navigate("/")}
-        >
-          {"\u56de\u5927\u5ef3"}
-        </button>
         <p className="text-[1.7rem] font-semibold tracking-wide text-[#12324a]">{clinicName || "\u81ea\u52a9\u639b\u865f"}</p>
         <h1 className="mt-1 text-xl font-medium tracking-[0.22em] text-[#3d7a96]">{"\u81ea\u52a9\u639b\u865f"}</h1>
         <div className="mx-auto mt-3 h-1 w-16 rounded-full bg-[#c4a36a]" />
@@ -432,8 +439,8 @@ export function SelfRegisterKioskPage() {
         <div className="flex flex-1 flex-col items-center justify-center text-center">
           <div className="rounded-[2rem] bg-white px-16 py-12 shadow-[0_16px_36px_rgba(18,42,58,.12)]">
             <div className="text-3xl font-bold">{who}</div>
-            <div className="mt-4 text-7xl font-bold text-[#0f4c6e]">{number}</div>
-            <div className="mt-4 text-2xl">{note}</div>
+            {number ? <div className="mt-4 text-7xl font-bold text-[#0f4c6e]">{number}</div> : null}
+            <div className={number ? "mt-4 text-2xl" : "mt-6 text-4xl font-bold leading-snug"}>{note}</div>
           </div>
           <button type="button" className="mt-8 h-16 w-56 rounded-2xl bg-[#0f4c6e] text-2xl font-bold text-white" onClick={resetHome}>
             {"\u5b8c\u6210"}
