@@ -54,6 +54,7 @@ class NhiEncounterIntake(BaseModel):
     referralDate: str | None = Field(None, max_length=12)
     acceptReferral: str | None = Field(None, max_length=1)
     prebook: bool = False
+    confirmDuplicate: bool = False
     queueNumber: int | None = Field(None, description="當次看診序號，可手改")
     visitClock: str | None = Field(None, max_length=8, description="就診時間 HH:MM")
     # None＝這次不改。False 會清掉「已寫入」圈，只有寫入成功才送 True。

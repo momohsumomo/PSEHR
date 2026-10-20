@@ -70,7 +70,8 @@ export function PatientLookDialog({ open, patientId, patientName, medicalNo, onC
   const [viewer, setViewer] = useState<number | null>(null);
   const [picked, setPicked] = useState(0);
   const [photoBusy, setPhotoBusy] = useState(false);
-  const [deleteArmed, setDeleteArmed] = useState(false);
+  const [armedIndex, setArmedIndex] = useState<number | null>(null);
+  const armedAt = useRef(0);
   const [photoNote, setPhotoNote] = useState("");
   const addRef = useRef<HTMLInputElement>(null);
   const editRef = useRef<HTMLInputElement>(null);
@@ -87,7 +88,7 @@ export function PatientLookDialog({ open, patientId, patientName, medicalNo, onC
   }, []);
 
   useEscLayer([
-    { open: open && viewer != null, close: () => { setViewer(null); setDeleteArmed(false); } },
+    { open: open && viewer != null, close: () => { setViewer(null); setArmedIndex(null); } },
     { open: open && previewOpen, close: closePreview },
     { open: open && viewer == null && !previewOpen, close: onClose },
   ]);
@@ -252,7 +253,7 @@ export function PatientLookDialog({ open, patientId, patientName, medicalNo, onC
 
   const showPhoto = (index: number) => {
     if (index < 0 || index >= photos.length) return;
-    setDeleteArmed(false);
+    setArmedIndex(null);
     setPhotoNote("");
     setViewer(index);
   };
@@ -304,20 +305,25 @@ export function PatientLookDialog({ open, patientId, patientName, medicalNo, onC
     const photo = photos[index];
     const rel = folderRel(photo);
     if (!photo || !rel || photoBusy) {
-      setPhotoNote("\u9019\u5f35\u4e0d\u5728\u76f8\u7c3f\u8cc7\u6599\u593e\uff0c\u6c92\u8fa6\u6cd5\u79fb\u51fa\u3002");
+      const msg = "\u9019\u5f35\u4e0d\u5728\u76f8\u7c3f\u8cc7\u6599\u593e\uff0c\u6c92\u8fa6\u6cd5\u79fb\u51fa\u3002";
+      setPhotoNote(msg);
+      setNote(msg);
       return;
     }
-    if (!deleteArmed) {
-      setDeleteArmed(true);
-      setPhotoNote("\u518d\u6309\u4e00\u6b21\u522a\u9664\uff0c\u9019\u5f35\u5c31\u6703\u5f9e\u76f8\u7c3f\u62ff\u6389\u3002");
-      setNote("\u518d\u6309\u4e00\u6b21\u522a\u9664\uff0c\u9019\u5f35\u5c31\u6703\u5f9e\u76f8\u7c3f\u62ff\u6389\u3002");
+    if (armedIndex !== index || Date.now() - armedAt.current < 400) {
+      if (armedIndex !== index) {
+        setArmedIndex(index);
+        armedAt.current = Date.now();
+        setPhotoNote("\u518d\u6309\u4e00\u6b21\u522a\u9664\uff0c\u9019\u5f35\u5c31\u6703\u5f9e\u76f8\u7c3f\u62ff\u6389\u3002");
+        setNote("\u518d\u6309\u4e00\u6b21\u522a\u9664\uff0c\u9019\u5f35\u5c31\u6703\u5f9e\u76f8\u7c3f\u62ff\u6389\u3002");
+      }
       return;
     }
     setPhotoBusy(true);
     try {
       await removeLookPhoto(rel);
       const wall = await loadWall();
-      setDeleteArmed(false);
+      setArmedIndex(null);
       setPhotoNote("");
       setNote("");
       if (!wall.length) {
@@ -360,7 +366,7 @@ export function PatientLookDialog({ open, patientId, patientName, medicalNo, onC
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/35">
+    <div className="fixed inset-0 z-[80] flex bg-black/35">
       <input
         ref={addRef}
         type="file"
@@ -385,7 +391,7 @@ export function PatientLookDialog({ open, patientId, patientName, medicalNo, onC
         }}
       />
       <div
-        className="flex h-[min(44rem,92vh)] w-[min(68rem,96vw)] flex-col border bg-[#F0F0F0] shadow-lg"
+        className="flex h-full w-full flex-col border bg-[#F0F0F0] shadow-lg"
         style={{ borderColor: HIS.chromeDark, fontFamily: HIS_FONT }}
       >
         <div className="flex shrink-0 items-center gap-2 bg-[#2060A0] px-2 py-1 text-xs font-bold text-white">
@@ -423,7 +429,7 @@ export function PatientLookDialog({ open, patientId, patientName, medicalNo, onC
               void deleteCurrent(index);
             }}
           >
-            刪除
+            {armedIndex === Math.min(picked, Math.max(photos.length - 1, 0)) ? "確定刪除" : "刪除"}
           </button>
           <button type="button" className="px-2 hover:underline" onClick={onClose}>
             關閉
@@ -431,16 +437,19 @@ export function PatientLookDialog({ open, patientId, patientName, medicalNo, onC
         </div>
         <div className="min-h-0 flex-1 overflow-auto p-2">
           {photos.length > 0 ? (
-            <div className="grid grid-cols-4 gap-2">
+            <div className="grid grid-cols-3 gap-2 lg:grid-cols-4 xl:grid-cols-5">
               {photos.map((photo, index) => (
                 <figure
                   key={photo.id}
                   className="flex min-w-0 cursor-pointer flex-col border bg-white"
                   style={{ borderColor: picked === index || viewer === index ? "#0047AB" : HIS.chromeBorder, outline: picked === index || viewer === index ? "2px solid #0047AB" : "none" }}
-                  onClick={() => setPicked(index)}
+                  onClick={() => {
+                    setPicked(index);
+                    if (index !== armedIndex) setArmedIndex(null);
+                  }}
                   onDoubleClick={() => showPhoto(index)}
                 >
-                  <div className="flex h-36 items-center justify-center bg-[#202020] sm:h-40">
+                  <div className="flex aspect-[4/3] items-center justify-center bg-[#202020]">
                     <img src={photo.src} alt="" loading="lazy" className="max-h-full max-w-full object-contain" />
                   </div>
                   <figcaption className="truncate px-1 text-[11px] leading-4" title={`${photo.name} ${photo.date}`.trim()}>
@@ -459,17 +468,17 @@ export function PatientLookDialog({ open, patientId, patientName, medicalNo, onC
 
 
       {viewer != null && currentPhoto && (
-        <div className="fixed inset-0 z-[95] flex items-center justify-center bg-black/70">
+        <div className="fixed inset-0 z-[95] flex bg-black">
           <input ref={editRef} type="file" accept={IMAGE_ACCEPT} className="hidden" onChange={(e) => {
             const file = e.target.files?.[0];
             e.target.value = "";
             if (file) void replaceCurrent(file);
           }} />
-          <div className="flex h-[min(46rem,94vh)] w-[min(72rem,96vw)] flex-col border bg-[#111] shadow-lg" style={{ fontFamily: HIS_FONT }}>
+          <div className="flex h-full w-full flex-col bg-[#111]" style={{ fontFamily: HIS_FONT }}>
             <div className="flex shrink-0 items-center gap-2 bg-[#2060A0] px-2 py-1 text-xs font-bold text-white">
               <span>照片 {viewer + 1} / {photos.length}</span>
               <span className="font-normal">{currentPhoto.name}</span>
-              <button type="button" className="ml-auto px-2 hover:underline" onClick={() => { setViewer(null); setDeleteArmed(false); }}>關閉</button>
+              <button type="button" className="ml-auto px-2 hover:underline" onClick={() => { setViewer(null); setArmedIndex(null); }}>關閉</button>
             </div>
             <button type="button" className="flex min-h-0 flex-1 items-center justify-center bg-black" onDoubleClick={() => showPhoto((viewer + 1) % photos.length)}>
               <img src={currentPhoto.src} alt="" className="max-h-full max-w-full object-contain" />
@@ -480,7 +489,7 @@ export function PatientLookDialog({ open, patientId, patientName, medicalNo, onC
               <button type="button" className="border bg-[#D4D0C8] px-2 py-1 text-xs font-bold" disabled={photoBusy} onClick={() => void rotateCurrent(-1)}>左轉</button>
               <button type="button" className="border bg-[#D4D0C8] px-2 py-1 text-xs font-bold" disabled={photoBusy} onClick={() => void rotateCurrent(1)}>右轉</button>
               <button type="button" className="border bg-[#D4D0C8] px-2 py-1 text-xs font-bold" disabled={photoBusy} onClick={() => editRef.current?.click()}>換成別張</button>
-              <button type="button" className="border bg-[#F0C0C0] px-2 py-1 text-xs font-bold" disabled={photoBusy} onClick={() => void deleteCurrent(viewer ?? picked)}>{deleteArmed ? "確定刪除" : "刪除"}</button>
+              <button type="button" className="border bg-[#F0C0C0] px-2 py-1 text-xs font-bold" disabled={photoBusy} onClick={() => void deleteCurrent(viewer ?? picked)}>{armedIndex === viewer ? "確定刪除" : "刪除"}</button>
               <span className="text-[11px] text-slate-700">{photoNote || "雙擊大圖看下一張。刪除會把這張移出相簿，放到本機 data\\look-removed。"}</span>
             </div>
           </div>
@@ -488,9 +497,9 @@ export function PatientLookDialog({ open, patientId, patientName, medicalNo, onC
       )}
 
       {previewOpen && (
-        <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/45">
+        <div className="fixed inset-0 z-[90] flex bg-black/45">
           <div
-            className="flex h-[min(40rem,88vh)] w-[min(64rem,94vw)] flex-col border bg-[#F0F0F0] shadow-lg"
+            className="flex h-full w-full flex-col border bg-[#F0F0F0] shadow-lg"
             style={{ borderColor: HIS.chromeDark, fontFamily: HIS_FONT }}
           >
             <div className="flex shrink-0 items-center gap-2 bg-[#2060A0] px-2 py-1 text-xs font-bold text-white">
@@ -502,7 +511,7 @@ export function PatientLookDialog({ open, patientId, patientName, medicalNo, onC
             </div>
             <div className="min-h-0 flex-1 overflow-auto p-2">
               {pending.length > 0 ? (
-                <div className="grid grid-cols-4 gap-2">
+                <div className="grid grid-cols-3 gap-2 lg:grid-cols-4 xl:grid-cols-5">
                   {pending.map((item) => {
                     const on = item.key === selectedKey;
                     return (
@@ -516,7 +525,7 @@ export function PatientLookDialog({ open, patientId, patientName, medicalNo, onC
                         }}
                         onClick={() => setSelectedKey(item.key)}
                       >
-                        <div className="flex h-36 items-center justify-center bg-[#202020] sm:h-40">
+                        <div className="flex aspect-[4/3] items-center justify-center bg-[#202020]">
                           <img src={item.url} alt="" className="max-h-full max-w-full object-contain" />
                         </div>
                         <span className="truncate px-1 text-[11px] leading-4" title={`${item.file.name} ${item.date}`.trim()}>

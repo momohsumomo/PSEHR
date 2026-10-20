@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { fixCardConsole, startLocalCard6, type CardConsoleStatus } from "@/api/clinicApi";
+import { startLocalCard6, type CardConsoleStatus } from "@/api/clinicApi";
+import { DeskCardError, identifyLocalSlots, listLocalReaders } from "@/lib/localCard";
 
 type Props = {
   onFixed?: (status: CardConsoleStatus | null, message: string) => void;
@@ -7,68 +8,87 @@ type Props = {
   variant?: "dark" | "light";
   label?: string;
   scope?: "host" | "local";
+  align?: "start" | "end";
 };
 
-export function CardConsoleDebugButton({ onFixed, compact = false, variant = "dark", label, scope = "host" }: Props) {
+export function CardConsoleDebugButton({
+  onFixed,
+  compact = false,
+  variant = "dark",
+  label,
+  align = "start",
+}: Props) {
+  const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [note, setNote] = useState<string | null>(null);
+  const [note, setNote] = useState("");
 
-  const runFix = async (e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (busy) return;
+  const light = variant === "light";
+  const btnClass = light
+    ? "rounded border border-sky-700 bg-white px-2 py-0.5 text-[12px] font-bold text-sky-950"
+    : "rounded border border-sky-300/40 bg-sky-500/15 px-2 py-0.5 text-[12px] font-bold text-sky-100";
+
+  const load = async () => {
     setBusy(true);
-    setNote(null);
+    setNote("");
     try {
-      if (scope === "local") {
-        let msg = "";
-        try {
-          msg = await startLocalCard6();
-        } catch {
-          msg = "\u9019\u6247\u8996\u7a97\u9084\u6c92\u88ab\u5141\u8a31\u770b\u9019\u53f0\u96fb\u8166\u3002\u8acb\u95dc\u6389\u9019\u6247\uff0c\u518d\u96d9\u64ca\u9019\u53f0\u5df2\u7d93\u6709\u7684\u9023\u5230\u4e3b\u6a5f.bat\u3002\u4e0d\u7528\u518d\u4e0b\u8f09\u3002";
-        }
-        setNote(msg);
-        onFixed?.(null, msg);
+      const names = await listLocalReaders();
+      if (names.length === 0) {
+        setNote("\u9019\u53f0\u6c92\u6709\u770b\u5230\u8b80\u5361\u6a5f\u3002");
         return;
       }
-      const result = await fixCardConsole();
-      const msg = result.message || (result.ok ? "\u8b80\u5361\u8edf\u9ad4\u5df2\u5c31\u7dd2\u3002" : "\u9664\u932f\u672a\u5b8c\u6210\u3002");
-      setNote(msg);
-      onFixed?.(result.status ?? null, msg);
+      setNote(names.length === 1 ? "\u6b63\u5728\u770b\u9019\u4e00\u53f0\u63d2\u7684\u662f\u54ea\u7a2e\u5361\u2026" : "\u6b63\u5728\u8fa8\u8a8d\u5169\u500b\u69fd\u2026");
+      const found = await identifyLocalSlots(names);
+      setNote(found.note);
+      onFixed?.(null, found.note);
     } catch (err) {
-      const msg = err instanceof Error ? err.message : "\u9664\u932f\u5931\u6557";
-      setNote(msg);
-      onFixed?.(null, msg);
+      setNote(err instanceof Error ? err.message : "\u8b80\u5361\u6a5f\u6e05\u55ae\u5931\u6557");
     } finally {
       setBusy(false);
     }
   };
 
-  const btnClass =
-    variant === "light"
-      ? compact
-        ? "px-2 py-0.5 text-[10px] border-sky-600/30 bg-white text-sky-900 hover:bg-sky-50"
-        : "w-full px-2.5 py-1.5 text-[11px] border-sky-600/30 bg-white text-sky-900 hover:bg-sky-50"
-      : compact
-        ? "px-2 py-0.5 text-[10px] border-sky-400/50 bg-sky-500/15 text-sky-100 hover:bg-sky-500/25"
-        : "w-full px-2.5 py-1.5 text-[11px] border-sky-400/40 bg-sky-500/10 text-sky-100 hover:bg-sky-500/20";
-
   return (
-    <div className={compact ? "mt-1.5" : "mt-2"} onClick={(e) => e.stopPropagation()}>
+    <div className={compact ? "relative" : "relative mt-2"} onClick={(event) => event.stopPropagation()}>
       <button
         type="button"
-        onClick={runFix}
         disabled={busy}
-        className={"rounded-lg border font-bold transition active:scale-[0.98] disabled:opacity-60 " + btnClass}
+        className={btnClass + " disabled:opacity-60"}
+        onClick={() => {
+          const next = !open;
+          setOpen(next);
+          if (next) void load();
+        }}
       >
-        {busy ? "\u9664\u932f\u4e2d\u2026" : label || "\u9664\u932f\uff08\u81ea\u52d5\u555f\u52d5\uff0f\u91cd\u555f\uff09"}
+        {label || "\u8b80\u5361\u9664\u932f"}
       </button>
-      {note ? (
-        <p
-          className={"mt-1 text-[10px] leading-snug " + (variant === "light" ? "text-sky-900/80" : "text-sky-100/90")}
+      {open ? (
+        <div
+          className={
+            "absolute z-50 mt-1 w-72 space-y-1 rounded border p-2 text-[12px] shadow-lg " +
+            (align === "end" ? "right-0 " : "left-0 ") +
+            (light ? "border-sky-700 bg-white text-black" : "border-sky-300/40 bg-slate-900 text-sky-50")
+          }
         >
-          {note}
-        </p>
+          {note ? <p className="leading-snug">{note}</p> : null}
+          <div className="flex gap-1">
+            <button type="button" disabled={busy} className="border bg-white px-2 py-0.5 text-black disabled:opacity-60" onClick={() => void load()}>
+              {"\u518d\u5224\u65b7\u4e00\u6b21"}
+            </button>
+            {note.indexOf("\u6c92\u6709\u56de\u61c9") >= 0 ? (
+              <button
+                type="button"
+                className="border bg-white px-2 py-0.5 text-black"
+                onClick={() => {
+                  void startLocalCard6().then((msg) => setNote(msg)).catch((err: unknown) => {
+                    setNote(err instanceof DeskCardError || err instanceof Error ? err.message : "\u8b80\u5361\u8edf\u9ad4\u6c92\u958b\u8d77\u4f86");
+                  });
+                }}
+              >
+                {"\u958b\u555f\u9019\u53f0\u7684\u8b80\u5361\u8edf\u9ad4"}
+              </button>
+            ) : null}
+          </div>
+        </div>
       ) : null}
     </div>
   );
@@ -77,9 +97,6 @@ export function CardConsoleDebugButton({ onFixed, compact = false, variant = "da
 function cardStatusLabel(status: CardConsoleStatus | null): string {
   if (status == null) return "\u8b80\u53d6\u4e2d";
   if (status.reachable) return "\u6b63\u5e38";
-  const action = status.fault?.deskAction;
-  if (action === "start_software") return "\u672a\u555f\u52d5";
-  if (action === "restart_software") return "\u9700\u91cd\u555f";
   return "\u672a\u9023\u7dda";
 }
 

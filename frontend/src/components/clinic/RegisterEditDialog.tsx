@@ -58,6 +58,7 @@ export type RegisterEditForm = {
   burdenFee: string;
   /** 預約掛號；無卡存檔時不走押金單 */
   prebook?: boolean;
+  confirmDuplicate?: boolean;
   /** 當日就診序號，空白＝存檔時自動取號 */
   queueNumber?: string;
   /** 清單上的就診時間 HH:MM */

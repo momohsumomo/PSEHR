@@ -15,7 +15,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from scripts.import_yisheng_data import md5_id, parse_roc_date, read_dbf_records
+from scripts.import_yisheng_data import md5_id, read_dbf_records
 from src.core.yisheng_register_fields import map_visit_state
 
 
@@ -80,8 +80,6 @@ def main() -> int:
             continue
         patient_id = keyword_to_patient.get(keyword)
         if not patient_id:
-            continue
-        if not parse_roc_date(o_date):
             continue
         eid = f"local-encounter-{md5_id(f'{keyword}-{o_date}-{timesno}')}"
         encounter_ids.add(eid)

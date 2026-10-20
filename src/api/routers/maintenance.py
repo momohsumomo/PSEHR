@@ -9,8 +9,14 @@ from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from src.app.bootstrap import get_shadow_store
-from src.core import clinic_reports, db_backup
+from src.core import app_update, clinic_reports, db_backup
+from src.core.appearance import load_appearance
 from src.core.desktop_window import open_desktop_window
+from src.core.drug_pack_fetch import download_latest
+from src.spoke.drug_price import clear_price_cache
+from src.spoke.hydrator import PackHydrator
+from src.spoke.local_hub import hub_packages_dir
+from src.spoke.pack_store import PackStore
 
 router = APIRouter(prefix="/maintenance", tags=["Maintenance"])
 
@@ -37,6 +43,48 @@ def desktop_window(body: DesktopWindowBody) -> dict[str, Any]:
     except RuntimeError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return {"ok": True, "target": kind}
+
+
+@router.get("/app-update", summary="Compare this install with GitHub main")
+def app_update_status() -> dict:
+    try:
+        return app_update.describe()
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail="\u9023\u4e0d\u4e0a GitHub\u3002" + str(exc)) from exc
+
+
+@router.post("/app-update", summary="Replace the program from GitHub, keep data/")
+def app_update_apply() -> dict:
+    try:
+        return app_update.begin_apply()
+    except RuntimeError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail="\u8edf\u9ad4\u4e0b\u8f09\u5931\u6557\u3002" + str(exc)) from exc
+
+
+@router.get("/appearance", summary="Clinic appearance saved under data/")
+def appearance_saved() -> dict:
+    return load_appearance()
+
+
+@router.post("/drug-pack", summary="Download the published drug pack and hydrate")
+async def drug_pack_apply() -> dict:
+    try:
+        got = download_latest(hub_packages_dir())
+    except RuntimeError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    result = await PackHydrator(PackStore()).run_once()
+    body = result.to_dict()
+    clear_price_cache()
+    store = PackStore()
+    store.initialize()
+    return {
+        "ok": body.get("status") == "success",
+        "tag": got.get("tag") or "",
+        "version": store.latest_active_version(),
+        "diagnosis": body.get("diagnosis") or body.get("error_message") or "",
+    }
 
 
 @router.get("/backup", summary="備份設定、現有備份、目前是否在備份")

@@ -11,6 +11,7 @@ from src.core.local_print import (
     desk_print_status,
     ensure_sumatra,
     installed_printers,
+    proxy_local_cshis,
     queue_html_print,
     start_local_card6,
 )
@@ -43,46 +44,8 @@ class LocalPrintHandler(BaseHTTPRequestHandler):
         self._cors()
         self.end_headers()
 
-    def _proxy_cshis(self, method: str) -> None:
-        import ssl
-        import urllib.error
-        import urllib.request
-
-        rel = self.path.split("?", 1)[0]
-        if not rel.startswith("/cshis/"):
-            self._json({"detail": "not found"}, 404)
-            return
-        target = "https://127.0.0.1:5066" + rel[len("/cshis"):]
-        length = int(self.headers.get("Content-Length") or "0")
-        raw = self.rfile.read(length) if length else b""
-        if method in {"POST", "PUT"} and not raw:
-            raw = b"{}"
-        req = urllib.request.Request(target, data=raw if method not in {"GET", "HEAD"} else None, method=method)
-        req.add_header("Accept", "application/json")
-        req.add_header("Content-Type", "application/json")
-        ctx = ssl._create_unverified_context()
-        try:
-            with urllib.request.urlopen(req, timeout=25, context=ctx) as resp:
-                payload = resp.read()
-                code = int(resp.status)
-        except urllib.error.HTTPError as exc:
-            payload = exc.read() if exc.fp else b"{}"
-            code = int(exc.code)
-        except Exception:
-            payload = b'{"detail":"card software on this PC is not running"}'
-            code = 502
-        self.send_response(code)
-        self._cors()
-        self.send_header("Content-Type", "application/json; charset=utf-8")
-        self.send_header("Content-Length", str(len(payload)))
-        self.end_headers()
-        self.wfile.write(payload)
-
     def do_GET(self) -> None:
         path = self.path.split("?", 1)[0]
-        if path.startswith("/cshis/"):
-            self._proxy_cshis("GET")
-            return
         if path == "/health":
             fresh = "fresh=1" in (self.path.split("?", 1)[1] if "?" in self.path else "")
             self._json(desk_print_status(fresh=fresh))
@@ -94,11 +57,28 @@ class LocalPrintHandler(BaseHTTPRequestHandler):
 
     def do_POST(self) -> None:
         path = self.path.split("?", 1)[0]
-        if path.startswith("/cshis/"):
-            self._proxy_cshis("POST")
-            return
         if path == "/tools/card":
             self._json(start_local_card6())
+            return
+        if path == "/tools/cshis":
+            try:
+                length = int(self.headers.get("Content-Length") or "0")
+            except ValueError:
+                length = 0
+            try:
+                payload = json.loads(self.rfile.read(length).decode("utf-8") or "{}")
+            except (UnicodeError, json.JSONDecodeError):
+                self._json({"ok": False, "statusCode": 400}, 400)
+                return
+            if not isinstance(payload, dict):
+                self._json({"ok": False, "statusCode": 400}, 400)
+                return
+            body = payload.get("body")
+            self._json(proxy_local_cshis(
+                str(payload.get("method") or "GET"),
+                str(payload.get("path") or ""),
+                body if isinstance(body, dict) else None,
+            ))
             return
         if path == "/tools/sumatra":
             try:

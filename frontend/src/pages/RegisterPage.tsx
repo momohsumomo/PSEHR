@@ -41,7 +41,12 @@ import { openDepositSlip, openSavedVisitReceipt } from "@/lib/visitReceiptPrint"
 import { VisitPrintDialog } from "@/components/clinic/VisitPrintDialog";
 import { DoneMarkCell } from "@/components/clinic/EncounterQueuePanel";
 import { AppointmentCheckInDialog, InsertNumberDialog } from "@/components/clinic/InsertNumberDialog";
-import { findSameDayHits, SameDayFlash } from "@/components/clinic/SameDayRegisterDialog";
+import {
+  pendingDuplicateHits,
+  SameDayFlash,
+  SameDayRegisterDialog,
+  type SameDayHit,
+} from "@/components/clinic/SameDayRegisterDialog";
 import { HisWinTitle } from "@/components/clinic/HisPageFrame";
 
 function dash(v: unknown): string {
@@ -215,6 +220,8 @@ export function RegisterPage() {
     () => loadClinicSession()?.shift || defaultShift(),
   );
   const [sameDayFlash, setSameDayFlash] = useState(false);
+  const [dupAsk, setDupAsk] = useState<SameDayHit[] | null>(null);
+  const dupGo = useRef<(() => void) | null>(null);
   const [careBusy, setCareBusy] = useState(false);
   const [searchParams, setSearchParams] = useSearchParams();
   const [insertNo, setInsertNo] = useState("");
@@ -244,6 +251,7 @@ export function RegisterPage() {
   const [printMenuOpen, setPrintMenuOpen] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const queueListRef = useRef<HTMLDivElement>(null);
+  const preferAfterDeleteRef = useRef<string | null>(null);
 
   /** 已掛一筆 → 掛號編輯 */
 
@@ -454,14 +462,16 @@ export function RegisterPage() {
     setStubId(act.id);
   };
 
-  const confirmSaveRegister = async () => {
-    const hits = findSameDayHits(
-      queue,
-      confirmForm.patientId || "",
-      confirmForm.idNo || "",
-      confirmForm.encounterId,
-      regShift,
-    );
+  const confirmSaveRegister = async (allowDuplicate = false) => {
+    const hits = pendingDuplicateHits(queue, confirmForm, regShift);
+    if (!allowDuplicate && hits.length) {
+      dupGo.current = () => {
+        setDupAsk(null);
+        void confirmSaveRegister(true);
+      };
+      setDupAsk(hits);
+      return;
+    }
     let bureauSameDay = false;
     setConfirmError(null);
     const skipSeq =
@@ -483,6 +493,7 @@ export function RegisterPage() {
           : confirmForm),
         shift: regShift,
         visitClock: normalizeClock(confirmForm.visitClock || nowClock()),
+        confirmDuplicate: allowDuplicate,
       };
       if (toSave !== confirmForm) setConfirmForm(toSave);
       await submitRegisterEdit(toSave, (fields) => {
@@ -557,10 +568,29 @@ export function RegisterPage() {
     );
   };
 
-  const handlePrebook = async (insert: boolean) => {
+  const handlePrebook = async (insert: boolean, allowDuplicate = false) => {
     if (!selected) {
       tellShell("這個時段還沒有選定的掛號（或先讀卡掛號）。");
       return;
+    }
+    if (!allowDuplicate) {
+      const hits = pendingDuplicateHits(
+        queue,
+        {
+          patientId: selected.patientId,
+          idNo: selected.idNo,
+          queueNumber: selected.queueNumber != null ? String(selected.queueNumber) : "",
+        },
+        regShift,
+      );
+      if (hits.length) {
+        dupGo.current = () => {
+          setDupAsk(null);
+          void handlePrebook(insert, true);
+        };
+        setDupAsk(hits);
+        return;
+      }
     }
     const typedInsert = Number(insertNo);
     const insertAt = insert ? (typedInsert > 0 ? typedInsert : selected.queueNumber) : undefined;
@@ -573,6 +603,7 @@ export function RegisterPage() {
           sex: selected.sex || "F",
           patientName: selected.patientDisplay,
           reasonText: selected.reasonText || "",
+          confirmDuplicate: allowDuplicate,
         },
         selected.slotTime || "",
         insertAt,
@@ -847,7 +878,28 @@ export function RegisterPage() {
       if (selectedId) setSelectedId(null);
       return;
     }
-    if (filteredQueue.some((e) => e.encounterId === selectedId)) return;
+    if (filteredQueue.some((e) => e.encounterId === selectedId)) {
+      if (preferAfterDeleteRef.current && preferAfterDeleteRef.current === selectedId) {
+        preferAfterDeleteRef.current = null;
+      }
+      return;
+    }
+    const wanted = preferAfterDeleteRef.current;
+    if (wanted !== null) {
+      preferAfterDeleteRef.current = null;
+      if (wanted && filteredQueue.some((e) => e.encounterId === wanted)) {
+        setSelectedId(wanted);
+        const id = wanted;
+        requestAnimationFrame(() => {
+          queueListRef.current
+            ?.querySelector<HTMLElement>(`[data-qid="${CSS.escape(id)}"]`)
+            ?.scrollIntoView({ block: "nearest" });
+        });
+        return;
+      }
+      setSelectedId(null);
+      return;
+    }
     const last = filteredQueue.reduce((best, row) =>
       (Number(row.queueNumber) || 0) >= (Number(best.queueNumber) || 0) ? row : best,
     );
@@ -1323,6 +1375,12 @@ export function RegisterPage() {
       />
 
       <SameDayFlash open={sameDayFlash} onClose={() => setSameDayFlash(false)} />
+      <SameDayRegisterDialog
+        open={dupAsk != null}
+        hits={dupAsk || []}
+        onConfirm={() => dupGo.current?.()}
+        onCancel={() => setDupAsk(null)}
+      />
       <DeleteRegisterDialog
         open={deleteOpen}
         busy={deleteBusy}
@@ -1336,8 +1394,13 @@ export function RegisterPage() {
           setDeleteError(null);
           try {
             const res = await cancelRegister({ encounterId: selectedId, mode });
+            const rows = displayQueueRef.current;
+            const idx = rows.findIndex((row) => row.encounterId === selectedId);
+            const neighbor = idx >= 0 ? rows[idx + 1] || rows[idx - 1] || null : null;
+            preferAfterDeleteRef.current = neighbor?.encounterId ?? "";
             await refreshQueue();
-            if (res.localCancelled) setSelectedId(null);
+            if (res.localCancelled) setSelectedId(neighbor?.encounterId ?? null);
+            else preferAfterDeleteRef.current = null;
             setDeleteOpen(false);
           } catch (e) {
             setDeleteError(e instanceof Error ? e.message : "刪除掛號失敗");

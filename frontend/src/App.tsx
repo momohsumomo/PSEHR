@@ -76,7 +76,7 @@ export default function App() {
 
   return (
     <BrowserRouter>
-      <div className="wundadi-his min-h-screen" style={{ colorScheme: "only light" }}>
+      <div className="wundadi-his flex h-dvh flex-col overflow-hidden" style={{ colorScheme: "only light" }}>
         <DeskExeNotice />
         <AppShell />
         <PrintPreviewHost />

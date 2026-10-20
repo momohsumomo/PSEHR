@@ -1,9 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import {
-  fetchCardConsoleStatus,
   fetchDeskStatus,
   fetchLocalPrintHealth,
-  fetchVpnReach,
   fixCardConsole,
   startLocalCard6,
   type LocalPrintHealth,
@@ -148,8 +146,6 @@ function Lamp({
 export function DeskStatusLamps({ sync, syncHint }: Props) {
   const [printHealth, setPrintHealth] = useState<LocalPrintHealth | null>(null);
   const [printLoaded, setPrintLoaded] = useState(false);
-  const [hostCard, setHostCard] = useState<boolean | null>(null);
-  const [hostVpn, setHostVpn] = useState<boolean | null>(null);
   const [note, setNote] = useState("");
 
   const localSeen = useRef(false);
@@ -185,46 +181,20 @@ export function DeskStatusLamps({ sync, syncHint }: Props) {
     };
   }, []);
 
-  const hostDesk = printLoaded && !!printHealth && printHealth.card6 == null;
-  const vpnKnown = typeof printHealth?.vpn === "boolean";
-  const askHostVpn = printLoaded && !!printHealth && !vpnKnown;
-
-  useEffect(() => {
-    if (!hostDesk && !askHostVpn) return;
-    let gone = false;
-    const loadHost = async () => {
-      if (hostDesk) {
-        try {
-          const status = await fetchCardConsoleStatus();
-          if (!gone) setHostCard(status.reachable === true);
-        } catch {
-          if (!gone) setHostCard(false);
-        }
-      }
-      if (askHostVpn) {
-        const reach = await fetchVpnReach();
-        if (!gone) setHostVpn(reach === true);
-      }
-    };
-    void loadHost();
-    const timer = window.setInterval(() => void loadHost(), 15000);
-    return () => {
-      gone = true;
-      window.clearInterval(timer);
-    };
-  }, [hostDesk, askHostVpn]);
-
   const pdf = pdfLamp(printHealth, printLoaded);
   const printer = printerLamp(printHealth, printLoaded);
   const localVpn = printHealth?.vpn;
-  const vpnOn = vpnKnown ? localVpn === true : hostVpn === true;
-  const vpnTone: Tone = !printLoaded ? "wait" : !printHealth ? "bad" : vpnKnown ? (vpnOn ? "ok" : "bad") : hostVpn == null ? "wait" : vpnOn ? "ok" : "bad";
+  const vpnKnown = typeof localVpn === "boolean";
+  const vpnOn = vpnKnown && localVpn === true;
+  const vpnTone: Tone = !printLoaded ? "wait" : !printHealth || !vpnKnown ? "bad" : vpnOn ? "ok" : "bad";
   const vpnLabel = vpnTone === "bad" ? "VPN\u672a\u901a" : "VPN";
   const vpnHint = !printHealth
     ? LOCAL_BLOCKED
-    : vpnOn
-      ? "\u9019\u53f0\u96fb\u8166\u9023\u5f97\u5230\u5065\u4fdd VPN \u4e3b\u6a5f"
-      : "\u9019\u53f0\u9023\u4e0d\u5230\u5065\u4fdd VPN\u3002\u8acb\u81ea\u5df1\u767b\u5165\uff0c\u7db2\u9801\u4e0d\u6703\u4ee3\u767b\u3002";
+    : !vpnKnown
+      ? "\u9019\u53f0\u6c92\u6709\u56de\u5831 VPN\u3002\u4e0d\u6703\u6539\u770b\u4e3b\u6a5f\u3002"
+      : vpnOn
+        ? "\u9019\u53f0\u96fb\u8166\u9023\u5f97\u5230\u5065\u4fdd VPN \u4e3b\u6a5f"
+        : "\u9019\u53f0\u9023\u4e0d\u5230\u5065\u4fdd VPN\u3002\u8acb\u81ea\u5df1\u767b\u5165\uff0c\u7db2\u9801\u4e0d\u6703\u4ee3\u767b\u3002";
 
   const reloadLocal = async () => {
     const health = await fetchLocalPrintHealth();
@@ -257,15 +227,11 @@ export function DeskStatusLamps({ sync, syncHint }: Props) {
     ? "wait"
     : !printHealth
       ? "bad"
-      : card6
-        ? card6.installed && card6.running
-          ? "ok"
-          : "bad"
-        : hostCard == null
-          ? "wait"
-          : hostCard
+        : card6
+          ? card6.installed && card6.running
             ? "ok"
-            : "bad";
+            : "bad"
+          : "bad";
   const cardLabel = cardTone === "bad"
     ? !printHealth
       ? "\u8b80\u5361\u6a5f\u672a\u67e5"
@@ -280,9 +246,7 @@ export function DeskStatusLamps({ sync, syncHint }: Props) {
     : !printHealth
       ? LOCAL_BLOCKED
       : !card6
-        ? hostCard
-          ? "\u9019\u53f0\u7684\u8b80\u5361\u8edf\u9ad4 6.0 \u6709\u5728\u807d"
-          : "\u9019\u53f0\u7684\u8b80\u5361\u6a5f\u6c92\u9023\u4e0a"
+        ? "\u9019\u53f0\u6c92\u6709\u56de\u5831\u8b80\u5361\u6a5f\u3002\u4e0d\u6703\u6539\u770b\u4e3b\u6a5f\u3002"
         : card6.installed && card6.running
           ? "\u9019\u53f0\u7684\u8b80\u5361\u8edf\u9ad4 6.0 \u6709\u5728\u807d"
           : card6.legacy5

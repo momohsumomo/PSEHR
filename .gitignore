@@ -56,6 +56,9 @@ frontend/node_modules/
 frontend/dist/
 frontend/tsconfig.tsbuildinfo
 
+# Written on a clinic install. A development checkout uses git instead.
+/program.json
+
 # Editor
 .idea/
 .vscode/

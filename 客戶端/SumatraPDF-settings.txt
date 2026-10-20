@@ -1,4 +1,4 @@
-﻿# For documentation, see https://www.sumatrapdfreader.org/settings/settings3-6.html
+# For documentation, see https://www.sumatrapdfreader.org/settings/settings3-6.html
 
 CheckForUpdates = false
 CustomScreenDPI = 0

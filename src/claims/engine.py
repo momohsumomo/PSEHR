@@ -28,6 +28,8 @@ class ClaimMedLine:
     doseEach: float | None = None
     routeCode: str = ""
     ratePercent: float = 100.0
+    # False: case-01 daily-fee drug. Filed as order category 4, price and points 0.
+    billable: bool = True
 
 
 @dataclass

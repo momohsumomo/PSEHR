@@ -3,7 +3,6 @@
 
 from __future__ import annotations
 
-import threading
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request
@@ -12,8 +11,6 @@ from src.core.desk_channel import (
     enqueue,
     finish_job,
     fresh_report,
-    host_status,
-    is_host_ip,
     job_view,
     remember_report,
     take_jobs,
@@ -43,8 +40,6 @@ def report(payload: dict[str, Any], request: Request) -> dict[str, Any]:
 @router.get("/status")
 def status(request: Request) -> dict[str, Any]:
     ip = _ip(request)
-    if is_host_ip(ip):
-        return host_status()
     health = fresh_report(ip)
     if not health:
         return {"reported": False}
@@ -58,15 +53,6 @@ def print_job(payload: dict[str, Any], request: Request) -> dict[str, Any]:
     if not isinstance(payload, dict) or not str(payload.get("html") or "").strip():
         raise HTTPException(status_code=400, detail=_NO_HTML)
     ip = _ip(request)
-    if is_host_ip(ip):
-        job_id = enqueue(ip, payload, state="printing")
-        threading.Thread(
-            target=_print_on_host,
-            args=(ip, job_id, payload),
-            name="desk-host-print",
-            daemon=True,
-        ).start()
-        return {"ok": True, "id": job_id, "state": "printing"}
     if fresh_report(ip) is None:
         raise HTTPException(status_code=400, detail=_NO_AGENT)
     job_id = enqueue(ip, payload, state="queued")
@@ -98,21 +84,3 @@ def job_result(job_id: str, payload: dict[str, Any], request: Request) -> dict[s
         detail=str(payload.get("detail") or ""),
     )
     return {"ok": True}
-
-
-def _print_on_host(ip: str, job_id: str, payload: dict[str, Any]) -> None:
-    from src.core.local_print import print_html_to_printer
-
-    feed = str(payload.get("feed") or "")
-    try:
-        used = print_html_to_printer(
-            html=str(payload.get("html") or ""),
-            printer_name=str(payload.get("printerName") or ""),
-            width_mm=float(payload.get("widthMm") or 0),
-            height_mm=float(payload.get("heightMm") or 0),
-            feed=feed,
-        )
-    except Exception as exc:
-        finish_job(ip, job_id, ok=False, detail=str(exc))
-        return
-    finish_job(ip, job_id, ok=True, printer=used)

@@ -1086,6 +1086,86 @@ class SqliteShadowStore(ShadowStore):
             })
         return result
 
+    def emr_text_match_ids(
+        self,
+        date_from: str,
+        date_to: str,
+        *,
+        cc: str = "",
+        dx: str = "",
+        drug: str = "",
+    ) -> set[str] | None:
+        """Encounter ids whose chief complaint, diagnosis, or drug contains the text. None = no text filter."""
+
+        def like(text: str) -> str:
+            safe = text.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+            return f"%{safe}%"
+
+        cc_text = cc.strip()
+        dx_text = dx.strip()
+        drug_text = drug.strip()
+        if not cc_text and not dx_text and not drug_text:
+            return None
+        where = [
+            "ei.queue_status != 'cancelled'",
+            "IFNULL(ei.fhir_status, '') != 'cancelled'",
+            "ei.encounter_date >= ? AND ei.encounter_date <= ?",
+        ]
+        params: list[Any] = [date_from[:10], date_to[:10]]
+        if cc_text:
+            where.append(
+                "("
+                "IFNULL(ei.chief_complaint, '') LIKE ? ESCAPE '\\' "
+                "OR IFNULL(ei.reg_cc, '') LIKE ? ESCAPE '\\' "
+                "OR EXISTS (SELECT 1 FROM clinical_note_index cn "
+                "WHERE cn.encounter_id = ei.resource_id "
+                "AND IFNULL(cn.chief_complaint, '') LIKE ? ESCAPE '\\')"
+                ")"
+            )
+            token = like(cc_text)
+            params.extend([token, token, token])
+        if dx_text:
+            where.append(
+                "EXISTS (SELECT 1 FROM condition_index ci WHERE ci.encounter_id = ei.resource_id "
+                "AND (IFNULL(ci.summary_text, '') LIKE ? ESCAPE '\\' "
+                "OR IFNULL(ci.icd10_code, '') LIKE ? ESCAPE '\\' "
+                "OR IFNULL(ci.nhi_icd10_code, '') LIKE ? ESCAPE '\\'))"
+            )
+            token = like(dx_text)
+            params.extend([token, token, token])
+        if drug_text:
+            where.append(
+                "EXISTS (SELECT 1 FROM medication_request_index mi WHERE mi.encounter_id = ei.resource_id "
+                "AND (IFNULL(mi.drug_text, '') LIKE ? ESCAPE '\\' "
+                "OR IFNULL(mi.nhi_code, '') LIKE ? ESCAPE '\\'))"
+            )
+            token = like(drug_text)
+            params.extend([token, token])
+        sql = f"SELECT ei.resource_id FROM encounter_index ei WHERE {' AND '.join(where)}"
+        with self._connect() as conn:
+            return {str(row[0]) for row in conn.execute(sql, tuple(params)) if row[0]}
+
+    def charts_with_media(self, date_from: str, date_to: str) -> set[str]:
+        """Six-digit chart numbers that have an image on a visit in the range."""
+        found: set[str] = set()
+        with self._connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT DISTINCT trim(pi.medical_no)
+                FROM media_index mi
+                JOIN encounter_index ei ON ei.resource_id = mi.encounter_id
+                JOIN patient_index pi ON pi.resource_id = mi.patient_id
+                WHERE ei.encounter_date >= ? AND ei.encounter_date <= ?
+                  AND IFNULL(mi.has_image_data, 1) != 0
+                """,
+                (date_from[:10], date_to[:10]),
+            ).fetchall()
+        for (raw,) in rows:
+            digits = "".join(ch for ch in str(raw or "") if ch.isdigit())
+            if digits:
+                found.add(digits[:6].zfill(6))
+        return found
+
     def list_encounters_for_date(
         self,
         encounter_date: str,
@@ -1114,6 +1194,7 @@ class SqliteShadowStore(ShadowStore):
         where_sql = " AND ".join(where)
 
         with self._connect() as conn:
+            # CROSS JOIN: keep the date index as the driver. A plain JOIN walks every Encounter payload.
             rows = conn.execute(
                 f"""
                 SELECT
@@ -1138,7 +1219,7 @@ class SqliteShadowStore(ShadowStore):
                     ei.reg_cc,
                     ei.reg_remark
                 FROM encounter_index ei
-                JOIN resource_cache rc
+                CROSS JOIN resource_cache rc
                   ON rc.resource_type = 'Encounter' AND rc.resource_id = ei.resource_id
                 LEFT JOIN patient_index pi ON pi.resource_id = ei.patient_id
                 WHERE {where_sql}

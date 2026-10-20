@@ -19,6 +19,7 @@ type Props = {
 
 export function PrintSetupPanel({ value, onChange }: Props) {
   const [printers, setPrinters] = useState<string[]>([]);
+  const [printerNote, setPrinterNote] = useState("");
   const [editId, setEditId] = useState<PrintSetupId | null>(null);
   const editing = value.setups.find((row) => row.id === editId) || null;
 
@@ -34,11 +35,18 @@ export function PrintSetupPanel({ value, onChange }: Props) {
 
   useEffect(() => {
     let cancel = false;
-    void fetchInstalledPrinters().then((names) => {
-      if (!cancel) setPrinters(names);
-    });
+    const load = () => {
+      void fetchInstalledPrinters().then((names) => {
+        if (cancel) return;
+        setPrinters(names);
+        setPrinterNote(names.length ? "" : "\u9019\u53f0\u9084\u6c92\u6709\u56de\u5831\u5370\u8868\u6a5f\u3002\u8acb\u7528\u958b\u555f\u9580\u8a3a.exe \u958b\u9019\u500b\u8996\u7a97\u3002");
+      });
+    };
+    load();
+    const timer = window.setInterval(load, 3000);
     return () => {
       cancel = true;
+      window.clearInterval(timer);
     };
   }, []);
 
@@ -126,13 +134,19 @@ export function PrintSetupPanel({ value, onChange }: Props) {
                 </select>
               </td>
               <td className={cell}>
-                <input
+                <select
                   className={input}
-                  list="clinic-printers"
                   value={row.printerName}
-                  placeholder={printers.length ? "\u9078\u6216\u8f38\u5165\u5370\u8868\u6a5f" : "\u8f38\u5165\u5370\u8868\u6a5f\u540d\u7a31"}
                   onChange={(e) => patchRow(row.id, { printerName: e.target.value })}
-                />
+                >
+                  <option value="">{printers.length ? "\u8acb\u9078\u9019\u53f0\u7684\u5370\u8868\u6a5f" : "\u9019\u53f0\u9084\u6c92\u6709\u5370\u8868\u6a5f"}</option>
+                  {row.printerName && !printers.includes(row.printerName) ? (
+                    <option value={row.printerName}>{row.printerName}</option>
+                  ) : null}
+                  {printers.map((name) => (
+                    <option key={name} value={name}>{name}</option>
+                  ))}
+                </select>
               </td>
               <td className={cell}>
                 <button
@@ -156,11 +170,7 @@ export function PrintSetupPanel({ value, onChange }: Props) {
           ))}
         </tbody>
       </table>
-      <datalist id="clinic-printers">
-        {printers.map((name) => (
-          <option key={name} value={name} />
-        ))}
-      </datalist>
+      {printerNote ? <p className="text-[12px] text-[#606060]">{printerNote}</p> : null}
       <button
         type="button"
         className="text-[11px] font-bold underline"

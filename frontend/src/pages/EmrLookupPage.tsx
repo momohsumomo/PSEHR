@@ -179,8 +179,18 @@ const inputStyle: CSSProperties = {
   fontFamily: HIS_FONT,
 };
 
-type ViewStyle = "lr" | "tb" | "emr";
 type SortKey = "name" | "date" | "serno" | "case";
+
+function feeInRange(value: number, fromRaw: string, toRaw: string): boolean {
+  const from = Number(fromRaw);
+  const to = Number(toRaw);
+  const lo = Number.isFinite(from) ? from : 0;
+  const hi = Number.isFinite(to) ? to : 0;
+  if (lo === 0 && hi === 0) return true;
+  if (value < lo) return false;
+  if (hi > 0 && value > hi) return false;
+  return true;
+}
 
 function feeYmFromIso(iso: string): string {
   const m = iso.match(/^(\d{4})-(\d{2})/);
@@ -190,22 +200,38 @@ function feeYmFromIso(iso: string): string {
 
 const EMR_RETURN_KEY = "wundadi.emrLookup.return";
 
-type EmrReturnSnap = {
+type EmrHold = {
   dateFrom: string;
   dateTo: string;
+  queriedFrom: string;
+  queriedTo: string;
   shift: string;
   room: string;
   patientId: string | null;
   patientKey: string;
   patientLabel: string;
+  ccText: string;
+  dxText: string;
+  drugText: string;
+  sameDay: boolean;
   hasImage: boolean;
+  txFeeFrom: string;
+  txFeeTo: string;
+  drugFeeFrom: string;
+  drugFeeTo: string;
+  rows: ApiQueueEntry[];
   encounterId: string;
+  status: string;
+  sortKey: SortKey;
 };
+
+let emrHold: EmrHold | null = null;
+let emrReturnEpoch = 0;
+let emrReplayEpoch = 0;
 
 export function EmrLookupPage() {
   const navigate = useNavigate();
   const apiMode = isApiMode();
-  const [viewStyle, setViewStyle] = useState<ViewStyle>("lr");
   /** 預設：起訖都是今天；改日期才看得出清單變。防呆只擋截止早於起始。 */
   const [dateFrom, setDateFrom] = useState(todayRoc);
   const [dateTo, setDateTo] = useState(todayRoc);
@@ -228,6 +254,9 @@ export function EmrLookupPage() {
   const [txFeeTo, setTxFeeTo] = useState("0");
   const [drugFeeFrom, setDrugFeeFrom] = useState("0");
   const [drugFeeTo, setDrugFeeTo] = useState("0");
+  const [ccText, setCcText] = useState("");
+  const [dxText, setDxText] = useState("");
+  const [drugText, setDrugText] = useState("");
   const [status, setStatus] = useState("請設看診日起訖後按確定。");
   const [busy, setBusy] = useState(false);
   const [resultOpen, setResultOpen] = useState(false);
@@ -238,19 +267,9 @@ export function EmrLookupPage() {
   const [detailLoading, setDetailLoading] = useState(false);
 
   const [opts, setOpts] = useState({
-    cert: false,
-    antibiotic: false,
     sameDay: true,
-    ctrl: false,
-    inject: false,
     hasImage: false,
   });
-  const [trials, setTrials] = useState({
-    dm: false,
-    bcHep: false,
-    dialysis: false,
-  });
-  const pendingReturn = useRef<EmrReturnSnap | null>(null);
   const focusReturnId = useRef<string | null>(null);
 
   useEscLayer([
@@ -297,23 +316,43 @@ export function EmrLookupPage() {
 
   useEffect(() => {
     const raw = sessionStorage.getItem(EMR_RETURN_KEY);
-    if (!raw) return;
-    sessionStorage.removeItem(EMR_RETURN_KEY);
-    try {
-      const snap = JSON.parse(raw) as EmrReturnSnap;
-      pendingReturn.current = snap;
-      focusReturnId.current = snap.encounterId;
-      setDateFrom(snap.dateFrom);
-      setDateTo(snap.dateTo);
-      setShift(snap.shift || "全部");
-      setRoom(snap.room || "");
-      setPatientId(snap.patientId);
-      setPatientKey(snap.patientKey || "");
-      setPatientLabel(snap.patientLabel || "");
-      setOpts((prev) => ({ ...prev, hasImage: Boolean(snap.hasImage) }));
-    } catch {
-      pendingReturn.current = null;
+    const epoch = raw ? Number(raw) : 0;
+    const pending = epoch > 0 && epoch === emrReturnEpoch && emrHold != null;
+    const replay = emrReplayEpoch === emrReturnEpoch && emrReturnEpoch !== 0 && emrHold != null;
+    if (!emrHold) {
+      sessionStorage.removeItem(EMR_RETURN_KEY);
+      return;
     }
+    if (!pending && !replay) return;
+    emrReplayEpoch = emrReturnEpoch;
+    sessionStorage.removeItem(EMR_RETURN_KEY);
+    const hold = emrHold;
+    focusReturnId.current = hold.encounterId;
+    setDateFrom(hold.dateFrom);
+    setDateTo(hold.dateTo);
+    setQueriedFrom(hold.queriedFrom);
+    setQueriedTo(hold.queriedTo);
+    setShift(hold.shift || "全部");
+    setRoom(hold.room || "");
+    setPatientId(hold.patientId);
+    setPatientKey(hold.patientKey || "");
+    setPatientLabel(hold.patientLabel || "");
+    setCcText(hold.ccText);
+    setDxText(hold.dxText);
+    setDrugText(hold.drugText);
+    setTxFeeFrom(hold.txFeeFrom);
+    setTxFeeTo(hold.txFeeTo);
+    setDrugFeeFrom(hold.drugFeeFrom);
+    setDrugFeeTo(hold.drugFeeTo);
+    setOpts({ sameDay: hold.sameDay, hasImage: hold.hasImage });
+    setSortKey(hold.sortKey);
+    setRows(hold.rows);
+    setStatus(hold.status);
+    setResultOpen(true);
+    const timer = window.setTimeout(() => {
+      if (emrReplayEpoch === emrReturnEpoch) emrReplayEpoch = 0;
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, []);
 
   useEffect(() => {
@@ -380,6 +419,10 @@ export function EmrLookupPage() {
         dateTo: isoTo,
         patientId,
         hasImage: opts.hasImage,
+        sameDay: opts.sameDay,
+        cc: ccText,
+        dx: dxText,
+        drug: drugText,
       });
       let list = bundle.entry;
 
@@ -389,6 +432,12 @@ export function EmrLookupPage() {
       if (room.trim()) {
         list = list.filter((e) => String(e.queueMeta?.room || "").includes(room.trim()));
       }
+      list = list.filter((e) => {
+        const meta = e.queueMeta;
+        const treat = Number(meta?.consultFee || meta?.treatFee || 0);
+        const drugFee = Number(meta?.drugFee || 0);
+        return feeInRange(treat, txFeeFrom, txFeeTo) && feeInRange(drugFee, drugFeeFrom, drugFeeTo);
+      });
 
       const qFrom = isoToRoc(bundle.dateFrom) || fromNorm;
       const qTo = isoToRoc(bundle.dateTo) || toNorm;
@@ -399,9 +448,7 @@ export function EmrLookupPage() {
       setRows(list);
       if (!focusReturnId.current) setSelectedIdx(0);
       setResultOpen(true);
-      const clipNote = bundle.clipped
-        ? "未指定病患，區間較長，已改查截止日前約三個月。"
-        : "";
+      const clipNote = "";
       const imageNote =
         opts.hasImage && bundle.imageFolderReady === false
           ? "相片資料夾讀不到，有建立圖像沒有篩到人。"
@@ -417,18 +464,6 @@ export function EmrLookupPage() {
       setBusy(false);
     }
   };
-
-  useEffect(() => {
-    const snap = pendingReturn.current;
-    if (!snap) return;
-    if (dateFrom !== snap.dateFrom || dateTo !== snap.dateTo) return;
-    if ((shift || "\u5168\u90e8") !== (snap.shift || "\u5168\u90e8")) return;
-    if ((room || "") !== (snap.room || "")) return;
-    if ((patientId || null) !== (snap.patientId || null)) return;
-    if (Boolean(opts.hasImage) !== Boolean(snap.hasImage)) return;
-    pendingReturn.current = null;
-    void runConfirm();
-  }, [dateFrom, dateTo, shift, room, patientId, opts.hasImage]);
 
   useEffect(() => {
     if (!resultOpen || !apiMode) return;
@@ -458,18 +493,32 @@ export function EmrLookupPage() {
   const enterChart = (entry?: ApiQueueEntry | null) => {
     const row = entry ?? selected;
     if (!row?.resource?.id) return;
-    const snap: EmrReturnSnap = {
+    emrReturnEpoch += 1;
+    emrHold = {
       dateFrom,
       dateTo,
+      queriedFrom,
+      queriedTo,
       shift,
       room,
       patientId,
       patientKey,
       patientLabel,
+      ccText,
+      dxText,
+      drugText,
+      sameDay: opts.sameDay,
       hasImage: opts.hasImage,
+      txFeeFrom,
+      txFeeTo,
+      drugFeeFrom,
+      drugFeeTo,
+      rows,
       encounterId: row.resource.id,
+      status,
+      sortKey,
     };
-    sessionStorage.setItem(EMR_RETURN_KEY, JSON.stringify(snap));
+    sessionStorage.setItem(EMR_RETURN_KEY, String(emrReturnEpoch));
     const q = row.queueMeta || {};
     const params = new URLSearchParams({
       encounter: row.resource.id,
@@ -517,21 +566,6 @@ export function EmrLookupPage() {
         />
 
         <div className="min-h-0 flex-1 space-y-1 overflow-auto p-1.5">
-          <div className="flex flex-wrap items-center gap-3">
-            {(
-              [
-                ["lr", "傳統式左右視窗"],
-                ["tb", "進階式上下視窗"],
-                ["emr", "轉電子病歷"],
-              ] as const
-            ).map(([id, t]) => (
-              <label key={id} className={`flex items-center gap-1 ${lab}`} style={labStyle}>
-                <input type="radio" checked={viewStyle === id} onChange={() => setViewStyle(id)} />
-                {t}
-              </label>
-            ))}
-          </div>
-
           <div className="grid grid-cols-2 gap-2 lg:grid-cols-[1.4fr_1fr]">
             <div className="space-y-1">
               <div className="grid grid-cols-[5rem_1fr_5rem_1fr] items-center gap-1">
@@ -663,6 +697,14 @@ export function EmrLookupPage() {
                     placeholder="選定病患（可略）"
                   />
                 </div>
+                <div className="mb-1 grid grid-cols-[5.5rem_1fr] items-center gap-1">
+                  <span className={lab} style={labStyle}>{"\u4e3b\u8ff0\u5167\u542b\u5b57"}</span>
+                  <input className={inputCls} style={inputStyle} value={ccText} onChange={(e) => setCcText(e.target.value)} />
+                  <span className={lab} style={labStyle}>{"\u8a3a\u65b7\u75c5\u540d"}</span>
+                  <input className={inputCls} style={inputStyle} value={dxText} onChange={(e) => setDxText(e.target.value)} />
+                  <span className={lab} style={labStyle}>{"\u85e5\u54c1\u540d\u7a31"}</span>
+                  <input className={inputCls} style={inputStyle} value={drugText} onChange={(e) => setDrugText(e.target.value)} />
+                </div>
                 <div className="grid grid-cols-[auto_1fr_auto_1fr] items-center gap-1">
                   <span className={lab} style={labStyle}>
                     診療費
@@ -777,57 +819,28 @@ export function EmrLookupPage() {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 gap-1 md:grid-cols-2">
-            <fieldset className="border p-1" style={{ borderColor: border }}>
-              <legend className={`px-1 ${lab}`} style={labStyle}>
-                調閱選項
-              </legend>
-              <div className="grid grid-cols-2 gap-x-2 gap-y-0.5">
-                {(
-                  [
-                    ["cert", "調已開立診斷證明書"],
-                    ["antibiotic", "調抗生素"],
-                    ["sameDay", "含當日掛號"],
-                    ["ctrl", "管制藥"],
-                    ["inject", "注射劑"],
-                    ["hasImage", "有建立圖像"],
-                  ] as const
-                ).map(([k, t]) => (
-                  <label key={k} className={`flex items-center gap-1 ${lab}`} style={labStyle}>
-                    <input
-                      type="checkbox"
-                      checked={opts[k]}
-                      onChange={(e) => setOpts((o) => ({ ...o, [k]: e.target.checked }))}
-                    />
-                    {t}
-                  </label>
-                ))}
-              </div>
-            </fieldset>
-            <fieldset className="border p-1" style={{ borderColor: border }}>
-              <legend className={`px-1 ${lab}`} style={labStyle}>
-                試辦計畫
-              </legend>
-              <div className="grid grid-cols-2 gap-x-2 gap-y-0.5">
-                {(
-                  [
-                    ["dm", "調糖尿照護"],
-                    ["bcHep", "BC肝試辦計畫"],
-                    ["dialysis", "洗腎 PRE_ESRD"],
-                  ] as const
-                ).map(([k, t]) => (
-                  <label key={k} className={`flex items-center gap-1 ${lab}`} style={labStyle}>
-                    <input
-                      type="checkbox"
-                      checked={trials[k]}
-                      onChange={(e) => setTrials((o) => ({ ...o, [k]: e.target.checked }))}
-                    />
-                    {t}
-                  </label>
-                ))}
-              </div>
-            </fieldset>
-          </div>
+          <fieldset className="border p-1" style={{ borderColor: border }}>
+            <legend className={`px-1 ${lab}`} style={labStyle}>
+              調閱選項
+            </legend>
+            <div className="flex flex-wrap gap-x-4 gap-y-0.5">
+              {(
+                [
+                  ["sameDay", "含當日掛號"],
+                  ["hasImage", "有建立圖像"],
+                ] as const
+              ).map(([k, t]) => (
+                <label key={k} className={`flex items-center gap-1 ${lab}`} style={labStyle}>
+                  <input
+                    type="checkbox"
+                    checked={opts[k]}
+                    onChange={(e) => setOpts((o) => ({ ...o, [k]: e.target.checked }))}
+                  />
+                  {t}
+                </label>
+              ))}
+            </div>
+          </fieldset>
 
           <div className="flex justify-end gap-2 pt-1">
             <button
@@ -919,15 +932,27 @@ export function EmrLookupPage() {
 
           {patientLabel ? (
             <div className="shrink-0 bg-[#FFF8C0] px-2 py-0.5 text-[11px] text-[#404000]">
-              已篩病患：{patientLabel}（「清病患」後再查＝全院該日）
+              {"\u5df2\u7be9\u75c5\u60a3\uff1a"}
+              {patientLabel}
+            </div>
+          ) : null}
+          {ccText.trim() || dxText.trim() || drugText.trim() || opts.hasImage || !opts.sameDay ? (
+            <div className="shrink-0 bg-[#FFF8C0] px-2 py-0.5 text-[11px] text-[#404000]">
+              {[
+                ccText.trim() ? `\u4e3b\u8ff0\u300c${ccText.trim()}\u300d` : "",
+                dxText.trim() ? `\u8a3a\u65b7\u300c${dxText.trim()}\u300d` : "",
+                drugText.trim() ? `\u85e5\u300c${drugText.trim()}\u300d` : "",
+                opts.hasImage ? "\u6709\u5efa\u7acb\u5716\u50cf" : "",
+                opts.sameDay ? "" : "\u4e0d\u542b\u7576\u65e5\u672a\u5b8c\u6210\u639b\u865f",
+              ]
+                .filter(Boolean)
+                .join("\u3000")}
             </div>
           ) : null}
 
-          <div className={`min-h-0 flex-1 ${viewStyle === "tb" ? "flex flex-col" : "flex"}`}>
+          <div className="flex min-h-0 flex-1">
             <div
-              className={`flex min-h-0 flex-col border-r ${
-                viewStyle === "tb" ? "h-[38%]" : "w-[min(22rem,38%)]"
-              }`}
+              className="flex min-h-0 w-[min(22rem,38%)] flex-col border-r"
               style={{ borderColor: HIS.chromeBorder, background: HIS.chrome }}
             >
               <div ref={resultListRef} className="min-h-0 flex-1 overflow-auto bg-white">

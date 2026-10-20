@@ -68,6 +68,50 @@ def start_local_card6() -> dict:
         return {"ok": True, "message": "\u9019\u53f0\u7684\u8b80\u5361\u8edf\u9ad4 6.0 \u5df2\u7d93\u5728\u8dd1\u3002", **info}
     subprocess.Popen([str(card6_exe())], close_fds=True)
     return {"ok": True, "message": "\u5df2\u7d93\u958b\u555f\u9019\u53f0\u7684\u8b80\u5361\u8edf\u9ad4 6.0\u3002", **info}
+
+
+_CSHIS_PATHS = {
+    "/api/settings/v1/PcscReader/Readers",
+    "/api/settings/v1/PcscReader/Default",
+    "/api/settings/v1/CloudSam",
+    "/api/common/v1/Status",
+    "/api/common/v1/Finalize",
+    "/api/common/v1/Initial",
+    "/api/sam/v1/Verification",
+    "/api/hc/v1/Basic",
+    "/api/hpc/v1/Basic",
+}
+
+
+def proxy_local_cshis(method: str, path: str, body: dict | None) -> dict:
+    """Ask this PC's card software. The page sometimes cannot open https://127.0.0.1:5066 itself."""
+    verb = (method or "GET").upper()
+    if verb not in {"GET", "POST"} or path not in _CSHIS_PATHS:
+        return {"ok": False, "statusCode": 400}
+    import ssl
+    import urllib.error
+    import urllib.request
+
+    url = "https://127.0.0.1:5066" + path
+    raw = None
+    if verb == "POST":
+        raw = json.dumps(body or {}).encode("utf-8")
+    req = urllib.request.Request(url, data=raw, method=verb)
+    req.add_header("Accept", "application/json")
+    if raw is not None:
+        req.add_header("Content-Type", "application/json")
+    try:
+        with urllib.request.urlopen(req, context=ssl._create_unverified_context(), timeout=20) as res:
+            text = res.read().decode("utf-8", errors="replace")
+    except urllib.error.HTTPError as exc:
+        text = exc.read().decode("utf-8", errors="replace")
+    except Exception:
+        return {"ok": False, "error": "unreachable", "statusCode": 1119}
+    try:
+        parsed = json.loads(text) if text else {}
+    except json.JSONDecodeError:
+        parsed = {}
+    return parsed if isinstance(parsed, dict) else {}
 _SUMATRA_URL = "https://www.sumatrapdfreader.org/download-free-pdf-viewer"
 
 

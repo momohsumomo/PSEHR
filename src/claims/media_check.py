@@ -144,6 +144,8 @@ def check_media(records: list[ClaimEncounterRecord], settings: Any = None) -> di
             from src.spoke.drug_price import lookup_drug_price
 
             for line in rec.medications:
+                if not getattr(line, "billable", True):
+                    continue
                 if not _drug_line(line.nhiCode) or line.unitPrice is None:
                     continue
                 looked = lookup_drug_price(line.nhiCode, day)

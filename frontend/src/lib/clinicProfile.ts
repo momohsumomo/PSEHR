@@ -93,7 +93,7 @@ export const DEFAULT_PROFILE: ClinicProfileFields = {
   clinicName: "?o??????M??E??",
   licenseNo: "?n????E?r?? 3521013662 ??",
   controlCertNo: "",
-  mainDept: "11 ?????",
+  mainDept: "11 \u76ae\u819a\u79d1",
   dispenseType: "0 ?????",
   phone: "06-2882555",
   zipCode: "701",
@@ -157,8 +157,12 @@ function fromBundle(data: ClinicProfileBundle): {
   fees: ClinicFees;
   workflow: ClinicWorkflow;
 } {
+  const profile: ClinicProfileFields = { ...DEFAULT_PROFILE, ...(data.profile as Partial<ClinicProfileFields>) };
+  if (!profile.mainDept || profile.mainDept.includes("?")) {
+    profile.mainDept = "11 \u76ae\u819a\u79d1";
+  }
   return {
-    profile: { ...DEFAULT_PROFILE, ...(data.profile as Partial<ClinicProfileFields>) },
+    profile,
     fees: normalizeFees(data.fees as Partial<ClinicFees>),
     workflow: normalizeWorkflow(data.workflow as Partial<ClinicWorkflow>),
   };

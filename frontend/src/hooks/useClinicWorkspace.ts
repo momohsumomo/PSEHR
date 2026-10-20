@@ -665,6 +665,7 @@ export function useClinicWorkspace(options?: {
         materialFee?: string;
         burdenFee?: string;
         prebook?: boolean;
+        confirmDuplicate?: boolean;
         queueNumber?: string;
         visitClock?: string;
         acceptReferral?: string;
@@ -722,6 +723,7 @@ export function useClinicWorkspace(options?: {
         materialFee: form.materialFee,
         burdenFee: form.burdenFee,
         prebook: form.prebook,
+        confirmDuplicate: form.confirmDuplicate,
         queueNumber: form.queueNumber ? Number(form.queueNumber) : undefined,
         visitClock: form.visitClock,
         acceptReferral: form.acceptReferral,
@@ -1251,10 +1253,15 @@ export function useClinicWorkspace(options?: {
   );
 
   const addPrebook = useCallback(
-    async (form: QueueRegisterForm, slotTime: string, insertAtNumber?: number) => {
+    async (form: QueueRegisterForm & { confirmDuplicate?: boolean }, slotTime: string, insertAtNumber?: number) => {
       const reason = form.reasonText.trim();
       if (apiMode) {
-        await registerPatientAndEncounter({ ...form, reasonText: reason, prebook: true });
+        await registerPatientAndEncounter({
+          ...form,
+          reasonText: reason,
+          prebook: true,
+          confirmDuplicate: form.confirmDuplicate,
+        });
         await refreshQueue(currentDate);
         return;
       }

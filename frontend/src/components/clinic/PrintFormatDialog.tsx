@@ -273,13 +273,19 @@ export function PrintFormatDialog({ row, printers, onClose, onSaved }: Props) {
             </label>
             <label className="col-span-2">
               {"\u5370\u8868\u6a5f "}
-              <input
+              <select
                 className={`${input} w-[18rem]`}
-                list="clinic-printers"
                 value={printerName}
-                placeholder={printers.length ? "\u9078\u6216\u8f38\u5165\u5370\u8868\u6a5f" : "\u8f38\u5165\u5370\u8868\u6a5f\u540d\u7a31"}
                 onChange={(e) => setPrinterName(e.target.value)}
-              />
+              >
+                <option value="">{printers.length ? "\u8acb\u9078\u9019\u53f0\u7684\u5370\u8868\u6a5f" : "\u9019\u53f0\u9084\u6c92\u6709\u5370\u8868\u6a5f"}</option>
+                {printerName && !printers.includes(printerName) ? (
+                  <option value={printerName}>{printerName}</option>
+                ) : null}
+                {printers.map((name) => (
+                  <option key={name} value={name}>{name}</option>
+                ))}
+              </select>
             </label>
             {row.id === "simple" && (
               <>

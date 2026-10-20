@@ -3,7 +3,8 @@
 param(
   [switch]$Install,
   [switch]$Open,
-  [switch]$Register
+  [switch]$Register,
+  [switch]$Intake
 )
 
 $ErrorActionPreference = "Stop"
@@ -240,7 +241,7 @@ function Find-ClinicHost {
 }
 
 function Open-ClinicEdge {
-  param([string]$Page = "")
+  param([string]$Page = "", [string]$ProfileName = "edge-app")
   $ip = Find-ClinicHost
   if (-not $ip) {
     Add-Type -AssemblyName System.Windows.Forms
@@ -253,11 +254,24 @@ function Open-ClinicEdge {
   if ($Page) { $url = "http://{0}:3010/{1}?desk=1" -f $ip, $Page.Trim("/") }
   $edge = Find-Edge
   if ($edge) {
-    $profile = Join-Path $Root "edge-app"
+    $profile = Join-Path $Root $ProfileName
     New-Item -ItemType Directory -Force -Path $profile | Out-Null
+    Stop-ClinicEdge $profile
     $edgeArgs = "--user-data-dir=`"$profile`" --app=`"$url`" --no-first-run --no-default-browser-check --disable-sync --disable-features=LocalNetworkAccessChecks"
     Start-Process -FilePath $edge -ArgumentList $edgeArgs
   } else { Start-Process $url }
+}
+
+function Stop-ClinicEdge([string]$Profile) {
+  try {
+    $procs = @(Get-CimInstance Win32_Process -Filter "Name = 'msedge.exe'" -ErrorAction SilentlyContinue)
+    foreach ($proc in $procs) {
+      if ("$($proc.CommandLine)" -like "*$Profile*") {
+        Stop-Process -Id $proc.ProcessId -Force -ErrorAction SilentlyContinue
+      }
+    }
+  } catch {}
+  Start-Sleep -Milliseconds 400
 }
 
 function Invoke-DeskJson([string]$Url, [string]$Method, [string]$Json) {
@@ -291,6 +305,258 @@ function Invoke-OnePrint($job) {
   & $exe -silent -print-to $printer -print-settings $settings -exit-when-done $pdf | Out-Null
 }
 
+function Test-Port5066Excluded {
+  foreach ($family in @("ipv4", "ipv6")) {
+    $raw = netsh int $family show excludedportrange protocol=tcp | Out-String
+    foreach ($line in ($raw -split "`r?`n")) {
+      if ($line -match "^\s*(\d+)\s+(\d+)") {
+        $start = [int]$Matches[1]
+        $end = [int]$Matches[2]
+        if (5066 -ge $start -and 5066 -le $end) { return $true }
+      }
+    }
+  }
+  return $false
+}
+
+function Start-LocalCard6 {
+  $card = Get-Card6
+  if (-not $card.installed) {
+    Write-Log "card software 6.0 is not installed"
+    return
+  }
+  if ($card.running) { return }
+  $pf86 = ${env:ProgramFiles(x86)}
+  if (-not $pf86) { $pf86 = "C:\Program Files (x86)" }
+  $exe = Join-Path $pf86 "NHI\cshis6\ciet6001s01.exe"
+  $alive = @(Get-Process -Name ciet6001s01 -ErrorAction SilentlyContinue)
+  if ($alive.Count -eq 0) {
+    try {
+      Start-Process -FilePath $exe -WorkingDirectory (Split-Path -Parent $exe) | Out-Null
+      Write-Log "started card software 6.0"
+    } catch {
+      Write-Log $_.Exception.Message
+      return
+    }
+  }
+  for ($i = 0; $i -lt 15; $i++) {
+    Start-Sleep -Seconds 1
+    if ((Get-Card6).running) { return }
+  }
+  Write-Log "card software 6.0 did not listen"
+}
+
+function Request-Release5066 {
+  $card = Get-Card6
+  if (-not $card.installed -or $card.running) { return }
+  if (-not (Test-Port5066Excluded)) { return }
+  $ps1 = Join-Path $Here "release_port_5066.ps1"
+  if (-not (Test-Path -LiteralPath $ps1)) { return }
+  $stamp = Join-Path $Root "port5066-ask.txt"
+  if ((Test-Path -LiteralPath $stamp) -and ((Get-Date) - (Get-Item -LiteralPath $stamp).LastWriteTime).TotalSeconds -lt 90) { return }
+  Set-Content -Path $stamp -Value (Get-Date -Format o) -Encoding ASCII
+  $ps = Join-Path $env:SystemRoot "System32\WindowsPowerShell\v1.0\powershell.exe"
+  try {
+    Start-Process -FilePath $ps -Verb RunAs -Wait -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"$ps1`""
+  } catch {
+    Write-Log $_.Exception.Message
+  }
+}
+
+function Start-LocalPrinterListener {
+  $tcp = $null
+  try {
+    $tcp = New-Object System.Net.Sockets.TcpListener ([System.Net.IPAddress]::Loopback, 5310)
+    $tcp.Start()
+  } catch {
+    Write-Log "printer list already listening"
+    return
+  }
+  $ps = [PowerShell]::Create()
+  [void]$ps.AddScript({
+    param($tcp)
+    function Send-Bytes($client, [byte[]]$Bytes) {
+      $stream = $client.GetStream()
+      $stream.Write($Bytes, 0, $Bytes.Length)
+      $stream.Flush()
+    }
+    if (-not ([System.Management.Automation.PSTypeName]"PsehrTrustAll").Type) {
+      Add-Type @"
+using System.Net;
+using System.Security.Cryptography.X509Certificates;
+public class PsehrTrustAll : ICertificatePolicy {
+  public bool CheckValidationResult(ServicePoint sp, X509Certificate cert, WebRequest req, int problem) { return true; }
+}
+"@
+    }
+    [System.Net.ServicePointManager]::CertificatePolicy = New-Object PsehrTrustAll
+    [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.SecurityProtocolType]::Tls12
+    function Send-Json($client, [string]$Json, [int]$Status) {
+      $cors = "Access-Control-Allow-Origin: *`r`nAccess-Control-Allow-Private-Network: true`r`nAccess-Control-Allow-Methods: GET, POST, OPTIONS`r`nAccess-Control-Allow-Headers: *`r`n"
+      $reason = "OK"
+      if ($Status -eq 204) { $reason = "No Content" }
+      if ($Status -eq 400) { $reason = "Bad Request" }
+      if ($Status -eq 404) { $reason = "Not Found" }
+      $payload = [Text.Encoding]::UTF8.GetBytes($Json)
+      $head = [Text.Encoding]::ASCII.GetBytes("HTTP/1.1 $Status $reason`r`n" + $cors + "Content-Type: application/json; charset=utf-8`r`nContent-Length: " + $payload.Length + "`r`nConnection: close`r`n`r`n")
+      $stream = $client.GetStream()
+      $stream.Write($head, 0, $head.Length)
+      if ($payload.Length -gt 0) { $stream.Write($payload, 0, $payload.Length) }
+      $stream.Flush()
+    }
+    function Test-CardPort {
+      $client = New-Object System.Net.Sockets.TcpClient
+      try {
+        $wait = $client.BeginConnect("127.0.0.1", 5066, $null, $null)
+        $ok = $wait.AsyncWaitHandle.WaitOne(400, $false) -and $client.Connected
+        return $ok
+      } catch { return $false } finally { $client.Close() }
+    }
+    function Get-CardExe {
+      $pf86 = ${env:ProgramFiles(x86)}
+      if (-not $pf86) { $pf86 = "C:\Program Files (x86)" }
+      return (Join-Path $pf86 "NHI\cshis6\ciet6001s01.exe")
+    }
+    function Get-PrinterJson {
+      $bits = New-Object System.Collections.Generic.List[string]
+      try {
+        $items = @(Get-CimInstance -ClassName Win32_Printer -ErrorAction SilentlyContinue)
+        foreach ($item in $items) {
+          $name = "$($item.Name)".Trim()
+          if (-not $name) { continue }
+          $safe = $name.Replace("\", "\\").Replace('"', '\"')
+          $flag = "false"
+          if ($item.Default) { $flag = "true" }
+          [void]$bits.Add('{"name":"' + $safe + '","default":' + $flag + '}')
+        }
+      } catch {}
+      return ($bits -join ",")
+    }
+    function Invoke-CshisProxy([string]$Method, [string]$Path, [string]$JsonBody) {
+      $allowed = @(
+        "/api/settings/v1/PcscReader/Readers",
+        "/api/settings/v1/PcscReader/Default",
+        "/api/settings/v1/CloudSam",
+        "/api/common/v1/Status",
+        "/api/common/v1/Finalize",
+        "/api/common/v1/Initial",
+        "/api/sam/v1/Verification",
+        "/api/hc/v1/Basic",
+        "/api/hpc/v1/Basic"
+      )
+      if ($Method -ne "GET" -and $Method -ne "POST") { return '{"ok":false,"statusCode":400}' }
+      if ($allowed -notcontains $Path) { return '{"ok":false,"statusCode":400}' }
+      try {
+        $req = [System.Net.HttpWebRequest]::Create("https://127.0.0.1:5066" + $Path)
+        $req.Method = $Method
+        $req.Timeout = 20000
+        $req.Accept = "application/json"
+        $req.ServerCertificateValidationCallback = { $true }
+        if ($Method -eq "POST") {
+          $bytes = [Text.Encoding]::UTF8.GetBytes($(if ($JsonBody) { $JsonBody } else { "{}" }))
+          $req.ContentType = "application/json"
+          $req.ContentLength = $bytes.Length
+          $out = $req.GetRequestStream()
+          $out.Write($bytes, 0, $bytes.Length)
+          $out.Close()
+        }
+        $resp = $req.GetResponse()
+        $reader = New-Object System.IO.StreamReader($resp.GetResponseStream())
+        $text = $reader.ReadToEnd()
+        $reader.Close()
+        $resp.Close()
+        if (-not $text) { return "{}" }
+        return $text
+      } catch [System.Net.WebException] {
+        $resp = $_.Exception.Response
+        if ($resp) {
+          $reader = New-Object System.IO.StreamReader($resp.GetResponseStream())
+          $text = $reader.ReadToEnd()
+          $reader.Close()
+          if ($text) { return $text }
+        }
+        return '{"ok":false,"error":"unreachable","statusCode":1119}'
+      } catch {
+        return '{"ok":false,"error":"unreachable","statusCode":1119}'
+      }
+    }
+    while ($true) {
+      $client = $null
+      try {
+        $client = $tcp.AcceptTcpClient()
+        $stream = $client.GetStream()
+        $stream.ReadTimeout = 3000
+        $buf = New-Object byte[] 8192
+        $read = $stream.Read($buf, 0, $buf.Length)
+        $text = [Text.Encoding]::UTF8.GetString($buf, 0, $read)
+        $line = ($text -split "`r`n", 2)[0]
+        $parts = $line -split " "
+        $verb = $parts[0]
+        $target = ""
+        if ($parts.Length -gt 1) { $target = ($parts[1] -split "\?")[0] }
+        if ($verb -eq "OPTIONS") {
+          Send-Json $client "" 204
+          continue
+        }
+        if ($verb -eq "GET" -and $target -eq "/health") {
+          $exe = Get-CardExe
+          $installed = Test-Path -LiteralPath $exe
+          $running = $false
+          if ($installed) { $running = Test-CardPort }
+          $flag = "false"
+          $run = "false"
+          if ($installed) { $flag = "true" }
+          if ($running) { $run = "true" }
+          $printers = Get-PrinterJson
+          Send-Json $client ('{"ok":true,"printers":[' + $printers + '],"card6":{"installed":' + $flag + ',"running":' + $run + "}}") 200
+          continue
+        }
+        if ($verb -eq "POST" -and $target -eq "/tools/card") {
+          $exe = Get-CardExe
+          if (-not (Test-Path -LiteralPath $exe)) {
+            Send-Json $client '{"ok":false,"code":"missing"}' 200
+            continue
+          }
+          if (Test-CardPort) {
+            Send-Json $client '{"ok":true,"code":"running"}' 200
+            continue
+          }
+          Start-Process -FilePath $exe -WorkingDirectory (Split-Path -Parent $exe) | Out-Null
+          Send-Json $client '{"ok":true,"code":"started"}' 200
+          continue
+        }
+        if ($verb -eq "POST" -and $target -eq "/tools/cshis") {
+          $rawBody = ""
+          $splitAt = $text.IndexOf("`r`n`r`n")
+          if ($splitAt -ge 0) { $rawBody = $text.Substring($splitAt + 4) }
+          $method = "GET"
+          $path = ""
+          $inner = ""
+          try {
+            $payload = $rawBody | ConvertFrom-Json
+            if ($payload.method) { $method = "$($payload.method)".ToUpper() }
+            if ($payload.path) { $path = "$($payload.path)" }
+            if ($payload.body) { $inner = ($payload.body | ConvertTo-Json -Compress -Depth 6) }
+          } catch {}
+          $proxied = Invoke-CshisProxy $method $path $inner
+          Send-Json $client $proxied 200
+          continue
+        }
+        if ($verb -eq "GET" -and ($target -eq "/printers" -or $target -eq "/")) {
+          Send-Json $client ('{"ok":true,"printers":[' + (Get-PrinterJson) + "]}") 200
+          continue
+        }
+        Send-Json $client '{"detail":"not found"}' 404
+      } catch {
+      } finally {
+        if ($client) { $client.Close() }
+      }
+    }
+  }).AddArgument($tcp)
+  [void]$ps.BeginInvoke()
+  Write-Log "printer list on 5310"
+}
+
 function Start-DeskLoop {
   Stop-OldAgent
   $mutex = New-Object System.Threading.Mutex($false, "Local\PSEHR-desk-agent")
@@ -302,6 +568,8 @@ function Start-DeskLoop {
   }
   if (-not $owned) { return }
   try {
+    Start-LocalPrinterListener
+    Request-Release5066
     while ($true) {
       try {
         $ip = Find-ClinicHost
@@ -336,7 +604,7 @@ function Stop-OldAgent {
     foreach ($proc in $procs) {
       if ([int]$proc.ProcessId -eq $PID) { continue }
       $cmd = "$($proc.CommandLine)"
-      if ($cmd -like "*-Open*" -or $cmd -like "*-Install*") { continue }
+      if ($cmd -like "*-Open*" -or $cmd -like "*-Install*" -or $cmd -like "*-Register*" -or $cmd -like "*-Intake*") { continue }
       if ($cmd -like "*desk_agent.ps1*" -or $cmd -like "*desk_helper.ps1*") {
         Stop-Process -Id $proc.ProcessId -Force -ErrorAction SilentlyContinue
       }
@@ -344,10 +612,17 @@ function Stop-OldAgent {
   } catch {}
 }
 
+if ($Intake) {
+  Open-ClinicEdge -Page "kiosk/intake" -ProfileName "edge-intake"
+  exit 0
+}
+
 if ($Open -or $Install -or $Register) {
+  Request-Release5066
+  Start-LocalCard6
   $ps = Join-Path $env:SystemRoot "System32\WindowsPowerShell\v1.0\powershell.exe"
   Start-Process -FilePath $ps -ArgumentList "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$PSCommandPath`"" -WindowStyle Hidden
-  if ($Register) { Open-ClinicEdge -Page "kiosk/register" }
+  if ($Register) { Open-ClinicEdge -Page "kiosk/register" -ProfileName "edge-register" }
   else { Open-ClinicEdge }
   exit 0
 }

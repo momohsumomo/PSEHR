@@ -631,6 +631,19 @@ def register_nhi_encounter(body: NhiEncounterIntake) -> dict[str, Any]:
 
     _pair_nocard_claim(body)
     _require_nhi_visit_for_register(body)
+    from src.core.register_guard import duplicate_register_message
+
+    day = (body.encounterDate or "")[:10]
+    if day:
+        clash = duplicate_register_message(
+            store.list_encounters_for_date(day),
+            patient_id=patient_id,
+            shift=body.shift or "",
+            queue_number=body.queueNumber,
+            confirm=bool(body.confirmDuplicate),
+        )
+        if clash:
+            raise HTTPException(status_code=409, detail=clash)
 
     try:
         payload = nhi_encounter_to_fhir(body)

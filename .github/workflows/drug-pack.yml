@@ -23,8 +23,10 @@ jobs:
           path: data/hub_workspace
           key: drug-hub-${{ github.run_id }}
           restore-keys: drug-hub-
-      - run: pip install -r requirements.txt
+      - run: pip install httpx
       - name: Build pack
+        env:
+          HUB_LLM_REQUIRED_ON_MATERIAL: "0"
         run: python -m hub.run > hub-result.json
       - name: Publish Release
         env:

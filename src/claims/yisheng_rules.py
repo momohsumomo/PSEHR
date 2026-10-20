@@ -294,6 +294,7 @@ def apply_daily_drug_fee(rec: object, *, days: int, case: str) -> float:
     for med in drugs:
         med.unitPrice = 0.0
         med.linePoints = 0.0
+        med.billable = False
     rec.medications.append(
         ClaimMedLine(
             medicationRequestId="",

@@ -20,12 +20,6 @@ export default defineConfig({
         xfwd: true,
         rewrite: (path) => path.replace(/^\/api/, ""),
       },
-      "/cshis": {
-        target: "https://127.0.0.1:5066",
-        changeOrigin: true,
-        secure: false,
-        rewrite: (path) => path.replace(/^\/cshis/, ""),
-      },
     },
   },
 });

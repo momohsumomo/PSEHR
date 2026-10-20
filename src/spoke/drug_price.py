@@ -86,6 +86,13 @@ def _covering(rows: list[dict[str, Any]], day: str) -> dict[str, Any] | None:
     return chosen[0]
 
 
+def clear_price_cache() -> None:
+    """Drop the in-memory catalog so a newly hydrated pack is used immediately."""
+    _INDEX.clear()
+    _PACK.clear()
+    _READY.clear()
+
+
 def lookup_drug_price(
     nhi_code: str,
     target_date: str,

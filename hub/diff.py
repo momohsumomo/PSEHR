@@ -13,6 +13,13 @@ def diff_snapshots(
     curr_keys = set(current)
     added_keys = sorted(curr_keys - prev_keys)
     removed_keys = sorted(prev_keys - curr_keys)
+    # An undated row was several price periods collapsed together. Once dates
+    # parse, that ghost key disappears and the real periods show up as adds.
+    removed_dated = [
+        k
+        for k in removed_keys
+        if previous[k].get("startDate") or previous[k].get("endDate")
+    ]
     common = curr_keys & prev_keys
 
     price_changes: list[dict[str, Any]] = []
@@ -81,7 +88,8 @@ def diff_snapshots(
         "previousCount": len(previous),
         "currentCount": len(current),
         "added": len(added_keys),
-        "removed": len(removed_keys),
+        "removed": len(removed_dated),
+        "removedUndated": len(removed_keys) - len(removed_dated),
         "priceChanged": len(price_changes),
         "otherFieldChanged": len(field_changes),
         "controlFilled": control_filled,

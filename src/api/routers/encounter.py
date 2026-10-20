@@ -77,7 +77,11 @@ def emr_lookup_encounters(
     date_from: str = Query(..., alias="dateFrom", description="起始日 YYYY-MM-DD（必填）"),
     date_to: str = Query(..., alias="dateTo", description="截止日 YYYY-MM-DD（必填）"),
     patient: str | None = Query(None, description="可選：篩選病人 ID"),
-    has_image: bool = Query(False, alias="hasImage", description="只留日期範圍內有匯入相片的病歷號"),
+    has_image: bool = Query(False, alias="hasImage", description="只留日期範圍內有建立圖像的病歷"),
+    same_day: bool = Query(True, alias="sameDay", description="含當日尚未完診的掛號"),
+    cc: str = Query("", description="主述內含字"),
+    dx: str = Query("", description="診斷病名或代碼"),
+    drug: str = Query("", description="藥品名稱或健保碼"),
 ) -> dict[str, Any]:
     """調閱／費用統計專用：依看診日起迄撈清單。禁止 today fallback。"""
     d0 = date_from[:10]
@@ -91,21 +95,31 @@ def emr_lookup_encounters(
         raise HTTPException(status_code=400, detail="截止日期不可早於起始日期")
 
     store = _store()
-    # 指定病患：整段區間一次查。未指定病患才把過長區間收到截止日前 92 天，避免從很早的起日裁掉後來的看診。
     query_from = d0
-    clipped = False
-    span = (date.fromisoformat(d1) - date.fromisoformat(d0)).days
-    if not patient and span > 92:
-        query_from = (date.fromisoformat(d1) - timedelta(days=92)).isoformat()
-        clipped = True
     pid = _patient_ref(patient).split("/")[-1] if patient else None
     entries = store.list_encounters_for_date(query_from, date_to=d1, patient_id=pid)
+    matched = store.emr_text_match_ids(query_from, d1, cc=cc, dx=dx, drug=drug)
+    if matched is not None:
+        entries = [entry for entry in entries if (entry.get("resource") or {}).get("id") in matched]
+    if not same_day:
+        today = date.today().isoformat()
+        kept_day: list[dict[str, Any]] = []
+        for entry in entries:
+            meta = entry.get("queueMeta") or {}
+            day = str(meta.get("encounterDate") or "")[:10]
+            status = str(meta.get("queueStatus") or "")
+            if day == today and status != "finished":
+                continue
+            kept_day.append(entry)
+        entries = kept_day
     image_folder_ready = True
     if has_image:
         from src.core.look_images import charts_with_images, look_root
 
         image_folder_ready = look_root().is_dir()
         charts = charts_with_images(query_from, d1) if image_folder_ready else set()
+        charts |= store.charts_with_media(query_from, d1)
+        image_folder_ready = image_folder_ready or bool(charts)
         kept: list[dict[str, Any]] = []
         for entry in entries:
             meta = entry.get("queueMeta") or {}
@@ -121,7 +135,7 @@ def emr_lookup_encounters(
         "dateFrom": query_from,
         "dateTo": d1,
         "requestedFrom": d0,
-        "clipped": clipped,
+        "clipped": False,
         "hasImage": has_image,
         "imageFolderReady": image_folder_ready,
         "total": len(entries),

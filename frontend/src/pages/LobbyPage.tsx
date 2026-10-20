@@ -4,6 +4,7 @@ import { ClaimsPickDialog } from "@/components/clinic/ClaimsPickDialog";
 import { IcDailyUploadDialog } from "@/components/clinic/IcDailyUploadDialog";
 import { API_ENABLED, SANDBOX_ID } from "@/config/sandbox";
 import { request, prefetchPatientRoster } from "@/api/clinicApi";
+import { AppUpdateDialog } from "@/components/clinic/AppUpdateDialog";
 import { CardConsoleDebugButton } from "@/components/clinic/CardConsoleDebugButton";
 import { DeskStatusLamps } from "@/components/clinic/DeskStatusLamps";
 import { readLocalClinicBundle } from "@/lib/clinicProfile";
@@ -36,6 +37,7 @@ export function LobbyPage() {
   const [activeMenu, setActiveMenu] = useState<string | null>(null);
   const [claimsOpen, setClaimsOpen] = useState(false);
   const [uploadOpen, setUploadOpen] = useState(false);
+  const [updateOpen, setUpdateOpen] = useState(false);
   const [searchParams, setSearchParams] = useSearchParams();
   const clinicLine = useMemo(() => clinicCaption(), []);
 
@@ -211,7 +213,7 @@ export function LobbyPage() {
 
   return (
     <div
-      className="relative flex h-screen flex-col overflow-hidden text-[#E7EEF8]"
+      className="relative flex min-h-0 flex-1 flex-col overflow-hidden text-[#E7EEF8]"
       style={{ fontFamily: '"Microsoft JhengHei", "Segoe UI", sans-serif' }}
       onClick={() => setActiveMenu(null)}
     >
@@ -252,9 +254,10 @@ export function LobbyPage() {
           </div>
         ))}
         <span className="ml-auto text-[12px] text-[#8EA0BA]">鍵盤 1–9、0、A、B、C、E</span>
+        <CardConsoleDebugButton compact variant="dark" align="end" label={"\u8b80\u5361\u9664\u932f"} scope="local" />
       </nav>
 
-      <header className="relative z-10 flex items-end gap-6 px-8 pb-2 pt-8">
+      <header className="relative z-10 flex shrink-0 items-end gap-6 px-8 pb-2 pt-6">
         <div className="flex items-start gap-4">
           <svg width="36" height="36" viewBox="0 0 36 36" aria-hidden className="mt-1 shrink-0">
             <path
@@ -272,9 +275,16 @@ export function LobbyPage() {
             <p className="mt-1 text-[14px] text-[#A9B8CE]">{clinicLine}</p>
           </div>
         </div>
+        <div className="ml-auto mb-1">
+          <DeskStatusLamps
+            sync={syncError ? "bad" : pendingSync == null ? "wait" : "ok"}
+            syncHint={syncLabel}
+          />
+        </div>
       </header>
 
-      <main className="relative z-10 grid grid-cols-3 content-start gap-8 px-8 pb-10 pt-5">
+      <main className="relative z-10 min-h-0 flex-1 overflow-y-auto px-8 pb-6 pt-4">
+        <div className="grid grid-cols-3 content-start gap-8">
         {groups.map((group) => (
           <section key={group.title} className="min-w-0">
             <h2 className="mb-3 text-[12px] font-medium tracking-[0.18em] text-[#8EA0BA]">{group.title}</h2>
@@ -296,17 +306,20 @@ export function LobbyPage() {
             </div>
           </section>
         ))}
+        </div>
       </main>
 
-      <footer className="relative z-20 mt-auto flex shrink-0 items-center justify-between border-t border-white/10 px-8 py-2 text-[12px] text-[#8EA0BA]">
-        <span className="flex flex-wrap items-center gap-3">
-          <DeskStatusLamps
-            sync={syncError ? "bad" : pendingSync == null ? "wait" : "ok"}
-            syncHint={syncLabel}
-          />
-          <CardConsoleDebugButton compact variant="dark" label={"\u8b80\u5361\u9664\u932f"} scope="local" />
+      <footer className="relative z-20 flex shrink-0 items-center justify-end border-t border-white/10 px-8 py-2 text-[12px] text-[#8EA0BA]">
+        <span className="flex items-center gap-3">
+          <button
+            type="button"
+            className="rounded border border-white/15 px-2 py-0.5 text-[12px] text-[#E7D7A8] hover:bg-white/10"
+            onClick={() => setUpdateOpen(true)}
+          >
+            {"\u66f4\u65b0"}
+          </button>
+          <span className="font-mono text-[#C5D2E6]">{currentTime}</span>
         </span>
-        <span className="font-mono text-[#C5D2E6]">{currentTime}</span>
       </footer>
       <ClaimsPickDialog
         open={claimsOpen}
@@ -325,6 +338,7 @@ export function LobbyPage() {
         }}
       />
       <IcDailyUploadDialog open={uploadOpen} onClose={() => setUploadOpen(false)} />
+      <AppUpdateDialog open={updateOpen} onClose={() => setUpdateOpen(false)} />
     </div>
   );
 }

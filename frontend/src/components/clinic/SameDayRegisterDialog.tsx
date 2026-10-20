@@ -44,6 +44,45 @@ export function findSameDayHits(
     }));
 }
 
+export function findQueueClash(
+  queue: Parameters<typeof findSameDayHits>[0],
+  shift: string,
+  queueNumber: string,
+  excludeEncounterId?: string,
+): SameDayHit | null {
+  const n = queueNumber.trim();
+  if (!n) return null;
+  const skip = (excludeEncounterId || "").split("/").pop() || "";
+  const hit = queue.find((e) => {
+    if (e.queueStatus === "cancelled" || e.queueStatus === "entered-in-error") return false;
+    if (skip && (e.encounterId || "").split("/").pop() === skip) return false;
+    if (String(e.queueNumber ?? "") !== n) return false;
+    return (e.shift || "") === (shift || "");
+  });
+  if (!hit) return null;
+  return {
+    shift: hit.shift || "",
+    queueNumber: n,
+    name: hit.patientDisplay || "\u5df2\u7d93\u6709\u4eba",
+  };
+}
+
+export function pendingDuplicateHits(
+  queue: Parameters<typeof findSameDayHits>[0],
+  form: { patientId?: string; idNo?: string; encounterId?: string; queueNumber?: string },
+  shift: string,
+): SameDayHit[] {
+  const hits = form.encounterId
+    ? []
+    : findSameDayHits(queue, form.patientId || "", form.idNo || "", form.encounterId, shift);
+  const clash = findQueueClash(queue, shift, form.queueNumber || "", form.encounterId);
+  if (!clash) return hits;
+  const covered = hits.some(
+    (h) => h.queueNumber === clash.queueNumber && (h.shift || "") === (clash.shift || ""),
+  );
+  return covered ? hits : [...hits, clash];
+}
+
 type Props = {
   open: boolean;
   hits: SameDayHit[];
@@ -79,7 +118,7 @@ export function SameDayFlash({ open, onClose }: { open: boolean; onClose: () => 
 export function SameDayRegisterDialog({ open, hits, onConfirm, onCancel }: Props) {
   if (!open) return null;
   return (
-    <div className="fixed inset-0 z-[88] flex items-center justify-center bg-black/40">
+    <div className="fixed inset-0 z-[96] flex items-center justify-center bg-black/40">
       <div
         className="w-[min(28rem,92vw)] border bg-[#F0F0F0] shadow-lg"
         style={{ borderColor: HIS.chromeDark, fontFamily: HIS_FONT }}

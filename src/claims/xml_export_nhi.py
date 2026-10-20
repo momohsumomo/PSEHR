@@ -371,11 +371,16 @@ def _render_pdata_lines(
         raw_pts = med.linePoints if med.linePoints is not None else unit * qty
         pts = int(round(float(raw_pts)))
         rate = float(getattr(med, "ratePercent", 100.0) or 100.0)
+        unpriced_drug = not getattr(med, "billable", True) and not is_order_code(code)
         if _VIRTUAL_ORDER.match(code.upper()):
             kind = "G"
             pts = 0
         elif is_order_code(code):
             kind = "2" if pts > 0 else "4"
+        elif unpriced_drug:
+            kind = "4"
+            unit = 0.0
+            pts = 0
         else:
             kind = "1"
         fields: list[tuple[str, Any]] = [
@@ -388,7 +393,7 @@ def _render_pdata_lines(
             ("p13", order),
             ("p17", "4"),
         ]
-        if kind == "1":
+        if kind == "1" or unpriced_drug:
             days = int(med.daysSupply or 0)
             dose = med.doseEach
             fields = [

@@ -162,10 +162,16 @@ def _patient_stub(pid: str, row: dict) -> str:
         "name": [{"text": name, "family": family, "given": [given] if given else []}],
         "gender": "female" if sex == "F" else "male",
         "birthDate": birth_iso,
-        "identifier": [
-            {"system": "http://www.moi.gov.tw/id", "value": id_no},
-            {"use": "secondary", "system": "https://clinic.org/chart-number", "value": med},
-        ],
+        "identifier": (
+            [
+                {"system": "http://www.moi.gov.tw/id", "value": id_no},
+                {"use": "secondary", "system": "https://clinic.org/chart-number", "value": med},
+            ]
+            if id_no
+            else [
+                {"use": "secondary", "system": "https://clinic.org/chart-number", "value": med},
+            ]
+        ),
         "telecom": [{"system": "phone", "value": tel}] if tel else [],
         "address": [{"text": addr}] if addr else [],
         "extension": [
@@ -346,13 +352,27 @@ def main() -> int:
         if id_no and id_no in by_idno:
             keyword_to_patient[keyword] = by_idno[id_no]
             continue
-        if not id_no:
-            continue
-        pid = f"local-patient-{md5_id(id_no)}"
-        keyword_to_patient[keyword] = pid
-        by_idno[id_no] = pid
         med = _clean(row.get("MEDICAL_NO")) or None
-        if med:
+        if not id_no:
+            existing = None
+            if med:
+                existing = conn.execute(
+                    """
+                    SELECT resource_id FROM patient_index
+                    WHERE trim(medical_no) = ?
+                      AND (id_no IS NULL OR trim(id_no) = '')
+                    """,
+                    (med,),
+                ).fetchone()
+            if existing:
+                keyword_to_patient[keyword] = existing["resource_id"]
+                continue
+            pid = f"local-patient-{md5_id('noid:' + keyword)}"
+        else:
+            pid = f"local-patient-{md5_id(id_no)}"
+            by_idno[id_no] = pid
+        keyword_to_patient[keyword] = pid
+        if med and id_no:
             conn.execute(
                 """
                 UPDATE patient_index
@@ -376,7 +396,7 @@ def main() -> int:
             ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?, datetime('now'))
             """,
             (
-                pid, family, given, id_no, birth_iso, id_no, birthday_roc, sex,
+                pid, family, given, id_no or (med or keyword), birth_iso, id_no or None, birthday_roc, sex,
                 _clean(row.get("MEDICAL_NO")) or None,
                 _clean(row.get("TEL")) or None,
                 _clean(row.get("ADDRESS")) or None,

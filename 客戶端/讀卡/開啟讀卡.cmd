@@ -1,4 +1,13 @@
 @echo off
 cd /d "%~dp0"
-start "讀卡" "%SystemRoot%\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -STA -File "%~dp0讀卡.ps1"
-exit /b
+set "SCRIPT="
+for %%F in (*.ps1) do (
+  set "SCRIPT=%%~fF"
+  goto run
+)
+echo This folder has no card script.
+pause
+exit /b 1
+:run
+start "" "%SystemRoot%\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -STA -WindowStyle Hidden -File "%SCRIPT%"
+exit /b 0

@@ -220,42 +220,6 @@ function ConvertTo-DeskJson($payload) {
   return ($payload | ConvertTo-Json -Compress -Depth 6)
 }
 
-function Invoke-Cshis([string]$Method, [string]$Rel, [string]$Body) {
-  if (-not ([System.Management.Automation.PSTypeName]"TrustAllCshis").Type) {
-    Add-Type "using System.Net; using System.Security.Cryptography.X509Certificates; public class TrustAllCshis : ICertificatePolicy { public bool CheckValidationResult(ServicePoint sp, X509Certificate cert, WebRequest req, int problem) { return true; } }"
-  }
-  [System.Net.ServicePointManager]::CertificatePolicy = New-Object TrustAllCshis
-  try { [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.SecurityProtocolType]::Tls12 } catch {}
-  $url = "https://127.0.0.1:5066" + $Rel
-  $web = [System.Net.HttpWebRequest]::Create($url)
-  $web.Method = $Method
-  $web.Accept = "application/json"
-  $web.Timeout = 25000
-  $web.ReadWriteTimeout = 25000
-  if ($Method -ne "GET" -and $Method -ne "HEAD") {
-    $bytes = [Text.Encoding]::UTF8.GetBytes($(if ($Body) { $Body } else { "{}" }))
-    $web.ContentType = "application/json"
-    $web.ContentLength = $bytes.Length
-    $out = $web.GetRequestStream()
-    $out.Write($bytes, 0, $bytes.Length)
-    $out.Close()
-  }
-  $resp = $null
-  try {
-    $resp = $web.GetResponse()
-  } catch [System.Net.WebException] {
-    if ($_.Exception.Response) { $resp = $_.Exception.Response }
-    else { return @{ status = 502; body = '{"detail":"card software on this PC is not running"}' } }
-  }
-  $code = [int]$resp.StatusCode
-  $reader = New-Object System.IO.StreamReader($resp.GetResponseStream())
-  $text = $reader.ReadToEnd()
-  $reader.Close()
-  $resp.Close()
-  if (-not $text) { $text = "{}" }
-  return @{ status = $code; body = $text }
-}
-
 function Send-Http($stream, [int]$Status, [string]$Body) {
   $text = if ($null -eq $Body) { "" } else { $Body }
   $bytes = [Text.Encoding]::UTF8.GetBytes($text)
@@ -536,12 +500,6 @@ while ($true) {
     $req = Read-Http $stream
     if (-not $req) { continue }
     if ($req.method -eq "OPTIONS") { Send-Http $stream 204 ""; continue }
-    if ($req.path.StartsWith("/cshis/")) {
-      $rel = $req.path.Substring(6)
-      $proxied = Invoke-Cshis $req.method $rel $req.body
-      Send-Http $stream $proxied.status $proxied.body
-      continue
-    }
     $payload = $null
     if ($req.path -eq "/health" -or $req.path -eq "/printers") {
       $payload = Get-Health

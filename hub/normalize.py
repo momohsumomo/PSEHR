@@ -40,17 +40,20 @@ def roc_yyyymmdd_to_iso(v: Any) -> str | None:
     s = _s(v).replace("/", "").replace("-", "")
     if not s.isdigit():
         return None
-    if len(s) == 7:  # 民國
+    # 民國 84年03月01日 is 6 digits. 100年11月30日 is 7. Western is 8.
+    if len(s) == 6:
+        y = int(s[0:2]) + 1911
+        m, d = int(s[2:4]), int(s[4:6])
+    elif len(s) == 7:
         y = int(s[0:3]) + 1911
         m, d = int(s[3:5]), int(s[5:7])
     elif len(s) == 8:
         y, m, d = int(s[0:4]), int(s[4:6]), int(s[6:8])
     else:
         return None
-    try:
-        return f"{y:04d}-{m:02d}-{d:02d}"
-    except Exception:
+    if not (1 <= m <= 12 and 1 <= d <= 31 and y >= 1912):
         return None
+    return f"{y:04d}-{m:02d}-{d:02d}"
 
 
 def normalize_record(raw: dict[str, Any]) -> dict[str, Any] | None:

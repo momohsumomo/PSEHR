@@ -285,6 +285,10 @@ export async function fetchEncountersInRange(opts: {
   dateTo: string;
   patientId?: string | null;
   hasImage?: boolean;
+  sameDay?: boolean;
+  cc?: string;
+  dx?: string;
+  drug?: string;
 }): Promise<{
   entry: ApiQueueEntry[];
   total: number;
@@ -315,6 +319,10 @@ export async function fetchEncountersInRange(opts: {
     params.set("patient", opts.patientId.startsWith("Patient/") ? opts.patientId : `Patient/${opts.patientId}`);
   }
   if (opts.hasImage) params.set("hasImage", "true");
+  if (opts.sameDay === false) params.set("sameDay", "false");
+  if (opts.cc?.trim()) params.set("cc", opts.cc.trim());
+  if (opts.dx?.trim()) params.set("dx", opts.dx.trim());
+  if (opts.drug?.trim()) params.set("drug", opts.drug.trim());
   const bundle = await request<{
     entry?: ApiQueueEntry[];
     total?: number;
@@ -712,6 +720,7 @@ export type EncounterRegisterBody = {
   materialFee?: string;
   burdenFee?: string;
   prebook?: boolean;
+  confirmDuplicate?: boolean;
   /** 只有雲端／寫卡成功才送 true；省略表示不改既有勾圈 */
   cardWritten?: boolean;
   queueNumber?: number;
@@ -1858,15 +1867,35 @@ export async function fetchVpnReach(): Promise<boolean | null> {
   }
 }
 
-export async function fetchInstalledPrinters(): Promise<string[]> {
-  try {
-    const res = await localPrintFetch("/printers");
-    if (!res.ok) return [];
-    const data = (await res.json()) as { printers?: string[] };
-    return Array.isArray(data.printers) ? data.printers.filter(Boolean) : [];
-  } catch {
-    return [];
+function printerRows(raw: unknown): NonNullable<LocalPrintHealth["printers"]> {
+  if (!Array.isArray(raw)) return [];
+  const rows: NonNullable<LocalPrintHealth["printers"]> = [];
+  for (const item of raw) {
+    if (typeof item === "string") {
+      const name = item.trim();
+      if (name) rows.push({ name });
+      continue;
+    }
+    if (!item || typeof item !== "object") continue;
+    const row = item as { name?: unknown; online?: boolean | null; default?: boolean; device?: boolean };
+    const name = String(row.name || "").trim();
+    if (!name) continue;
+    rows.push({ name, online: row.online, default: row.default, device: row.device });
   }
+  return rows;
+}
+
+export async function fetchThisPcPrinters(): Promise<NonNullable<LocalPrintHealth["printers"]>> {
+  const local = await fetchLocalPrintHealth();
+  const here = printerRows(local?.printers);
+  if (here.length) return here;
+  const desk = await fetchDeskStatus();
+  return printerRows(desk?.printers);
+}
+
+export async function fetchInstalledPrinters(): Promise<string[]> {
+  const rows = await fetchThisPcPrinters();
+  return rows.map((row) => row.name || "").filter(Boolean);
 }
 
 export async function saveClinicDevice(

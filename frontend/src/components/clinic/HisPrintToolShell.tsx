@@ -1,6 +1,6 @@
 import { cloneElement, isValidElement, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { fetchLocalPrintHealth, printToNamedPrinter } from "@/api/clinicApi";
+import { fetchThisPcPrinters, printToNamedPrinter } from "@/api/clinicApi";
 import { HIS_FONT } from "@/lib/hisTheme";
 import { loadPrinterFeed, savePrinterFeed, type PrinterFeed } from "@/lib/printSettings";
 import {
@@ -130,8 +130,7 @@ export function HisPrintToolShell({
     setZoom(profile.defaultZoom);
     setPage(0);
     setHint("");
-    void fetchLocalPrintHealth().then((health) => {
-      const rows = health?.printers || [];
+    void fetchThisPcPrinters().then((rows) => {
       const named =
         rows.find((row) => row.default && row.device !== false && row.name) ||
         rows.find((row) => row.default && row.name) ||

@@ -60,7 +60,7 @@ export const HIS = {
   fs: { primary: 14, body: 13, secondary: 11, tertiary: 10, fbar: 12, title: 12 },
   row: { list: 18, listHeader: 17, formField: 20, fbarPrimary: 52, fbarSecondary: 22 },
   labelW: "4.25rem",
-} as const;
+};
 
 export const HIS_QUEUE_COL_WIDTHS: Record<string, number> = {
   doneMark: 20,
@@ -97,6 +97,33 @@ export const HIS_FBAR_COLORS = {
   Esc: "#D4D0C8",
   X: "#D4D0C8",
 } as const;
+
+const COLOR = /^#[0-9A-Fa-f]{6}$/;
+
+/** Saved clinic colors replace the program default. Unknown keys are ignored. */
+export function applyClinicAppearance(patch: Record<string, unknown> | null | undefined): void {
+  if (!patch) return;
+  const target = HIS as Record<string, unknown>;
+  for (const [key, value] of Object.entries(patch)) {
+    if (typeof value !== "string" || typeof target[key] !== "string") continue;
+    if (!COLOR.test(value)) continue;
+    target[key] = value;
+  }
+}
+
+export async function loadClinicAppearance(): Promise<void> {
+  try {
+    const ctrl = new AbortController();
+    const timer = window.setTimeout(() => ctrl.abort(), 1200);
+    const res = await fetch("/api/maintenance/appearance", { signal: ctrl.signal });
+    window.clearTimeout(timer);
+    if (!res.ok) return;
+    const body = (await res.json()) as { clinic?: Record<string, unknown> };
+    applyClinicAppearance(body.clinic);
+  } catch {
+    /* keep the program default */
+  }
+}
 
 /** Lock document to HIS light palette (all routes). Safe to call multiple times. */
 export function applyHisDocumentTheme(): void {

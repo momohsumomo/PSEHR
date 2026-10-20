@@ -13,7 +13,12 @@ import { OutpatientSidebarQueue } from "@/components/clinic/OutpatientSidebarQue
 import { PatientLookDialog } from "@/components/clinic/PatientLookDialog";
 import { ReferralSlipDialog } from "@/components/clinic/ReferralSlipDialog";
 import { IcCardInfoDialog } from "@/components/clinic/IcCardInfoDialog";
-import { findSameDayHits, SameDayFlash } from "@/components/clinic/SameDayRegisterDialog";
+import {
+  pendingDuplicateHits,
+  SameDayFlash,
+  SameDayRegisterDialog,
+  type SameDayHit,
+} from "@/components/clinic/SameDayRegisterDialog";
 import { ChartPatientHead } from "@/components/clinic/ChartPatientHead";
 import {
   ChartVitalsColumn,
@@ -201,6 +206,7 @@ export function ClinicOutpatientPage() {
   const [session, setSession] = useState<ClinicSession | null>(() => seekBoot ?? loadClinicSession());
   const [entered, setEntered] = useState(seekBoot != null);
   const [gateOpen, setGateOpen] = useState(seekBoot == null);
+  const gateLeaveRef = useRef(false);
   const ws = useClinicWorkspace({
     loadWorkspace: true,
     initialDate: seekBoot?.date,
@@ -266,6 +272,8 @@ export function ClinicOutpatientPage() {
   const [referralOpen, setReferralOpen] = useState(false);
   const [icInfoOpen, setIcInfoOpen] = useState(false);
   const [sameDayFlash, setSameDayFlash] = useState(false);
+  const [dupAsk, setDupAsk] = useState<SameDayHit[] | null>(null);
+  const dupGo = useRef<(() => void) | null>(null);
   const [currentRxByEncounter, setCurrentRxByEncounter] = useState<Record<string, RxLine[]>>(
     {},
   );
@@ -449,6 +457,8 @@ export function ClinicOutpatientPage() {
       .sort(compareClinicQueue);
   }, [shiftQueue, queueFilter, queueSearch]);
 
+  const preferAfterDeleteRef = useRef<string | null>(null);
+
   useEffect(() => {
     if (!entered || shiftQueue.length === 0) return;
     const seekId = searchParams.get("from") === "emr" ? searchParams.get("encounter") || "" : "";
@@ -462,7 +472,22 @@ export function ClinicOutpatientPage() {
       return;
     }
     const stillThere = shiftQueue.some((e) => e.encounterId === selectedEncounterId);
-    if (stillThere) return;
+    if (stillThere) {
+      if (preferAfterDeleteRef.current && preferAfterDeleteRef.current === selectedEncounterId) {
+        preferAfterDeleteRef.current = null;
+      }
+      return;
+    }
+    const wanted = preferAfterDeleteRef.current;
+    if (wanted !== null) {
+      preferAfterDeleteRef.current = null;
+      if (wanted && shiftQueue.some((e) => e.encounterId === wanted)) {
+        setSelectedEncounterId(wanted);
+        return;
+      }
+      setSelectedEncounterId(null);
+      return;
+    }
     const last = shiftQueue.reduce((best, row) =>
       (Number(row.queueNumber) || 0) >= (Number(best.queueNumber) || 0) ? row : best,
     );
@@ -2111,7 +2136,7 @@ export function ClinicOutpatientPage() {
       { open: lesionOpen, close: () => setLesionOpen(false) },
       { open: registerOptionsOpen, close: () => setRegisterOptionsOpen(false) },
       { open: needsPatientTab, close: () => closeChart() },
-      { open: true, close: () => navigate("/") },
+      { open: true, close: () => { gateLeaveRef.current = true; setGateOpen(true); } },
     ],
     !gateOpen,
   );
@@ -2376,18 +2401,21 @@ export function ClinicOutpatientPage() {
     else closeChart();
   };
 
-  const confirmNewRegister = async () => {
+  const confirmNewRegister = async (allowDuplicate = false) => {
     if (!apiMode) {
       setConfirmError("掛號需 API 模式");
       return;
     }
-    const hits = findSameDayHits(
-      queue,
-      confirmForm.patientId || "",
-      confirmForm.idNo || "",
-      confirmForm.encounterId,
-      session?.shift,
-    );
+    const pageShift = session?.shift || confirmForm.shift;
+    const hits = pendingDuplicateHits(queue, confirmForm, pageShift);
+    if (!allowDuplicate && hits.length) {
+      dupGo.current = () => {
+        setDupAsk(null);
+        void confirmNewRegister(true);
+      };
+      setDupAsk(hits);
+      return;
+    }
     let bureauSameDay = false;
     setConfirmError(null);
     setSeqNote(null);
@@ -2399,7 +2427,6 @@ export function ClinicOutpatientPage() {
     setRegisterBusy(true);
     try {
       const depositHold = isDepositHold(confirmForm);
-      const pageShift = session?.shift || confirmForm.shift;
       const toSave = {
         ...(depositHold
           ? {
@@ -2410,6 +2437,7 @@ export function ClinicOutpatientPage() {
           : confirmForm),
         shift: pageShift,
         visitClock: normalizeClock(confirmForm.visitClock || nowClock()),
+        confirmDuplicate: allowDuplicate,
       };
       await submitRegisterEdit(toSave, (fields) => {
         const { seqNote: note, ...rest } = fields;
@@ -2488,6 +2516,9 @@ export function ClinicOutpatientPage() {
     setDeleteError(null);
     try {
       const res = await cancelRegister({ encounterId: selectedEncounterId, mode });
+      const idx = filteredQueue.findIndex((row) => row.encounterId === selectedEncounterId);
+      const neighbor = idx >= 0 ? filteredQueue[idx + 1] || filteredQueue[idx - 1] || null : null;
+      preferAfterDeleteRef.current = neighbor?.encounterId ?? "";
       await refreshQueue();
       if (res.localCancelled) {
         const dropped = selectedEncounterId;
@@ -2500,7 +2531,9 @@ export function ClinicOutpatientPage() {
         setApiDxOverlay(null);
         setApiRxOverlay(null);
         setCcText("");
-        setSelectedEncounterId(null);
+        setSelectedEncounterId(neighbor?.encounterId ?? null);
+      } else {
+        preferAfterDeleteRef.current = null;
       }
       setDeleteOpen(false);
     } catch (e) {
@@ -3266,6 +3299,12 @@ export function ClinicOutpatientPage() {
         }}
       />
       <SameDayFlash open={sameDayFlash} onClose={() => setSameDayFlash(false)} />
+      <SameDayRegisterDialog
+        open={dupAsk != null}
+        hits={dupAsk || []}
+        onConfirm={() => dupGo.current?.()}
+        onCancel={() => setDupAsk(null)}
+      />
       <PatientLookDialog
         open={lookOpen}
         patientId={selected?.patientId ?? null}
@@ -3683,8 +3722,18 @@ export function ClinicOutpatientPage() {
       {gateOpen && entered && (
         <ClinicSessionGate
           initial={session}
-          onConfirm={(next) => applySession(next, false)}
-          onCancel={() => setGateOpen(false)}
+          onConfirm={(next) => {
+            gateLeaveRef.current = false;
+            applySession(next, false);
+          }}
+          onCancel={() => {
+            if (gateLeaveRef.current) {
+              gateLeaveRef.current = false;
+              navigate("/");
+              return;
+            }
+            setGateOpen(false);
+          }}
         />
       )}
       <IcCardInfoDialog
