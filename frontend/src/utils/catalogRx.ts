@@ -2,6 +2,12 @@ import type { CatalogDrug, CatalogPackage } from "@/types/clinicCatalog";
 import type { RxLine } from "@/mocks/clinicMocks";
 import { withComputedTotal, type CatalogUsage } from "@/utils/rxTotal";
 
+export function lineSelfPayPrice(line: RxLine, drugs: CatalogDrug[]): number | null {
+  const hit = drugs.length ? pickDrugForLine(line, drugs) : undefined;
+  const raw = Number(hit?.selfPayPrice);
+  return Number.isFinite(raw) && raw > 0 ? raw : null;
+}
+
 function pickDrugForLine(line: RxLine, drugs: CatalogDrug[]): CatalogDrug | undefined {
   const alias = String(line.shortName || "").trim().toUpperCase();
   if (alias) {

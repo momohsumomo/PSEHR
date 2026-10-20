@@ -11,12 +11,63 @@ import socket
 import struct
 import subprocess
 import tempfile
+import threading
 import time
 import urllib.request
 import winreg
 from pathlib import Path
 
-_EDGE = Path(r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe")
+def find_edge() -> Path | None:
+    for raw in (
+        r"C:\Program Files\Microsoft\Edge\Application\msedge.exe",
+        r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe",
+    ):
+        path = Path(raw)
+        if path.is_file():
+            return path
+    return None
+
+
+def card6_exe() -> Path:
+    pf86 = os.environ.get("ProgramFiles(x86)", r"C:\Program Files (x86)")
+    return Path(pf86) / "NHI" / "cshis6" / "ciet6001s01.exe"
+
+
+def local_card6() -> dict:
+    """6.0 only. A 5.x install does not count as ready."""
+    exe = card6_exe()
+    installed = exe.is_file()
+    pf86 = os.environ.get("ProgramFiles(x86)", r"C:\Program Files (x86)")
+    legacy = (not installed) and any(
+        Path(raw).exists()
+        for raw in (
+            r"C:\NHI",
+            str(Path(pf86) / "NHI" / "cshis"),
+            str(Path(pf86) / "NHI" / "CsHis"),
+        )
+    )
+    running = False
+    if installed:
+        try:
+            with socket.create_connection(("127.0.0.1", 5066), 0.4):
+                running = True
+        except OSError:
+            running = False
+    return {"installed": installed, "running": running, "legacy5": legacy}
+
+
+def start_local_card6() -> dict:
+    info = local_card6()
+    if not info["installed"]:
+        if info["legacy5"]:
+            message = "\u9019\u53f0\u662f 5.XX\uff0c\u6c92\u6709\u8b80\u5361\u8edf\u9ad4 6.0\u30026.0 \u8981\u5f9e\u5065\u4fdd\u5c08\u7db2\u5b89\u88dd\uff0c\u9019\u88e1\u4e0d\u6703\u81ea\u5df1\u4e0b\u8f09\u3002"
+        else:
+            message = "\u9019\u53f0\u6c92\u6709\u8b80\u5361\u8edf\u9ad4 6.0\u3002\u8981\u5f9e\u5065\u4fdd\u5c08\u7db2\u5b89\u88dd\uff0c\u9019\u88e1\u4e0d\u6703\u81ea\u5df1\u4e0b\u8f09\u3002"
+        return {"ok": False, "message": message, **info}
+    if info["running"]:
+        return {"ok": True, "message": "\u9019\u53f0\u7684\u8b80\u5361\u8edf\u9ad4 6.0 \u5df2\u7d93\u5728\u8dd1\u3002", **info}
+    subprocess.Popen([str(card6_exe())], close_fds=True)
+    return {"ok": True, "message": "\u5df2\u7d93\u958b\u555f\u9019\u53f0\u7684\u8b80\u5361\u8edf\u9ad4 6.0\u3002", **info}
 _SUMATRA_URL = "https://www.sumatrapdfreader.org/download-free-pdf-viewer"
 
 
@@ -247,7 +298,8 @@ def _print_page_pdf(port: int, url: str, pdf_path: Path, width_mm: float, height
 
 def render_html_pdf(html: str, pdf_path: Path, *, width_mm: float = 210, height_mm: float = 297) -> None:
     """PDF page size and margins come from this job, not from Edge or Chrome print settings."""
-    if not _EDGE.is_file():
+    edge = find_edge()
+    if edge is None:
         raise RuntimeError("\u9019\u53f0\u96fb\u8166\u6c92\u6709 Microsoft Edge\uff0c\u7121\u6cd5\u7d44\u5217\u5370\u6a94\u3002")
     folder = pdf_path.parent
     html_path = folder / "slip.html"
@@ -255,7 +307,7 @@ def render_html_pdf(html: str, pdf_path: Path, *, width_mm: float = 210, height_
     profile = folder / "edge-profile"
     proc = subprocess.Popen(
         [
-            str(_EDGE),
+            str(edge),
             "--headless=new",
             "--disable-gpu",
             "--no-first-run",
@@ -352,21 +404,51 @@ def _query_printer_rows() -> list[dict]:
     return rows or [{"name": name, "online": None} for name in installed_printers()]
 
 
-def desk_print_status() -> dict:
+def desk_print_status(*, fresh: bool = False) -> dict:
+    global _PRINT_CACHE
+    if fresh:
+        _PRINT_CACHE = None
     return {
         "ok": True,
-        "edge": _EDGE.is_file(),
+        "edge": find_edge() is not None,
         "sumatra": find_sumatra() is not None,
         "printers": printer_rows(),
+        "card6": local_card6(),
     }
+
+
+def _registry_sumatra() -> list[Path]:
+    paths: list[Path] = []
+    try:
+        import winreg
+    except ImportError:
+        return paths
+    keys = (
+        (winreg.HKEY_CURRENT_USER, r"Software\Microsoft\Windows\CurrentVersion\App Paths\SumatraPDF.exe"),
+        (winreg.HKEY_LOCAL_MACHINE, r"Software\Microsoft\Windows\CurrentVersion\App Paths\SumatraPDF.exe"),
+        (winreg.HKEY_LOCAL_MACHINE, r"Software\WOW6432Node\Microsoft\Windows\CurrentVersion\App Paths\SumatraPDF.exe"),
+    )
+    for hive, name in keys:
+        try:
+            with winreg.OpenKey(hive, name) as key:
+                value, _ = winreg.QueryValueEx(key, "")
+        except OSError:
+            continue
+        text = str(value or "").strip().strip('"')
+        if text:
+            paths.append(Path(text))
+    return paths
 
 
 def find_sumatra() -> Path | None:
     local = os.environ.get("LOCALAPPDATA", "")
     candidates = [
+        Path(__file__).resolve().parents[2] / "\u5ba2\u6236\u7aef" / "SumatraPDF.exe",
+        Path(local) / "SumatraPDF" / "SumatraPDF.exe",
         Path(local) / "Wundadi" / "print" / "SumatraPDF.exe",
         Path(r"C:\Program Files\SumatraPDF\SumatraPDF.exe"),
         Path(r"C:\Program Files (x86)\SumatraPDF\SumatraPDF.exe"),
+        *_registry_sumatra(),
     ]
     for path in candidates:
         if path.is_file():
@@ -375,35 +457,12 @@ def find_sumatra() -> Path | None:
     return Path(found) if found else None
 
 
-_SUMATRA_ZIP = "https://www.sumatrapdfreader.org/dl/rel/3.5.2/SumatraPDF-3.5.2-64.zip"
-
-
 def ensure_sumatra() -> str:
-    """Download the free SumatraPDF portable build into this PC's print folder."""
+    """SumatraPDF is installed by the clinic. This does not download it."""
     found = find_sumatra()
     if found is not None:
         return str(found)
-    import io
-    import urllib.request
-    import zipfile
-
-    dest_dir = Path(os.environ.get("LOCALAPPDATA", "")) / "Wundadi" / "print"
-    dest_dir.mkdir(parents=True, exist_ok=True)
-    dest = dest_dir / "SumatraPDF.exe"
-    req = urllib.request.Request(_SUMATRA_ZIP, headers={"User-Agent": "PSEHR"})
-    try:
-        with urllib.request.urlopen(req, timeout=120) as resp:
-            blob = resp.read()
-    except Exception as exc:
-        raise RuntimeError(
-            "\u4e0b\u8f09\u5217\u5370\u7a0b\u5f0f\u5931\u6557\uff1a" + str(exc) + "\u3002" + _SUMATRA_URL
-        ) from exc
-    with zipfile.ZipFile(io.BytesIO(blob)) as zf:
-        name = next((item for item in zf.namelist() if item.lower().endswith("sumatrapdf.exe")), "")
-        if not name:
-            raise RuntimeError("\u4e0b\u8f09\u6a94\u88e1\u6c92\u6709 SumatraPDF.exe\u3002" + _SUMATRA_URL)
-        dest.write_bytes(zf.read(name))
-    return str(dest)
+    raise RuntimeError(sumatra_missing_message())
 
 
 def sumatra_missing_message() -> str:
@@ -417,32 +476,97 @@ def sumatra_missing_message() -> str:
     )
 
 
-def printer_job_settings(width_mm: float, height_mm: float) -> str:
-    """Page width and height decide direction. Do not follow the printer's last job.
+def short_edge_portrait(width_mm: float, height_mm: float, feed: str | None) -> tuple[float, float, bool]:
+    """Wide slip plus portrait feed matches the receipt driver.
 
-    disable-auto-rotation stops Sumatra from turning a portrait page sideways
-    when the printer driver still remembers landscape.
+    That driver stores the form as the short edge by the long edge, portrait
+    (93.0 x 210.0 mm). The on-screen sheet stays wide; the job turns 90 degrees.
     """
-    lock = "noscale,disable-auto-rotation"
+    width = float(width_mm)
+    height = float(height_mm)
+    if (feed or "").strip().lower() == "portrait" and width > height + 2:
+        return height, width, True
+    return width, height, False
+
+
+def _rotate_onto_short_edge(html: str, visual_w: float, visual_h: float) -> str:
+    short = float(visual_h)
+    long = float(visual_w)
+    style = (
+        '<style id="ys-short-edge">'
+        "@page{size:%smm %smm;margin:0 !important;}"
+        "html,body{margin:0 !important;padding:0 !important;width:%smm !important;height:%smm !important;"
+        "overflow:hidden !important;background:#fff !important;}"
+        ".ys-rot{width:%smm;height:%smm;transform-origin:top left;"
+        "transform:rotate(90deg) translateY(-%smm);}"
+        "</style>"
+    ) % (short, long, short, long, long, short, short)
+    if "</head>" in html:
+        html = html.replace("</head>", style + "</head>", 1)
+    else:
+        html = style + html
+    lower = html.lower()
+    start = lower.find("<body")
+    if start < 0:
+        return '<div class="ys-rot">' + html + "</div>"
+    open_end = html.find(">", start)
+    close = lower.rfind("</body>")
+    if open_end < 0 or close < 0 or close < open_end:
+        return html
+    return html[: open_end + 1] + '<div class="ys-rot">' + html[open_end + 1 : close] + "</div>" + html[close:]
+
+
+def printer_job_settings(width_mm: float, height_mm: float, feed: str | None = None) -> str:
+    """Page size sets the form. feed is how this printer takes the paper.
+
+    When feed matches the form, lock rotation so the driver's last job cannot flip it.
+    When feed differs, leave rotation on so the same form turns onto that feed.
+    """
+    page_landscape = float(width_mm) > float(height_mm) + 2
+    chosen = (feed or "").strip().lower()
+    if chosen == "landscape":
+        want_landscape = True
+    elif chosen == "portrait":
+        want_landscape = False
+    else:
+        want_landscape = page_landscape
+    orient = "landscape" if want_landscape else "portrait"
+    turned = want_landscape != page_landscape
+    lock = "noscale" if turned else "noscale,disable-auto-rotation"
+    paper = ""
     if abs(width_mm - 210) <= 2 and abs(height_mm - 297) <= 2:
-        return "paper=A4,portrait," + lock
-    if abs(width_mm - 297) <= 2 and abs(height_mm - 210) <= 2:
-        return "paper=A4,landscape," + lock
-    if abs(width_mm - 148) <= 2 and abs(height_mm - 210) <= 2:
-        return "paper=A5,portrait," + lock
-    if abs(width_mm - 210) <= 2 and abs(height_mm - 148) <= 2:
-        return "paper=A5,landscape," + lock
+        paper = "paper=A4,"
+    elif abs(width_mm - 297) <= 2 and abs(height_mm - 210) <= 2:
+        paper = "paper=A4,"
+    elif abs(width_mm - 148) <= 2 and abs(height_mm - 210) <= 2:
+        paper = "paper=A5,"
+    elif abs(width_mm - 210) <= 2 and abs(height_mm - 148) <= 2:
+        paper = "paper=A5,"
+    if paper:
+        return paper + orient + "," + lock
+    if chosen in {"portrait", "landscape"}:
+        return orient + "," + lock
     return lock
 
 
-def print_html_to_printer(*, html: str, printer_name: str, width_mm: float, height_mm: float) -> str:
+def print_html_to_printer(
+    *,
+    html: str,
+    printer_name: str,
+    width_mm: float,
+    height_mm: float,
+    feed: str = "",
+) -> str:
     printer = _match_printer(printer_name)
     exe = find_sumatra()
     if exe is None:
         raise RuntimeError(sumatra_missing_message())
     folder = Path(tempfile.mkdtemp(prefix="wundadi-print-"))
     pdf_path = folder / "slip.pdf"
-    render_html_pdf(html, pdf_path, width_mm=width_mm, height_mm=height_mm)
+    page_w, page_h, turn = short_edge_portrait(width_mm, height_mm, feed)
+    page_html = _rotate_onto_short_edge(html, width_mm, height_mm) if turn else html
+    page_feed = "portrait" if turn else feed
+    render_html_pdf(page_html, pdf_path, width_mm=page_w, height_mm=page_h)
     proc = subprocess.run(
         [
             str(exe),
@@ -450,7 +574,7 @@ def print_html_to_printer(*, html: str, printer_name: str, width_mm: float, heig
             "-print-to",
             printer,
             "-print-settings",
-            printer_job_settings(width_mm, height_mm),
+            printer_job_settings(page_w, page_h, page_feed),
             "-exit-when-done",
             str(pdf_path),
         ],
@@ -461,6 +585,35 @@ def print_html_to_printer(*, html: str, printer_name: str, width_mm: float, heig
     if proc.returncode not in (0, None):
         err = ((proc.stderr or b"") + (proc.stdout or b"")).decode("utf-8", errors="replace")[-300:]
         raise RuntimeError("\u5370\u8868\u6a5f\u6c92\u6709\u63a5\u4e0b\u9019\u5f35\u55ae\u3002" + err)
+    return printer
+
+
+def queue_html_print(
+    *,
+    html: str,
+    printer_name: str,
+    width_mm: float,
+    height_mm: float,
+    feed: str = "",
+) -> str:
+    """Accept the job and return. Rendering and the printer run on a background thread."""
+    printer = _match_printer(printer_name)
+    if find_sumatra() is None:
+        raise RuntimeError(sumatra_missing_message())
+
+    def run() -> None:
+        try:
+            print_html_to_printer(
+                html=html,
+                printer_name=printer,
+                width_mm=width_mm,
+                height_mm=height_mm,
+                feed=feed,
+            )
+        except Exception:
+            return
+
+    threading.Thread(target=run, name="wundadi-print-job", daemon=True).start()
     return printer
 
 

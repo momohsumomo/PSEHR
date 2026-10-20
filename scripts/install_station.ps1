@@ -15,12 +15,12 @@ if (-not (Test-Path (Join-Path $Root ".venv\Scripts\python.exe"))) {
 
 $dir = Join-Path $env:LOCALAPPDATA "PSEHR"
 New-Item -ItemType Directory -Force -Path $dir | Out-Null
-$hostFile = Join-Path $dir "host.txt"
-$ip = ""
-if (Test-Path $hostFile) { $ip = (Get-Content $hostFile -Raw).Trim() }
-if (-not $ip) {
-  $ip = Read-Host "Host IP (the exam computer)"
-  Set-Content -Path $hostFile -Value $ip.Trim() -Encoding ASCII
+& powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $Root "scripts\host_service.ps1") -Action discover
+if ($LASTEXITCODE -ne 0) {
+  $ip = Read-Host "Host IP (only if this PC is not on the same network as the clinic host)"
+  if ($ip.Trim()) {
+    Set-Content -Path (Join-Path $dir "host.txt") -Value $ip.Trim() -Encoding ASCII
+  }
 }
 
 $vbs = Join-Path $Root "scripts\psehr_protocol.vbs"

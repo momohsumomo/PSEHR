@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { ClaimsPickDialog } from "@/components/clinic/ClaimsPickDialog";
 import { IcDailyUploadDialog } from "@/components/clinic/IcDailyUploadDialog";
 import { API_ENABLED, SANDBOX_ID } from "@/config/sandbox";
-import { request, fetchCardConsoleStatus, prefetchPatientRoster, type CardConsoleStatus } from "@/api/clinicApi";
+import { request, prefetchPatientRoster } from "@/api/clinicApi";
 import { CardConsoleDebugButton } from "@/components/clinic/CardConsoleDebugButton";
 import { DeskStatusLamps } from "@/components/clinic/DeskStatusLamps";
 import { readLocalClinicBundle } from "@/lib/clinicProfile";
@@ -33,7 +33,6 @@ export function LobbyPage() {
   const [currentTime, setCurrentTime] = useState("");
   const [pendingSync, setPendingSync] = useState<number | null>(null);
   const [syncError, setSyncError] = useState(false);
-  const [cardStatus, setCardStatus] = useState<CardConsoleStatus | null>(null);
   const [activeMenu, setActiveMenu] = useState<string | null>(null);
   const [claimsOpen, setClaimsOpen] = useState(false);
   const [uploadOpen, setUploadOpen] = useState(false);
@@ -83,20 +82,6 @@ export function LobbyPage() {
     };
     void fetchSyncStatus();
     const interval = setInterval(() => void fetchSyncStatus(), 5000);
-    return () => clearInterval(interval);
-  }, []);
-
-  useEffect(() => {
-    if (!API_ENABLED) return;
-    const load = async () => {
-      try {
-        setCardStatus(await fetchCardConsoleStatus());
-      } catch {
-        setCardStatus({ reachable: false, advice: ["後端 API 連不到，無法問 6.0 主控台。"] });
-      }
-    };
-    void load();
-    const interval = setInterval(() => void load(), 8000);
     return () => clearInterval(interval);
   }, []);
 
@@ -216,13 +201,6 @@ export function LobbyPage() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   });
 
-  const cardLabel =
-    cardStatus?.reachable === false
-      ? "讀卡機離線"
-      : cardStatus?.reachable
-        ? "讀卡機已連上"
-        : "讀卡機 —";
-
   const syncLabel = !API_ENABLED
     ? `預覽 · ${SANDBOX_ID}`
     : syncError
@@ -323,19 +301,10 @@ export function LobbyPage() {
       <footer className="relative z-20 mt-auto flex shrink-0 items-center justify-between border-t border-white/10 px-8 py-2 text-[12px] text-[#8EA0BA]">
         <span className="flex flex-wrap items-center gap-3">
           <DeskStatusLamps
-            card={cardStatus == null ? "wait" : cardStatus.reachable ? "ok" : "bad"}
-            cardHint={cardLabel}
             sync={syncError ? "bad" : pendingSync == null ? "wait" : "ok"}
             syncHint={syncLabel}
           />
-          <CardConsoleDebugButton
-            compact
-            variant="dark"
-            label={"\u8b80\u5361\u9664\u932f"}
-            onFixed={(status) => {
-              if (status) setCardStatus(status);
-            }}
-          />
+          <CardConsoleDebugButton compact variant="dark" label={"\u8b80\u5361\u9664\u932f"} scope="local" />
         </span>
         <span className="font-mono text-[#C5D2E6]">{currentTime}</span>
       </footer>

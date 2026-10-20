@@ -420,15 +420,6 @@ def write_visit_to_card(
     write_dx = bool(data.get("writeDx", True))
     write_orders = bool(data.get("writeOrders", True))
 
-    client = Cshis6Client(console_base)
-    if not client.probe():
-        return CardWriteResult(
-            written=False,
-            reason="\u8b80\u5361\u4e3b\u63a7\u53f0\u7121\u6cd5\u9023\u7dda\uff0c\u96f2\u7aef\u672a\u5beb\u5165\u3002",
-            consoleReachable=False,
-            source="none",
-        )
-
     if not encounter_id:
         return CardWriteResult(
             written=False,
@@ -499,13 +490,13 @@ def write_visit_to_card(
     except Exception:
         pass
 
+    desk_sign = data.get("deskSign") if isinstance(data.get("deskSign"), dict) else None
+    desk_sign_rx = data.get("deskSignRx") if isinstance(data.get("deskSignRx"), dict) else None
     hc_id = str(reg.get("hcId") or "").strip()
     hc_id_no = str(reg.get("hcIdNo") or "").strip()
-    if not hc_id or not hc_id_no:
-        card = read_card_profile(use_mock=False, console_base=console_base)
-        if card.profile:
-            hc_id = hc_id or str(card.profile.get("cardId") or "")
-            hc_id_no = hc_id_no or str(card.profile.get("idNo") or "")
+    if desk_sign:
+        hc_id = hc_id or str(desk_sign.get("hcId") or "")
+        hc_id_no = hc_id_no or str(desk_sign.get("hcIdNo") or "")
 
     consult = _fee_int(reg.get("consultFee"))
     drug = _fee_int(reg.get("drugFee"))
@@ -517,6 +508,13 @@ def write_visit_to_card(
     dt = reg.get("treatDateTime") or reg.get("opdDate")
     after = str(reg.get("afterCheck") or "1")[:1]
     rx_items = build_prescription_items(meds, treatment_date_time=str(dt or "")) if write_orders else []
+    needs_rx = write_orders and bool(rx_items)
+    has_sign = bool(desk_sign and str(desk_sign.get("signature") or "").strip() and str(desk_sign.get("clientRandom") or "").strip())
+    has_rx_sign = bool(desk_sign_rx and str(desk_sign_rx.get("signature") or "").strip() and str(desk_sign_rx.get("clientRandom") or "").strip())
+    if (write_dx or needs_rx) and not has_sign:
+        return CardWriteResult(written=False, reason="NEED_DESK_SIGN", consoleReachable=True, source="need-desk-sign")
+    if needs_rx and not has_rx_sign:
+        return CardWriteResult(written=False, reason="NEED_DESK_SIGN_RX", consoleReachable=True, source="need-desk-sign")
 
     result = write_visit_to_cloud(
         console_base=console_base,
@@ -530,6 +528,8 @@ def write_visit_to_card(
         write_dx=write_dx,
         write_orders=write_orders and bool(rx_items),
         prescriptions=rx_items if write_orders else None,
+        desk_sign=desk_sign,
+        desk_sign_rx=desk_sign_rx,
     )
     return CardWriteResult(
         written=bool(result.ok),

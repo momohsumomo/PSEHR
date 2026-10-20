@@ -3,7 +3,7 @@ import { createPortal } from "react-dom";
 import { printToNamedPrinter } from "@/api/clinicApi";
 import { HIS_FONT } from "@/lib/hisTheme";
 import { bindPrintPreview, previewSheetMarkup, type PrintSendResult } from "@/lib/printJob";
-import { paperDirectionLabel } from "@/lib/printSettings";
+import { feedLabel } from "@/lib/printSettings";
 
 type Req = {
   title: string;
@@ -11,6 +11,7 @@ type Req = {
   printerName: string;
   widthMm: number;
   heightMm: number;
+  feed?: "portrait" | "landscape";
   resolve: (result: PrintSendResult) => void;
   reject: (err: Error) => void;
 };
@@ -113,10 +114,10 @@ function PreviewSheet({ req }: { req: Req }) {
 
 function PreviewWindow({ req, onClose }: { req: Req; onClose: () => void }) {
   const [hint, setHint] = useState("\u5148\u770b\u9810\u89bd\u3002\u78ba\u5b9a\u5f8c\u518d\u6309\u9019\u88e1\u7684\u300c\u5217\u5370\u300d\u624d\u6703\u9001\u51fa\u53bb\u3002");
-  const [sending, setSending] = useState(false);
   const settled = useRef(false);
-  const printingRef = useRef(false);
   const openedAt = useRef(Date.now());
+  const sentName = useRef("");
+  const aliveRef = useRef(true);
   const printer = req.printerName || "\u9019\u4e00\u5217\u9084\u6c92\u9078\u5370\u8868\u6a5f";
 
   const finish = (result: PrintSendResult) => {
@@ -126,7 +127,7 @@ function PreviewWindow({ req, onClose }: { req: Req; onClose: () => void }) {
   };
 
   const close = () => {
-    finish({ printed: false, printer: "" });
+    finish({ printed: !!sentName.current, printer: sentName.current });
     onClose();
   };
 
@@ -136,38 +137,39 @@ function PreviewWindow({ req, onClose }: { req: Req; onClose: () => void }) {
   };
 
   const print = () => {
-    if (printingRef.current || sending) return;
     if (!req.printerName) {
       setHint("\u9019\u4e00\u5217\u9084\u6c92\u9078\u5370\u8868\u6a5f\uff0c\u6c92\u6709\u9001\u51fa\u53bb\u3002");
       return;
     }
-    printingRef.current = true;
-    setSending(true);
-    setHint("\u6b63\u5728\u9001\u5230 " + req.printerName);
+    const name = req.printerName;
+    sentName.current = name;
+    setHint("\u5df2\u9001\u51fa\uff0c\u53ef\u6309 Esc \u96e2\u958b\u3002");
     void printToNamedPrinter({
-      printerName: req.printerName,
+      printerName: name,
       html: req.html,
       widthMm: req.widthMm,
       heightMm: req.heightMm,
+      feed: req.feed || "portrait",
     })
       .then((sent) => {
-        const name = sent.printer || req.printerName;
-        setHint("\u5df2\u9001\u5230 " + name);
-        finish({ printed: true, printer: name });
+        const shown = sent.printer || name;
+        sentName.current = shown;
+        if (!aliveRef.current) return;
+        setHint("\u5df2\u9001\u5230 " + shown);
       })
       .catch((err: unknown) => {
+        if (!aliveRef.current) return;
         const msg = err instanceof Error ? err.message : "\u9001\u5230\u5370\u8868\u6a5f\u5931\u6557";
         setHint(msg);
-        if (!settled.current) {
-          settled.current = true;
-          req.reject(err instanceof Error ? err : new Error(msg));
-        }
-      })
-      .finally(() => {
-        printingRef.current = false;
-        setSending(false);
       });
   };
+
+  useEffect(() => {
+    aliveRef.current = true;
+    return () => {
+      aliveRef.current = false;
+    };
+  }, []);
 
   useEffect(() => {
     const onKey = (ev: KeyboardEvent) => {
@@ -213,9 +215,8 @@ function PreviewWindow({ req, onClose }: { req: Req; onClose: () => void }) {
             type="button"
             className="border border-[#404040] bg-[#ffe14a] px-3 py-0.5 text-[12px] font-bold"
             onClick={print}
-            disabled={sending}
           >
-            <span className="font-mono text-[10px]">P</span> {sending ? "\u9001\u51fa\u4e2d\u2026" : "\u5217\u5370"}
+            <span className="font-mono text-[10px]">P</span> {"\u5217\u5370"}
           </button>
           <button type="button" className="border border-[#808080] bg-[#E8E8E8] px-3 py-0.5 text-[12px] font-bold" onClick={close}>
             Esc {"\u96e2\u958b"}
@@ -224,7 +225,7 @@ function PreviewWindow({ req, onClose }: { req: Req; onClose: () => void }) {
             {"\u5370\u8868\u6a5f\uff1a"}{printer}
           </span>
           <span className="font-mono text-[11px] text-black">
-            {req.widthMm}{"\u00d7"}{req.heightMm} mm {paperDirectionLabel(req.widthMm, req.heightMm)}
+            {req.widthMm}{"\u00d7"}{req.heightMm} mm {feedLabel(req.feed)}
           </span>
         </div>
         <PreviewSheet req={req} />

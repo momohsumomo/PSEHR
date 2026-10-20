@@ -45,6 +45,10 @@ def _ensure(conn) -> None:
         conn.execute("ALTER TABLE referral_slip ADD COLUMN treat_text TEXT NOT NULL DEFAULT ''")
     if "sheet_json" not in cols:
         conn.execute("ALTER TABLE referral_slip ADD COLUMN sheet_json TEXT NOT NULL DEFAULT ''")
+    if "local_id" not in cols:
+        conn.execute("ALTER TABLE referral_slip ADD COLUMN local_id TEXT NOT NULL DEFAULT ''")
+    if "nhi_id" not in cols:
+        conn.execute("ALTER TABLE referral_slip ADD COLUMN nhi_id TEXT NOT NULL DEFAULT ''")
 
 
 def list_slips(kind: str = "") -> list[dict[str, Any]]:
@@ -130,6 +134,24 @@ def save_slip(body: dict[str, Any]) -> dict[str, Any]:
     return _public(fields)
 
 
+def mark_uploaded(slip_id: str, *, local_id: str, nhi_id: str, status: str) -> None:
+    """Record the bureau's job ids once an upload is accepted."""
+    slip = (slip_id or "").strip()
+    if not slip:
+        return
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    with get_shadow_store()._connect() as conn:
+        _ensure(conn)
+        conn.execute(
+            """
+            UPDATE referral_slip
+            SET status=?, local_id=?, nhi_id=?, updated_at=?
+            WHERE id=?
+            """,
+            (status, local_id or "", nhi_id or "", now, slip),
+        )
+
+
 def _sheet(fields: dict[str, Any]) -> dict[str, Any]:
     raw = fields.get("sheet_json") or ""
     if not raw:
@@ -162,6 +184,8 @@ def _public(fields: dict[str, Any]) -> dict[str, Any]:
         "serial": fields["serial"],
         "validUntil": fields["valid_until"],
         "status": fields["status"],
+        "localId": fields.get("local_id") or "",
+        "nhiId": fields.get("nhi_id") or "",
         "openedOn": fields.get("opened_on") or "",
         "updatedAt": fields["updated_at"],
         "sex": extra.get("sex") or "",

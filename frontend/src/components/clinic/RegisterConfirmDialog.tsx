@@ -131,6 +131,19 @@ function identityFeePatch(
   };
 }
 
+/** Identity deposit is the amount for a deposit hold. A card visit stores none. */
+function feesForVisit(
+  icException: string,
+  code: string,
+  hit: { deposit?: number; reg_fee?: number; copay?: number } | undefined,
+  clinicReg: string,
+  personDisc?: string,
+): { note: string; patch: Partial<RegisterEditForm> } {
+  const applied = identityFeePatch(code, hit, clinicReg, icException === "deposit", personDisc);
+  if (!icException || icException === "ic") applied.patch.deposit = "";
+  return applied;
+}
+
 function shiftCode(shift: string): string {
   if (shift === "下午") return "2";
   if (shift === "晚上") return "3";
@@ -319,7 +332,7 @@ export function RegisterConfirmDialog({
 
   useEffect(() => {
     if (!open) return;
-    if (lockedShift && form.shift !== lockedShift) onChange({ shift: lockedShift });
+    if (!form.encounterId && lockedShift && form.shift !== lockedShift) onChange({ shift: lockedShift });
     if (!form.visitClock && visitTime) onChange({ visitClock: normalizeClock(visitTime) });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, lockedShift]);
@@ -424,12 +437,9 @@ export function RegisterConfirmDialog({
             const cats = await fetchIdCategorySettings();
             const hit = matchIdCategory(cats, cat);
             if (hit || shown) {
-              const noCard = ["deposit", "noCard", "childNoCard", "pregnantNoCard", "badCard", "paper"].includes(
-                form.icException,
-              );
-              const applied = identityFeePatch(shown || cat, hit, defaults.regFeeOutpatient, !noCard, personDisc);
+              const applied = feesForVisit(form.icException, shown || cat, hit, defaults.regFeeOutpatient, personDisc);
               nhiQuoteRef.current = applied;
-              if (feeEpoch.current === epoch) {
+              if (!form.encounterId && feeEpoch.current === epoch) {
                 const selfPay = selfPayLive.current;
                 const base = selfPay
                   ? { ...applied.patch, regFee: defaults.regFeeSelfPay || applied.patch.regFee, copayAmt: "0", copayDiscAmt: "0" }
@@ -457,7 +467,7 @@ export function RegisterConfirmDialog({
         } else {
           const plain = identityFeePatch("", undefined, defaults.regFeeOutpatient, false, personDiscRef.current);
           nhiQuoteRef.current = plain;
-          if (feeEpoch.current === epoch) {
+          if (!form.encounterId && feeEpoch.current === epoch) {
             const selfPay = selfPayLive.current;
             const base = selfPay
               ? { ...plain.patch, regFee: defaults.regFeeSelfPay || plain.patch.regFee, copayAmt: "0", copayDiscAmt: "0" }
@@ -614,7 +624,7 @@ export function RegisterConfirmDialog({
       <div className="flex max-h-[96vh] w-[min(58rem,98vw)] flex-col overflow-hidden border-2 border-[#004d00] bg-[#c5e6c5] shadow-2xl">
         {/* 頂列：身分／電話／地址 */}
         <header className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-0.5 border-b border-[#80a080] bg-[#004d00] px-2 py-1 text-[11px] text-white">
-          <span className="font-bold">掛號前確認資料存檔</span>
+          <span className="font-bold">{form.encounterId ? "\u4fee\u6539\u6b64\u6b21\u639b\u865f" : "\u639b\u865f\u524d\u78ba\u8a8d\u8cc7\u6599\u5b58\u6a94"}</span>
           <span className="font-mono">證：{form.idNo || "—"}</span>
           <span className="font-mono">生：{rocDotsFrom7(form.birthday)}</span>
           <span>電：{phone || "—"}</span>
@@ -1087,7 +1097,7 @@ export function RegisterConfirmDialog({
                 setIdFeeNote("此身分類別尚未對到優惠表，請按身份類別旁的 … 設定");
                 return;
               }
-              const applied = identityFeePatch(idCategory, hit, defaults.regFeeOutpatient, true, personDiscRef.current);
+              const applied = feesForVisit(form.icException, idCategory, hit, defaults.regFeeOutpatient, personDiscRef.current);
               nhiQuoteRef.current = applied;
               const selfPay = selfPayLive.current;
               const base = selfPay

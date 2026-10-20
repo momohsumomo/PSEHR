@@ -28,6 +28,7 @@ import { IntakeKioskPage } from "@/pages/IntakeKioskPage";
 import { SelfRegisterKioskPage } from "@/pages/SelfRegisterKioskPage";
 import { applyHisDocumentTheme } from "@/lib/hisTheme";
 import { PrintPreviewHost } from "@/components/clinic/PrintPreviewDialog";
+import { DeskExeNotice } from "@/components/clinic/DeskExeNotice";
 
 function AppShell() {
   return (
@@ -76,6 +77,7 @@ export default function App() {
   return (
     <BrowserRouter>
       <div className="wundadi-his min-h-screen" style={{ colorScheme: "only light" }}>
+        <DeskExeNotice />
         <AppShell />
         <PrintPreviewHost />
       </div>

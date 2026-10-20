@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useDefaultUiConfig } from "@/hooks/useDefaultUiConfig";
 import { useClinicCatalog } from "@/hooks/useClinicCatalog";
+import type { CatalogUsage } from "@/types/clinicCatalog";
 import {
   HisCatalogFBar,
   HisCatalogSplit,
@@ -12,6 +13,13 @@ import {
 } from "@/components/clinic/HisPageFrame";
 import { HIS, HIS_FBAR_COLORS } from "@/lib/hisTheme";
 import { useEscLayer } from "@/hooks/useEscLayer";
+
+function doseLabel(code: string | undefined): string {
+  if (code === "1") return "\u4e00\u6b21\u91cf";
+  if (code === "2") return "\u4e00\u65e5\u91cf";
+  if (code === "3") return "\u4e0d\u6307\u5b9a";
+  return "\u7e3d\u91cf";
+}
 
 export function UsageCatalogPage() {
   const navigate = useNavigate();
@@ -27,15 +35,15 @@ export function UsageCatalogPage() {
   const [search, setSearch] = useState("");
   const [filterOpen, setFilterOpen] = useState(true);
   const [selectedCode, setSelectedCode] = useState<string | null>(null);
-  const [form, setForm] = useState<{ code: string; label: string }>({ code: "", label: "" });
+  const [form, setForm] = useState<CatalogUsage>({ code: "", label: "" });
   const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const filterRef = useRef<HTMLInputElement>(null);
 
   const usages = useMemo(() => {
-    const map = new Map<string, { code: string; label: string }>();
+    const map = new Map<string, CatalogUsage>();
     for (const u of catalog.usages || []) {
-      if (u.code) map.set(u.code, { code: u.code, label: String(u.label || u.eatType || "") });
+      if (u.code) map.set(u.code, u);
     }
     if (!map.size) {
       for (const code of defaultUsages ?? ["QD", "BID", "TID", "QID", "HS", "PRN"]) {
@@ -45,7 +53,13 @@ export function UsageCatalogPage() {
     for (const u of overrides.usages || []) {
       const code = String(u.code || u.short || "").trim();
       if (!code) continue;
-      map.set(code, { code, label: String(u.label || u.name || "") });
+      const prev = map.get(code);
+      map.set(code, {
+        ...(prev || { code }),
+        ...u,
+        code,
+        label: String(u.label || u.eatType || prev?.label || ""),
+      });
     }
     return [...map.values()];
   }, [catalog.usages, defaultUsages, overrides.usages]);
@@ -64,17 +78,17 @@ export function UsageCatalogPage() {
   const filtered = usages.filter(
     (u) =>
       u.code.toLowerCase().includes(search.toLowerCase()) ||
-      u.label.toLowerCase().includes(search.toLowerCase()),
+      (u.label || u.eatType || "").toLowerCase().includes(search.toLowerCase()),
   );
 
-  const load = (u: { code: string; label: string } | null) => {
+  const load = (u: CatalogUsage | null) => {
     if (!u) {
       setSelectedCode(null);
       setForm({ code: "", label: "" });
       return;
     }
     setSelectedCode(u.code);
-    setForm({ code: u.code, label: u.label });
+    setForm({ ...u, label: u.label || u.eatType || "" });
   };
 
   useEffect(() => {
@@ -89,7 +103,13 @@ export function UsageCatalogPage() {
     }
     setBusy(true);
     try {
-      await upsertUsage({ code: form.code.trim(), label: form.label.trim() });
+      await upsertUsage({
+        ...form,
+        code: form.code.trim(),
+        label: (form.label || form.eatType || "").trim(),
+        eatType: (form.eatType || form.label || "").trim(),
+        frequency: Number(form.frequency) || 0,
+      });
       setSelectedCode(form.code.trim());
       setNotice("\u5df2\u5b58\u6a94");
     } catch (e) {
@@ -132,7 +152,7 @@ export function UsageCatalogPage() {
               color: HIS_FBAR_COLORS.F2,
               onClick: () => {
                 setSelectedCode(null);
-                setForm({ code: "", label: "" });
+                setForm({ code: "", label: "", indexFlag: "Y" });
                 setNotice("\u65b0\u589e\u6a21\u5f0f\uff1a\u586b\u5beb\u5f8c\u6309 F9 \u5b58\u6a94");
               },
             },
@@ -167,22 +187,44 @@ export function UsageCatalogPage() {
       }
     >
       <HisCatalogSplit
-        formWidth="65%"
+        formWidth="34%"
         form={
-          <div className="grid grid-cols-1 gap-y-1 p-1">
+          <div className="grid grid-cols-2 gap-1 p-1">
+            <p className="col-span-2 px-1 leading-snug text-[#404040]" style={{ fontSize: HIS.fs.tertiary }}>
+              {"\u9078\u7528\u586b Y \u624d\u6703\u51fa\u73fe\u5728\u770b\u8a3a\u7684\u7528\u6cd5\u6e05\u55ae\u3002\u6c92\u6a19 Y \u7684\u4ecd\u7559\u5728\u9019\u9801\uff0c\u6539\u6210 Y \u518d\u5b58\u6a94\u5c31\u80fd\u7528\u3002"}
+            </p>
             <HisField label={"\u7c21\u78bc"}>
-              <input
-                className={`${hisInputClass} font-mono`}
-                value={form.code}
-                onChange={(e) => setForm({ ...form, code: e.target.value })}
-              />
+              <input className={`${hisInputClass} font-mono`} value={form.code} onChange={(e) => setForm({ ...form, code: e.target.value })} />
             </HisField>
             <HisField label={"\u8aaa\u660e"}>
-              <input
-                className={hisInputClass}
-                value={form.label}
-                onChange={(e) => setForm({ ...form, label: e.target.value })}
-              />
+              <input className={hisInputClass} value={form.eatType || form.label || ""} onChange={(e) => setForm({ ...form, eatType: e.target.value, label: e.target.value })} />
+            </HisField>
+            <HisField label={"\u4e00\u5929\u6b21\u6578"}>
+              <input className={`${hisInputClass} font-mono`} value={form.frequency ?? ""} onChange={(e) => setForm({ ...form, frequency: Number(e.target.value) || 0 })} />
+            </HisField>
+            <HisField label={"\u7e3d\u91cf\u7b97\u6cd5"}>
+              <input className={`${hisInputClass} font-mono`} value={form.isTotal || ""} onChange={(e) => setForm({ ...form, isTotal: e.target.value })} />
+            </HisField>
+            <HisField label={"\u6392\u5e8f"}>
+              <input className={`${hisInputClass} font-mono`} value={form.useageNo || ""} onChange={(e) => setForm({ ...form, useageNo: e.target.value })} />
+            </HisField>
+            <HisField label={"\u9078\u7528"}>
+              <input className={`${hisInputClass} font-mono`} value={form.indexFlag || ""} onChange={(e) => setForm({ ...form, indexFlag: e.target.value })} />
+            </HisField>
+            <HisField label={"\u9069\u7528 1"}>
+              <input className={hisInputClass} value={form.cast1 || ""} onChange={(e) => setForm({ ...form, cast1: e.target.value })} />
+            </HisField>
+            <HisField label={"\u9069\u7528 2"}>
+              <input className={hisInputClass} value={form.cast2 || ""} onChange={(e) => setForm({ ...form, cast2: e.target.value })} />
+            </HisField>
+            <HisField label={"\u9069\u7528 3"}>
+              <input className={hisInputClass} value={form.cast3 || ""} onChange={(e) => setForm({ ...form, cast3: e.target.value })} />
+            </HisField>
+            <HisField label={"\u5065\u4fdd\u7528\u6cd5"}>
+              <input className={hisInputClass} value={form.nhiUsage || ""} onChange={(e) => setForm({ ...form, nhiUsage: e.target.value })} />
+            </HisField>
+            <HisField label={"\u5099\u8a3b"}>
+              <input className={hisInputClass} value={form.remark || ""} onChange={(e) => setForm({ ...form, remark: e.target.value })} />
             </HisField>
           </div>
         }
@@ -210,14 +252,35 @@ export function UsageCatalogPage() {
             )}
             <HisDataGrid
               columns={[
-                { key: "code", label: "\u7c21\u78bc", width: "5rem", mono: true },
-                { key: "label", label: "\u8aaa\u660e" },
+                { key: "code", label: "\u7528\u6cd5", width: "5.2rem", mono: true },
+                { key: "frequency", label: "\u6b21\u6578", width: "3rem", mono: true },
+                { key: "useageNo", label: "\u4ee3\u78bc", width: "3.2rem", mono: true },
+                { key: "eatType", label: "\u670d\u7528\u65b9\u6cd5", width: "8rem" },
+                { key: "indexFlag", label: "\u9078\u7528", width: "3rem", mono: true },
+                { key: "cast1", label: "\u85e5\u54c1\u5225\u4e00", width: "4rem" },
+                { key: "cast2", label: "\u85e5\u54c1\u5225\u4e8c", width: "4rem" },
+                { key: "cast3", label: "\u85e5\u54c1\u5225\u4e09", width: "4rem" },
+                { key: "dose", label: "\u7528\u91cf\u8868\u793a", width: "4.5rem" },
+                { key: "remark", label: "\u5099\u8a3b", width: "3rem", mono: true },
+                { key: "nhi", label: "\u5065\u4fdd\u7528\u6cd5", width: "5rem" },
               ]}
               rows={filtered}
               rowKey={(u) => u.code}
               selectedKey={selectedCode}
               onSelect={load}
-              cell={(u, key) => (key === "code" ? u.code : u.label || "\u2014")}
+              cell={(u, key) => {
+                if (key === "code") return u.code;
+                if (key === "frequency") return u.frequency ? String(u.frequency) : "";
+                if (key === "useageNo") return u.useageNo || "";
+                if (key === "eatType") return u.eatType || u.label || "";
+                if (key === "indexFlag") return u.indexFlag || "";
+                if (key === "cast1") return u.cast1 || "";
+                if (key === "cast2") return u.cast2 || "";
+                if (key === "cast3") return u.cast3 || "";
+                if (key === "dose") return doseLabel(u.isTotal);
+                if (key === "nhi") return u.nhiUsage || "";
+                return u.remark || "";
+              }}
             />
           </>
         }

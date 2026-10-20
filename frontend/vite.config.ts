@@ -17,7 +17,14 @@ export default defineConfig({
       "/api": {
         target: process.env.VITE_API_PROXY_TARGET || "http://127.0.0.1:5000",
         changeOrigin: true,
+        xfwd: true,
         rewrite: (path) => path.replace(/^\/api/, ""),
+      },
+      "/cshis": {
+        target: "https://127.0.0.1:5066",
+        changeOrigin: true,
+        secure: false,
+        rewrite: (path) => path.replace(/^\/cshis/, ""),
       },
     },
   },

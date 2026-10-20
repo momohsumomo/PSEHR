@@ -397,6 +397,7 @@ function definedPages(
       sex: "\u5973",
       birthday: "0800101",
       idNo: "A000000000",
+      medicalNo: "000000",
       phone: "",
       address: "\u7bc4\u4f8b\u5730\u5740",
       chief: "\u76ae\u819a\u7662\u4e09\u5929",
@@ -421,7 +422,7 @@ function definedPages(
       hospAddr: "",
       hospTel: "",
       valid: "115.11.01",
-      copies: [["\u7b2c\u4e00\u806f", "\u63a5\u53d7\u8f49\u8a3a\u91ab\u9662\u3001\u8a3a\u6240\u6240\u7559\u5b58"]],
+      copies: [["\u7b2c\u4e00\u806f\uff1a\u63a5\u53d7\u8f49\u8a3a\u91ab\u9662\u3001\u8a3a\u6240\u7559\u5b58\uff08\u85cd\u8272\uff09", ""]],
     });
     const parts = html.split(/(?=<section class="slip-page")/).map((part) => part.trim()).filter(Boolean);
     return parts.length ? parts : [html];

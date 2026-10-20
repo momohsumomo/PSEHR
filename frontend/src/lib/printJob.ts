@@ -4,8 +4,10 @@ import {
   loadPrintSettings,
   paperCssSize,
   resolveDocPrint,
+  setupFeed,
   setupPageCss,
   type PrintDocKind,
+  type PrinterFeed,
   type PrintSetupId,
 } from "@/lib/printSettings";
 
@@ -33,6 +35,7 @@ export type PreparedPrint = {
   printerName: string;
   widthMm: number;
   heightMm: number;
+  feed: PrinterFeed;
 };
 
 type PreviewRequest = PreparedPrint & {
@@ -64,6 +67,7 @@ export function preparePrint(job: PrintJob): PreparedPrint {
     printerName: setup?.printerName.trim() || "",
     widthMm: setup?.widthMm || 210,
     heightMm: setup?.heightMm || 297,
+    feed: setup ? setupFeed(setup) : "portrait",
   };
 }
 

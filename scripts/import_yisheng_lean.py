@@ -15,6 +15,7 @@ Each drug line stores HISTORY.PRICE. Quantity is the on-screen QTY.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import sqlite3
@@ -293,7 +294,7 @@ def main() -> int:
                 icd10, dname = shortcut_map.get(sick, ("", ""))
                 if not dname:
                     dname = sick
-                cid = f"local-condition-{md5_id(f'{eid}-{sick}-{i}')}"
+                cid = "local-condition-" + hashlib.md5(f"{eid}|{sick}|{i}".encode()).hexdigest()
                 condition_idx.append(
                     (
                         cid,

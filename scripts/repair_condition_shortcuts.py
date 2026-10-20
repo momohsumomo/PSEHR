@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import sqlite3
 import sys
@@ -95,7 +96,7 @@ def main() -> int:
                 name = sick
             else:
                 matched += 1
-            cid = f"local-condition-{md5_id(f'{eid}-{sick}-{idx_seq}')}"
+            cid = "local-condition-" + hashlib.md5(f"{eid}|{sick}|{idx_seq}".encode()).hexdigest()
             new_rows.append(
                 (
                     cid,

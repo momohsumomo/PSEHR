@@ -24,7 +24,8 @@ from src.core.intake_form import (
     compose_cosmetic_note,
     compose_kiosk_note,
 )
-from src.core.nhi_card_bridge import profile_to_patient_intake, read_virtual_card_profile
+from src.core.nhi_card_bridge import profile_to_patient_intake
+from src.core.nhi_card_init_sop import map_hc_basic
 from src.core.nhi_validators import NhiValidationError
 
 router = APIRouter(prefix="/nhi/v1", tags=["Kiosk"])
@@ -54,7 +55,8 @@ class IntakeSubmitBody(BaseModel):
 
 
 class VirtualCardBody(BaseModel):
-    token: str = Field(..., min_length=8)
+    token: str = ""
+    basic: dict[str, Any] | None = None
 
 
 def _roc_to_iso(text: str) -> str:
@@ -210,11 +212,11 @@ def virtual_card(body: VirtualCardBody) -> dict[str, Any]:
     from src.api.routers.nhi import _patient_validation, _save_nhi_patient
     from src.core.nhi_fhir_mapper import extract_nhi_stickers_from_patient
 
-    card = read_virtual_card_profile(body.token)
-    if not card.profile:
-        raise HTTPException(status_code=422, detail=card.consoleError or "\u865b\u64ec\u5065\u4fdd\u5361\u8b80\u4e0d\u5230")
+    profile = map_hc_basic(body.basic or {})
+    if not profile:
+        raise HTTPException(status_code=422, detail="NEED_DESK_SIGN")
     try:
-        intake = profile_to_patient_intake(card.profile)
+        intake = profile_to_patient_intake(profile)
         resource, created = _save_nhi_patient(intake)
     except NhiValidationError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
@@ -226,6 +228,6 @@ def virtual_card(body: VirtualCardBody) -> dict[str, Any]:
         "patientId": patient_id,
         "cardSource": "virtual",
         "consoleReachable": True,
-        "validation": {**face, "cardId": card.profile.get("cardId") or ""},
+        "validation": {**face, "cardId": profile.get("cardId") or ""},
         "nhiStickers": extract_nhi_stickers_from_patient(resource),
     }

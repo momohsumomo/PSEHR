@@ -27,6 +27,7 @@ import {
   CLINIC_MODULE_TABS,
   type ClinicTab,
 } from "@/lib/clinicShortcutSets";
+import { rxLinesMissingFrom } from "@/lib/dittoRxLines";
 import { EncounterQueuePanel } from "@/components/clinic/EncounterQueuePanel";
 import { HistoryRxPanel } from "@/components/clinic/HistoryRxPanel";
 import { PatientHeaderWidget } from "@/components/clinic/widgets/PatientHeaderWidget";
@@ -43,11 +44,7 @@ import { useClinicCatalog } from "@/hooks/useClinicCatalog";
 import { useClinicWorkspace } from "@/hooks/useClinicWorkspace";
 import { useDefaultUiConfig } from "@/hooks/useDefaultUiConfig";
 import type { DiagnosisRow, HistoryVisit, RxLine } from "@/mocks";
-import {
-  RegisterEditDialog,
-  emptyRegisterForm,
-  type RegisterEditForm,
-} from "@/components/clinic/RegisterEditDialog";
+import { emptyRegisterForm, type RegisterEditForm } from "@/components/clinic/RegisterEditDialog";
 import { RegisterConfirmDialog } from "@/components/clinic/RegisterConfirmDialog";
 import { PatientFinderDialog } from "@/components/clinic/PatientFinderDialog";
 import { DeleteRegisterDialog } from "@/components/clinic/DeleteRegisterDialog";
@@ -69,7 +66,7 @@ import {
   applyClinicDrugDisplayNames,
   resolvePackageLines,
 } from "@/utils/catalogRx";
-import { cancelRegister, writeVisitToCard, CardReadError, type CardFaultReport, patchEncounterReg, fetchStaff, replyReferral, claimChartOpen, releaseChartOpen, CHART_IN_USE } from "@/api/clinicApi";
+import { cancelRegister, writeVisitToCard, CardReadError, type CardFaultReport, patchEncounterReg, fetchStaff, replyReferral, saveReferralSlip, claimChartOpen, releaseChartOpen, CHART_IN_USE } from "@/api/clinicApi";
 import { ReferralReplyDialog, useIncomingReferralAsk } from "@/components/clinic/ReferralAcceptDialogs";
 import { loadLocalDeviceMeta } from "@/lib/clinicDevice";
 import { appendChiefNotes, mapDiagnosisList, readyIcd9, resolveIcd9Row } from "@/lib/icdCrosswalk";
@@ -93,7 +90,7 @@ import {
 } from "@/components/clinic/VisitSaveConfirmPanel";
 import { HIS, HIS_FONT, hisFontStyle } from "@/lib/hisTheme";
 import { findWaitingAppointment, otherShiftAppointmentNote } from "@/lib/appointmentCheckIn";
-import { compareClinicQueue, normalizeClock, nowClock, planQueueNumber, shiftQueueNumbers, skipsCloudWrite } from "@/lib/queueOrder";
+import { compareClinicQueue, normalizeClock, nowClock, planQueueNumber, shiftQueueNumbers, showsUploadCircle, skipsCloudWrite } from "@/lib/queueOrder";
 import { AppointmentCheckInDialog, InsertNumberDialog } from "@/components/clinic/InsertNumberDialog";
 import { useEscLayer } from "@/hooks/useEscLayer";
 
@@ -243,15 +240,21 @@ export function ClinicOutpatientPage() {
     refreshQueue,
     readCardRegisterPatient,
     submitRegisterEdit,
-    persistMedication,
+    ensureAcceptReferralOrder,
     currentDate,
     setCurrentDate,
     queueHints,
     vitalsFromWs,
   } = ws;
   const incoming = useIncomingReferralAsk();
-  const refInAdded = useRef<Set<string>>(new Set());
-  const [replyAsk, setReplyAsk] = useState<{ serial: string; hosp: string; dx: string; note: string } | null>(null);
+  const [replyAsk, setReplyAsk] = useState<{
+    serial: string;
+    hosp: string;
+    dx: string;
+    note: string;
+    meds: string;
+    patientName: string;
+  } | null>(null);
   const [replyBusy, setReplyBusy] = useState(false);
   const [replyError, setReplyError] = useState("");
 
@@ -275,6 +278,7 @@ export function ClinicOutpatientPage() {
   const [actionError, setActionError] = useState<string | null>(null);
   const [chartInUse, setChartInUse] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [saveSpent, setSaveSpent] = useState(false);
   const [activeShortcutKey, setActiveShortcutKey] = useState<string | null>(null);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [clinicTab, setClinicTab] = useState<ClinicTab>(seekBoot ? "chart" : "list");
@@ -285,15 +289,13 @@ export function ClinicOutpatientPage() {
   const [chartRailTab, setChartRailTab] = useState<ChartRailTab>("waiting");
   const [historyVisit, setHistoryVisit] = useState<HistoryVisit | null>(null);
   const [saveLayerOpen, setSaveLayerOpen] = useState(false);
+  const [cloudAgainAsk, setCloudAgainAsk] = useState(false);
   const [saveDraft, setSaveDraft] = useState<VisitSaveDraft>(() =>
     buildVisitSaveDraft({ selected: null, diagnoses: [], currentRx: [] }),
   );
-  const [saveCommitted, setSaveCommitted] = useState<Record<string, boolean>>({});
   const [cardNote, setCardNote] = useState<string | null>(null);
   const [printNote, setPrintNote] = useState<string | null>(null);
-  const [registerOpen, setRegisterOpen] = useState(false);
-  const [registerForm, setRegisterForm] = useState<RegisterEditForm>(() => emptyRegisterForm());
-  /** 掛號前確認存檔（F2 找人／F9 讀卡） */
+  /** 掛號前確認存檔（F2 找人／F9 讀卡），F3 修改已掛的也開這一頁 */
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [insertAsk, setInsertAsk] = useState<{
     gap: number;
@@ -313,7 +315,6 @@ export function ClinicOutpatientPage() {
   const queueSearchRef = useRef<HTMLInputElement>(null);
   const [seqBusy, setSeqBusy] = useState(false);
   const [seqNote, setSeqNote] = useState<string | null>(null);
-  const [registerError, setRegisterError] = useState<string | null>(null);
   const [confirmError, setConfirmError] = useState<string | null>(null);
   const [depositAsk, setDepositAsk] = useState<{
     name: string;
@@ -369,6 +370,13 @@ export function ClinicOutpatientPage() {
   >(null);
   const leaveBypassRef = useRef(false);
   const afterSaveLeaveRef = useRef<(() => void) | null>(null);
+  const finishReply = useCallback(() => {
+    setReplyAsk(null);
+    setReplyError("");
+    const leaveAfter = afterSaveLeaveRef.current;
+    afterSaveLeaveRef.current = null;
+    if (leaveAfter) leaveAfter();
+  }, []);
 
   useEffect(() => {
     if (!leaveAsk) return;
@@ -485,22 +493,12 @@ export function ClinicOutpatientPage() {
   useEffect(() => {
     const id = selected?.encounterId;
     if (!apiMode || !id || selected?.acceptReferral !== "1") return;
-    if (refInAdded.current.has(id)) return;
-    if ((currentRxRaw || []).some((row) => (row.nhiCode || "").toUpperCase() === "01038C")) {
-      refInAdded.current.add(id);
-      return;
-    }
-    refInAdded.current.add(id);
-    void persistMedication({
-      id: "rx-draft-ref-in",
-      name: "\u63a5\u53d7\u8f49\u8a3a",
-      sig: "\u4f9d\u91ab\u56d1",
-      days: 1,
-      qty: 1,
-      nhiCode: "01038C",
-      route: "po",
-    });
-  }, [apiMode, selected?.encounterId, selected?.acceptReferral, currentRxRaw, persistMedication]);
+    if ((currentRxRaw || []).some((row) => {
+      const code = (row.nhiCode || "").toUpperCase();
+      return code === "01038C" || code === "00193C";
+    })) return;
+    void ensureAcceptReferralOrder(id);
+  }, [apiMode, selected?.encounterId, selected?.acceptReferral, currentRxRaw, ensureAcceptReferralOrder]);
   const displayHistoryVisits = useMemo(
     () =>
       historyVisits.map((v) => ({
@@ -566,18 +564,6 @@ export function ClinicOutpatientPage() {
     rx: currentRx.map((r) => `${r.nhiCode}|${r.sig}|${r.days}|${r.qty ?? 1}`),
     vitals: chartVitals,
   });
-  const saveLocked = Boolean(
-    selectedEncounterId &&
-      saveCommitted[selectedEncounterId] &&
-      committedFpRef.current[selectedEncounterId] === visitFingerprint,
-  );
-
-  useEffect(() => {
-    if (!selectedEncounterId) return;
-    if (!saveCommitted[selectedEncounterId]) return;
-    if (committedFpRef.current[selectedEncounterId] === visitFingerprint) return;
-    setSaveCommitted((prev) => ({ ...prev, [selectedEncounterId]: false }));
-  }, [selectedEncounterId, saveCommitted, visitFingerprint]);
 
   const historyFontPx = prefs.historyFontSizePx ?? 15;
   const allergyEmpty = prefs.allergyEmptyText ?? t.allergy.none;
@@ -594,7 +580,7 @@ export function ClinicOutpatientPage() {
     setSelectedRxIndex(0);
     if (draft) {
       ccDirtyRef.current = true;
-      chartDirtyRef.current = true;
+      chartDirtyRef.current = true; setSaveSpent(false);
       setCcText(draft.cc);
       setApiDxOverlay(draft.dx);
       setApiRxOverlay(draft.rx);
@@ -647,6 +633,29 @@ export function ClinicOutpatientPage() {
     return () => window.clearInterval(id);
   }, []);
 
+  useEffect(() => {
+    if (!entered || !apiMode) return;
+    let pending = false;
+    let last = 0;
+    const pull = () => {
+      const now = Date.now();
+      if (pending || now - last < 700) return;
+      last = now;
+      pending = true;
+      void refreshQueue()
+        .catch(() => undefined)
+        .finally(() => {
+          pending = false;
+        });
+    };
+    window.addEventListener("wheel", pull, { passive: true });
+    window.addEventListener("pointerdown", pull);
+    return () => {
+      window.removeEventListener("wheel", pull);
+      window.removeEventListener("pointerdown", pull);
+    };
+  }, [entered, apiMode, refreshQueue]);
+
   const runAction = useCallback(async (fn: () => Promise<void>) => {
     setSaving(true);
     setActionError(null);
@@ -689,7 +698,7 @@ export function ClinicOutpatientPage() {
       });
       if (apiMode) setApiRxOverlay(next);
       else setMockCurrentRx(next);
-      chartDirtyRef.current = true;
+      chartDirtyRef.current = true; setSaveSpent(false);
       setChartFocus("rx");
       setChartRailTab((prev) =>
         prev === "waiting" || prev === "history" ? "common" : prev,
@@ -699,7 +708,7 @@ export function ClinicOutpatientPage() {
   );
 
   const markChartDirty = useCallback(() => {
-    chartDirtyRef.current = true;
+    chartDirtyRef.current = true; setSaveSpent(false);
   }, []);
 
   const placeDiagnosisRows = useCallback(
@@ -901,7 +910,6 @@ export function ClinicOutpatientPage() {
       setActionError(CLAIM_DX_SAVE);
       return;
     }
-    if (saveLocked) return;
     const defaults = loadClinicRegisterDefaults();
     let doctorLabel = doctorDisplayName(selected?.doctorName, selected?.doctorId);
     let doctorId = selected?.doctorId || defaults.defaultDoctorId || "";
@@ -920,22 +928,36 @@ export function ClinicOutpatientPage() {
         doctorLabel = doctorId;
       }
     }
-    setSaveDraft(
-      buildVisitSaveDraft({
-        selected,
-        diagnoses: displayDiagnoses,
-        currentRx,
-        doctor: doctorLabel,
-        doctorId,
-        consultFeeDefault: defaults.consultFeeDefault,
-      }),
-    );
+    const draft = buildVisitSaveDraft({
+      selected,
+      diagnoses: displayDiagnoses,
+      currentRx,
+      doctor: doctorLabel,
+      doctorId,
+      consultFeeDefault: defaults.consultFeeDefault,
+    });
+    setSaveDraft(draft);
     setCardNote(null);
+    if (selected && showsUploadCircle(selected) && draft.writeCard) {
+      setCloudAgainAsk(true);
+      return;
+    }
     setSaveLayerOpen(true);
-  }, [isChart, selectedEncounterId, saveLocked, selected, displayDiagnoses, currentRx]);
+  }, [isChart, selectedEncounterId, selected, displayDiagnoses, currentRx]);
+
+  useEffect(() => {
+    if (!cloudAgainAsk) return;
+    const onKey = (ev: KeyboardEvent) => {
+      if (ev.key !== "Escape") return;
+      ev.preventDefault();
+      setCloudAgainAsk(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [cloudAgainAsk]);
 
   const confirmSave = useCallback(async () => {
-    if (!selectedEncounterId || saveLocked) return;
+    if (!selectedEncounterId) return;
     if (displayDiagnoses.length > CLAIM_DX_LIMIT) {
       setActionError(CLAIM_DX_SAVE);
       return;
@@ -1019,15 +1041,24 @@ export function ClinicOutpatientPage() {
           /* vitals best-effort; SOAP/Rx already saved */
         }
         hisOk = true;
-        const serial = (selected?.referralSeq || "").trim();
-        if (serial && !(selected?.referralLocalId || "").trim()) {
+        const accepted = (selected?.acceptReferral || "").trim() === "1";
+        const replied = Boolean((selected?.referralLocalId || "").trim());
+        if (accepted && !replied) {
           setReplyError("");
           setReplyAsk({
-            serial,
+            serial: (selected?.referralSeq || "").trim(),
             hosp: selected?.referralHospName || selected?.referralHospId || "",
-            dx: (dxForSave[0]?.icd10 || dxForSave[0]?.nhiIcd10 || "").trim(),
+            dx: dxForSave
+              .map((row) => [row.icd10 || row.nhiIcd10 || "", row.text].filter((part) => part.trim()).join(" ").trim())
+              .filter(Boolean)
+              .join("\n"),
             note: ccForSave.trim(),
+            meds: currentRx
+              .map((row) => [row.name, row.sig, row.days ? `${row.days}\u5929` : ""].filter(Boolean).join(" "))
+              .join("\n"),
+            patientName: selected?.patientDisplay || "",
           });
+          setSaveLayerOpen(false);
         }
       }
       const deskOnly = selected ? skipsCloudWrite(selected) : false;
@@ -1095,10 +1126,13 @@ export function ClinicOutpatientPage() {
           });
       }
       committedFpRef.current[selectedEncounterId] = visitFingerprint;
-      setSaveCommitted((prev) => ({ ...prev, [selectedEncounterId]: true }));
-      const leaveAfter = afterSaveLeaveRef.current;
-      afterSaveLeaveRef.current = null;
-      if (leaveAfter) leaveAfter();
+      const holdForReply =
+        apiMode && (selected?.acceptReferral || "").trim() === "1" && !(selected?.referralLocalId || "").trim();
+      if (!holdForReply) {
+        const leaveAfter = afterSaveLeaveRef.current;
+        afterSaveLeaveRef.current = null;
+        if (leaveAfter) leaveAfter();
+      }
       setVisitDrafts((prev) => {
         if (!prev[selectedEncounterId]) return prev;
         const next = { ...prev };
@@ -1109,6 +1143,7 @@ export function ClinicOutpatientPage() {
       setApiDxOverlay(null);
       ccDirtyRef.current = false;
       chartDirtyRef.current = false;
+      setSaveSpent(true);
     } catch (e) {
       const raw = e instanceof Error ? e.message : "存檔失敗";
       const msg = hisOk ? `病歷已寫入本機。${raw}` : raw;
@@ -1119,7 +1154,6 @@ export function ClinicOutpatientPage() {
     }
   }, [
     selectedEncounterId,
-    saveLocked,
     apiMode,
     persistVisit,
     persistVitals,
@@ -1200,20 +1234,21 @@ export function ClinicOutpatientPage() {
   }, [currentDate, saveDraft, selected, ccText, displayDiagnoses, currentRx, session?.pharmacist]);
 
   const onF9 = useCallback(() => {
-    if (saveLocked) return;
+    if (saving || saveSpent || cloudAgainAsk) return;
     if (!saveLayerOpen) {
       void openSaveLayer();
       return;
     }
     void confirmSave();
-  }, [saveLocked, saveLayerOpen, openSaveLayer, confirmSave]);
+  }, [saveLayerOpen, openSaveLayer, confirmSave, saving, saveSpent, cloudAgainAsk]);
 
   const dittoRx = useCallback(
     (lines: RxLine[]) => {
-      if (!lines.length) return;
-      addRxLines(cloneRxLines(lines));
+      const missing = rxLinesMissingFrom(currentRx, lines);
+      if (!missing.length) return;
+      addRxLines(cloneRxLines(missing));
     },
-    [addRxLines, cloneRxLines],
+    [addRxLines, cloneRxLines, currentRx],
   );
 
   const dittoCc = useCallback(
@@ -1222,7 +1257,7 @@ export function ClinicOutpatientPage() {
       const copied = text.trim();
       if (!copied) return;
       ccDirtyRef.current = true;
-      chartDirtyRef.current = true;
+      chartDirtyRef.current = true; setSaveSpent(false);
       setCcText((prev) => (prev ? `${prev} ${copied}` : copied));
     },
     [prefs.dittoCc],
@@ -1315,6 +1350,7 @@ export function ClinicOutpatientPage() {
       setSelectedRxIndex(-1);
       commandFocusBump.current += 1;
       chartDirtyRef.current = false;
+      setSaveSpent(false);
 
       if (finished) {
         // Re-open saved visit: always server truth until F9
@@ -1329,7 +1365,7 @@ export function ClinicOutpatientPage() {
         ccDirtyRef.current = false;
       } else if (draft) {
         ccDirtyRef.current = true;
-        chartDirtyRef.current = true;
+        chartDirtyRef.current = true; setSaveSpent(false);
         setCcText(draft.cc);
         setApiDxOverlay(draft.dx);
         setApiRxOverlay(draft.rx);
@@ -1563,20 +1599,6 @@ export function ClinicOutpatientPage() {
     if (res.cardBridgeNote) setSeqNote(res.cardBridgeNote);
   }, [apiMode, readCardRegisterPatient, session]);
 
-  /** F3：編輯已掛一筆 */
-  const openRegisterDialog = useCallback(
-    (seed?: Partial<RegisterEditForm>) => {
-      setRegisterError(null);
-      setSeqNote(null);
-      setCardDiagnose(null);
-      const next = { ...emptyRegisterForm(), ...seed };
-      next.pharmacist = seed?.pharmacist || session?.pharmacist || lastPharmacist();
-      setRegisterForm(next);
-      setRegisterOpen(true);
-    },
-    [session],
-  );
-
   const openConfirmFromSeed = useCallback(
     (seed: Partial<RegisterEditForm>) => {
       setConfirmError(null);
@@ -1584,7 +1606,7 @@ export function ClinicOutpatientPage() {
       setCardDiagnose(null);
       const next = { ...emptyRegisterForm(), ...seed };
       next.pharmacist = seed.pharmacist || session?.pharmacist || lastPharmacist();
-      if (session?.shift) next.shift = session.shift;
+      if (!seed.encounterId && session?.shift) next.shift = session.shift;
       if (!seed.visitClock) next.visitClock = nowClock();
       setRegisterOptionsOpen(false);
       setConfirmForm(next);
@@ -1659,7 +1681,7 @@ export function ClinicOutpatientPage() {
         if (res.cardBridgeNote) setSeqNote(res.cardBridgeNote);
         const booked = findWaitingAppointment(
           queue,
-          { patientId: seed.patientId, idNo: seed.idNo },
+          { idNo: seed.idNo },
           shift,
           entryShift,
         );
@@ -1676,37 +1698,13 @@ export function ClinicOutpatientPage() {
         }
         const otherNote = otherShiftAppointmentNote(
           queue,
-          { patientId: seed.patientId, idNo: seed.idNo },
+          { idNo: seed.idNo },
           shift,
           entryShift,
         );
         if (otherNote) setSeqNote([res.cardBridgeNote, otherNote].filter(Boolean).join(" "));
         offerQueueNumber((n) => openConfirmFromSeed({ ...seed, queueNumber: String(n) }));
       } catch (e) {
-        const booked = selected
-          ? findWaitingAppointment(
-              queue,
-              { patientId: selected.patientId, idNo: selected.idNo },
-              shift,
-              entryShift,
-            )
-          : null;
-        if (booked) {
-          beginCheckIn(booked, {
-            patientId: booked.patientId,
-            idNo: booked.idNo,
-            patientName: booked.patientDisplay,
-            sex: booked.sex || "F",
-            icException: "deposit",
-            noCardReason: "",
-            deposit: loadClinicRegisterDefaults().depositAmount,
-            prebook: false,
-            payType: "4",
-            pharmacist: session?.pharmacist || lastPharmacist(),
-            shift,
-          });
-          return;
-        }
         openConfirmFromSeed({
           pharmacist: session?.pharmacist || lastPharmacist(),
           icException: "ic",
@@ -1717,7 +1715,7 @@ export function ClinicOutpatientPage() {
         setCardDiagnose(e instanceof CardReadError ? e.diagnose : null);
       }
     })();
-  }, [apiMode, beginCheckIn, entryShift, offerQueueNumber, openConfirmFromSeed, queue, readCardRegisterPatient, selected, session]);
+  }, [apiMode, beginCheckIn, entryShift, offerQueueNumber, openConfirmFromSeed, queue, readCardRegisterPatient, session]);
 
   const applyRegisterHub = useCallback(
     (label: string) => {
@@ -1866,6 +1864,8 @@ export function ClinicOutpatientPage() {
       referralHospName: entry.referralHospName || "",
       referralDate: entry.referralDate || "",
       pharmacist: entry.pharmacist || session?.pharmacist || lastPharmacist(),
+      doctorId: entry.doctorId || "",
+      doctorName: entry.doctorName || "",
       paperCard: Boolean(entry.paperCard),
       treatSeq: entry.treatSeq || "",
       treatmentNumber: entry.treatmentNumber || "",
@@ -1893,8 +1893,8 @@ export function ClinicOutpatientPage() {
       return;
     }
     setSelectedEncounterId(entry.encounterId);
-    openRegisterDialog(seedFromEntry(entry));
-  }, [selected, queue, selectedEncounterId, openRegisterDialog, seedFromEntry, setSelectedEncounterId]);
+    openConfirmFromSeed(seedFromEntry(entry));
+  }, [selected, queue, selectedEncounterId, openConfirmFromSeed, seedFromEntry, setSelectedEncounterId]);
 
   const openDeleteDialog = useCallback(() => {
     if (!selectedEncounterId) {
@@ -2071,6 +2071,7 @@ export function ClinicOutpatientPage() {
 
   useEscLayer(
     [
+      { open: replyAsk != null, close: finishReply },
       { open: newPatientQuery != null, close: () => setNewPatientQuery(null) },
       { open: checkInAsk != null, close: () => setCheckInAsk(null) },
       { open: insertAsk != null, close: () => answerInsert(false) },
@@ -2098,7 +2099,6 @@ export function ClinicOutpatientPage() {
           setCardDiagnose(null);
         },
       },
-      { open: registerOpen, close: () => setRegisterOpen(false) },
       { open: deleteOpen, close: () => setDeleteOpen(false) },
       {
         open: saveLayerOpen,
@@ -2119,9 +2119,12 @@ export function ClinicOutpatientPage() {
   useEffect(() => {
     const onKey = (ev: KeyboardEvent) => {
       if (gateOpen) return;
+      if (replyAsk) {
+        if (ev.key === "F9") ev.preventDefault();
+        return;
+      }
       if (ev.key === "Escape") return;
       if (
-        registerOpen ||
         confirmOpen ||
         finderOpen ||
         newPatientQuery != null ||
@@ -2154,7 +2157,7 @@ export function ClinicOutpatientPage() {
         setRegisterOptionsOpen(true);
         return;
       }
-      if (isList && ev.key === "F3") {
+      if ((isList || isChart) && ev.key === "F3") {
         ev.preventDefault();
         openF3RegisterEdit();
         return;
@@ -2287,7 +2290,6 @@ export function ClinicOutpatientPage() {
     needsPatientTab,
     closeChart,
     openChart,
-    registerOpen,
     confirmOpen,
     finderOpen,
     deleteOpen,
@@ -2298,6 +2300,7 @@ export function ClinicOutpatientPage() {
     icInfoOpen,
     referralOpen,
     gateOpen,
+    replyAsk,
     openFinder,
     queueSearch,
     isList,
@@ -2373,50 +2376,6 @@ export function ClinicOutpatientPage() {
     else closeChart();
   };
 
-  const confirmRegisterEdit = async () => {
-    if (!apiMode) {
-      setRegisterError("掛號需 API 模式");
-      return;
-    }
-    setRegisterError(null);
-    setSeqNote(null);
-    setSeqBusy(true);
-    setRegisterBusy(true);
-    try {
-      await submitRegisterEdit(registerForm, (fields) => {
-        const { seqNote: note, ...rest } = fields;
-        setRegisterForm((prev) => ({ ...prev, ...rest }));
-        setSeqNote(note);
-      }, incoming.ask);
-      const pharmacistName = (registerForm.pharmacist ?? "").trim();
-      if (pharmacistName) {
-        const prev = loadClinicSession();
-        saveClinicSession({
-          date: currentDate,
-          pharmacist: pharmacistName,
-          shift: prev?.shift || session?.shift || "上午",
-          dept: prev?.dept || session?.dept || "皮膚科",
-        });
-        setSession((s) =>
-          s
-            ? { ...s, pharmacist: pharmacistName }
-            : {
-                date: currentDate,
-                pharmacist: pharmacistName,
-                shift: "上午",
-                dept: "皮膚科",
-              },
-        );
-      }
-      setRegisterOpen(false);
-    } catch (e) {
-      setRegisterError(e instanceof Error ? e.message : "掛號失敗");
-    } finally {
-      setSeqBusy(false);
-      setRegisterBusy(false);
-    }
-  };
-
   const confirmNewRegister = async () => {
     if (!apiMode) {
       setConfirmError("掛號需 API 模式");
@@ -2480,6 +2439,7 @@ export function ClinicOutpatientPage() {
         );
       }
       setConfirmOpen(false);
+      if (toSave.encounterId) return;
       if (hits.length || bureauSameDay) setSameDayFlash(true);
       if (depositHold) {
         setDepositAsk({
@@ -2500,25 +2460,25 @@ export function ClinicOutpatientPage() {
   };
 
   const stubValues: Record<string, string> = {
-    姓名: selected?.patientDisplay || registerForm.patientName || "",
+    姓名: selected?.patientDisplay || confirmForm.patientName || "",
     病歷號: selected?.medicalNo || "",
-    身分證: selected?.idNo || registerForm.idNo || "",
-    生日: formatBirthdayRoc(selected?.birthday || registerForm.birthday || ""),
-    性別: selected?.sex || registerForm.sex || "",
-    卡號: registerForm.cardId || selected?.hcId || "",
-    就醫序號: selected?.treatSeq || registerForm.treatSeq || "",
-    就醫識別碼: selected?.treatmentNumber || registerForm.treatmentNumber || "",
-    就醫日期時間: selected?.treatDateTime || registerForm.treatDateTime || "",
+    身分證: selected?.idNo || confirmForm.idNo || "",
+    生日: formatBirthdayRoc(selected?.birthday || confirmForm.birthday || ""),
+    性別: selected?.sex || confirmForm.sex || "",
+    卡號: confirmForm.cardId || selected?.hcId || "",
+    就醫序號: selected?.treatSeq || confirmForm.treatSeq || "",
+    就醫識別碼: selected?.treatmentNumber || confirmForm.treatmentNumber || "",
+    就醫日期時間: selected?.treatDateTime || confirmForm.treatDateTime || "",
     看診日: currentDate,
-    時段: selected?.shift || registerForm.shift || "",
-    診間: selected?.room || registerForm.room || "",
-    掛號費: selected?.regFee || registerForm.regFee || "",
-    藥費: selected?.drugFee || registerForm.drugFee || "",
-    藥品費: selected?.drugFee || registerForm.drugFee || "",
-    材料費: selected?.materialFee || registerForm.materialFee || "",
-    診察費: selected?.consultFee || registerForm.consultFee || "",
-    押金: selected?.deposit || registerForm.deposit || "",
-    目前藥師: selected?.pharmacist || registerForm.pharmacist || "",
+    時段: selected?.shift || confirmForm.shift || "",
+    診間: selected?.room || confirmForm.room || "",
+    掛號費: selected?.regFee || confirmForm.regFee || "",
+    藥費: selected?.drugFee || confirmForm.drugFee || "",
+    藥品費: selected?.drugFee || confirmForm.drugFee || "",
+    材料費: selected?.materialFee || confirmForm.materialFee || "",
+    診察費: selected?.consultFee || confirmForm.consultFee || "",
+    押金: selected?.deposit || confirmForm.deposit || "",
+    目前藥師: selected?.pharmacist || confirmForm.pharmacist || "",
     病患: selected?.patientDisplay || "",
   };
 
@@ -2637,6 +2597,7 @@ export function ClinicOutpatientPage() {
       onSaveHistory={async (visit) => {
         await runAction(() => persistHistoryVisit(visit));
       }}
+      drugs={catalog.drugs}
     />
   );
 
@@ -2945,7 +2906,7 @@ export function ClinicOutpatientPage() {
                       ccText={ccText}
                       setCcText={(v) => {
                         ccDirtyRef.current = true;
-                        chartDirtyRef.current = true;
+                        chartDirtyRef.current = true; setSaveSpent(false);
                         setCcText(v);
                       }}
                       ccChips={ccChips}
@@ -2957,7 +2918,7 @@ export function ClinicOutpatientPage() {
                   <ChartVitalsColumn
                     value={chartVitals}
                     onChange={(patch) => {
-                      chartDirtyRef.current = true;
+                      chartDirtyRef.current = true; setSaveSpent(false);
                       setChartVitals((prev) => ({ ...prev, ...patch }));
                     }}
                   />
@@ -2992,12 +2953,12 @@ export function ClinicOutpatientPage() {
                     historyFontPx={HIS.fs.body}
                     mockCurrentRx={apiMode ? currentRx : mockCurrentRx}
                     setMockCurrentRx={(lines) => {
-                      chartDirtyRef.current = true;
+                      chartDirtyRef.current = true; setSaveSpent(false);
                       if (apiMode) setApiRxOverlay(lines);
                       else setMockCurrentRx(lines);
                     }}
                     onChangeLine={(id, patch) => {
-                      chartDirtyRef.current = true;
+                      chartDirtyRef.current = true; setSaveSpent(false);
                       const next = currentRx.map((l) => (l.id === id ? { ...l, ...patch } : l));
                       if (apiMode) setApiRxOverlay(next);
                       else setMockCurrentRx(next);
@@ -3153,7 +3114,7 @@ export function ClinicOutpatientPage() {
                     }}
                     onAddCc={(text) => {
                       ccDirtyRef.current = true;
-                      chartDirtyRef.current = true;
+                      chartDirtyRef.current = true; setSaveSpent(false);
                       setCcText((prev) => (prev.trim() ? `${prev.trim()}; ${text}` : text));
                       setChartFocus("cc");
                     }}
@@ -3169,7 +3130,7 @@ export function ClinicOutpatientPage() {
       <ClinicShortcutBar
         items={isChart ? [] : barItems}
         activeKey={activeShortcutKey}
-        disabledKeys={saveLocked ? ["F9"] : []}
+        disabledKeys={[]}
         onActivate={runShortcut}
         trailing={
           <div className="flex items-center gap-1">
@@ -3185,9 +3146,9 @@ export function ClinicOutpatientPage() {
                 </button>
                 <button
                   type="button"
-                  className="border px-2 py-1 text-xs font-extrabold text-[#004000]"
-                  style={{ borderColor: HIS.chromeDark, background: "#C8F0C8" }}
-                  disabled={saveLocked}
+                  disabled={saving || saveSpent}
+                  className="border px-2 py-1 text-xs font-extrabold text-[#004000] disabled:text-[#808080]"
+                  style={{ borderColor: HIS.chromeDark, background: saveSpent ? "#D4D0C8" : "#C8F0C8" }}
                   onClick={() => onF9()}
                 >
                   F9 存檔
@@ -3267,8 +3228,9 @@ export function ClinicOutpatientPage() {
               </button>
               <button
                 type="button"
-                className="flex min-w-0 flex-1 items-center justify-center border border-[#808080] bg-[#C8F0C8] px-1 text-[13px] font-extrabold text-[#004000]"
-                disabled={saveLocked}
+                disabled={saving || saveSpent}
+                className="flex min-w-0 flex-1 items-center justify-center border border-[#808080] px-1 text-[13px] font-extrabold disabled:text-[#808080]"
+                style={{ background: saveSpent ? "#D4D0C8" : "#C8F0C8", color: saveSpent ? "#808080" : "#004000" }}
                 onClick={() => onF9()}
               >
                 F9 存檔
@@ -3317,28 +3279,80 @@ export function ClinicOutpatientPage() {
         <ReferralReplyDialog
           serial={replyAsk.serial}
           hosp={replyAsk.hosp}
+          patientName={replyAsk.patientName}
+          diagnosis={replyAsk.dx}
+          meds={replyAsk.meds}
+          note={replyAsk.note}
+          encounterId={selectedEncounterId || ""}
           busy={replyBusy}
           error={replyError}
-          onSkip={() => setReplyAsk(null)}
-          onSend={() => {
+          onSkip={finishReply}
+          onSend={(draft) => {
             if (!selectedEncounterId) return;
             setReplyBusy(true);
             setReplyError("");
+            if (!draft.upload) {
+              void saveReferralSlip({
+                kind: "reply",
+                encounterId: selectedEncounterId,
+                patientName: selected?.patientDisplay || "",
+                medicalNo: selected?.medicalNo || "",
+                idNo: selected?.idNo || "",
+                destHosp: replyAsk.hosp,
+                serial: draft.serial,
+                diagnosis: draft.diagnosis,
+                note: draft.note,
+                treatText: replyAsk.meds,
+                doctor: selected?.doctorName || "",
+                status: "\u5df2\u5b58\u6a94",
+              })
+                .then(() => {
+                  setCardNote("\u8f49\u8a3a\u56de\u8986\u5df2\u5b58\u6a94\uff0c\u6c92\u4e0a\u50b3");
+                  finishReply();
+                })
+                .catch((err: unknown) => {
+                  setReplyError(err instanceof Error ? err.message : "\u56de\u8986\u5b58\u6a94\u5931\u6557");
+                })
+                .finally(() => setReplyBusy(false));
+              return;
+            }
             void replyReferral({
               encounterId: selectedEncounterId,
-              serial: replyAsk.serial,
-              doctorId: selected?.doctorId,
-              diagnosis: replyAsk.dx,
-              note: replyAsk.note,
+              serial: draft.serial,
+              doctorId: selected?.doctorId || loadClinicRegisterDefaults().defaultDoctorId || undefined,
+              diagnosis: draft.diagnosis,
+              note: draft.note,
+              drugs: draft.drugs,
+              aux: draft.aux,
+              purpose: draft.purpose,
               expectReferral: true,
             })
-              .then((ref) => {
-                if (ref.uploaded) {
-                  setCardNote(`\u5df2\u4e0a\u50b3\u8f49\u8a3a\u56de\u5fa9\uff0c\u5e8f\u865f ${ref.serial}`);
-                  setReplyAsk(null);
+              .then(async (ref) => {
+                if (!ref.uploaded) {
+                  setReplyError(ref.reason || "\u56de\u8986\u6c92\u9001\u51fa");
                   return;
                 }
-                setReplyError(ref.reason || "\u56de\u8986\u6c92\u9001\u51fa");
+                try {
+                  await saveReferralSlip({
+                    kind: "reply",
+                    encounterId: selectedEncounterId,
+                    patientName: selected?.patientDisplay || "",
+                    medicalNo: selected?.medicalNo || "",
+                    idNo: selected?.idNo || "",
+                    destHosp: replyAsk.hosp,
+                    serial: draft.serial,
+                    diagnosis: draft.diagnosis,
+                    note: draft.note,
+                    treatText: replyAsk.meds,
+                    doctor: selected?.doctorName || "",
+                    status: "\u5df2\u56de\u8986",
+                  });
+                } catch {
+                  /* upload already accepted */
+                }
+                setCardNote(`\u5df2\u4e0a\u50b3\u8f49\u8a3a\u56de\u5fa9\uff0c\u5e8f\u865f ${ref.serial}`);
+                void refreshQueue();
+                finishReply();
               })
               .catch((err: unknown) => {
                 setReplyError(err instanceof Error ? err.message : "\u56de\u8986\u6c92\u9001\u51fa");
@@ -3347,9 +3361,52 @@ export function ClinicOutpatientPage() {
           }}
         />
       ) : null}
+      {cloudAgainAsk ? (
+        <div
+          className="fixed inset-0 z-[90] flex items-center justify-center bg-black/35"
+          style={{ fontFamily: HIS_FONT }}
+          onKeyDown={(ev) => {
+            if (ev.key === "Escape") {
+              ev.preventDefault();
+              setCloudAgainAsk(false);
+            }
+          }}
+        >
+          <div className="w-[min(28rem,94vw)] border border-black bg-[#F4F1EA] p-3 text-[14px] shadow-lg">
+            <div className="mb-2 text-[16px] font-bold">{"\u9019\u7b46\u5df2\u7d93\u5beb\u5165\u904e\u96f2\u7aef"}</div>
+            <p className="mb-3 leading-snug">
+              {"\u82e5\u9019\u6b21\u53ea\u6539\u81ea\u8cbb\u6216\u7528\u6cd5\uff0c\u53ef\u4ee5\u4e0d\u518d\u4e0a\u50b3\u3002\u9078\u5426\u5c31\u4e0d\u5fc5\u63d2\u5065\u4fdd\u5361\uff0c\u4e5f\u4e0d\u6703\u518d\u5beb\u4e00\u6b21\u3002"}
+            </p>
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                className="border border-[#808080] bg-white px-3 py-1 font-bold"
+                onClick={() => {
+                  setSaveDraft((d) => ({ ...d, writeCard: false }));
+                  setCloudAgainAsk(false);
+                  setSaveLayerOpen(true);
+                }}
+              >
+                {"\u4e0d\u7528\u518d\u4e0a\u50b3"}
+              </button>
+              <button
+                type="button"
+                className="border border-[#004d00] bg-[#C8F0C8] px-3 py-1 font-bold"
+                onClick={() => {
+                  setSaveDraft((d) => ({ ...d, writeCard: true }));
+                  setCloudAgainAsk(false);
+                  setSaveLayerOpen(true);
+                }}
+              >
+                {"\u8981\u518d\u4e0a\u50b3"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
       <VisitSaveConfirmPanel
         open={saveLayerOpen}
-        locked={saveLocked}
+        locked={false}
         saving={saving}
         cardNote={cardNote}
         selected={selected}
@@ -3368,9 +3425,6 @@ export function ClinicOutpatientPage() {
           }))}
         onChange={(patch) => {
           setSaveDraft((d) => ({ ...d, ...patch }));
-          if (selectedEncounterId) {
-            setSaveCommitted((prev) => ({ ...prev, [selectedEncounterId]: false }));
-          }
         }}
         onClose={() => setSaveLayerOpen(false)}
         onConfirm={() => void confirmSave()}
@@ -3405,52 +3459,6 @@ export function ClinicOutpatientPage() {
         onSearchPatients={(q) => openFinder(q)}
         onPatientPicked={onPatientPickedForRegister}
         onNoCardRegister={(q) => {
-          const booked = !q && selected
-            ? findWaitingAppointment(
-                queue,
-                { patientId: selected.patientId, idNo: selected.idNo },
-                session?.shift,
-                entryShift,
-              )
-            : null;
-          if (booked) {
-            beginCheckIn(booked, {
-              patientId: selected?.patientId || booked.patientId,
-              idNo: selected?.idNo || booked.idNo,
-              birthday: patientEditSeed?.birthday || "",
-              sex: selected?.sex || booked.sex || "F",
-              patientName: selected?.patientDisplay || booked.patientDisplay,
-              icException: "deposit",
-              noCardReason: "",
-              deposit: loadClinicRegisterDefaults().depositAmount,
-              prebook: false,
-              payType: "4",
-              pharmacist: session?.pharmacist || lastPharmacist(),
-            });
-            return;
-          }
-          if (selected?.patientId && !q) {
-            const otherNote = otherShiftAppointmentNote(
-              queue,
-              { patientId: selected.patientId, idNo: selected.idNo },
-              session?.shift,
-              entryShift,
-            );
-            if (otherNote) setSeqNote(otherNote);
-            openConfirmFromSeed({
-              patientId: selected.patientId,
-              idNo: selected.idNo || "",
-              birthday: patientEditSeed?.birthday || "",
-              sex: selected.sex || "F",
-              patientName: selected.patientDisplay,
-              icException: "deposit",
-              noCardReason: "",
-              deposit: loadClinicRegisterDefaults().depositAmount,
-              prebook: false,
-              pharmacist: session?.pharmacist || lastPharmacist(),
-            });
-            return;
-          }
           openFinder(q || queueSearch);
         }}
         onEditSelected={() => openF3RegisterEdit()}
@@ -3605,38 +3613,6 @@ export function ClinicOutpatientPage() {
           </div>
         </div>
       )}
-      <RegisterEditDialog
-        open={registerOpen}
-        title="掛號編輯（已掛一筆／診療作業）"
-        busy={registerBusy}
-        seqBusy={seqBusy}
-        seqNote={seqNote}
-        error={registerError}
-        form={registerForm}
-        onChange={(patch) => setRegisterForm((prev) => ({ ...prev, ...patch }))}
-        onClose={() => {
-          setRegisterOpen(false);
-        }}
-        onReadCard={async () => {
-          try {
-            setRegisterError(null);
-            const res = await readCardRegisterPatient();
-            setRegisterForm((prev) => ({
-              ...prev,
-              patientId: res.patientId,
-              idNo: res.validation?.idNo ?? prev.idNo,
-              birthday: res.validation?.birthdayRoc ?? prev.birthday,
-              sex: res.validation?.sex ?? prev.sex,
-              patientName: res.validation?.patientName || prev.patientName,
-              cardId: res.validation?.cardId ?? prev.cardId,
-            }));
-            if (res.cardBridgeNote) setSeqNote(res.cardBridgeNote);
-          } catch (e) {
-            setRegisterError(e instanceof Error ? e.message : "讀卡失敗");
-          }
-        }}
-        onConfirm={confirmRegisterEdit}
-      />
       {leaveAsk && (
         <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/35">
           <div

@@ -27,11 +27,16 @@ export type PrintSetupId =
   | "referral"
   | "deposit";
 
+/** 進紙方向，跟紙張長寬分開記。 */
+export type PrinterFeed = "portrait" | "landscape";
+
 export type PrintSetup = {
   id: PrintSetupId;
   label: string;
   widthMm: number;
   heightMm: number;
+  /** 進紙方向。跟紙張長寬分開，寬 210、長 93 仍可選直向。 */
+  feed?: PrinterFeed;
   printerName: string;
   footer: string;
   /** 健保或對外固定版面：只調紙張與印表機 */
@@ -234,6 +239,10 @@ export function paperCssSize(paper: PrintPaperSize): string {
   }
 }
 
+function savedFeed(value: unknown): PrinterFeed | undefined {
+  return value === "portrait" || value === "landscape" ? value : undefined;
+}
+
 function mergeParts(base: PrintPart[] | undefined, saved: PrintPart[] | undefined): PrintPart[] | undefined {
   if (!base) return undefined;
   return base.map((part) => {
@@ -252,6 +261,7 @@ function mergePrintSetups(saved: PrintSetup[] | undefined): PrintSetup[] {
         return {
           ...base,
           printerName: String(hit.printerName || ""),
+          feed: savedFeed(hit.feed),
         };
       }
       const days = Number(hit.depositDays);
@@ -267,6 +277,7 @@ function mergePrintSetups(saved: PrintSetup[] | undefined): PrintSetup[] {
         depositShowId: hit.depositShowId === true,
         depositHolidayNote: hit.depositHolidayNote === true,
         depositSingleSide: hit.depositSingleSide === true,
+        feed: savedFeed(hit.feed),
       };
     }
     const width = Number(hit.widthMm);
@@ -283,6 +294,7 @@ function mergePrintSetups(saved: PrintSetup[] | undefined): PrintSetup[] {
         Number(hit.drugFontSizePx) > 0 ? Number(hit.drugFontSizePx) : base.drugFontSizePx,
       receiptTitle: typeof hit.receiptTitle === "string" ? hit.receiptTitle : base.receiptTitle,
       parts: mergeParts(base.parts, hit.parts),
+      feed: savedFeed(hit.feed),
     };
   });
 }
@@ -322,6 +334,45 @@ export function paperSizeEditable(setup: Pick<PrintSetup, "id" | "layoutFixed">)
 }
 
 /** Width shorter than height is portrait. The printer's last job does not override this. */
+const PRINTER_FEED_KEY = "psehr.printerFeed.v1";
+
+export function setupFeed(setup: Pick<PrintSetup, "widthMm" | "heightMm" | "feed">): PrinterFeed {
+  if (setup.feed === "portrait" || setup.feed === "landscape") return setup.feed;
+  return Number(setup.widthMm) > Number(setup.heightMm) ? "landscape" : "portrait";
+}
+
+export function feedLabel(feed: PrinterFeed | "" | undefined): string {
+  return feed === "landscape" ? "\u6a6b\u5411" : "\u76f4\u5411";
+}
+
+export function loadPrinterFeed(printerName: string): PrinterFeed | "" {
+  const name = printerName.trim();
+  if (!name) return "";
+  try {
+    const raw = localStorage.getItem(PRINTER_FEED_KEY);
+    const map = raw ? (JSON.parse(raw) as Record<string, string>) : {};
+    const value = map[name];
+    return value === "portrait" || value === "landscape" ? value : "";
+  } catch {
+    return "";
+  }
+}
+
+export function savePrinterFeed(printerName: string, feed: PrinterFeed | ""): void {
+  const name = printerName.trim();
+  if (!name) return;
+  let map: Record<string, string> = {};
+  try {
+    const raw = localStorage.getItem(PRINTER_FEED_KEY);
+    map = raw ? (JSON.parse(raw) as Record<string, string>) : {};
+  } catch {
+    map = {};
+  }
+  if (!feed) delete map[name];
+  else map[name] = feed;
+  localStorage.setItem(PRINTER_FEED_KEY, JSON.stringify(map));
+}
+
 export function paperDirectionLabel(widthMm: number, heightMm: number): string {
   return Number(widthMm) > Number(heightMm) ? "\u6a6b\u5411" : "\u76f4\u5411";
 }

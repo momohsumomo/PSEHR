@@ -169,16 +169,6 @@ export function buildDepositSlipHtml(input: DepositDocInput): string {
   </div>`;
 }
 
-const REFERRAL_PURPOSES: Array<[string, string]> = [
-  ["1", "\u6025\u8a3a\u6cbb\u7642"],
-  ["2", "\u4f4f\u9662\u6cbb\u7642"],
-  ["3", "\u9580\u8a3a\u6cbb\u7642"],
-  ["4", "\u9032\u4e00\u6b65\u6aa2\u67e5"],
-  ["5", "\u8f49\u56de\u8f49\u51fa\u6216\u9069\u7576\u4e4b\u9662\u6240\u7e7c\u7e8c"],
-  ["9", "COVID-19\u500b\u6848\uff08\u542b\u7591\u4f3c\uff09\u8f49\u8a3a\u6cbb\u7642"],
-  ["6", "\u5176\u4ed6\u76ee\u7684"],
-  ["A", "\u8f49\u4ecb\u5176\u4ed6\u8a66\u8fa6\u8a08\u756b\u6216\u65b9\u6848"],
-];
 
 export type ReferralDocInput = {
   clinicName: string;
@@ -189,6 +179,7 @@ export type ReferralDocInput = {
   sex: string;
   birthday: string;
   idNo: string;
+  medicalNo: string;
   phone: string;
   address: string;
   chief: string;
@@ -217,94 +208,173 @@ export type ReferralDocInput = {
 };
 
 export function buildReferralSlipHtml(input: ReferralDocInput): string {
-  const mark = (on: boolean) => (on ? "\u25a0" : "\u25a1");
-  const birth = (() => {
-    const s = (input.birthday || "").trim();
+  const K = 25.4 / 72;
+  const mm = (pt: number) => (pt * K).toFixed(2) + "mm";
+  const roc3 = (raw: string): [string, string, string] => {
+    const s = (raw || "").trim();
     const iso = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
     if (iso) return [String(Number(iso[1]) - 1911), iso[2], iso[3]];
     const roc = s.match(/(\d+)\D+(\d+)\D+(\d+)/);
-    return roc ? [roc[1], roc[2], roc[3]] : ["", "", ""];
-  })();
-  const opened = (input.opened || "").split(".");
-  const dx = input.diagnoses.split(/\n/).map((line) => line.trim()).filter(Boolean).slice(0, 3);
-  const splitDx = (line: string) => {
-    const m = line.match(/^([A-Za-z][A-Za-z0-9.]*)\s*(.*)$/);
-    return m ? [m[1], m[2]] : ["", line];
+    return roc ? [roc[1], roc[2].padStart(2, "0"), roc[3].padStart(2, "0")] : ["", "", ""];
   };
+  const rocWords = (raw: string, tail: string) => {
+    const p = roc3(raw);
+    if (!p[0]) return (raw || "").trim();
+    return "民國" + Number(p[0]) + "年" + Number(p[1]) + "月" + Number(p[2]) + "日" + tail;
+  };
+  const birth = roc3(input.birthday);
+  const birthText = birth[0] ? birth[0] + "." + birth[1] + "." + birth[2] : "";
+  const sexRaw = (input.sex || "").trim().toUpperCase();
+  const sex = sexRaw === "M" || sexRaw === "1" ? "男" : sexRaw === "F" || sexRaw === "2" ? "女" : (input.sex || "");
+  const dx = input.diagnoses.split(/\n/).map((line) => line.trim()).filter(Boolean).slice(0, 4);
+  const dxHtml = dx.map((line) => {
+    const hit = line.match(/^([A-Za-z][A-Za-z0-9.]*)\s*[:：]?\s*(.*)$/);
+    if (!hit) return esc(line);
+    return esc(hit[1].replace(/\./g, "")) + "&nbsp;&nbsp;:" + esc(hit[2]);
+  }).join("<br>");
   const purpose = input.purpose;
-  const td = "border:1px solid #000;padding:1px 3px;vertical-align:top;overflow:hidden;";
-  const rail = "border:1px solid #000;writing-mode:vertical-rl;text-align:center;letter-spacing:2px;font-size:13px;padding:2px 0;";
-  const copies = input.copies.length ? input.copies : ([["\u8f49\u8a3a\u55ae", ""]] as Array<[string, string]>);
-  const dxLines = [0, 1, 2].map((i) => {
-    const pair = splitDx(dx[i] || "");
-    return `<div>${i + 1}. ${esc(pair[0])} ${esc(pair[1])}</div>`;
-  }).join("");
-  const face = REFERRAL_PURPOSES.filter(([code]) => "12345".includes(code))
-    .map(([code, label]) => `${mark(purpose === code)}${code}.${label}`)
-    .join("\u3000");
-  const extra = REFERRAL_PURPOSES.find(([code]) => code === purpose && !"12345".includes(code));
-  const extraLine = extra
-    ? `<div>${mark(true)}${esc(extra[0])}.${esc(extra[1])}${purpose === "6" && input.purposeOther ? "\uff08" + esc(input.purposeOther) + "\uff09" : ""}</div>`
-    : "";
-  const allergy = (input.allergy || "").trim()
-    ? `<div>\u85e5\u7269\u904e\u654f\u53f2\uff1a${esc(input.allergy)}</div>`
-    : "";
-  const validBit = (input.valid || "").trim() ? `\u3000\u6709\u6548\u671f\u9650\uff1a${esc(input.valid)}` : "";
-  const cols = `<col style="width:8mm">${Array.from({ length: 12 }, () => "<col>").join("")}<col style="width:8mm">`;
-  return copies.map(([which, side]) => `
-      <section class="slip-page" style="box-sizing:border-box;height:100%;width:100%;padding:5mm 6mm 4mm;display:flex;flex-direction:column;font-family:'PMingLiU','MingLiU','Microsoft JhengHei',serif;font-size:12px;line-height:1.25;color:#000;background:#fff;">
-        <div style="flex:0 0 auto;text-align:center;font-size:18px;font-weight:700;letter-spacing:1px;">\u5168\u6c11\u5065\u5eb7\u4fdd\u96aa\u3000\u9662(\u6240)\u8f49\u8a3a\u55ae(\u8f49\u8a3a\u81f3 ${esc(input.hosp || "\u3000\u3000\u3000")} \u9662\u6240)</div>
-        <div style="flex:0 0 auto;margin:0 0 1mm;">\u4fdd\u96aa\u91ab\u4e8b\u670d\u52d9\u6a5f\u69cb\u4ee3\u865f\uff1a${esc(input.clinicCode || "")}</div>
-        <div style="flex:1 1 auto;min-height:0;">
-          <table style="width:100%;border-collapse:collapse;table-layout:fixed;border:2px solid #000;">
-            <colgroup>${cols}</colgroup>
-            <tr style="height:16mm">
-              <td rowspan="7" style="${rail}">\u539f\u8a3a\u7642\u91ab\u9662\u6458\u8981</td>
-              <td colspan="3" style="${td}">\u59d3\u540d ${esc(input.name || "")}</td>
-              <td colspan="2" style="${td}">\u6027\u5225 ${mark(input.sex === "\u7537")}\u7537 ${mark(input.sex === "\u5973")}\u5973</td>
-              <td colspan="4" style="${td}">\u51fa\u751f\u65e5\u671f\u3000\u6c11\u570b ${esc(birth[0])} \u5e74 ${esc(birth[1])} \u6708 ${esc(birth[2])} \u65e5</td>
-              <td colspan="3" style="${td}">\u8eab\u5206\u8b49\u7d71\u4e00\u7de8\u865f ${esc(input.idNo || "")}</td>
-              <td rowspan="10" style="${rail}">${esc(which)}\uff1a${esc(side)}</td>
-            </tr>
-            <tr style="height:14mm">
-              <td colspan="3" style="${td}">\u806f\u7d61\u4eba</td>
-              <td colspan="3" style="${td}">\u806f\u7d61\u96fb\u8a71 ${esc(input.phone || "")}</td>
-              <td colspan="6" style="${td}">\u5730\u5740 ${esc(input.address || "")}</td>
-            </tr>
-            <tr style="height:46mm">
-              <td colspan="6" style="${td}">A.\u75c5\u60c5\u6458\u8981(\u4e3b\u8a34\u53ca\u7c21\u77ed\u75c5\u53f2)<div style="white-space:pre-wrap;">${esc(input.chief || "")}</div>${allergy}</td>
-              <td colspan="6" style="${td}">B.\u8a3a\u65b7\u3000ICD-10-CM/PCS\u3000\u75c5\u540d${dxLines}</td>
-            </tr>
-            <tr style="height:38mm">
-              <td colspan="6" style="${td}">C.\u6aa2\u67e5\u53ca\u6cbb\u7642\u6458\u8981<div>1.\u6700\u8fd1\u4e00\u6b21\u6aa2\u67e5\u7d50\u679c</div><div>\u65e5\u671f\uff1a${esc(input.examOn || "")}</div><div style="white-space:pre-wrap;">\u5831\u544a\uff1a${esc(input.exam || "")}</div></td>
-              <td colspan="6" style="${td}"><div>2.\u6700\u8fd1\u4e00\u6b21\u958b\u85e5\u6216\u624b\u8853\u540d\u7a31</div><div style="white-space:pre-wrap;">${esc(input.meds || "")}</div><div>\u65e5\u671f\uff1a${esc(input.medOn || input.opened || "")}</div></td>
-            </tr>
-            <tr style="height:26mm">
-              <td colspan="12" style="${td}">\u8f49\u8a3a\u76ee\u7684\uff1a<div>${face}</div>${extraLine}</td>
-            </tr>
-            <tr style="height:24mm">
-              <td colspan="12" style="${td}">\u8f49\u8a3a\u9662\u6240 ${esc(input.clinicName || "")}\u3000\u79d1\u5225 ${esc(input.ourDept)}\u3000\u91ab\u5e2b ${esc(input.doctor || "")}\u3000\u806f\u7d61\u96fb\u8a71 ${esc(input.tel || input.clinicPhone || "")}<div>\u50b3\u771f\u865f\u78bc ${esc(input.fax || "")}\u3000\u96fb\u5b50\u4fe1\u7bb1 ${esc(input.email || "")}\u3000\u5730\u5740 ${esc(input.clinicAddress || "")}</div><div>\u958b\u55ae\u65e5\u671f ${esc(opened[0] || "")} \u5e74 ${esc(opened[1] || "")} \u6708 ${esc(opened[2] || "")} \u65e5\u3000\u5b89\u6392\u5c31\u91ab\u65e5\u671f\u3000\u5e74\u3000\u6708\u3000\u65e5${validBit}</div></td>
-            </tr>
-            <tr style="height:20mm">
-              <td colspan="12" style="${td}">\u5efa\u8b70\u8f49\u8a3a\u9662\u6240\u79d1\u5225\uff1a\u91ab\u9662 ${esc(input.hosp || "")} ${esc(input.hospCode)}\u3000\u79d1\u5225 ${esc(input.dept)}\u3000\u91ab\u5e2b ${esc(input.suggestDoc || "")}<div>\u8f49\u8a3a\u9662\u6240\u5730\u5740\u53ca\u96fb\u8a71\uff1a\u5730\u5740 ${esc(input.hospAddr)}\u3000\u96fb\u8a71 ${esc(input.hospTel)}</div></td>
-            </tr>
-            <tr style="height:40mm">
-              <td rowspan="3" style="${rail}">\u63a5\u53d7\u8f49\u8a3a\u91ab\u9662\u8a3a\u7642\u6458\u8981</td>
-              <td colspan="12" style="${td}">\u8655\u7406\u60c5\u5f62\uff1a<div>${mark(false)}1.\u5df2\u4e88\u6025\u8a3a\u8655\u7f6e\uff0c\u4e26\u4f4f\u9662\u6cbb\u7642</div><div>${mark(false)}2.\u5df2\u4e88\u6025\u8a3a\u8655\u7f6e\uff0c\u4e26\u8f49\u8a3a\u81f3________\u91ab\u9662</div><div>${mark(false)}3.\u5df2\u5b89\u6392\u672c\u9662________\u75c5\u623f\u6cbb\u7642\u4e2d</div><div>${mark(false)}4.\u5df2\u5b89\u6392\u672c\u9662________\u9580\u8a3a\u6cbb\u7642\u4e2d</div><div>${mark(false)}5.\u5df2\u4e88\u9069\u7576\u8655\u7406\u4e26\u8f49\u56de\u539f\u9662\u6240\uff0c\u5efa\u8b70\u4e8b\u9805\u5982\u4e0b</div></td>
-            </tr>
-            <tr style="height:22mm">
-              <td colspan="4" style="${td}">1.\u4e3b\u8a3a\u65b7 ICD-10-CM/PCS\uff1a<div>\u75c5\u540d\uff1a</div></td>
-              <td colspan="4" style="${td}">2.\u6cbb\u7642\u85e5\u7269\u6216\u624b\u8853\u540d\u7a31</td>
-              <td colspan="4" style="${td}">3.\u8f14\u52a9\u8a3a\u65b7\u4e4b\u6aa2\u67e5\u7d50\u679c</td>
-            </tr>
-            <tr style="height:16mm">
-              <td colspan="4" style="${td}">\u8a3a\u7642\u91ab\u5e2b\u59d3\u540d\u3000\u79d1\u5225\u3000\u91ab\u5e2b\u7c3d\u7ae0</td>
-              <td colspan="4" style="${td}">\u96fb\u8a71\u6216\u50b3\u771f\uff1a<div>\u96fb\u5b50\u4fe1\u7bb1\uff1a</div></td>
-              <td colspan="4" style="${td}">\u56de\u8986\u65e5\u671f\u3000\u5e74\u3000\u6708\u3000\u65e5</td>
-            </tr>
-          </table>
-        </div>
-        <div style="flex:0 0 auto;margin-top:1mm;font-size:10px;">\u203b2014\u5e7412\u67082\u65e5\u4ee5\u5f8c\u6539\u7528 ICD-10-CM/PCS\u3002\u672c\u8f49\u8a3a\u55ae\u9650\u4f7f\u7528\u4e59\u6b21\u3002\u4ee5\u4e0a\u6b04\u4f4d\u5747\u5c6c\u5fc5\u586b\uff0c\u5982\u7121\u5247\u586b\u7121\u3002</div>
+  const mark = (code: string, label: string) => (purpose === code ? "✓" : "") + label;
+  const other = purpose === "6" ? esc(input.purposeOther || "") : "";
+  const copies = input.copies.length
+    ? input.copies
+    : ([["第一聯：接受轉診醫院、診所留存（藍色）", ""]] as Array<[string, string]>);
+  const v = (x: number, y0: number, y1: number) =>
+    `<div style="position:absolute;left:${mm(x)};top:${mm(y0)};width:0;height:${mm(y1 - y0)};border-left:0.6pt solid #000;"></div>`;
+  const h = (y: number, x0: number, x1: number) =>
+    `<div style="position:absolute;left:${mm(x0)};top:${mm(y)};width:${mm(x1 - x0)};height:0;border-top:0.6pt solid #000;"></div>`;
+  const at = (x: number, y: number, w: number, ht: number, html: string, extra = "") =>
+    `<div style="position:absolute;left:${mm(x)};top:${mm(y)};width:${mm(w)};height:${mm(ht)};box-sizing:border-box;overflow:hidden;${extra}">${html}</div>`;
+  const mid = "display:flex;align-items:center;justify-content:center;text-align:center;font-size:12pt;line-height:1.15;";
+  const top = "font-size:12pt;line-height:1.25;padding:0.4mm 0.8mm;";
+  const rail = "writing-mode:vertical-rl;text-orientation:upright;display:flex;align-items:center;justify-content:center;font-size:12pt;letter-spacing:0.35em;";
+  const lines = [
+    v(34.0, 48.4, 756.7),
+    v(62.3, 48.4, 516.1),
+    v(79.3, 487.8, 756.7),
+    v(96.4, 728.8, 756.7),
+    v(144.5, 487.8, 516.1),
+    v(147.4, 48.4, 127.8),
+    v(153.0, 728.8, 756.7),
+    v(161.5, 487.8, 516.1),
+    v(170.0, 728.8, 756.7),
+    v(226.7, 487.8, 516.1),
+    v(226.7, 728.8, 756.7),
+    v(232.4, 48.4, 127.8),
+    v(246.6, 544.4, 587.0),
+    v(249.4, 516.1, 544.4),
+    v(260.8, 728.8, 756.7),
+    v(317.4, 48.4, 127.8),
+    v(317.4, 700.4, 756.7),
+    v(325.9, 516.1, 587.0),
+    v(340.1, 459.5, 516.1),
+    v(394.0, 700.4, 756.7),
+    v(396.8, 459.5, 516.1),
+    h(68.3, 62.3, 552.6),
+    h(88.1, 62.3, 552.6),
+    h(108.0, 62.3, 552.6),
+    h(127.8, 34.0, 552.6),
+    h(416.9, 34.0, 552.6),
+    h(459.5, 34.0, 552.6),
+    h(487.8, 34.0, 552.6),
+    h(516.1, 34.0, 552.6),
+    h(544.4, 34.0, 552.6),
+    h(587.0, 14.2, 552.6),
+    h(657.8, 34.0, 552.6),
+    h(700.4, 34.0, 552.6),
+    h(728.8, 34.0, 552.6),
+  ].join("");
+  const face = `
+    ${at(14.2, 48.1, 19.8, 538.9, "原診療醫院診所", rail)}
+    ${at(34.0, 48.1, 28.3, 79.7, "保險對象基本資料", rail + "letter-spacing:0.15em;font-size:11pt;")}
+    ${at(62.3, 48.1, 85.1, 20.2, "姓　名", mid)}
+    ${at(147.4, 48.1, 85.0, 20.2, "性　別", mid)}
+    ${at(232.4, 48.1, 85.0, 20.2, "出生日期", mid)}
+    ${at(317.4, 48.1, 235.2, 20.2, "病　歷　號　碼", mid)}
+    ${at(62.3, 68.3, 85.1, 19.8, esc(input.name || ""), mid)}
+    ${at(147.4, 68.3, 85.0, 19.8, esc(sex), mid)}
+    ${at(232.4, 68.3, 85.0, 19.8, esc(birthText), mid)}
+    ${at(317.4, 68.3, 235.2, 19.8, esc(input.medicalNo || ""), mid + "font-size:14pt;")}
+    ${at(62.3, 88.1, 85.1, 19.9, "身分證號", mid)}
+    ${at(147.4, 88.1, 85.0, 19.9, "聯絡電話", mid)}
+    ${at(232.4, 88.1, 85.0, 19.9, "聯絡人", mid)}
+    ${at(317.4, 88.1, 235.2, 19.9, "聯絡地址", mid)}
+    ${at(62.3, 108.0, 85.1, 19.8, esc(input.idNo || ""), mid + "font-size:11pt;")}
+    ${at(147.4, 108.0, 85.0, 19.8, esc(input.phone || ""), mid + "font-size:11pt;")}
+    ${at(232.4, 108.0, 85.0, 19.8, "", mid)}
+    ${at(317.4, 108.0, 235.2, 19.8, esc(input.address || ""), mid + "font-size:11pt;justify-content:flex-start;padding:0 1.5mm;")}
+    ${at(34.0, 127.8, 28.3, 289.1, "病歷摘要", rail)}
+    ${at(66, 130.6, 240, 16, "A.病情摘要(主訴及簡短病史)", "font-size:12pt;")}
+    ${at(76, 148, 230, 165, esc(input.chief || ""), "font-size:12pt;line-height:1.35;white-space:pre-wrap;")}
+    ${at(66, 320.5, 240, 16, "B.診斷:ICD-10-CM/PCS　病名", "font-size:12pt;")}
+    ${at(76, 338, 230, 74, dxHtml, "font-size:12pt;line-height:1.35;")}
+    ${at(312, 130.6, 230, 16, "C.檢查及治療摘要:", "font-size:12pt;")}
+    ${at(317, 148, 110, 48, "1.最近一次檢查結果<div>日期:" + esc(input.examOn || "") + "</div><div>" + esc(input.exam || "") + "</div>", "font-size:11pt;line-height:1.3;")}
+    ${at(431, 148, 115, 48, "2.最近一次用藥或手術名稱<div>日期:" + esc(input.medOn || "") + "</div><div>" + esc(input.meds || "") + "</div>", "font-size:11pt;line-height:1.3;")}
+    ${at(312, 201.5, 230, 16, "D.藥物過敏史:" + esc(input.allergy || ""), "font-size:12pt;")}
+    ${at(312, 216.4, 230, 16, "E.交班注意事項:", "font-size:12pt;")}
+    ${at(34, 416.9, 28.3, 42.6, "轉診\n目的", mid + "white-space:pre-line;")}
+    ${at(70, 418, 475, 41, [
+      mark("1", "１.急診治療"),
+      mark("4", "４.進一步檢查,檢查項目"),
+      mark("9", "９.COVID-19個案(含疑似)轉診治療"),
+      mark("2", "２.住院治療"),
+      mark("5", "５.轉回轉出或適當之院所繼續追蹤"),
+      "",
+      mark("3", "３.門診治療"),
+      mark("6", "６.其它 <span style=\"display:inline-block;min-width:28mm;border-bottom:0.6pt solid #000;\">" + other + "</span>"),
+      "",
+    ].map((item) => `<div style="white-space:nowrap">${item}</div>`).join(""), "display:grid;grid-template-columns:108pt 176pt 1fr;font-size:9.5pt;line-height:13pt;align-content:center;")}
+    ${at(34, 459.5, 28.3, 28.3, "院所\n住址", mid + "white-space:pre-line;")}
+    ${at(64, 459.5, 274, 28.3, esc(input.clinicAddress || ""), top + "display:flex;align-items:center;")}
+    ${at(342, 459.5, 52, 28.3, "傳真號碼:" + esc(input.fax || "") + "<div>電子信箱:" + esc(input.email || "") + "</div>", "font-size:11pt;line-height:1.25;padding-top:1mm;")}
+    ${at(34, 487.8, 28.3, 28.3, "診治\n醫師", mid + "white-space:pre-line;")}
+    ${at(62.3, 487.8, 17, 28.3, "姓\n名", mid + "white-space:pre-line;")}
+    ${at(79.3, 487.8, 65.2, 28.3, esc(input.doctor || ""), mid)}
+    ${at(144.5, 487.8, 17, 28.3, "科\n別", mid + "white-space:pre-line;")}
+    ${at(161.5, 487.8, 65.2, 28.3, esc(input.ourDept || ""), mid)}
+    ${at(226.7, 487.8, 113.4, 28.3, "聯絡\n電話", mid + "white-space:pre-line;")}
+    ${at(340.1, 487.8, 56.7, 28.3, esc(input.tel || input.clinicPhone || ""), mid + "font-size:11pt;")}
+    ${at(396.8, 487.8, 40, 28.3, "醫師\n簽章", mid + "white-space:pre-line;font-size:11pt;")}
+    ${at(34, 516.1, 28, 28.3, "開單\n日期", mid + "white-space:pre-line;")}
+    ${at(80, 516.1, 165, 28.3, esc(rocWords(input.opened, "")), mid)}
+    ${at(249.4, 516.1, 76.5, 28.3, "安排就醫日期", mid + "font-size:11pt;")}
+    ${at(325.9, 516.1, 220, 28.3, esc(rocWords(input.valid, "前")), mid)}
+    ${at(34, 544.4, 28, 42.6, "建議轉診\n院所科別\n及醫師", mid + "white-space:pre-line;font-size:11pt;")}
+    ${at(66, 546, 176, 38, esc(input.hosp || "") + "<div>" + esc(input.dept || "") + " 醫師 " + esc(input.suggestDoc || "") + "</div>", top)}
+    ${at(246.6, 544.4, 79.3, 42.6, "轉診院所地址\n及專線電話", mid + "white-space:pre-line;font-size:11pt;")}
+    ${at(328, 546, 218, 38, "地址:" + esc(input.hospAddr || "") + "<div>電話:" + esc(input.hospTel || "") + "</div>", top)}
+    ${at(14.2, 587, 19.8, 169.7, "接受轉診醫院診所", rail)}
+    ${at(34, 587, 45.3, 70.8, "處理\n情形", mid + "white-space:pre-line;")}
+    ${at(82, 589, 460, 66, [
+      "1.□已予急診處置並轉至______醫院",
+      "2.□已予急診處置並住本院______病房治療中",
+      "3.□已予安排住本院______病房治療中",
+      "4.□已予安排本院______科門診療中",
+      "5.□已予適當安排並轉回原院所　建議事項如下",
+      "",
+    ].map((item) => `<div style="white-space:nowrap">${item}</div>`).join(""), "display:grid;grid-template-columns:1fr 1fr;font-size:10pt;line-height:14pt;align-content:center;")}
+    ${at(34, 657.8, 45.3, 42.6, "治療\n摘要", mid + "white-space:pre-line;")}
+    ${at(82, 660, 150, 38, "1.主診斷<div>ICD-10-CM/PCS :</div><div>病名 :</div>", "font-size:11pt;line-height:1.3;")}
+    ${at(233, 660, 180, 38, "2.治療藥物或手術名稱", "font-size:11pt;")}
+    ${at(425, 660, 120, 38, "3.輔助診斷之結果檢查", "font-size:11pt;")}
+    ${at(34, 700.4, 45.3, 28.4, "院所\n名稱", mid + "white-space:pre-line;")}
+    ${at(317.4, 700.4, 76.6, 28.4, "電話或傳真<div>電子信箱</div>", mid + "font-size:11pt;flex-direction:column;")}
+    ${at(34, 728.8, 45.3, 27.9, "診治\n醫師", mid + "white-space:pre-line;")}
+    ${at(79.3, 728.8, 17.1, 27.9, "姓\n名", mid + "white-space:pre-line;font-size:11pt;")}
+    ${at(153, 728.8, 17, 27.9, "科\n別", mid + "white-space:pre-line;font-size:11pt;")}
+    ${at(226.7, 728.8, 34.1, 27.9, "醫師\n簽章", mid + "white-space:pre-line;font-size:11pt;")}
+    ${at(317.4, 728.8, 76.6, 27.9, "回覆日期", mid)}
+    ${at(400, 728.8, 145, 27.9, "年　月　日", mid)}
+    ${at(16.9, 762.7, 360, 16, "※本轉診單限使用乙次　※以上欄位均屬必填，如無則填無", "font-size:10pt;")}
+  `;
+  return copies.map(([which]) => `
+      <section class="slip-page" style="position:relative;box-sizing:border-box;width:210mm;height:297mm;margin:0;padding:0;overflow:hidden;background:#fff;color:#000;font-family:'DFKai-SB','標楷體','PMingLiU',serif;">
+        <div style="position:absolute;left:0;top:${mm(8)};width:210mm;text-align:center;font-size:14pt;white-space:nowrap;overflow:hidden;">全民健康保險${esc(input.clinicName || "")}　轉診單（轉診至${esc(input.hosp || "")}）</div>
+        <div style="position:absolute;left:${mm(14.2)};top:${mm(30)};font-size:12pt;">保險醫事服務機構代號：${esc(input.clinicCode || "")}</div>
+        <div style="position:absolute;left:${mm(14.2)};top:${mm(48.1)};width:${mm(538.4)};height:${mm(708.6)};border:0.6pt solid #000;box-sizing:border-box;"></div>
+        ${lines}
+        ${face}
+        <div style="position:absolute;left:${mm(552.6)};top:${mm(78)};width:${mm(40)};height:${mm(480)};${rail}letter-spacing:0.42em;font-size:12pt;">${esc(which)}</div>
       </section>`).join("");
 }
 

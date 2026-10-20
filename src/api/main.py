@@ -23,6 +23,7 @@ from src.api.routers import (
     allergy_intolerance,
     claims,
     clinic_settings,
+    desk,
     condition,
     encounter,
     ic_upload,
@@ -107,6 +108,7 @@ app.include_router(outpatient.router)
 app.include_router(sandbox.router)
 app.include_router(staff.router)
 app.include_router(clinic_settings.router)
+app.include_router(desk.router)
 app.include_router(address_book.router)
 app.include_router(claims.router)
 app.include_router(ic_upload.router)

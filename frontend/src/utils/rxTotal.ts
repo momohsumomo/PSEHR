@@ -10,6 +10,7 @@ export type CatalogUsage = {
   isTotal?: UsageCalcMode | string;
   label?: string;
   eatType?: string;
+  indexFlag?: string;
 };
 
 export const DEFAULT_QTY_PICKS = [

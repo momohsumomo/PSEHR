@@ -63,6 +63,28 @@ import {
   type RxLine,
 } from "@/mocks";
 
+function queueStamp(date: string, rows: QueueEntry[]): string {
+  const body = rows
+    .map((row) =>
+      [
+        row.encounterId,
+        row.queueNumber,
+        row.queueStatus,
+        row.shift,
+        row.slotTime,
+        row.patientDisplay,
+        row.deposit,
+        row.regFee,
+        row.copayAmt,
+        row.treatSeq,
+        row.icException,
+        row.prebook ? 1 : 0,
+      ].join("|"),
+    )
+    .join("\n");
+  return `${date}\n${body}`;
+}
+
 function mapApiQueue(entries: ApiQueueEntry[]): QueueEntry[] {
   return entries.map((e) => ({
     encounterId: e.resource.id,
@@ -103,6 +125,8 @@ function mapApiQueue(entries: ApiQueueEntry[]): QueueEntry[] {
     cardWritten: Boolean(e.queueMeta.cardWritten),
     // Yu: live appointment only (API already hides after check-in)
     prebook: Boolean(e.queueMeta.prebook),
+    regCc: e.queueMeta.regCc,
+    referredOut: Boolean(e.queueMeta.referredOut),
     deposit: e.queueMeta.deposit,
     regFee: e.queueMeta.regFee,
     copayAmt: e.queueMeta.copayAmt,
@@ -375,14 +399,19 @@ export function useClinicWorkspace(options?: {
   // 病人歷史 light 清單快取（醫聖式：選過／預載的病人幾乎瞬開）
   const historyCacheRef = useRef(new Map<string, HistoryVisit[]>());
   const readyQueue = useRef<{ date: string; res: Awaited<ReturnType<typeof fetchQueueForDate>> } | null>(null);
+  const queueStampRef = useRef("");
   /** 後到的舊查詢不能蓋掉較新的病名／處置。 */
   const wsGen = useRef(0);
+  const acceptOrderFlight = useRef<Set<string>>(new Set());
 
   const refreshQueue = useCallback(async (targetDate?: string) => {
     if (!apiMode) return;
     const queryDate = targetDate ?? currentDate;
     const res = await fetchQueueForDate(queryDate);
     const mapped = mapApiQueue(res.entry);
+    const stamp = queueStamp(queryDate, mapped);
+    if (stamp === queueStampRef.current) return mapped;
+    queueStampRef.current = stamp;
     setQueue(mapped);
     setQueueHints({
       requestedDate: res.requestedDate,
@@ -574,6 +603,30 @@ export function useClinicWorkspace(options?: {
     }));
   }, [selectedEncounterId]);
 
+  const ensureAcceptReferralOrder = useCallback(async (encounterId: string) => {
+    if (!encounterId || acceptOrderFlight.current.has(encounterId)) return;
+    acceptOrderFlight.current.add(encounterId);
+    try {
+      const ws = await fetchWorkspace(encounterId, { historyLimit: 0 });
+      const has = mapRxFromWorkspace(ws.currentMedications || []).some((row) => {
+        const code = (row.nhiCode || "").toUpperCase();
+        return code === "01038C" || code === "00193C";
+      });
+      if (has) return;
+      await registerMedication({
+        encounterId,
+        drugText: "\u63a5\u53d7\u8f49\u8a3a",
+        nhiCode: "01038C",
+        sig: "\u4f9d\u91ab\u56d1",
+        daysSupply: 1,
+        quantity: 1,
+      });
+      if (selectedEncounterId === encounterId) await refreshWorkspace(encounterId);
+    } finally {
+      acceptOrderFlight.current.delete(encounterId);
+    }
+  }, [refreshWorkspace, selectedEncounterId]);
+
   const readCardRegisterPatient = useCallback(async () => {
     if (!apiMode) throw new Error("需 API 模式");
     const res = await readCardAndRegister(false);
@@ -692,6 +745,7 @@ export function useClinicWorkspace(options?: {
     ) => {
       if (!apiMode) throw new Error("掛號需 API 模式");
       const mode = form.icException || "ic";
+      if (mode === "ic") form = { ...form, deposit: "" };
       if (mode === "badCard" && !form.noCardReason.trim()) {
         form = { ...form, noCardReason: BAD_CARD_REASON };
       }
@@ -815,9 +869,9 @@ export function useClinicWorkspace(options?: {
       };
 
       const storeIncoming = async (encounterId: string, patientId: string, slips: ReferralSlipHit[]) => {
-        if (!slips.length || !onIncoming) return;
+        if (!slips.length || !onIncoming) return false;
         const choice = await onIncoming(slips);
-        if (!choice?.accept || !choice.serial) return;
+        if (!choice?.accept || !choice.serial) return false;
         await patchEncounterReg(encounterId, {
           patientId,
           referralSeq: choice.serial,
@@ -826,6 +880,7 @@ export function useClinicWorkspace(options?: {
           referralDate: choice.openDate,
           acceptReferral: "1",
         });
+        return true;
       };
 
       const gross = Number(form.copayAmt) || 0;
@@ -888,16 +943,22 @@ export function useClinicWorkspace(options?: {
           referralDate: payload.referralDate,
         });
         const slips = await rememberReferral(form.encounterId);
-        await storeIncoming(form.encounterId, patientId, slips);
+        const fromSlip = await storeIncoming(form.encounterId, patientId, slips);
+        if ((payload.acceptReferral || "").trim() === "1" || fromSlip) {
+          await ensureAcceptReferralOrder(form.encounterId);
+        }
         await refreshQueue();
         return { encounterId: form.encounterId, patientId };
       }
       const created = await registerPatientAndEncounter(payload);
       const slips = await rememberReferral(created.encounterId);
-      await storeIncoming(created.encounterId, created.patientId, slips);
+      const fromSlip = await storeIncoming(created.encounterId, created.patientId, slips);
+      if ((payload.acceptReferral || "").trim() === "1" || fromSlip) {
+        await ensureAcceptReferralOrder(created.encounterId);
+      }
       return created;
     },
-    [apiMode, registerPatientAndEncounter, refreshQueue],
+    [apiMode, registerPatientAndEncounter, refreshQueue, ensureAcceptReferralOrder],
   );
 
   const persistCondition = useCallback(
@@ -1140,7 +1201,9 @@ export function useClinicWorkspace(options?: {
       if (apiMode) {
         await patchQueueStatus(encounterId, status);
         const res = await fetchQueueForDate(currentDate);
-        setQueue(mapApiQueue(res.entry));
+        const mapped = mapApiQueue(res.entry);
+        queueStampRef.current = queueStamp(currentDate, mapped);
+        setQueue(mapped);
         if (selectedEncounterId === encounterId) {
           await refreshWorkspace(encounterId);
         }
@@ -1263,6 +1326,7 @@ export function useClinicWorkspace(options?: {
     readCardRegisterPatient,
     registerPatientAndEncounter,
     submitRegisterEdit,
+    ensureAcceptReferralOrder,
     persistCondition,
     persistMedication,
     persistMedications,

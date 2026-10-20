@@ -16,7 +16,6 @@ from urllib.error import URLError
 from src.claims.ic_daily_upload import collect_ic_day
 from src.core.nhi_cshis6_client import (
     DEFAULT_CONSOLE_BASE,
-    Cshis6Client,
     request_json,
     status_hint,
 )
@@ -31,20 +30,9 @@ def _business_base() -> str:
 
 
 def _sign(console_base: str) -> dict[str, Any]:
-    client = Cshis6Client(console_base or DEFAULT_CONSOLE_BASE)
-    try:
-        client.ensure_session()
-        signed = client.sam_signature("05")
-    except (URLError, TimeoutError, OSError) as exc:
-        raise RuntimeError(_NO_CONSOLE) from exc
-    except Exception as exc:
-        raise RuntimeError(_NO_CONSOLE) from exc
-    code = signed.get("statusCode")
-    if code not in (None, 0):
-        raise RuntimeError("\u5b89\u5168\u6a21\u7d44\u7c3d\u7ae0\u5931\u6557\uff1a" + status_hint(int(code)))
-    if not signed.get("signature") or not signed.get("clientRandom") or not signed.get("samId"):
-        raise RuntimeError("\u5b89\u5168\u6a21\u7d44\u7c3d\u7ae0\u56de\u50b3\u4e0d\u5b8c\u6574\u3002\u6c92\u6709\u9001\u51fa\u3002")
-    return signed
+    """Desk 6.0 signs SAM service 05. This server does not open a reader."""
+    del console_base
+    raise RuntimeError("NEED_DESK_SIGN")
 
 
 def _roc_parts(stamp: str) -> tuple[str, str]:
@@ -54,7 +42,14 @@ def _roc_parts(stamp: str) -> tuple[str, str]:
     return f"{digits[0:3]}.{digits[3:5]}.{digits[5:7]}", f"{digits[7:9]}:{digits[9:11]}:{digits[11:13]}"
 
 
-def send_ic_day(store: Any, day: str, institution: str, *, console_base: str = DEFAULT_CONSOLE_BASE) -> dict[str, Any]:
+def send_ic_day(
+    store: Any,
+    day: str,
+    institution: str,
+    *,
+    desk_sign: dict[str, Any] | None = None,
+    console_base: str = DEFAULT_CONSOLE_BASE,
+) -> dict[str, Any]:
     built = collect_ic_day(store, day, institution)
     ready = int(built.get("readyForExport") or 0)
     if ready == 0:
@@ -74,10 +69,27 @@ def send_ic_day(store: Any, day: str, institution: str, *, console_base: str = D
             "count": ready,
             "reason": f"\u6709 {missing} \u7b46\u6c92\u6709\u53d6\u865f\u6642\u7684\u5b89\u5168\u7c3d\u7ae0\uff0c\u6c92\u6709\u9001\u51fa",
         }
+    del console_base
     try:
-        signed = _sign(console_base)
-    except RuntimeError as exc:
-        return {"ok": False, "sent": False, "date": day[:10], "count": ready, "reason": str(exc)}
+        from src.core.nhi_seq_bridge import posted_sign
+
+        signed = posted_sign(desk_sign)
+    except RuntimeError:
+        return {
+            "ok": False,
+            "sent": False,
+            "date": day[:10],
+            "count": ready,
+            "reason": "\u8acb\u5728\u9019\u53f0\u96fb\u8166\u7c3d\u7ae0\u5f8c\u518d\u4e0a\u50b3\u3002\u6c92\u6709\u9001\u51fa\u3002",
+        }
+    if not signed.get("samId"):
+        return {
+            "ok": False,
+            "sent": False,
+            "date": day[:10],
+            "count": ready,
+            "reason": "\u9019\u53f0\u5b89\u5168\u6a21\u7d44\u7c3d\u7ae0\u4e0d\u5b8c\u6574\u3002\u6c92\u6709\u9001\u51fa\u3002",
+        }
 
     raw = str(built.get("xml") or "").encode("cp950", errors="strict")
     body = {

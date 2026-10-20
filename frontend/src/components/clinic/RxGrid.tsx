@@ -12,6 +12,7 @@ import {
 import { CatalogDropdown } from "@/components/clinic/CatalogDropdown";
 import { RxDetailSheet } from "@/components/clinic/IcdBrowseDialogs";
 import { HIS, HIS_FONT } from "@/lib/hisTheme";
+import type { CatalogDrug } from "@/types/clinicCatalog";
 import {
   DEFAULT_DAY_PICKS,
   DEFAULT_QTY_PICKS,
@@ -55,6 +56,7 @@ type Props = {
   selectedIndex?: number;
   onSelectIndex?: (index: number) => void;
   usages?: CatalogUsage[];
+  drugs?: CatalogDrug[];
   routes?: string[];
   qtyPicks?: number[];
   dayPicks?: number[];
@@ -301,6 +303,7 @@ export function RxGrid({
   selectedIndex,
   onSelectIndex,
   usages = [],
+  drugs = [],
   routes = DEFAULT_ROUTE_PICKS,
   qtyPicks = DEFAULT_QTY_PICKS,
   dayPicks = DEFAULT_DAY_PICKS,
@@ -1045,8 +1048,8 @@ export function RxGrid({
                         </li>
                       ))
                     : menu.kind === "sig"
-                      ? (usages.length
-                          ? usages
+                      ? ((usages.length
+                          ? usages.filter((u) => String(u.indexFlag || "").toUpperCase() === "Y")
                           : ["QD", "BID", "TID", "QID", "HS", "PRN", "ST"].map((code) => ({
                               code,
                               frequency: 0,
@@ -1064,7 +1067,7 @@ export function RxGrid({
                               <span className="text-[11px] opacity-90">{usageCalcLabel(u)}</span>
                             </button>
                           </li>
-                        ))
+                        )))
                       : menu.kind === "qty"
                         ? qtyPicks.map((q) => (
                             <li key={q}>
@@ -1124,7 +1127,7 @@ export function RxGrid({
           />
         )
         : null}
-      {detailOpen ? <RxDetailSheet lines={lines} onClose={() => setDetailOpen(false)} /> : null}
+      {detailOpen ? <RxDetailSheet lines={lines} drugs={drugs} onClose={() => setDetailOpen(false)} /> : null}
     </>
   );
 }

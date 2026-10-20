@@ -14,13 +14,10 @@ from typing import Any
 from urllib.error import URLError
 
 from src.core.nhi_cshis6_client import (
-    Cshis6Client,
     DEFAULT_CONSOLE_BASE,
-    DEFAULT_HOSPITAL_ID,
     request_json,
     status_hint,
 )
-from src.core.nhi_card_bridge import read_card_profile
 
 DEFAULT_BUSINESS_BASE = os.environ.get(
     "NHI_BUSINESS_BASE",
@@ -52,64 +49,19 @@ class SeqResult:
     raw: dict[str, Any] | None = None
 
 
-def _signature_ready(signed: dict[str, Any]) -> bool:
-    code = signed.get("statusCode")
-    return code in (None, 0) and bool(signed.get("signature")) and bool(signed.get("clientRandom"))
+def posted_sign(raw: dict[str, Any] | None) -> dict[str, Any]:
+    """Signature made by the desk PC's own 6.0. The server must not sign or fill SAM."""
+    signed = dict(raw or {})
+    needed = ("signature", "clientRandom", "samId", "hospitalId")
+    if any(not str(signed.get(key) or "").strip() for key in needed):
+        raise RuntimeError("NEED_DESK_SIGN")
+    return signed
 
 
 def _sign_hc(*, console_base: str, service_type: str = "03") -> dict[str, Any]:
-    """Sign the card already in the reader. Scan every reader only if that fails."""
-    client = Cshis6Client(console_base)
-    try:
-        client.ensure_session()
-    except Exception as exc:
-        raise RuntimeError(f"主控台初始化／驗證 SAM 失敗：{exc}") from exc
-    signed: dict[str, Any] = {}
-    try:
-        signed = client.hc_signature(service_type)
-    except Exception:
-        signed = {}
-    profile: dict[str, str] = {}
-    if not _signature_ready(signed):
-        card = read_card_profile(use_mock=False, console_base=console_base)
-        if not card.profile:
-            raise RuntimeError(card.consoleError or "讀不到健保卡基本資料，無法簽章取號。")
-        profile = card.profile
-        try:
-            signed = client.hc_signature(service_type)
-        except Exception as exc:
-            raise RuntimeError(f"主控台簽章失敗：{exc}") from exc
-    code = signed.get("statusCode")
-    if code not in (None, 0):
-        raise RuntimeError(f"主控台簽章失敗：{status_hint(int(code))}")
-    if not signed.get("signature") or not signed.get("clientRandom"):
-        raise RuntimeError("主控台簽章回傳不完整（缺 signature／clientRandom）。")
-    if not signed.get("hcId"):
-        signed["hcId"] = profile.get("cardId") or ""
-    if not signed.get("hcIdNo"):
-        signed["hcIdNo"] = profile.get("idNo") or ""
-    if not signed.get("hcId") or not signed.get("hcIdNo"):
-        try:
-            from src.core.nhi_card_init_sop import map_hc_basic
-
-            mapped = map_hc_basic(client.hc_basic()) or {}
-        except Exception:
-            mapped = {}
-        if not signed.get("hcId"):
-            signed["hcId"] = mapped.get("cardId") or ""
-        if not signed.get("hcIdNo"):
-            signed["hcIdNo"] = mapped.get("idNo") or ""
-    if not signed.get("hospitalId"):
-        signed["hospitalId"] = DEFAULT_HOSPITAL_ID
-    if not signed.get("samId"):
-        try:
-            sam = client.sam_basic()
-            signed["samId"] = str(sam.get("samId") or sam.get("cardId") or "")
-        except Exception:
-            pass
-    if not signed.get("hcId") or not signed.get("hcIdNo"):
-        raise RuntimeError("簽章缺少健保卡號或身分證號。請確認已插病人健保卡。")
-    return signed
+    """Desk 6.0 signs. This server does not open a reader."""
+    del console_base, service_type
+    raise RuntimeError("NEED_DESK_SIGN")
 
 
 def _call_business(path: str, body: dict[str, Any], *, timeout_sec: float = 25.0) -> tuple[int, Any]:
@@ -127,31 +79,9 @@ def _call_business(path: str, body: dict[str, Any], *, timeout_sec: float = 25.0
 
 
 def _sign_sam(*, console_base: str, service_type: str = "03") -> dict[str, Any]:
-    client = Cshis6Client(console_base)
-    try:
-        client.ensure_session()
-    except Exception as exc:
-        raise RuntimeError(f"主控台初始化／驗證 SAM 失敗：{exc}") from exc
-    try:
-        signed = client.sam_signature(service_type)
-    except Exception as exc:
-        raise RuntimeError(f"SAM 簽章失敗：{exc}") from exc
-    code = signed.get("statusCode")
-    if code not in (None, 0):
-        raise RuntimeError(f"SAM 簽章失敗：{status_hint(int(code))}")
-    if not signed.get("signature") or not signed.get("clientRandom"):
-        raise RuntimeError("SAM 簽章回傳不完整（缺 signature／clientRandom）。")
-    if not signed.get("hospitalId"):
-        signed["hospitalId"] = DEFAULT_HOSPITAL_ID
-    if not signed.get("samId"):
-        try:
-            sam = client.sam_basic()
-            signed["samId"] = str(sam.get("samId") or sam.get("cardId") or "")
-        except Exception:
-            pass
-    if not signed.get("samId"):
-        raise RuntimeError("SAM 簽章缺少安全模組編號。")
-    return signed
+    """Desk 6.0 signs. This server does not open a reader."""
+    del console_base, service_type
+    raise RuntimeError("NEED_DESK_SIGN")
 
 
 NOCARD_EXCEPTIONS = frozenset({"noCard", "childNoCard", "pregnantNoCard", "badCard", "paper"})
@@ -165,6 +95,7 @@ def request_visit_number(
     baby_treatment: str = "",
     patient_id_no: str | None = None,
     console_base: str = DEFAULT_CONSOLE_BASE,
+    desk_sign: dict[str, Any] | None = None,
 ) -> SeqResult:
     """正常 IC＝Next；無卡／卡片不良／紙卡＝NoCard；自費才略過。都要連健保局（自費除外）。"""
     mode = (ic_exception or "ic").strip()
@@ -173,13 +104,14 @@ def request_visit_number(
     if mode == "deposit":
         return SeqResult(ok=True, skipped=True, reason="押單：不向健保局取號，待病患補卡。")
     if mode in NOCARD_EXCEPTIONS:
-        return request_no_card(patient_id_no=patient_id_no or "", console_base=console_base)
+        return request_no_card(patient_id_no=patient_id_no or "", console_base=console_base, desk_sign=desk_sign)
     check = "2" if mode == "afterCheck" else (after_check or "1")
     return request_seq_next(
         treatment_item=treatment_item,
         after_check=check,
         baby_treatment=baby_treatment,
         console_base=console_base,
+        desk_sign=desk_sign,
     )
 
 
@@ -187,13 +119,14 @@ def request_no_card(
     *,
     patient_id_no: str,
     console_base: str = DEFAULT_CONSOLE_BASE,
+    desk_sign: dict[str, Any] | None = None,
 ) -> SeqResult:
     """異常時取得就醫識別碼。SAM 簽章即可，不需要病人卡／醫事人員卡。"""
     id_no = (patient_id_no or "").strip().upper()
     if len(id_no) != 10:
         return SeqResult(ok=False, reason="無卡／卡片不良／紙卡仍要向健保局取就醫識別碼，請填身分證。")
     try:
-        signed = _sign_sam(console_base=console_base, service_type="03")
+        signed = posted_sign(desk_sign)
     except RuntimeError as exc:
         return SeqResult(ok=False, reason=str(exc), hcIdNo=id_no)
 
@@ -242,6 +175,7 @@ def request_seq_next(
     baby_treatment: str = "",
     paper_card: bool = False,
     console_base: str = DEFAULT_CONSOLE_BASE,
+    desk_sign: dict[str, Any] | None = None,
 ) -> SeqResult:
     """取得就醫序號。需要病人健保卡＋已驗證 SAM，不需要醫事人員卡。"""
     if paper_card:
@@ -251,7 +185,7 @@ def request_seq_next(
         )
 
     try:
-        signed = _sign_hc(console_base=console_base, service_type="03")
+        signed = posted_sign(desk_sign)
     except RuntimeError as exc:
         return SeqResult(ok=False, reason=str(exc))
 
@@ -312,6 +246,7 @@ def request_seq_rollback(
     treatment_date_time: str,
     expected_id_no: str | None = None,
     console_base: str = DEFAULT_CONSOLE_BASE,
+    desk_sign: dict[str, Any] | None = None,
 ) -> SeqResult:
     """退掛（回復就醫資料累計值）。"""
     roc = str(treatment_date_time or "").strip()
@@ -322,7 +257,7 @@ def request_seq_rollback(
         )
 
     try:
-        signed = _sign_hc(console_base=console_base, service_type="03")
+        signed = posted_sign(desk_sign)
     except RuntimeError as exc:
         return SeqResult(ok=False, reason=str(exc))
 

@@ -489,23 +489,7 @@ export function VisitSaveConfirmPanel({
       </aside>
       </div>
 
-      <footer className="flex shrink-0 items-center gap-2 border-t border-slate-400 bg-slate-300 px-3 py-1.5">
-        <button
-          type="button"
-          disabled={locked || saving}
-          className="rounded border border-slate-500 bg-white px-3 py-1 font-bold disabled:bg-slate-200 disabled:text-slate-400"
-          onClick={onConfirm}
-        >
-          <span className="font-mono" style={{ fontSize: "0.8em" }}>F9</span> {locked ? "已存檔" : "存檔"}
-        </button>
-        <button
-          type="button"
-          className="rounded border border-slate-700 bg-[#ffe14a] px-3 py-1 font-bold"
-          onClick={onPrint}
-        >
-          <span className="font-mono" style={{ fontSize: "0.8em" }}>P</span> 列印
-        </button>
-        {printNote ? <span className="min-w-0 flex-1 font-bold text-slate-900">{printNote}</span> : null}
+      <footer className="flex shrink-0 items-center gap-2 border-t border-slate-400 bg-slate-300 px-3 py-2">
         <button
           type="button"
           className="rounded border border-slate-500 bg-white px-3 py-1"
@@ -513,7 +497,23 @@ export function VisitSaveConfirmPanel({
         >
           Esc 離開
         </button>
+        {printNote ? <span className="min-w-0 flex-1 font-bold text-slate-900">{printNote}</span> : <span className="flex-1" />}
         {saving && <span className="text-sky-800">寫入中…</span>}
+        <button
+          type="button"
+          disabled={locked || saving}
+          className="rounded border-2 border-slate-600 bg-white px-8 py-3 text-[30px] font-bold leading-none disabled:bg-slate-200 disabled:text-slate-400"
+          onClick={onConfirm}
+        >
+          <span className="font-mono" style={{ fontSize: "0.8em" }}>F9</span> {locked ? "已存檔" : "存檔"}
+        </button>
+        <button
+          type="button"
+          className="rounded border-2 border-slate-800 bg-[#ffe14a] px-8 py-3 text-[30px] font-bold leading-none"
+          onClick={onPrint}
+        >
+          <span className="font-mono" style={{ fontSize: "0.8em" }}>P</span> 列印
+        </button>
       </footer>
     </div>
   );

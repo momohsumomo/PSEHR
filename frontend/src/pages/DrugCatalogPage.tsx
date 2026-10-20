@@ -14,14 +14,18 @@ import { HIS, HIS_FBAR_COLORS } from "@/lib/hisTheme";
 import { useEscLayer } from "@/hooks/useEscLayer";
 
 type DrugForm = {
+  drugNo: string;
+  alias: string;
   nhiCode: string;
-  name: string;
+  tradeName: string;
+  customName: string;
   generic: string;
   route: string;
-  selfPay: boolean;
+  payMark: string;
   unitPrice: string;
   selfPayPrice: string;
-  remark: string;
+  adapt: string;
+  memo: string;
   batchNo: string;
   control: string;
   maker: string;
@@ -37,7 +41,18 @@ type DrugForm = {
   amount: string;
   totalPrice: string;
   purchasePrice: string;
+  unitCost: string;
+  stock: string;
+  lowStock: string;
   allergyCode: string;
+  mutual: string;
+  conflict: string;
+  drugChg: string;
+  indexFlag: string;
+  sort: string;
+  typeSort: string;
+  totalQty: string;
+  basePoint: string;
   bagCc: string;
   maxMonth: string;
   expiry: string;
@@ -45,23 +60,32 @@ type DrugForm = {
   cloudCat: string;
 };
 
+function textNum(value: unknown): string {
+  if (value == null || value === "") return "";
+  return String(value);
+}
+
 const emptyForm = (): DrugForm => ({
+  drugNo: "",
+  alias: "",
   nhiCode: "",
-  name: "",
+  tradeName: "",
+  customName: "",
   generic: "",
   route: "oral",
-  selfPay: false,
+  payMark: "",
   unitPrice: "",
   selfPayPrice: "",
-  remark: "",
+  adapt: "",
+  memo: "",
   batchNo: "",
-  control: "無",
+  control: "",
   maker: "",
   appearance: "",
-  clinicCat: "A. 內服",
+  clinicCat: "",
   customCat: "",
-  qty: "1",
-  days: "1",
+  qty: "",
+  days: "",
   unit: "",
   usage: "",
   doseForm: "",
@@ -69,9 +93,20 @@ const emptyForm = (): DrugForm => ({
   amount: "",
   totalPrice: "",
   purchasePrice: "",
+  unitCost: "",
+  stock: "",
+  lowStock: "",
   allergyCode: "",
+  mutual: "",
+  conflict: "",
+  drugChg: "",
+  indexFlag: "Y",
+  sort: "",
+  typeSort: "",
+  totalQty: "",
+  basePoint: "",
   bagCc: "",
-  maxMonth: "0",
+  maxMonth: "",
   expiry: "",
   warnDate: "",
   cloudCat: "",
@@ -99,14 +134,22 @@ export function DrugCatalogPage() {
 
   useEscLayer([{ open: true, close: () => navigate("/") }]);
 
-  const filtered = catalog.drugs.filter(
-    (d) =>
-      d.name.includes(search) ||
-      d.nhiCode.toUpperCase().includes(search.toUpperCase()) ||
-      d.generic?.toLowerCase().includes(search.toLowerCase()),
-  );
+  const filtered = catalog.drugs.filter((d) => {
+    const q = search.trim().toLowerCase();
+    if (!q) return true;
+    return [d.alias, d.shortName, d.customName, d.name, d.nhiCode, d.generic, d.drugNo]
+      .join(" ")
+      .toLowerCase()
+      .includes(q);
+  });
 
-  const displayList = useMemo(() => [...filtered], [filtered]);
+  const displayList = useMemo(
+    () =>
+      [...filtered].sort((a, b) =>
+        (a.alias || a.shortName || a.drugNo).localeCompare(b.alias || b.shortName || b.drugNo, "zh-Hant"),
+      ),
+    [filtered],
+  );
 
   const loadDrug = (d: any | null) => {
     if (!d) {
@@ -114,17 +157,49 @@ export function DrugCatalogPage() {
       setForm(emptyForm());
       return;
     }
-    setSelectedCode(d.nhiCode);
+    const key = d.drugNo || d.alias || d.nhiCode;
+    setSelectedCode(key);
     setForm({
       ...emptyForm(),
+      drugNo: d.drugNo || "",
+      alias: d.alias || d.shortName || "",
       nhiCode: d.nhiCode || "",
-      name: d.name || "",
+      tradeName: d.name || "",
+      customName: d.customName || "",
       generic: d.generic || "",
-      route: d.route || "oral",
-      selfPay: Boolean(d.selfPay),
-      unitPrice: d.unitPrice != null ? String(d.unitPrice) : "",
-      selfPayPrice: d.selfPayPrice != null ? String(d.selfPayPrice) : "",
-      clinicCat: d.route === "topical" ? "B. 外用" : "A. 內服",
+      route: d.useType || d.route || "",
+      payMark: d.payMark || (d.selfPay ? "\u81ea" : ""),
+      unitPrice: textNum(d.unitPrice),
+      selfPayPrice: textNum(d.selfPayPrice),
+      adapt: d.adapt || "",
+      memo: d.memo || "",
+      batchNo: d.batchNo || "",
+      control: d.restrain || "",
+      maker: d.company || "",
+      clinicCat: d.cast || "",
+      customCat: d.typeName || "",
+      qty: textNum(d.qty),
+      days: textNum(d.days),
+      unit: d.unit || "",
+      usage: d.sig || "",
+      doseForm: d.dosimeter || "",
+      dose: textNum(d.dose),
+      amount: textNum(d.dose2),
+      totalPrice: textNum(d.totalPrice),
+      purchasePrice: textNum(d.cost),
+      unitCost: textNum(d.unitCost),
+      stock: textNum(d.stock),
+      lowStock: textNum(d.lowStock),
+      allergyCode: d.allergy || "",
+      mutual: d.mutual || "",
+      conflict: d.conflict || "",
+      drugChg: d.drugChg || "",
+      indexFlag: d.indexFlag || (d.clinicIndex ? "Y" : ""),
+      sort: textNum(d.sort),
+      typeSort: textNum(d.typeSort),
+      totalQty: textNum(d.totalQty),
+      basePoint: textNum(d.basePoint),
+      bagCc: d.warning || "",
     });
   };
 
@@ -147,23 +222,60 @@ export function DrugCatalogPage() {
   };
 
   const saveEdit = async () => {
-    if (!form.nhiCode.trim() || !form.name.trim()) {
-      setNotice("\u5065\u4fdd\u78bc\u8207\u7c21\u7a31\u5fc5\u586b");
+    const drugNo = (form.drugNo || form.alias || form.nhiCode).trim();
+    if (!drugNo || !(form.alias.trim() || form.customName.trim() || form.tradeName.trim())) {
+      setNotice("\u7c21\u7a31\u6216\u81ea\u5b9a\u540d\u7a31\u5fc5\u586b");
       return;
     }
+    const num = (raw: string) => (raw.trim() === "" ? null : Number(raw));
     setBusy(true);
     try {
       await upsertDrug({
-        nhiCode: form.nhiCode.trim(),
-        drugNo: form.nhiCode.trim(),
-        name: form.name.trim(),
+        drugNo,
+        alias: form.alias.trim(),
+        shortName: form.alias.trim(),
+        customName: form.customName.trim(),
+        name: form.tradeName.trim(),
         generic: form.generic.trim(),
+        nhiCode: form.nhiCode.trim(),
+        sig: form.usage.trim(),
+        days: num(form.days) ?? 0,
+        qty: num(form.qty) ?? 0,
         route: form.route,
-        selfPay: form.selfPay,
-        unitPrice: form.unitPrice ? Number(form.unitPrice) : undefined,
-        selfPayPrice: form.selfPayPrice ? Number(form.selfPayPrice) : undefined,
+        useType: form.route,
+        payMark: form.payMark,
+        selfPay: form.payMark === "\u81ea",
+        memo: form.memo,
+        unitPrice: num(form.unitPrice),
+        selfPayPrice: num(form.selfPayPrice),
+        batchNo: form.batchNo,
+        company: form.maker,
+        restrain: form.control,
+        cast: form.clinicCat,
+        typeName: form.customCat,
+        unit: form.unit,
+        dosimeter: form.doseForm,
+        dose: num(form.dose),
+        dose2: num(form.amount),
+        stock: num(form.stock),
+        lowStock: num(form.lowStock),
+        cost: num(form.purchasePrice),
+        unitCost: num(form.unitCost),
+        totalPrice: num(form.totalPrice),
+        totalQty: num(form.totalQty),
+        basePoint: num(form.basePoint),
+        drugChg: form.drugChg,
+        allergy: form.allergyCode,
+        mutual: form.mutual,
+        conflict: form.conflict,
+        sort: num(form.sort),
+        typeSort: num(form.typeSort),
+        indexFlag: form.indexFlag,
+        clinicIndex: form.indexFlag.toUpperCase() === "Y",
+        warning: form.bagCc,
+        adapt: form.adapt,
       });
-      setSelectedCode(form.nhiCode.trim());
+      setSelectedCode(drugNo);
       setNotice("\u85e5\u54c1\u5df2\u5b58\u5165\u9662\u6240\u76ee\u9304\u8986\u5beb\uff08\u5f71\u5b50\u5eab\uff09\u3002");
     } catch (e) {
       setNotice(e instanceof Error ? e.message : "\u5b58\u6a94\u5931\u6557");
@@ -183,7 +295,7 @@ export function DrugCatalogPage() {
     try {
       await removeDrug(code);
       setNotice(`\u5df2\u522a\u9664\uff0f\u96b1\u85cf ${code}`);
-      const next = catalog.drugs.find((d) => d.nhiCode !== code);
+      const next = catalog.drugs.find((d) => (d.drugNo || d.alias) !== code);
       loadDrug(next ?? null);
     } catch (e) {
       setNotice(e instanceof Error ? e.message : "\u522a\u9664\u5931\u6557");
@@ -206,7 +318,7 @@ export function DrugCatalogPage() {
               label: "\u4fee\u6539",
               color: HIS_FBAR_COLORS.F3,
               onClick: () => {
-                const d = catalog.drugs.find((x) => x.nhiCode === selectedCode);
+                const d = catalog.drugs.find((x) => (x.drugNo || x.alias) === selectedCode);
                 if (!d) {
                   setNotice("\u8acb\u5148\u5728\u53f3\u5074\u9078\u4e00\u7b46");
                   return;
@@ -228,9 +340,12 @@ export function DrugCatalogPage() {
         form={
         <div className="flex min-h-0 flex-col overflow-auto">
         <div className="flex flex-col gap-0.5 p-0.5">
+          <p className="px-1 leading-snug text-[#404040]" style={{ fontSize: HIS.fs.tertiary }}>
+            {"\u9078\u7528\u586b Y \u624d\u6703\u9032\u770b\u8a3a\u958b\u85e5\u3002\u6e05\u55ae\u88e1\u5df2\u6709\u7684\uff0c\u627e\u5230\u5f8c\u6539\u6210 Y \u518d\u5b58\u6a94\u3002\u65b0\u589e\u5065\u4fdd\u85e5\uff1a\u586b\u7c21\u7a31\u3001\u81ea\u5b9a\u540d\u7a31\u3001\u5065\u4fdd\u78bc\uff0c\u81ea\u8cbb\u7559\u767d\u3002\u65b0\u589e\u81ea\u8cbb\u85e5\uff1a\u81ea\u8cbb\u586b\u300c\u81ea\u300d\u4e26\u586b\u81ea\u8cbb\u91d1\u984d\u3002"}
+          </p>
           <div className="grid grid-cols-3 gap-1">
             <HisField label="簡稱">
-              <input className={hisInputClass} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+              <input className={`${hisInputClass} font-mono`} value={form.alias} onChange={(e) => setForm({ ...form, alias: e.target.value })} />
             </HisField>
             <HisField label="健保碼">
               <input className={`${hisInputClass} font-mono`} value={form.nhiCode} onChange={(e) => setForm({ ...form, nhiCode: e.target.value })} />
@@ -241,13 +356,10 @@ export function DrugCatalogPage() {
           </div>
           <div className="grid grid-cols-[2fr_1fr_1fr] gap-1">
             <HisField label="商品名稱">
-              <input className={hisInputClass} value={form.generic} onChange={(e) => setForm({ ...form, generic: e.target.value })} />
+              <input className={hisInputClass} value={form.tradeName} onChange={(e) => setForm({ ...form, tradeName: e.target.value })} />
             </HisField>
             <HisField label="管制">
-              <select className={hisInputClass} value={form.control} onChange={(e) => setForm({ ...form, control: e.target.value })}>
-                <option>無</option>
-                <option>1～4級</option>
-              </select>
+              <input className={hisInputClass} value={form.control} onChange={(e) => setForm({ ...form, control: e.target.value })} />
             </HisField>
             <HisField label="藥廠">
               <input className={hisInputClass} value={form.maker} onChange={(e) => setForm({ ...form, maker: e.target.value })} />
@@ -255,7 +367,7 @@ export function DrugCatalogPage() {
           </div>
           <div className="grid grid-cols-2 gap-1">
             <HisField label="自定名稱">
-              <input className={hisInputClass} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+              <input className={hisInputClass} value={form.customName} onChange={(e) => setForm({ ...form, customName: e.target.value })} />
             </HisField>
             <HisField label="顏色外觀">
               <input className={hisInputClass} value={form.appearance} onChange={(e) => setForm({ ...form, appearance: e.target.value })} />
@@ -263,23 +375,7 @@ export function DrugCatalogPage() {
           </div>
           <div className="grid grid-cols-2 gap-1">
             <HisField label="診療類別">
-              <select
-                className={hisInputClass}
-                value={form.clinicCat}
-                onChange={(e) => {
-                  const v = e.target.value;
-                  setForm({
-                    ...form,
-                    clinicCat: v,
-                    route: v.includes("外") ? "topical" : "oral",
-                  });
-                }}
-              >
-                <option>A. 內服</option>
-                <option>B. 外用</option>
-                <option>C. 注射</option>
-                <option>D. 處置</option>
-              </select>
+              <input className={hisInputClass} value={form.clinicCat} onChange={(e) => setForm({ ...form, clinicCat: e.target.value })} />
             </HisField>
             <HisField label="自定分類">
               <input className={hisInputClass} value={form.customCat} onChange={(e) => setForm({ ...form, customCat: e.target.value })} />
@@ -304,14 +400,7 @@ export function DrugCatalogPage() {
           </div>
           <div className="grid grid-cols-4 gap-1">
             <HisField label="途徑">
-              <select className={hisInputClass} value={form.route} onChange={(e) => setForm({ ...form, route: e.target.value })}>
-                <option value="oral">內服</option>
-                <option value="topical">外用</option>
-                <option value="injection">注射</option>
-                <option value="treatment">治療</option>
-                <option value="exam">檢查</option>
-                <option value="material">特材</option>
-              </select>
+              <input className={hisInputClass} value={form.route} onChange={(e) => setForm({ ...form, route: e.target.value })} />
             </HisField>
             <HisField label="劑量">
               <input className={`${hisInputClass} font-mono`} value={form.dose} onChange={(e) => setForm({ ...form, dose: e.target.value })} />
@@ -333,15 +422,48 @@ export function DrugCatalogPage() {
             <HisField label="進價">
               <input className={`${hisInputClass} font-mono`} value={form.purchasePrice} onChange={(e) => setForm({ ...form, purchasePrice: e.target.value })} />
             </HisField>
+            <HisField label="進貨單價">
+              <input className={`${hisInputClass} font-mono`} value={form.unitCost} onChange={(e) => setForm({ ...form, unitCost: e.target.value })} />
+            </HisField>
+          </div>
+          <div className="grid grid-cols-4 gap-1">
+            <HisField label="存量">
+              <input className={`${hisInputClass} font-mono`} value={form.stock} onChange={(e) => setForm({ ...form, stock: e.target.value })} />
+            </HisField>
+            <HisField label="危量">
+              <input className={`${hisInputClass} font-mono`} value={form.lowStock} onChange={(e) => setForm({ ...form, lowStock: e.target.value })} />
+            </HisField>
+            <HisField label="藥量">
+              <input className={hisInputClass} value={form.drugChg} onChange={(e) => setForm({ ...form, drugChg: e.target.value })} />
+            </HisField>
+            <HisField label="選用">
+              <input className={`${hisInputClass} font-mono`} value={form.indexFlag} onChange={(e) => setForm({ ...form, indexFlag: e.target.value })} />
+            </HisField>
+          </div>
+          <div className="grid grid-cols-4 gap-1">
+            <HisField label="自費">
+              <input className={hisInputClass} value={form.payMark} onChange={(e) => setForm({ ...form, payMark: e.target.value })} />
+            </HisField>
             <HisField label="自費金額">
-              <span className="flex items-center gap-1">
-                <input type="checkbox" checked={form.selfPay} onChange={(e) => setForm({ ...form, selfPay: e.target.checked })} />
-                <input className={`${hisInputClass} font-mono`} value={form.selfPayPrice} onChange={(e) => setForm({ ...form, selfPayPrice: e.target.value })} />
-              </span>
+              <input className={`${hisInputClass} font-mono`} value={form.selfPayPrice} onChange={(e) => setForm({ ...form, selfPayPrice: e.target.value })} />
+            </HisField>
+            <HisField label="排列">
+              <input className={`${hisInputClass} font-mono`} value={form.sort} onChange={(e) => setForm({ ...form, sort: e.target.value })} />
+            </HisField>
+            <HisField label="順序">
+              <input className={`${hisInputClass} font-mono`} value={form.typeSort} onChange={(e) => setForm({ ...form, typeSort: e.target.value })} />
+            </HisField>
+          </div>
+          <div className="grid grid-cols-[1fr_2fr] gap-1">
+            <HisField label="備註">
+              <input className={hisInputClass} value={form.memo} onChange={(e) => setForm({ ...form, memo: e.target.value })} />
+            </HisField>
+            <HisField label="學名成份">
+              <input className={hisInputClass} value={form.generic} onChange={(e) => setForm({ ...form, generic: e.target.value })} />
             </HisField>
           </div>
           <HisField label="適應症及備註" wide>
-            <textarea rows={3} className={`${hisInputClass} bg-white`} value={form.remark} onChange={(e) => setForm({ ...form, remark: e.target.value })} />
+            <textarea rows={6} className={`${hisInputClass} bg-white`} value={form.adapt} onChange={(e) => setForm({ ...form, adapt: e.target.value })} />
           </HisField>
           <HisField label="藥帶主訴" wide>
             <textarea rows={2} className={hisTextareaClass} value={form.bagCc} onChange={(e) => setForm({ ...form, bagCc: e.target.value })} />
@@ -370,14 +492,21 @@ export function DrugCatalogPage() {
         )}
         <HisDataGrid
           columns={[
-            { key: "name", label: "\u85e5\u54c1\u7c21\u7a31" },
-            { key: "generic", label: "\u81ea\u5b9a\u540d\u7a31" },
+            { key: "alias", label: "\u85e5\u54c1\u7c21\u7a31", width: "5.5rem", mono: true },
+            { key: "customName", label: "\u81ea\u5b9a\u540d\u7a31" },
+            { key: "indexFlag", label: "\u9078\u7528", width: "3rem", mono: true },
           ]}
           rows={displayList}
-          rowKey={(d) => d.nhiCode}
+          rowKey={(d) => d.drugNo || d.alias || d.nhiCode}
           selectedKey={selectedCode}
           onSelect={loadDrug}
-          cell={(d, key) => (key === "name" ? d.name : d.generic || d.nhiCode)}
+          cell={(d, key) =>
+            key === "alias"
+              ? d.alias || d.shortName || d.drugNo
+              : key === "indexFlag"
+                ? d.indexFlag || ""
+                : d.customName || d.name
+          }
         />
         <div className="shrink-0 space-y-0.5 border-t p-1" style={{ borderColor: HIS.chromeBorder, background: HIS.chrome }}>
           <HisField label="雲端查詢類別">

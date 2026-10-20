@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query
+from pydantic import BaseModel
 from fastapi.responses import Response
 
 from src.app.bootstrap import get_shadow_store
@@ -204,19 +205,21 @@ def ic_upload_history(limit: int = Query(40, ge=1, le=80)) -> dict[str, Any]:
     return {"rows": rows}
 
 
+class IcSendBody(BaseModel):
+    deskSign: dict[str, Any] | None = None
+
+
 @router.post("/send")
 def send_ic_upload(
     date_day: str = Query(..., alias="date"),
-    console_base: str = Query("", alias="consoleBase"),
+    body: IcSendBody | None = None,
 ) -> dict[str, Any]:
     from src.claims.ic_upload_send import send_ic_day
 
     store = get_shadow_store()
     day = date_day[:10]
-    kwargs: dict[str, Any] = {}
-    if console_base:
-        kwargs["console_base"] = console_base
-    result = send_ic_day(store, day, _institution_code(store), **kwargs)
+    desk = body.deskSign if body else None
+    result = send_ic_day(store, day, _institution_code(store), desk_sign=desk)
     if result.get("sent"):
         roc = _iso_to_roc(day)
         remember_send(

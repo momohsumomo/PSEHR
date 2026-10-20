@@ -235,10 +235,10 @@ export function StaffPage() {
                       onDoubleClick={() => handleOpenEdit(s)}
                     >
                       <td className="border px-1 py-0.5 font-mono" style={{ borderColor: "#C0C0C0" }}>
-                        {s.id}
+                        {s.id.replace(/^ys-/, "") || "—"}
                       </td>
                       <td className="border px-1 py-0.5 font-mono" style={{ borderColor: "#C0C0C0" }}>
-                        {s.nhiId || "—"}
+                        —
                       </td>
                       <td className="border px-1 py-0.5 font-mono text-sky-300" style={{ borderColor: "#C0C0C0" }}>
                         **********
@@ -247,7 +247,7 @@ export function StaffPage() {
                         {s.name}
                       </td>
                       <td className="border px-1 py-0.5 font-mono" style={{ borderColor: "#C0C0C0" }}>
-                        —
+                        {s.nhiId || "—"}
                       </td>
                       <td className="border px-1 py-0.5" style={{ borderColor: "#C0C0C0" }}>
                         {s.role || "—"}

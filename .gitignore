@@ -19,6 +19,11 @@ data/
 *.sam
 *.zip
 
+# Portable PDF viewer and card-reader installers copied with the workstation folder. Not pushed.
+客戶端/SumatraPDF.exe
+客戶端/讀卡6.0/*.exe
+客戶端/讀卡6.0/*.msi
+
 # Local backups, dumps, and third-party installers
 BkZip/
 scratch/
@@ -55,3 +60,5 @@ frontend/tsconfig.tsbuildinfo
 .idea/
 .vscode/
 .cursor/settings.json
+客戶端.7z
+*.7z

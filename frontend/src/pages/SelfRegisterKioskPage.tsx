@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
 import {
+  fetchIdCategorySettings,
+  fetchPatient,
   fetchPatients,
   fetchQueueForDate,
   fetchSameDayEncounters,
@@ -10,6 +12,7 @@ import {
 } from "@/api/clinicApi";
 import { ageYearsFromRoc, applyAgeFees, policyFromFees } from "@/lib/ageFee";
 import { loadClinicBundle, loadClinicRegisterDefaults, readLocalClinicBundle } from "@/lib/clinicProfile";
+import { identityVisitFees, matchIdCategory } from "@/lib/idCategory";
 import { lastPharmacist, shiftForClock } from "@/lib/clinicSession";
 import { mapApiPatientToHit, type PatientHit } from "@/lib/patientSearch";
 import { shiftQueueNumbers, takeSmallestQueueNumber } from "@/lib/queueOrder";
@@ -127,17 +130,45 @@ export function SelfRegisterKioskPage() {
     return () => window.removeEventListener("keydown", onKey);
   }, [mode, busy, digits]);
 
-  const quote = (birthdayRoc: string, selfPay: boolean, baseReg: number) => {
-    const fees = readLocalClinicBundle().fees;
-    return applyAgeFees({
+  const priceVisit = async (patientId: string, birthdayRoc: string, kind: "ic" | WalkKind) => {
+    const defaults = loadClinicRegisterDefaults();
+    const selfPay = kind === "selfPay";
+    let hit: { reg_fee?: number; copay?: number; deposit?: number } | undefined;
+    let personCopayDisc = "";
+    try {
+      const [patient, cats] = await Promise.all([fetchPatient(patientId), fetchIdCategorySettings()]);
+      const ext =
+        patient.extension?.find((item) => item.url?.includes("patient-clinic-ext"))?.extension || [];
+      const cat = ext.find((item) => item.url === "idCategory")?.valueString || "";
+      personCopayDisc = ext.find((item) => item.url === "copayDisc")?.valueString || "";
+      hit = matchIdCategory(cats, cat);
+    } catch {
+      hit = undefined;
+    }
+    const base = identityVisitFees({
+      clinicReg: Number(defaults.regFeeOutpatient) || 0,
+      selfPayReg: Number(defaults.regFeeSelfPay) || 0,
+      selfPay,
+      depositVisit: kind === "deposit",
+      clinicDeposit: defaults.depositAmount,
+      hit,
+      personCopayDisc,
+    });
+    const aged = applyAgeFees({
       age: ageYearsFromRoc(birthdayRoc),
-      baseReg,
-      baseCopay: 50,
-      baseDisc: 0,
+      baseReg: Number(base.regFee) || 0,
+      baseCopay: selfPay ? 0 : Number(base.copayAmt) || 0,
+      baseDisc: selfPay ? 0 : Number(base.copayDiscAmt) || 0,
       selfPay,
       student: false,
-      policy: policyFromFees(fees),
+      policy: policyFromFees(readLocalClinicBundle().fees),
     });
+    const copayNet = Math.max(0, Number(aged.copayAmt) - Number(aged.copayDiscAmt));
+    return {
+      regFee: aged.regFee,
+      copayAmt: selfPay ? "0" : String(copayNet),
+      deposit: base.deposit,
+    };
   };
 
   const showDone = (name: string, queueNumber: string, text: string) => {
@@ -179,14 +210,12 @@ export function SelfRegisterKioskPage() {
     if (await alreadyToday(args.patientId, args.name)) return;
     const defaults = loadClinicRegisterDefaults();
     const selfPay = args.kind === "selfPay";
-    const base = selfPay ? Number(defaults.regFeeSelfPay) || 0 : Number(defaults.regFeeOutpatient) || 0;
-    const aged = quote(args.birthdayRoc, selfPay, base);
+    const priced = await priceVisit(args.patientId, args.birthdayRoc, args.kind);
     const day = todayIso();
     const shift = shiftForClock();
     const board = await fetchQueueForDate(day);
     const rows = (board.resolvedDate === day ? board.entry : []).map((row) => row.queueMeta);
     const queueNumber = takeSmallestQueueNumber(shiftQueueNumbers(rows, shift));
-    const copayNet = Math.max(0, Number(aged.copayAmt) - Number(aged.copayDiscAmt));
     const saved = await registerEncounter({
       patientId: args.patientId,
       queueNumber,
@@ -208,9 +237,9 @@ export function SelfRegisterKioskPage() {
       doctorId: defaults.defaultDoctorId || undefined,
       encounterDate: day,
       visitClock: nowClock(),
-      regFee: aged.regFee,
-      copayAmt: String(copayNet),
-      deposit: args.kind === "deposit" ? defaults.depositAmount : "",
+      regFee: priced.regFee,
+      copayAmt: priced.copayAmt,
+      deposit: priced.deposit,
       dispense: defaults.dispenseType || undefined,
     });
     showDone(args.name, String(saved.queueNumber), "\u639b\u865f\u5b8c\u6210\uff0c\u8acb\u56de\u5ea7\u5019\u8a3a");

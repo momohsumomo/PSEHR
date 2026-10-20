@@ -33,7 +33,7 @@ def find_sam_file() -> Path:
         matches.append(p)
     if not matches:
         raise FileNotFoundError(
-            "專案根目錄找不到 .SAM。請把診所憑證放到專案根目錄（已 gitignore）。"
+            "這一台電腦旁邊找不到 .SAM。這支程式只會把檔案匯進「執行它的那一台」讀卡軟體 6.0（https://localhost:5066）。主機的專案資料夾不是各台看診電腦的憑證。"
         )
     if len(matches) > 1:
         print("找到多個 SAM，使用第一個：", matches[0].name)

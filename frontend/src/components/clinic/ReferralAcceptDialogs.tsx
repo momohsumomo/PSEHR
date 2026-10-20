@@ -1,6 +1,7 @@
 import { useCallback, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { HIS_FONT } from "@/lib/hisTheme";
+import { chartDittoText } from "@/lib/referralDitto";
 
 export type IncomingSlip = {
   serial: string;
@@ -96,9 +97,32 @@ function IncomingReferralDialog({
   );
 }
 
+const REPLY_PROC: Array<[string, string]> = [
+  ["1", "\u5df2\u4e88\u6025\u8a3a\u8655\u7f6e\u4e26\u8f49\u8a3a\u81f3\u91ab\u9662"],
+  ["2", "\u5df2\u4e88\u6025\u8a3a\u8655\u7f6e\uff0c\u4e26\u4f4f\u672c\u9662\u75c5\u623f\u6cbb\u7642\u4e2d"],
+  ["3", "\u5df2\u5b89\u6392\u4f4f\u672c\u9662\u75c5\u623f\u6cbb\u7642\u4e2d"],
+  ["4", "\u5df2\u5b89\u6392\u672c\u9662\u9580\u8a3a\u6cbb\u7642\u4e2d"],
+  ["5", "\u5df2\u4e88\u9069\u7576\u8655\u7406\u4e26\u8f49\u56de\u539f\u9662\u6240"],
+];
+
+export type ReferralReplyDraft = {
+  serial: string;
+  diagnosis: string;
+  note: string;
+  drugs: string;
+  aux: string;
+  purpose: string;
+  upload: boolean;
+};
+
 export function ReferralReplyDialog({
   serial,
   hosp,
+  patientName,
+  diagnosis,
+  meds,
+  note,
+  encounterId,
   busy,
   error,
   onSend,
@@ -106,31 +130,133 @@ export function ReferralReplyDialog({
 }: {
   serial: string;
   hosp: string;
+  patientName: string;
+  diagnosis: string;
+  meds: string;
+  note: string;
+  encounterId?: string;
   busy?: boolean;
   error?: string;
-  onSend: () => void;
+  onSend: (draft: ReferralReplyDraft) => void;
   onSkip: () => void;
 }) {
+  const [seq, setSeq] = useState(serial);
+  const [dx, setDx] = useState(diagnosis);
+  const [drugs, setDrugs] = useState(meds);
+  const [text, setText] = useState(note);
+  const [purpose, setPurpose] = useState("4");
+  const [uploadOnSave, setUploadOnSave] = useState(true);
+  const [localError, setLocalError] = useState("");
+  const box = "w-full border border-[#808080] bg-white px-1 py-0.5";
+  const copyChart = async (part: "drugs" | "chief") => {
+    const fallback = part === "drugs" ? (meds || "").trim() : (note || "").trim();
+    try {
+      const text = await chartDittoText(encounterId || "", part);
+      if (part === "drugs") setDrugs(text);
+      else setText(text);
+      setLocalError(part === "drugs" ? "\u5df2\u6284\u5165\u9019\u6b21\u770b\u8a3a\u7684\u91ab\u4ee4\u3002" : "\u5df2\u6284\u5165\u9019\u6b21\u770b\u8a3a\u7684\u4e3b\u8ff0\u3002");
+    } catch {
+      if (!fallback) {
+        setLocalError(part === "drugs" ? "\u9019\u6b21\u770b\u8a3a\u6c92\u6709\u91ab\u4ee4\u53ef\u6284\u3002" : "\u9019\u6b21\u770b\u8a3a\u6c92\u6709\u4e3b\u8ff0\u53ef\u6284\u3002");
+        return;
+      }
+      if (part === "drugs") setDrugs(fallback);
+      else setText(fallback);
+      setLocalError(part === "drugs" ? "\u5df2\u6284\u5165\u9019\u6b21\u770b\u8a3a\u7684\u91ab\u4ee4\u3002" : "\u5df2\u6284\u5165\u9019\u6b21\u770b\u8a3a\u7684\u4e3b\u8ff0\u3002");
+    }
+  };
   return createPortal(
-    <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/45" style={{ fontFamily: HIS_FONT }}>
-      <div className="w-[min(32rem,94vw)] border-2 border-[#004d00] bg-[#fff8dc] p-3 text-[16px]">
-        <h2 className="mb-2 font-bold">{"\u8f49\u8a3a\u56de\u8986"}</h2>
-        <p>{"\u5e8f\u865f "}<span className="font-mono">{serial}</span></p>
-        <p className="mb-2">{"\u8f49\u51fa\u9662\u6240 "}{hosp || "\u2014"}</p>
-        <p className="mb-3 text-[14px]">{"\u9019\u6b21\u5df2\u7d93\u5b58\u6a94\u3002\u9001\u51fa\u5c31\u56de\u8986\u9019\u5f35\u8f49\u8a3a\u55ae\u3002\u7565\u904e\u7684\u8a71\uff0c\u4e4b\u5f8c\u5230\u96fb\u5b50\u8f49\u8a3a\u518d\u56de\u3002"}</p>
-        {error ? <p className="mb-2 text-red-800">{error}</p> : null}
-        <div className="flex gap-2">
-          <button
-            type="button"
-            disabled={busy}
-            className="border border-[#004d00] bg-[#c8f5c8] px-3 py-1 font-bold disabled:opacity-50"
-            onClick={onSend}
-          >
-            {"\u9001\u51fa\u56de\u8986"}
-          </button>
-          <button type="button" className="border border-[#333] bg-white px-3 py-1" onClick={onSkip}>
-            {"\u7565\u904e"}
-          </button>
+    <div className="fixed inset-0 z-[80] flex flex-col" style={{ fontFamily: HIS_FONT, background: "#F4F1EA" }}>
+      <header className="flex shrink-0 items-center justify-between bg-[#2060A0] px-3 py-1 text-white">
+        <span className="font-bold">{"\u8f49\u8a3a\u56de\u8986"}</span>
+        <span className="text-[13px]">{"\u9019\u6b21\u5df2\u5b58\u6a94\u3002\u586b\u5b8c\u518d\u9001\u51fa\uff0c\u6216\u7559\u5230\u4e4b\u5f8c\u518d\u56de\u3002"}</span>
+      </header>
+      <div className="min-h-0 flex-1 overflow-auto p-3">
+        <div className="mx-auto max-w-4xl border border-black bg-white p-2 text-[14px]">
+          <div className="mb-2 text-center text-[18px] font-bold">{"\u63a5\u53d7\u91ab\u9662\u8a3a\u7642\u6458\u8981"}</div>
+          <p className="mb-2">
+            {patientName || "\u2014"}
+            {"\u3000\u539f\u9662\u6240\uff1a"}
+            {hosp || "\u2014"}
+          </p>
+          <label className="mb-2 block">
+            {"\u8655\u7406\u60c5\u5f62"}
+            <select className={`${box} mt-0.5`} value={purpose} onChange={(e) => setPurpose(e.target.value)}>
+              {REPLY_PROC.map(([code, label]) => (
+                <option key={code} value={code}>
+                  {code}
+                  {". "}
+                  {label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="mb-2 block">
+            {"\u8f49\u8a3a\u55ae\u5e8f\u865f"}
+            <input className={`${box} mt-0.5 font-mono`} value={seq} onChange={(e) => setSeq(e.target.value)} />
+          </label>
+          <label className="mb-2 block">
+            {"\u4e3b\u8a3a\u65b7"}
+            <textarea className={`${box} mt-0.5 min-h-16`} value={dx} onChange={(e) => setDx(e.target.value)} />
+          </label>
+          <label className="mb-2 block">
+            {"\u6cbb\u7642\u85e5\u7269\u6216\u8655\u7f6e"}
+            <div className="mt-0.5 flex gap-1">
+              <textarea className={`${box} min-h-16`} value={drugs} onChange={(e) => setDrugs(e.target.value)} />
+              <button type="button" className="shrink-0 border border-[#808080] bg-[#E8E8E8] px-2 text-[12px] font-bold" onClick={() => void copyChart("drugs")}>
+                {"Ditto\u91ab\u4ee4"}
+              </button>
+            </div>
+          </label>
+          <label className="mb-2 block">
+            {"\u4e3b\u8ff0"}
+            <div className="mt-0.5 flex gap-1">
+              <textarea className={`${box} min-h-20`} value={text} onChange={(e) => setText(e.target.value)} />
+              <button type="button" className="shrink-0 border border-[#808080] bg-[#E8E8E8] px-2 text-[12px] font-bold" onClick={() => void copyChart("chief")}>
+                {"Ditto\u4e3b\u8ff0"}
+              </button>
+            </div>
+          </label>
+          <label className="mb-2 flex items-center gap-2 font-bold text-[#800000]">
+            <input type="checkbox" checked={uploadOnSave} onChange={(e) => setUploadOnSave(e.target.checked)} />
+            {"\u5b58\u6a94\u6642\u4e0a\u50b3\u81f3\u5065\u4fdd\u4e2d\u5fc3"}
+          </label>
+          {localError || error ? <p className="mb-2 text-red-800">{localError || error}</p> : null}
+          <div className="flex gap-2">
+            <button
+              type="button"
+              disabled={busy}
+              className="border border-[#004d00] bg-[#c8f5c8] px-3 py-1 font-bold disabled:opacity-50"
+              onClick={() => {
+                const serialText = seq.trim();
+                if (!serialText) {
+                  setLocalError("\u8acb\u586b\u8f49\u8a3a\u55ae\u5e8f\u865f\u3002\u5e8f\u865f\u5f9e\u8f49\u8a3a\u5e73\u53f0\u4e0b\u8f09\uff0c\u4e0d\u5fc5\u518d\u63d2\u75c5\u60a3\u5065\u4fdd\u5361\u3002");
+                  return;
+                }
+                setLocalError("");
+                const picked = REPLY_PROC.find(([code]) => code === purpose);
+                const lines = [
+                  picked ? `\u8655\u7406\u60c5\u5f62\uff1a${picked[0]}. ${picked[1]}` : "",
+                  drugs.trim() ? `\u6cbb\u7642\uff1a${drugs.trim()}` : "",
+                  text.trim(),
+                ].filter(Boolean);
+                onSend({
+                  serial: serialText,
+                  diagnosis: dx.trim(),
+                  note: lines.join("\n"),
+                  drugs: drugs.trim(),
+                  aux: text.trim(),
+                  purpose,
+                  upload: uploadOnSave,
+                });
+              }}
+            >
+              {"\u9001\u51fa\u56de\u8986"}
+            </button>
+            <button type="button" className="border border-[#333] bg-white px-3 py-1" onClick={onSkip}>
+              {"\u7a0d\u5f8c\u518d\u56de"}
+            </button>
+          </div>
         </div>
       </div>
     </div>,

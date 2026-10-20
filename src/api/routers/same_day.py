@@ -7,6 +7,7 @@ import json
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query
+from pydantic import BaseModel
 
 from src.app.bootstrap import get_shadow_store
 from src.core.encounter_extensions import extract_reg_meta
@@ -31,6 +32,7 @@ def list_same_day(
     date_day: str = Query(..., alias="date", description="YYYY-MM-DD"),
     include_cloud: bool = Query(True, alias="includeCloud"),
     console_base: str = Query(DEFAULT_CONSOLE_BASE, alias="consoleBase"),
+    desk_sign: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     pid = patient_id.strip()
     day = date_day[:10]
@@ -86,7 +88,7 @@ def list_same_day(
     cloud_error = ""
     cloud_hits: list[dict[str, Any]] = []
     if include_cloud:
-        q = query_recent_treatments(console_base=console_base)
+        q = query_recent_treatments(console_base=console_base, desk_sign=desk_sign)
         if not q.ok:
             cloud_error = q.reason or "cloud query failed"
             cloud_note = "cloud unavailable; local only"
@@ -126,3 +128,21 @@ def list_same_day(
         "cloudError": cloud_error,
         "note": cloud_note or "local clinic shadow",
     }
+
+
+class SameDayBody(BaseModel):
+    patientId: str
+    date: str
+    includeCloud: bool = True
+    deskSign: dict[str, Any] | None = None
+
+
+@router.post("")
+def list_same_day_from_desk(body: SameDayBody) -> dict[str, Any]:
+    """Cloud half uses the signature from this desk's reader."""
+    return list_same_day(
+        patient_id=body.patientId,
+        date_day=body.date,
+        include_cloud=body.includeCloud,
+        desk_sign=body.deskSign,
+    )

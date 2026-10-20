@@ -3,6 +3,7 @@ import { useListNav } from "@/hooks/useListNav";
 import { RxGrid } from "@/components/clinic/RxGrid";
 import type { UiColumnDef } from "@/types/uiConfig";
 import type { DiagnosisRow, HistoryVisit, RxLine } from "@/mocks/clinicMocks";
+import type { CatalogDrug } from "@/types/clinicCatalog";
 
 const HISTORY_SPLIT_KEY = "wundadi.history.splits";
 const HISTORY_SPLIT_DEFAULT = { visits: 168, cc: 36, dx: 42 };
@@ -59,6 +60,7 @@ type Props = {
   /** light 清單選列時補載診斷／處方 */
   onEnsureDetail?: (visit: HistoryVisit) => Promise<HistoryVisit>;
   onSaveHistory?: (visit: HistoryVisit) => void | Promise<void>;
+  drugs?: CatalogDrug[];
 };
 
 /**
@@ -81,6 +83,7 @@ export function HistoryRxPanel({
   onSelectedChange,
   onEnsureDetail,
   onSaveHistory,
+  drugs = [],
 }: Props) {
   void showVisitDateOnRx;
   const [selectedId, setSelectedId] = useState<string | null>(visits[0]?.encounterId ?? null);
@@ -340,6 +343,7 @@ export function HistoryRxPanel({
               fontSizePx={bodyFs}
               onDitto={(line) => onDittoRx([line])}
               emptyText={"\u5c1a\u7121\u524d\u6b21\u8655\u65b9"}
+              drugs={drugs}
             />
           </div>
         </section>

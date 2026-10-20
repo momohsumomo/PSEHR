@@ -9,6 +9,7 @@ Missing visits and drug lines are inserted.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import sqlite3
 import sys
@@ -52,6 +53,37 @@ def _fee(value: str) -> int:
     if n is None:
         return 0
     return int(n)
+
+
+def _raw_cc_by_eid(path: Path) -> dict[str, str]:
+    """REGISTER.CC kept raw. The 4th byte is the first-visit mark and must stay in place."""
+    meta = parse_dbf_header(str(path))
+    if not meta:
+        return {}
+    num, hlen, rlen, fields = meta
+    idx = {name: (off, length) for name, _typ, length, off in fields}
+    if "CC" not in idx:
+        return {}
+    k_off, k_len = idx["KEYWORD"]
+    t_off, t_len = idx["TIMESNO"]
+    o_off, o_len = idx["O_DATE"]
+    c_off, c_len = idx["CC"]
+    out: dict[str, str] = {}
+    with path.open("rb") as handle:
+        handle.seek(hlen)
+        for _ in range(num):
+            buf = handle.read(rlen)
+            if len(buf) < rlen or buf[:1] == b"*":
+                continue
+
+            def cell(off: int, length: int) -> str:
+                return buf[off : off + length].decode("cp950", errors="ignore").replace("\x00", "").strip()
+
+            eid = "local-encounter-" + md5_id(
+                cell(k_off, k_len) + "-" + cell(o_off, o_len) + "-" + cell(t_off, t_len)
+            )
+            out[eid] = buf[c_off : c_off + c_len].decode("cp950", errors="ignore").replace("\x00", "")
+    return out
 
 
 def _set_queue(payload: dict, number: int, status: str, fhir: str) -> None:
@@ -415,6 +447,7 @@ def main() -> int:
         default_pharm = str((bundle.get("profile") or {}).get("defaultPharmacistId") or "")
 
     known = {row["resource_id"] for row in conn.execute("SELECT resource_id FROM encounter_index")}
+    cc_by_eid = _raw_cc_by_eid(dat / "REGISTER.Dat")
     updated = inserted = 0
     keyword_times_to_eid: dict[str, str] = {}
     eid_to_pid: dict[str, str] = {}
@@ -458,6 +491,7 @@ def main() -> int:
             _fee(row["KEYMONEY"]), _fee(row["PARTPAYMO"]), _fee(row["DISCARD"]), _fee(row["DISDRUG"]),
             _fee(row["REGISTER"]), _fee(row["SELF_PRICE"]), _fee(row["RECEIPTS"]), _fee(row["ARREARAGE"]),
         )
+        cc = cc_by_eid.get(eid, "")
         if eid in known:
             conn.execute(
                 """
@@ -468,13 +502,13 @@ def main() -> int:
                     claim_pharmacist_id=COALESCE(NULLIF(?, ''), claim_pharmacist_id),
                     treat_seq=COALESCE(NULLIF(?, ''), treat_seq),
                     copay_code=?, fee_deposit=?, fee_copay=?, fee_card_disc=?, fee_drug_disc=?,
-                    fee_reg=?, fee_self=?, fee_total=?, fee_arrears=?, updated_at=datetime('now')
+                    fee_reg=?, fee_self=?, fee_total=?, fee_arrears=?, reg_cc=?, updated_at=datetime('now')
                 WHERE resource_id=?
                 """,
                 (
                     visit["pid"], visit["iso"], serno, state["queue_status"], state["fhir_status"],
                     shift or None, slot, chief[:4000], doctor, pharmacist, seq, _clean(row["PARTPAYNO"]),
-                    *fee_cols, eid,
+                    *fee_cols, cc, eid,
                 ),
             )
             cached = conn.execute(
@@ -490,6 +524,7 @@ def main() -> int:
                 payload["reasonCode"] = [{"text": chief[:4000]}]
             _set_queue(payload, serno, state["queue_status"], state["fhir_status"])
             payload = attach_reg_extension(payload, fees)
+            put_reg_string(payload, "regCc", cc)
             if seq and _fee(row["KEYMONEY"]) == 0:
                 remark = _clean(row["REMARK"])[:40]
                 put_reg_string(payload, "noteMark", remark)
@@ -519,19 +554,20 @@ def main() -> int:
             }
             _set_queue(payload, serno, state["queue_status"], state["fhir_status"])
             payload = attach_reg_extension(payload, fees)
+            put_reg_string(payload, "regCc", cc)
             conn.execute(
                 """
                 INSERT INTO encounter_index (
                     resource_id, patient_id, encounter_date, queue_number, queue_status, fhir_status,
                     shift, slot_time, chief_complaint, claim_doctor_id, claim_pharmacist_id, treat_seq, copay_code,
                     fee_deposit, fee_copay, fee_card_disc, fee_drug_disc, fee_reg, fee_self, fee_total, fee_arrears,
-                    updated_at
-                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, datetime('now'))
+                    reg_cc, updated_at
+                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, datetime('now'))
                 """,
                 (
                     eid, visit["pid"], visit["iso"], serno, state["queue_status"], state["fhir_status"],
                     shift or None, slot, chief[:4000] or None, doctor or None, pharmacist or None, seq or None, _clean(row["PARTPAYNO"]),
-                    *fee_cols,
+                    *fee_cols, cc,
                 ),
             )
             conn.execute(
@@ -552,7 +588,7 @@ def main() -> int:
             parts = [sick_field[i:i + 4].strip() for i in range(0, len(sick_field), 4)]
             for i, sick in enumerate([p for p in parts if p][:8]):
                 icd10, dname = shortcut.get(sick, ("", sick))
-                cid = f"local-condition-{md5_id(f'{eid}-{sick}-{i}')}"
+                cid = "local-condition-" + hashlib.md5(f"{eid}|{sick}|{i}".encode()).hexdigest()
                 conn.execute(
                     """
                     INSERT OR IGNORE INTO condition_index (

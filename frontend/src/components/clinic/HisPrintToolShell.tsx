@@ -1,7 +1,8 @@
-import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { cloneElement, isValidElement, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { fetchLocalPrintHealth, printToNamedPrinter } from "@/api/clinicApi";
 import { HIS_FONT } from "@/lib/hisTheme";
+import { loadPrinterFeed, savePrinterFeed, type PrinterFeed } from "@/lib/printSettings";
 import {
   coerceHisPaperId,
   resolveHisPaper,
@@ -29,6 +30,8 @@ type Props = {
   children: ReactNode;
   exportText?: string;
   exportCsv?: string;
+  /** Real xlsx bytes. When set, \u8f49Excel downloads this instead of a csv. */
+  exportXlsx?: Uint8Array;
   fileBaseName?: string;
   /** Window chrome size (almost fullscreen for reports). */
   size?: "report" | "slip" | "wide";
@@ -58,7 +61,7 @@ const TOOLS: { id: HisPrintToolAction; label: string }[] = [
   { id: "close", label: "離開" },
 ];
 
-function downloadBlob(filename: string, mime: string, body: string) {
+function downloadBlob(filename: string, mime: string, body: BlobPart) {
   const blob = new Blob([body], { type: mime });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
@@ -66,6 +69,10 @@ function downloadBlob(filename: string, mime: string, body: string) {
   a.download = filename;
   a.click();
   URL.revokeObjectURL(url);
+}
+
+function showPage(node: ReactNode): ReactNode {
+  return isValidElement(node) ? cloneElement(node) : node;
 }
 
 function shellClass(size: Props["size"], landscape: boolean): string {
@@ -84,6 +91,7 @@ export function HisPrintToolShell({
   children,
   exportText = "",
   exportCsv = "",
+  exportXlsx,
   fileBaseName = "wundadi-print",
   size = "wide",
   paper = "a4",
@@ -92,6 +100,7 @@ export function HisPrintToolShell({
   pages,
 }: Props) {
   const paperRef = useRef<HTMLDivElement>(null);
+  const aliveRef = useRef(true);
   const innerRef = useRef<HTMLDivElement>(null);
   const printRootRef = useRef<HTMLDivElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
@@ -101,6 +110,8 @@ export function HisPrintToolShell({
   const [zoom, setZoom] = useState(profile.defaultZoom);
   const [page, setPage] = useState(0);
   const [hint, setHint] = useState("");
+  const [printerName, setPrinterName] = useState("");
+  const [feed, setFeed] = useState<PrinterFeed | "">("");
   const [fitPages, setFitPages] = useState(1);
   const [viewH, setViewH] = useState(0);
   const explicit = !!pages && pages.length > 0;
@@ -108,10 +119,27 @@ export function HisPrintToolShell({
   const scale = zoom / 100;
 
   useEffect(() => {
+    aliveRef.current = true;
+    return () => {
+      aliveRef.current = false;
+    };
+  }, []);
+
+  useEffect(() => {
     if (!open) return;
     setZoom(profile.defaultZoom);
     setPage(0);
     setHint("");
+    void fetchLocalPrintHealth().then((health) => {
+      const rows = health?.printers || [];
+      const named =
+        rows.find((row) => row.default && row.device !== false && row.name) ||
+        rows.find((row) => row.default && row.name) ||
+        rows.find((row) => row.device && row.name);
+      const name = named?.name || "";
+      setPrinterName(name);
+      setFeed(name ? loadPrinterFeed(name) : "");
+    });
   }, [open, title, profile.defaultZoom, paperId]);
 
   useEffect(() => {
@@ -217,13 +245,22 @@ export function HisPrintToolShell({
       return;
     }
     if (id === "saveExcel") {
+      if (exportXlsx && exportXlsx.length) {
+        downloadBlob(
+          `${fileBaseName}.xlsx`,
+          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+          exportXlsx,
+        );
+        setHint(`\u5df2\u4e0b\u8f09 ${fileBaseName}.xlsx`);
+        return;
+      }
       const body = exportCsv || exportText || paperRef.current?.innerText || "";
       if (!body.trim()) {
-        setHint("沒有可匯出的內容。");
+        setHint("\u6c92\u6709\u53ef\u532f\u51fa\u7684\u5167\u5bb9\u3002");
         return;
       }
       downloadBlob(`${fileBaseName}.csv`, "text/csv;charset=utf-8", "\uFEFF" + body);
-      setHint(`已下載 ${fileBaseName}.csv（Excel 可開）`);
+      setHint(`\u5df2\u4e0b\u8f09 ${fileBaseName}.csv\uff08Excel \u53ef\u958b\uff09`);
       return;
     }
     if (id === "print") {
@@ -246,28 +283,24 @@ export function HisPrintToolShell({
 </style></head><body>${bodyHtml}</body></html>`;
       const widthMm = profile.widthMm;
       const heightMm = profile.heightMm;
-      setHint("\u6b63\u5728\u9001\u51fa\u53bb\u2026");
-      void fetchLocalPrintHealth()
-        .then((health) => {
-          const rows = health?.printers || [];
-          const named =
-            rows.find((row) => row.default && row.device !== false && row.name) ||
-            rows.find((row) => row.default && row.name) ||
-            rows.find((row) => row.device && row.name);
-          if (!named?.name) {
-            throw new Error("\u9019\u53f0\u96fb\u8166\u9084\u6c92\u6709\u9810\u8a2d\u5370\u8868\u6a5f\u3002");
-          }
-          return printToNamedPrinter({
-            printerName: named.name,
-            html,
-            widthMm,
-            heightMm,
-          });
-        })
+      if (!printerName) {
+        setHint("\u9019\u53f0\u96fb\u8166\u9084\u6c92\u6709\u9810\u8a2d\u5370\u8868\u6a5f\u3002");
+        return;
+      }
+      const job = {
+        printerName,
+        html,
+        widthMm,
+        heightMm,
+        feed,
+      };
+      setHint("\u5df2\u9001\u51fa\uff0c\u53ef\u6309 Esc \u96e2\u958b\u3002");
+      void printToNamedPrinter(job)
         .then((sent) => {
+          if (!aliveRef.current) return;
           setHint(
             "\u5df2\u9001\u5230 " +
-              sent.printer +
+              (sent.printer || printerName) +
               "\uff08" +
               profile.label +
               " " +
@@ -278,6 +311,7 @@ export function HisPrintToolShell({
           );
         })
         .catch((err: unknown) => {
+          if (!aliveRef.current) return;
           const msg = err instanceof Error ? err.message : "\u9001\u5230\u5370\u8868\u6a5f\u5931\u6557";
           setHint(msg);
         });
@@ -330,8 +364,29 @@ export function HisPrintToolShell({
             頁次: {pageSafe + 1} / {pageCount}
           </span>
           <span className="font-mono text-[11px] text-[#000080]">{zoom}%</span>
-          <span className="ml-auto max-w-[14rem] truncate rounded border border-[#808080] bg-white px-1 font-mono text-[10px] text-[#333]">
-            預設印表機
+          <span className="ml-auto flex items-center gap-1">
+            <span className="max-w-[10rem] truncate font-mono text-[10px] text-[#333]">{printerName || "\u9810\u8a2d\u5370\u8868\u6a5f"}</span>
+            {(
+              [
+                ["", "\u8ddf\u7d19\u5f35"],
+                ["portrait", "\u76f4\u5411\u9032\u7d19"],
+                ["landscape", "\u6a6b\u5411\u9032\u7d19"],
+              ] as const
+            ).map(([value, label]) => (
+              <button
+                key={label}
+                type="button"
+                className="border border-[#808080] px-1.5 py-0.5 text-[11px] font-bold text-black"
+                style={{ background: feed === value ? "#FFF3C4" : "#E8E8E8", fontFamily: HIS_FONT }}
+                onClick={() => {
+                  const next = value;
+                  setFeed(next);
+                  if (printerName) savePrinterFeed(printerName, next);
+                }}
+              >
+                {label}
+              </button>
+            ))}
           </span>
         </div>
 
@@ -343,7 +398,7 @@ export function HisPrintToolShell({
           >
             {pages!.map((node, i) => (
               <div key={i} className="wundadi-print-page">
-                {node}
+                {showPage(node)}
               </div>
             ))}
           </div>
@@ -379,7 +434,7 @@ export function HisPrintToolShell({
                 }}
               >
                 {explicit ? (
-                  pages![pageSafe]
+                  showPage(pages![pageSafe])
                 ) : (
                   <div
                     ref={innerRef}

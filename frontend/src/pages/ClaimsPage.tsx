@@ -11,7 +11,28 @@ import {
   type ApiClaimsPreview,
 } from "@/api/clinicApi";
 
-const DASH = "—";
+const DASH = "\u2014";
+
+function shownPointSum(stats: {
+  totalConsultationPoints: number | null;
+  totalDrugPoints: number | null;
+  totalPharmacyPoints: number | null;
+  totalTreatmentPoints: number | null;
+  totalPoints: number | null;
+}): number | null {
+  const parts = [
+    stats.totalConsultationPoints,
+    stats.totalDrugPoints,
+    stats.totalPharmacyPoints,
+    stats.totalTreatmentPoints,
+  ];
+  let sum = 0;
+  for (const n of parts) {
+    if (n == null) return stats.totalPoints;
+    sum += Math.round(n);
+  }
+  return sum;
+}
 
 type Step = "setup" | "checked" | "exported";
 type ClaimJob = "check" | "build";
@@ -52,6 +73,8 @@ export function ClaimsPage() {
     finishedEncounters: 0 as number | null,
     totalConsultationPoints: null as number | null,
     totalDrugPoints: null as number | null,
+    totalPharmacyPoints: null as number | null,
+    totalTreatmentPoints: null as number | null,
     totalPoints: null as number | null,
   });
 
@@ -69,6 +92,8 @@ export function ClaimsPage() {
         finishedEncounters: finishedFromQueue,
         totalConsultationPoints: null,
         totalDrugPoints: null,
+        totalPharmacyPoints: null,
+        totalTreatmentPoints: null,
         totalPoints: null,
       });
       return;
@@ -83,6 +108,8 @@ export function ClaimsPage() {
             finishedEncounters: res.finishedEncounters,
             totalConsultationPoints: res.totalConsultationPoints,
             totalDrugPoints: res.totalDrugPoints,
+            totalPharmacyPoints: res.totalPharmacyPoints ?? null,
+            totalTreatmentPoints: res.totalTreatmentPoints ?? null,
             totalPoints: res.totalPoints,
           });
         }
@@ -116,6 +143,8 @@ export function ClaimsPage() {
         finishedEncounters: res.finishedEncounters,
         totalConsultationPoints: res.totalConsultationPoints,
         totalDrugPoints: res.totalDrugPoints,
+        totalPharmacyPoints: res.totalPharmacyPoints ?? null,
+        totalTreatmentPoints: res.totalTreatmentPoints ?? null,
         totalPoints: res.totalPoints,
       });
       const blocks = res.check?.blockCount ?? 0;
@@ -171,7 +200,7 @@ export function ClaimsPage() {
       setLog((prev) => [
         ...prev,
         `影子庫完診 ${stats.finishedEncounters ?? DASH} 筆`,
-        `診察點 ${stats.totalConsultationPoints ?? DASH}／藥費點 ${stats.totalDrugPoints ?? DASH}／合計 ${stats.totalPoints ?? DASH}`,
+        `\u8a3a\u5bdf\u9ede ${stats.totalConsultationPoints ?? DASH}\uff0f\u85e5\u8cbb\u9ede ${stats.totalDrugPoints ?? DASH}\uff0f\u85e5\u4e8b ${stats.totalPharmacyPoints ?? DASH}\uff0f\u8a3a\u7642 ${stats.totalTreatmentPoints ?? DASH}\uff0f\u5408\u8a08 ${shownPointSum(stats) ?? DASH}`,
         `格式標記：${format}`,
       ]);
 
@@ -201,7 +230,8 @@ export function ClaimsPage() {
 
   const displayRocYear = parseInt(selectedMonth.split("-")[0], 10) - 1911;
   const displayMonthStr = selectedMonth.split("-")[1];
-  const pts = (n: number | null) => (n === null ? DASH : `${n} 點`);
+  const pts = (n: number | null) => (n === null ? DASH : `${n} \u9ede`);
+  const addedUp = shownPointSum(stats);
   const previewRows = (preview?.records ?? []).slice(0, 40);
   const jobTitle = job === "check" ? "檢查申報資料" : "製作申報格式";
 
@@ -308,12 +338,20 @@ export function ClaimsPage() {
               <span className="font-mono font-bold">{pts(stats.totalConsultationPoints)}</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-slate-500 font-semibold">藥費點數</span>
+              <span className="text-slate-500 font-semibold">{"\u85e5\u8cbb\u9ede\u6578"}</span>
               <span className="font-mono font-bold">{pts(stats.totalDrugPoints)}</span>
             </div>
+            <div className="flex justify-between">
+              <span className="text-slate-500 font-semibold">{"\u85e5\u4e8b\u670d\u52d9\u8cbb\u9ede\u6578"}</span>
+              <span className="font-mono font-bold">{pts(stats.totalPharmacyPoints)}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-slate-500 font-semibold">{"\u8a3a\u7642\u8655\u7f6e\u9ede\u6578"}</span>
+              <span className="font-mono font-bold">{pts(stats.totalTreatmentPoints)}</span>
+            </div>
             <div className="flex justify-between border-t pt-2 text-sm">
-              <span className="text-slate-800 font-black">合計點數</span>
-              <span className="font-mono font-black text-sky-700">{pts(stats.totalPoints)}</span>
+              <span className="text-slate-800 font-black">{"\u5408\u8a08\u9ede\u6578"}</span>
+              <span className="font-mono font-black text-sky-700">{pts(addedUp)}</span>
             </div>
           </div>
 

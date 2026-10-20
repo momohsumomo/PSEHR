@@ -378,6 +378,8 @@ export function Icd10ConditionDialog({
 }
 
 import type { RxLine } from "@/mocks/clinicMocks";
+import type { CatalogDrug } from "@/types/clinicCatalog";
+import { lineSelfPayPrice } from "@/utils/catalogRx";
 
 function money(line: RxLine): { price: string; amount: string } {
   const price = Number(line.unitPrice);
@@ -389,7 +391,15 @@ function money(line: RxLine): { price: string; amount: string } {
   return { price: price.toFixed(2), amount: amount.toFixed(2) };
 }
 
-export function RxDetailSheet({ lines, onClose }: { lines: RxLine[]; onClose: () => void }) {
+export function RxDetailSheet({
+  lines,
+  drugs = [],
+  onClose,
+}: {
+  lines: RxLine[];
+  drugs?: CatalogDrug[];
+  onClose: () => void;
+}) {
   useEscLayer([{ open: true, close: onClose }]);
   const rows = lines.filter((line) => (line.name || "").trim() || (line.nhiCode || "").trim());
   let sum = 0;
@@ -414,7 +424,7 @@ export function RxDetailSheet({ lines, onClose }: { lines: RxLine[]; onClose: ()
           <table className="w-full border-collapse text-left text-[12px]">
             <thead className="sticky top-0 bg-[#D8D4C8]">
               <tr>
-                {["No", "\u7c21\u7a31", "\u8655\u7f6e\u540d\u7a31", "\u6578\u91cf", "\u7528\u6cd5", "\u5929\u6578", "\u7e3d\u91cf", "\u85e5\u54c1\u78bc", "\u55ae\u50f9", "\u8a08\u8cbb", "\u91d1\u984d"].map((label) => (
+                {["No", "\u7c21\u7a31", "\u8655\u7f6e\u540d\u7a31", "\u6578\u91cf", "\u7528\u6cd5", "\u5929\u6578", "\u7e3d\u91cf", "\u85e5\u54c1\u78bc", "\u55ae\u50f9", "\u81ea\u8cbb\u50f9", "\u8a08\u8cbb", "\u91d1\u984d"].map((label) => (
                   <th key={label} className="border border-[#A0A0A0] px-1">{label}</th>
                 ))}
               </tr>
@@ -422,6 +432,7 @@ export function RxDetailSheet({ lines, onClose }: { lines: RxLine[]; onClose: ()
             <tbody>
               {rows.map((line, i) => {
                 const cost = money(line);
+                const selfPrice = lineSelfPayPrice(line, drugs);
                 const mark = line.payMark || (line.selfPay ? "\u81ea" : "");
                 return (
                   <tr key={line.id} className="bg-white">
@@ -434,6 +445,7 @@ export function RxDetailSheet({ lines, onClose }: { lines: RxLine[]; onClose: ()
                     <td className="border border-[#E0E0E0] px-1">{line.totalAmount || ""}</td>
                     <td className="border border-[#E0E0E0] px-1 font-mono">{line.nhiCode}</td>
                     <td className="border border-[#E0E0E0] px-1 text-right">{cost.price}</td>
+                    <td className="border border-[#E0E0E0] px-1 text-right">{selfPrice == null ? "\u2014" : selfPrice.toFixed(2)}</td>
                     <td className="border border-[#E0E0E0] px-1">{mark || "\u5065\u4fdd"}</td>
                     <td className="border border-[#E0E0E0] px-1 text-right">{cost.amount}</td>
                   </tr>

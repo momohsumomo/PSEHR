@@ -83,6 +83,8 @@ class ClaimsSummary:
     totalConsultationPoints: float
     totalDrugPoints: float
     totalPoints: float
+    totalPharmacyPoints: float = 0.0
+    totalTreatmentPoints: float = 0.0
     records: list[ClaimEncounterRecord] = field(default_factory=list)
     packNote: str = "藥費依就醫日的藥價期；目錄沒有該期才用病歷上的單價"
 
@@ -91,8 +93,10 @@ class ClaimsSummary:
             "yearMonth": self.yearMonthRoc,
             "finishedEncounters": self.finishedEncounters,
             "totalConsultationPoints": int(round(self.totalConsultationPoints)),
-            "totalDrugPoints": round(self.totalDrugPoints, 2),
-            "totalPoints": round(self.totalPoints, 2),
+            "totalDrugPoints": int(round(self.totalDrugPoints)),
+            "totalPharmacyPoints": int(round(self.totalPharmacyPoints)),
+            "totalTreatmentPoints": int(round(self.totalTreatmentPoints)),
+            "totalPoints": int(round(self.totalPoints)),
             "pricing": {
                 "consultationPerEncounter": DEFAULT_CONSULTATION_POINTS,
                 "drugFormula": "unitPrice × quantity（缺價則 0）",
@@ -532,7 +536,9 @@ def build_claims_summary(
     claimable = [r for r in records if r.claimable]
     total_consult = round(sum(r.consultationPoints for r in claimable), 2)
     total_drug = round(sum(r.drugPoints for r in claimable), 2)
-    total_points = round(sum(r.totalPoints for r in claimable), 2)
+    total_pharm = round(sum(float(r.pharmacyPoints or 0) for r in claimable), 2)
+    total_tx = round(sum(float(r.treatmentPoints or 0) for r in claimable), 2)
+    total_points = round(total_consult + total_drug + total_pharm + total_tx, 2)
 
     return ClaimsSummary(
         yearMonth=date_month,
@@ -540,6 +546,8 @@ def build_claims_summary(
         finishedEncounters=len(claimable),
         totalConsultationPoints=total_consult,
         totalDrugPoints=total_drug,
+        totalPharmacyPoints=total_pharm,
+        totalTreatmentPoints=total_tx,
         totalPoints=total_points,
         records=records,
     )

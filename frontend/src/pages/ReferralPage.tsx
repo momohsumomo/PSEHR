@@ -2,11 +2,11 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   fetchReferralSlips,
-  replyReferral,
   saveReferralSlip,
   type ReferralSlipRow,
 } from "@/api/clinicApi";
-import { ReferralSlipDialog, type ReferralArchive, type ReferralSeed } from "@/components/clinic/ReferralSlipDialog";
+import { ReferralReplyForm } from "@/components/clinic/ReferralReplyForm";
+import { ReferralSlipDialog, type ReferralSeed } from "@/components/clinic/ReferralSlipDialog";
 import { useClinicWorkspace } from "@/hooks/useClinicWorkspace";
 import { useEscLayer } from "@/hooks/useEscLayer";
 import { readLocalClinicBundle } from "@/lib/clinicProfile";
@@ -14,21 +14,6 @@ import { HIS, HIS_FONT } from "@/lib/hisTheme";
 import type { QueueEntry } from "@/mocks/clinicMocks";
 
 type Mode = "out" | "reply";
-
-const REPLY_PROC: Array<[string, string]> = [
-  ["1", "\u5df2\u4e88\u6025\u8a3a\u8655\u7f6e\u4e26\u8f49\u8a3a\u81f3\u91ab\u9662"],
-  ["2", "\u5df2\u4e88\u6025\u8a3a\u8655\u7f6e\uff0c\u4e26\u4f4f\u672c\u9662\u75c5\u623f\u6cbb\u7642\u4e2d"],
-  ["3", "\u5df2\u5b89\u6392\u4f4f\u672c\u9662\u75c5\u623f\u6cbb\u7642\u4e2d"],
-  ["4", "\u5df2\u5b89\u6392\u672c\u9662\u9580\u8a3a\u6cbb\u7642\u4e2d"],
-  ["5", "\u5df2\u4e88\u9069\u7576\u8655\u7406\u4e26\u8f49\u56de\u539f\u9662\u6240"],
-];
-
-const REPLY_DEPT: Record<string, string> = {
-  "11": "11 \u76ae\u819a\u79d1",
-  "10": "10 \u5bb6\u91ab\u79d1",
-  "01": "01 \u5167\u79d1",
-  "14": "14 \u6574\u578b\u5916\u79d1",
-};
 
 const OUT_PURPOSE: Array<[string, string]> = [
   ["1", "\u6025\u8a3a\u6cbb\u7642"],
@@ -117,10 +102,6 @@ export function ReferralPage() {
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
   const [slipOpen, setSlipOpen] = useState(false);
-  const [replyDx, setReplyDx] = useState("");
-  const [replyText, setReplyText] = useState("");
-  const [replySerial, setReplySerial] = useState("");
-  const [replyIdNo, setReplyIdNo] = useState("");
 
   useEscLayer([{ open: true, close: () => navigate("/") }]);
 
@@ -181,10 +162,6 @@ export function ReferralPage() {
       });
       await load(mode);
       setPicked(saved.id);
-      setReplyDx(row.diseaseName || "");
-      setReplyText(row.reasonText || "");
-      setReplySerial("");
-      setReplyIdNo(row.idNo || "");
       setSlipOpen(mode === "out");
     } catch (err: unknown) {
       setNote(err instanceof Error ? err.message : "\u52a0\u5165\u540d\u55ae\u5931\u6557");
@@ -226,46 +203,9 @@ export function ReferralPage() {
       validUntil: current.validUntil || "",
       purpose: current.purpose || "",
       suggestDoctor: current.destDoctor || "",
+      openedOn: current.openedOn || "",
     };
   }, [current, mode]);
-
-  const sendReply = async () => {
-    if (!current) return;
-    const serial = replySerial.trim();
-    if (!serial) {
-      setNote("\u8acb\u586b\u8f49\u8a3a\u55ae\u5e8f\u865f\u3002\u5e8f\u865f\u5f9e\u8f49\u8a3a\u5e73\u53f0\u4e0b\u8f09\uff0c\u4e0d\u5fc5\u63d2\u75c5\u60a3\u5065\u4fdd\u5361\u3002");
-      return;
-    }
-    setBusy(true);
-    try {
-      const ref = await replyReferral({
-        encounterId: current.encounterId || undefined,
-        idNo: replyIdNo.trim() || current.idNo,
-        serial,
-        diagnosis: replyDx,
-        note: replyText,
-      });
-      if (ref.uploaded) {
-        const saved = await saveReferralSlip({
-          ...current,
-          kind: "reply",
-          serial,
-          diagnosis: replyDx,
-          note: replyText,
-          status: "\u5df2\u56de\u8986",
-        });
-        await load("reply");
-        setPicked(saved.id);
-        setNote(`\u5df2\u4e0a\u50b3\u56de\u8986\uff0c\u5e8f\u865f ${ref.serial}`);
-      } else {
-        setNote(ref.reason || (ref.skipped ? "\u9019\u4f4d\u76ee\u524d\u6c92\u6709\u5f85\u56de\u8986\u7684\u8f49\u8a3a\u55ae\u3002\u672a\u5047\u88dd\u5df2\u4e0a\u50b3\u3002" : "\u56de\u8986\u6c92\u9001\u51fa"));
-      }
-    } catch (err: unknown) {
-      setNote(err instanceof Error ? err.message : "\u56de\u8986\u6c92\u9001\u51fa");
-    } finally {
-      setBusy(false);
-    }
-  };
 
   const tab = (id: Mode, label: string) => (
     <button
@@ -314,10 +254,6 @@ export function ReferralPage() {
                       const saved = await saveReferralSlip({ kind: "reply", status: "\u624b\u586b" });
                       await load("reply");
                       setPicked(saved.id);
-                      setReplyDx("");
-                      setReplyText("");
-                      setReplySerial("");
-                      setReplyIdNo("");
                     } catch (err: unknown) {
                       setNote(err instanceof Error ? err.message : "\u65b0\u589e\u5931\u6557");
                     } finally {
@@ -357,10 +293,6 @@ export function ReferralPage() {
                     style={{ background: row.id === picked ? "#FFF2A8" : "transparent" }}
                     onClick={() => {
                       setPicked(row.id);
-                      setReplyDx(row.diagnosis || "");
-                      setReplyText(row.note || "");
-                      setReplySerial(row.serial || "");
-                      setReplyIdNo(row.idNo || "");
                       setSlipOpen(false);
                     }}
                     onDoubleClick={() => {
@@ -413,60 +345,12 @@ export function ReferralPage() {
           ) : mode === "out" ? (
             <OutSlipSheet current={current} onOpen={() => setSlipOpen(true)} />
           ) : (
-            <div className="max-w-4xl border bg-white p-2" style={{ borderColor: "#000" }}>
-              <div className="mb-1 text-center text-[16px] font-bold">{"\u63a5\u53d7\u91ab\u9662\u8a3a\u7642\u6458\u8981"}</div>
-              <div className="mb-1 text-[12px]">
-                {current.patientName} {current.medicalNo}
-                {"\u3000\u72c0\u614b\uff1a"}{current.status || "\u5f85\u586b"}
-                {"\u3000\u56de\u8986\u65e5\uff1a"}{rocDay(current.openedOn) || "\u2014"}
-              </div>
-              <table className="w-full border-collapse text-[12px]">
-                <tbody>
-                  <tr>
-                    <td className="border border-black p-1" colSpan={3}>
-                      <div className="font-bold">{"\u8655\u7406\u60c5\u5f62"}</div>
-                      {REPLY_PROC.map(([code, label]) => (
-                        <div key={code}>{current.purpose === code ? "\u25a0" : "\u25a1"} {code}. {label}</div>
-                      ))}
-                    </td>
-                  </tr>
-                  <tr>
-                    <td className="w-1/3 border border-black p-1 align-top">
-                      <div className="font-bold">{"1. \u4e3b\u8a3a\u65b7 ICD-10"}</div>
-                      <div className="mt-1 whitespace-pre-wrap">{current.diagnosis || "\u2014"}</div>
-                    </td>
-                    <td className="w-1/3 border border-black p-1 align-top">
-                      <div className="font-bold">{"2. \u6cbb\u7642\u85e5\u7269\u6216\u624b\u8853\u540d\u7a31"}</div>
-                      <div className="mt-1 min-h-16 whitespace-pre-wrap">{current.treatText || "\u2014"}</div>
-                    </td>
-                    <td className="w-1/3 border border-black p-1 align-top">
-                      <div className="font-bold">{"3. \u8f14\u52a9\u8a3a\u65b7\u4e4b\u6aa2\u67e5\u7d50\u679c"}</div>
-                      <div className="mt-1 min-h-16 whitespace-pre-wrap">{current.historyText || "\u2014"}</div>
-                    </td>
-                  </tr>
-                  <tr>
-                    <td className="border border-black p-1 align-top" colSpan={3}>
-                      <div className="font-bold">{"\u4e3b\u8ff0"}</div>
-                      <div className="mt-1 min-h-16 whitespace-pre-wrap">{current.note || "\u2014"}</div>
-                    </td>
-                  </tr>
-                  <tr>
-                    <td className="border border-black p-1">{"\u79d1\u5225\uff1a"}{REPLY_DEPT[current.dept] || current.dept || "\u2014"}</td>
-                    <td className="border border-black p-1">{"\u539f\u9662\u6240\uff1a"}{current.destHosp || "\u2014"}</td>
-                    <td className="border border-black p-1">
-                      <label>{"\u8f49\u8a3a\u55ae\u5e8f\u865f\uff1a"}
-                        <input className="ml-1 w-40 border px-1" style={{ borderColor: "#808080" }} value={replySerial} onChange={(e) => setReplySerial(e.target.value)} />
-                      </label>
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-              <div className="mt-2 flex gap-2">
-                <button type="button" disabled={busy} className="border border-[#808080] bg-[#C8F0C8] px-3 py-1 font-bold" onClick={() => void sendReply()}>
-                  {"\u9001\u51fa\u56de\u8986"}
-                </button>
-              </div>
-            </div>
+            <ReferralReplyForm
+              row={current}
+              onNote={setNote}
+              onSaved={() => void load("reply")}
+              onClose={() => setPicked("")}
+            />
           )}
           {note ? <p className="mt-3 max-w-xl text-[13px] text-[#004000]">{note}</p> : null}
         </section>

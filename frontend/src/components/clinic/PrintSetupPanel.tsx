@@ -3,9 +3,9 @@ import { fetchInstalledPrinters } from "@/api/clinicApi";
 import { PrintFormatDialog } from "@/components/clinic/PrintFormatDialog";
 import {
   DEFAULT_PRINT_SETUPS,
-  paperDirectionLabel,
   paperSizeEditable,
   savePrintSettings,
+  setupFeed,
   type PrintSettings,
   type PrintSetup,
   type PrintSetupId,
@@ -111,8 +111,19 @@ export function PrintSetupPanel({ value, onChange }: Props) {
                   />
                 )}
               </td>
-              <td className={`${cell} whitespace-nowrap font-bold`}>
-                {paperDirectionLabel(row.widthMm, row.heightMm)}
+              <td className={`${cell} whitespace-nowrap`}>
+                <select
+                  className={input}
+                  value={setupFeed(row)}
+                  onChange={(e) =>
+                    patchRow(row.id, {
+                      feed: e.target.value === "landscape" ? "landscape" : "portrait",
+                    })
+                  }
+                >
+                  <option value="portrait">{"\u76f4\u5411"}</option>
+                  <option value="landscape">{"\u6a6b\u5411"}</option>
+                </select>
               </td>
               <td className={cell}>
                 <input

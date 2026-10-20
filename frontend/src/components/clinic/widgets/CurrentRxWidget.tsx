@@ -291,6 +291,7 @@ export function CurrentRxWidget({
           onApplyCover={applyCover}
           onArrowDownPastEnd={handleArrowDownPastEnd}
           usages={usages}
+          drugs={catalog?.drugs || []}
           routes={routes}
           onRemove={(id) => {
             const idx = displayLines.findIndex((line) => line.id === id);

@@ -25,6 +25,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from scripts.import_yisheng_data import read_dbf_records
+from scripts.sync_yisheng_since import _read_fpt
 
 
 def _clean(s: str) -> str:
@@ -88,48 +89,55 @@ def _route(row: dict[str, str]) -> str:
     return "po"
 
 
-_DRUG_CAST_OK = frozenset(
-    {
-        "\u5167\u670d",
-        "\u5916\u7528",
-        "\u6ce8\u5c04",
-        "\u6cbb\u7642",
-        "\u7279\u6750",
-        "\u624b\u8853",
-    }
-)
-_DRUG_CAST_SKIP = frozenset({"\u6aa2\u67e5", "\u865b\u64ec", "\u8ad6\u8cea\u6aa2\u9a57"})
+def _memo_text(handle, block: int, token: str) -> str:
+    text = _clean(token)
+    if handle is None or not text.isdigit():
+        return ""
+    number = int(text)
+    if number <= 0:
+        return ""
+    handle.seek(number * block)
+    meta = handle.read(8)
+    if len(meta) < 8:
+        return ""
+    length = int.from_bytes(meta[4:8], "big")
+    if length <= 0 or length > 8000:
+        return ""
+    raw = handle.read(length)
+    cleaned = raw.decode("cp950", errors="ignore").replace("\x00", "")
+    cleaned = cleaned.replace("\r\n", "\n").replace("\r", "\n").strip()
+    return cleaned[:4000]
 
 
-def map_drug(row: dict[str, str]) -> dict | None:
+def _opt_num(row: dict[str, str], key: str):
+    if _clean(row.get(key) or "") == "":
+        return None
+    value = _num(row.get(key) or "", 0.0)
+    return value
+
+
+def map_drug(row: dict[str, str], adapt: str = "") -> dict | None:
     drug_no = _clean(row.get("DRUG_NO") or "")
     if not drug_no:
         return None
     cast = _clean(row.get("CAST") or "")
     typ = _clean(row.get("TYPE") or "")
     index_y = _clean(row.get("INDEX") or "").upper() == "Y"
-    # 論質、虛擬不進下拉。檢查只收診所自己有開的（INDEX=Y），整包健保檢驗不灌。
-    if typ in {"\u8ad6\u8cea\u6aa2\u9a57", "\u865b\u64ec"} or cast == "\u865b\u64ec":
-        return None
-    if (cast in _DRUG_CAST_SKIP or typ in _DRUG_CAST_SKIP) and not index_y:
-        return None
-    if cast not in _DRUG_CAST_OK and cast != "\u6aa2\u67e5" and typ not in {"\u5167\u670d", "\u5916\u7528", "\u6cbb\u7642"}:
-        return None
     trade = _clean(row.get("TRADE_NAME") or "")
     note = _clean(row.get("NOTE") or "")
     making = _clean(row.get("MAKING") or "")
     cht = _clean(row.get("CHT_NAME") or "")
     alias = _clean(row.get("ALIAS_NO") or "")
-    custom = making or cht or trade or note
-    if not custom:
-        return None
     nhi = _clean(row.get("CODE") or "")
+    custom = making or cht or trade or note or alias or nhi or drug_no
     sig = _clean(row.get("USEAGE") or "")
     mark = _clean(row.get("ISSELF") or "")
     self_pay = mark == "\u81ea" or mark.upper() in {"Y", "1", "T"}
     pay_mark = "\u4ea4" if mark == "\u4ea4" else ("\u81ea" if self_pay else "")
     memo = _clean(row.get("MEMO") or "")[:2]
     qty = _num(row.get("QTY") or "", 0.0)
+    price = _num(row.get("PRICE") or "", 0.0)
+    self_price = _num(row.get("PRICE_SELF") or "", 0.0)
     return {
         "drugNo": drug_no,
         "customName": custom,
@@ -146,6 +154,34 @@ def map_drug(row: dict[str, str]) -> dict | None:
         "clinicIndex": _clean(row.get("INDEX") or "").upper() == "Y",
         "name": trade or custom,
         "generic": note or making,
+        "unitPrice": price if price > 0 else None,
+        "selfPayPrice": self_price if self_price > 0 else None,
+        "batchNo": _clean(row.get("BATCH_NO") or ""),
+        "company": _clean(row.get("COMPANY") or ""),
+        "restrain": _clean(row.get("RESTRAIN") or ""),
+        "unit": _clean(row.get("UNIT") or ""),
+        "dosimeter": _clean(row.get("DOSIMETER") or ""),
+        "useType": _clean(row.get("USE_TYPE") or ""),
+        "cast": cast,
+        "typeName": typ,
+        "dose": _opt_num(row, "MAK"),
+        "dose2": _opt_num(row, "MAK1"),
+        "stock": _opt_num(row, "SAFETY"),
+        "lowStock": _opt_num(row, "LOW"),
+        "cost": _opt_num(row, "COST"),
+        "unitCost": _opt_num(row, "U_COST"),
+        "totalPrice": _opt_num(row, "TOTAL"),
+        "totalQty": _opt_num(row, "TTLQTY"),
+        "basePoint": _opt_num(row, "BASEPOINT"),
+        "drugChg": _clean(row.get("DRUG_CHG") or ""),
+        "allergy": _clean(row.get("ALLERGY_NO") or ""),
+        "mutual": _clean(row.get("MUTUAL") or ""),
+        "conflict": _clean(row.get("CONFLICT") or ""),
+        "sort": _opt_num(row, "SORT"),
+        "typeSort": _opt_num(row, "TYPESORT"),
+        "indexFlag": _clean(row.get("INDEX") or ""),
+        "warning": _clean(row.get("WARNING") or ""),
+        "adapt": adapt,
     }
 
 
@@ -182,8 +218,6 @@ def map_usage(row: dict[str, str]) -> dict | None:
     code = _clean(row.get("USEAGE") or "")
     if not code:
         return None
-    if _clean(row.get("INDEX") or "").upper() != "Y":
-        return None
     freq = _num(row.get("FREQUENCY") or "", 0.0)
     return {
         "code": code,
@@ -192,6 +226,12 @@ def map_usage(row: dict[str, str]) -> dict | None:
         "eatType": _clean(row.get("EATTYPE") or ""),
         "label": _clean(row.get("EATTYPE") or ""),
         "useageNo": _clean(row.get("USEAGE_NO") or ""),
+        "indexFlag": _clean(row.get("INDEX") or ""),
+        "cast1": _clean(row.get("CAST1") or ""),
+        "cast2": _clean(row.get("CAST2") or ""),
+        "cast3": _clean(row.get("CAST3") or ""),
+        "remark": _clean(row.get("REMARK") or ""),
+        "nhiUsage": _clean(row.get("NHI_USEAGE") or ""),
     }
 
 
@@ -245,10 +285,15 @@ def main() -> int:
         return 1
 
     drugs = []
-    for r in read_dbf_records(str(dat / "MEDICAL.Dat")):
-        d = map_drug(r)
-        if d:
-            drugs.append(d)
+    fpt, block = _read_fpt(dat / "MEDICAL.FPT")
+    try:
+        for r in read_dbf_records(str(dat / "MEDICAL.Dat")):
+            d = map_drug(r, _memo_text(fpt, block, r.get("ADAPT") or ""))
+            if d:
+                drugs.append(d)
+    finally:
+        if fpt is not None:
+            fpt.close()
 
     diagnoses = []
     diag_path = dat / "DIAGNOSE.Dat"
@@ -306,6 +351,7 @@ def main() -> int:
                 "days": "MEDICAL.DAY",
                 "qty": "MEDICAL.QTY",
                 "payMark": "MEDICAL.ISSELF",
+                "selfPayPrice": "MEDICAL.PRICE_SELF",
                 "memo": "MEDICAL.MEMO",
                 "usageTable": "USEAGE.Dat",
             },

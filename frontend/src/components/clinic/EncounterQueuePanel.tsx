@@ -15,6 +15,7 @@ import {
   type QueueStatus,
 } from "@/mocks/clinicMocks";
 import { HIS, HIS_FONT, HIS_QUEUE_COL_WIDTHS } from "@/lib/hisTheme";
+import { FIRST_VISIT_NAME, isFirstVisit, visitListMark } from "@/lib/visitListMark";
 import { clockLabel, compareClinicQueue, showsUploadCircle } from "@/lib/queueOrder";
 
 const COL_WIDTH_STORAGE = "wundadi.queue.colWidths.v2";
@@ -116,7 +117,7 @@ function queueCellValue(entry: QueueEntry, key: string): string {
     case "note":
       return empty(entry.note);
     case "preVisit":
-      return entry.prebook && entry.queueStatus === "waiting" ? "\u9810" : dash;
+      return visitListMark(entry) || dash;
     case "caseNo":
       return empty(entry.caseNo);
     case "reasonText":
@@ -408,6 +409,12 @@ export function EncounterQueuePanel({
                         borderColor: "#A0A0A0",
                         fontSize: isPrimary ? HIS.fs.primary : HIS.fs.body,
                         fontWeight: isPrimary ? 700 : 400,
+                        color:
+                          col.key === "patientDisplay" && isFirstVisit(e.regCc)
+                            ? FIRST_VISIT_NAME
+                            : col.key === "preVisit" && visitListMark(e)
+                              ? "#800080"
+                              : undefined,
                       }}
                       title={
                         col.key === "doneMark" ? undefined : queueCellValue(e, col.key)

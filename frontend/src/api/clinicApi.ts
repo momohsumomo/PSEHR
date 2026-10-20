@@ -1,5 +1,6 @@
 import { API_BASE, API_ENABLED } from "@/config/sandbox";
 import { loadLocalDeviceMeta } from "@/lib/clinicDevice";
+import { localReaderReachable, readLocalHcBasic, readLocalVirtualBasic, signLocalHc, signLocalSam, type DeskSign } from "@/lib/localCard";
 
 function workstationHeader(): string {
   const meta = loadLocalDeviceMeta();
@@ -185,6 +186,7 @@ export type ApiQueueEntry = {
     oweCard?: boolean;
     regCc?: string;
     regRemark?: string;
+    referredOut?: boolean;
   };
 };
 
@@ -498,9 +500,10 @@ export async function submitIntake(body: {
 }
 
 export async function readVirtualCard(token: string): Promise<PatientRegisterResponse> {
+  const basic = await readLocalVirtualBasic(token);
   return request<PatientRegisterResponse>("/nhi/v1/kiosk/virtual-card", {
     method: "POST",
-    body: JSON.stringify({ token }),
+    body: JSON.stringify({ token, basic }),
   });
 }
 
@@ -723,10 +726,17 @@ export type EncounterRegisterResponse = {
 };
 
 export async function readCardAndRegister(mock = false): Promise<PatientRegisterResponse> {
-  return request<PatientRegisterResponse>(
-    `/nhi/v1/card/read-and-register?mock=${mock ? "true" : "false"}`,
-    { method: "POST" },
-  );
+  if (mock) {
+    return request<PatientRegisterResponse>(
+      `/nhi/v1/card/read-and-register?mock=true`,
+      { method: "POST" },
+    );
+  }
+  const basic = await readLocalHcBasic();
+  return request<PatientRegisterResponse>("/nhi/v1/card/read-and-register", {
+    method: "POST",
+    body: JSON.stringify({ basic }),
+  });
 }
 
 export type CardConsoleStatus = {
@@ -757,27 +767,14 @@ export type CardConsoleFixResult = {
   status?: CardConsoleStatus;
 };
 
-export async function fetchCardConsoleStatus(light = true): Promise<CardConsoleStatus> {
-  const q = light ? "?light=true" : "";
-  return request<CardConsoleStatus>(`/nhi/v1/card/console-status${q}`);
+export async function fetchCardConsoleStatus(_light = true): Promise<CardConsoleStatus> {
+  return { reachable: await localReaderReachable() };
 }
 
 export async function fixCardConsole(): Promise<CardConsoleFixResult> {
-  const ctrl = new AbortController();
-  const timer = window.setTimeout(() => ctrl.abort(), 35000);
-  try {
-    return await request<CardConsoleFixResult>("/nhi/v1/card/console-fix", {
-      method: "POST",
-      signal: ctrl.signal,
-    });
-  } catch (e) {
-    if (e instanceof DOMException && e.name === "AbortError") {
-      throw new Error("讀卡軟體除錯逾時，請看工作列是否已出現主控台圖示。");
-    }
-    throw e;
-  } finally {
-    window.clearTimeout(timer);
-  }
+  const message = await startLocalCard6();
+  const status = await fetchCardConsoleStatus();
+  return { ok: status.reachable === true, action: "start", message, status };
 }
 
 export async function writeVisitToCard(body: {
@@ -786,14 +783,29 @@ export async function writeVisitToCard(body: {
   writeOrders?: boolean;
 }): Promise<{ written: boolean; reason: string; source?: string }> {
   const ctrl = new AbortController();
-  // VPN WriteCodeFee / Prescription 可能較久
   const timer = window.setTimeout(() => ctrl.abort(), 45000);
-  try {
-    return await request<{ written: boolean; reason: string; source?: string }>("/nhi/v1/card/write-visit", {
+  const post = (extra: { deskSign?: DeskSign; deskSignRx?: DeskSign }) =>
+    request<{ written: boolean; reason: string; source?: string }>("/nhi/v1/card/write-visit", {
       method: "POST",
-      body: JSON.stringify(body),
+      body: JSON.stringify({ ...body, ...extra }),
       signal: ctrl.signal,
     });
+  try {
+    try {
+      return await post({});
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "";
+      if (!message.includes("NEED_DESK_SIGN")) throw err;
+      const deskSign = await signLocalHc("02");
+      try {
+        return await post({ deskSign });
+      } catch (err2) {
+        const message2 = err2 instanceof Error ? err2.message : "";
+        if (!message2.includes("NEED_DESK_SIGN_RX")) throw err2;
+        const deskSignRx = await signLocalHc("02");
+        return await post({ deskSign, deskSignRx });
+      }
+    }
   } catch (e) {
     if (e instanceof DOMException && e.name === "AbortError") {
       throw new Error("健保雲端寫入逾時。本機病歷若已存請核對；勿重複假裝成功。請確認 VPN／插卡後再 F9。");
@@ -825,8 +837,11 @@ export async function refundDeposit(encounterId: string): Promise<{
   uploadDate: string;
   reason: string;
 }> {
+  const basic = await readLocalHcBasic();
+  const deskSign = await signLocalHc("03");
   return request(`/nhi/v1/encounter/${encodeURIComponent(encounterId)}/refund-deposit`, {
     method: "POST",
+    body: JSON.stringify({ basic, deskSign }),
   });
 }
 
@@ -852,12 +867,18 @@ export async function fetchSeqNext(body: {
   hvExpire?: boolean | null;
   treatmentLimit?: number | null;
 }> {
+  const mode = body.icException || (body.paperCard ? "paper" : "ic");
+  const noCard = mode === "noCard" || mode === "childNoCard" || mode === "pregnantNoCard" || mode === "badCard" || mode === "paper";
+  let deskSign: DeskSign | undefined;
+  if (mode !== "selfPay" && mode !== "deposit") {
+    deskSign = noCard ? await signLocalSam("03") : await signLocalHc("03");
+  }
   const ctrl = new AbortController();
   const timer = window.setTimeout(() => ctrl.abort(), 35000);
   try {
     return await request("/nhi/v1/card/seq-next", {
       method: "POST",
-      body: JSON.stringify(body),
+      body: JSON.stringify({ ...body, deskSign }),
       signal: ctrl.signal,
     });
   } catch (e) {
@@ -939,9 +960,16 @@ export async function queryReferral(body: { encounterId?: string; idNo?: string 
   count?: number;
   slips?: ReferralSlipHit[];
 }> {
+  let deskSign: DeskSign;
+  try {
+    deskSign = await signLocalHc("20");
+  } catch (err) {
+    const reason = err instanceof Error ? err.message : "NEED_DESK_SIGN";
+    return { ok: false, reason, serial: "", retry: true };
+  }
   return request("/nhi/v1/referral/query", {
     method: "POST",
-    body: JSON.stringify(body),
+    body: JSON.stringify({ ...body, deskSign }),
   });
 }
 
@@ -950,9 +978,16 @@ export async function replyReferral(body: {
   idNo?: string;
   serial?: string;
   doctorId?: string;
+  doctorName?: string;
   diagnosis?: string;
   note?: string;
+  drugs?: string;
+  aux?: string;
+  purpose?: string;
+  dept?: string;
   expectReferral?: boolean;
+  replyDate?: string;
+  slipId?: string;
 }): Promise<{
   ok: boolean;
   skipped: boolean;
@@ -967,6 +1002,40 @@ export async function replyReferral(body: {
   });
 }
 
+export async function uploadReferralOpen(body: {
+  encounterId?: string;
+  idNo?: string;
+  patientName?: string;
+  phone?: string;
+  address?: string;
+  sex?: string;
+  birth?: string;
+  contact?: string;
+  diagnosis?: string;
+  summary?: string;
+  purpose?: string;
+  purposeNote?: string;
+  doctorName?: string;
+  destCode?: string;
+  destDept?: string;
+  destDoctor?: string;
+  destAddress?: string;
+  destPhone?: string;
+  openedOn?: string;
+  validUntil?: string;
+  allergy?: string;
+  treat?: string;
+  exam?: string;
+  handoff?: string;
+  ourDept?: string;
+  slipId?: string;
+}): Promise<{ ok: boolean; uploaded: boolean; reason: string; serial: string }> {
+  return request("/nhi/v1/referral/open", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
 export async function cancelRegister(body: {
   encounterId: string;
   mode: "local" | "ic" | "both";
@@ -976,12 +1045,13 @@ export async function cancelRegister(body: {
   icRolledBack: boolean;
   reason: string;
 }> {
+  const deskSign = body.mode === "local" ? undefined : await signLocalHc("03");
   const ctrl = new AbortController();
   const timer = window.setTimeout(() => ctrl.abort(), 35000);
   try {
     return await request("/nhi/v1/encounter/cancel", {
       method: "POST",
-      body: JSON.stringify(body),
+      body: JSON.stringify({ ...body, deskSign }),
       signal: ctrl.signal,
     });
   } catch (e) {
@@ -1670,20 +1740,55 @@ async function localPrintFetch(path: string, init?: RequestInit): Promise<Respon
   }
 }
 
+async function printViaDesk(body: {
+  printerName: string;
+  html: string;
+  widthMm: number;
+  heightMm: number;
+  feed?: "portrait" | "landscape" | "";
+}): Promise<{ ok: boolean; printer: string }> {
+  const queued = await request<{ id: string }>("/clinic/desk/print", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+  const started = Date.now();
+  while (Date.now() - started < 60000) {
+    await new Promise((resolve) => window.setTimeout(resolve, 400));
+    const job = await request<{ state?: string; printer?: string; detail?: string }>(
+      `/clinic/desk/print/${queued.id}`,
+    );
+    if (job.state === "done") return { ok: true, printer: job.printer || body.printerName };
+    if (job.state === "error") throw new Error(job.detail || "\u9001\u5230\u5370\u8868\u6a5f\u5931\u6557");
+  }
+  throw new Error("\u9019\u53f0\u7684\u5de5\u4f5c\u7ad9\u5de5\u5177\u9084\u6c92\u6709\u628a\u9019\u5f35\u55ae\u5370\u51fa\u53bb");
+}
+
 export async function printToNamedPrinter(body: {
   printerName: string;
   html: string;
   widthMm: number;
   heightMm: number;
+  feed?: "portrait" | "landscape" | "";
 }): Promise<{ ok: boolean; printer: string }> {
-  const res = await localPrintFetch("/print", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
-  const data = (await res.json().catch(() => ({}))) as { ok?: boolean; printer?: string; detail?: string };
-  if (!res.ok) throw new Error(data.detail || "\u9001\u5230\u5370\u8868\u6a5f\u5931\u6557");
-  return { ok: true, printer: data.printer || body.printerName };
+  try {
+    return await printViaDesk(body);
+  } catch (err) {
+    const viaDesk = err instanceof Error ? err.message : "";
+    const canUseLocal = viaDesk === "Not Found" || viaDesk.indexOf("\u5de5\u4f5c\u7ad9\u5de5\u5177\u9084\u6c92\u6709\u5728\u56de\u5831") >= 0;
+    if (!canUseLocal) throw err instanceof Error ? err : new Error(viaDesk || "\u9001\u5230\u5370\u8868\u6a5f\u5931\u6557");
+    try {
+      const res = await localPrintFetch("/print", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const data = (await res.json().catch(() => ({}))) as { ok?: boolean; printer?: string; detail?: string };
+      if (!res.ok) throw new Error(data.detail || viaDesk || "\u9001\u5230\u5370\u8868\u6a5f\u5931\u6557");
+      return { ok: true, printer: data.printer || body.printerName };
+    } catch {
+      throw err instanceof Error ? err : new Error(viaDesk || "\u9001\u5230\u5370\u8868\u6a5f\u5931\u6557");
+    }
+  }
 }
 
 export type LocalPrintHealth = {
@@ -1691,6 +1796,8 @@ export type LocalPrintHealth = {
   edge?: boolean;
   sumatra?: boolean;
   printers?: Array<{ name?: string; online?: boolean | null; default?: boolean; device?: boolean }>;
+  card6?: { installed?: boolean; running?: boolean; legacy5?: boolean };
+  vpn?: boolean;
 };
 
 export async function installLocalSumatra(): Promise<string> {
@@ -1700,13 +1807,41 @@ export async function installLocalSumatra(): Promise<string> {
   return data.message || "SumatraPDF";
 }
 
-export function openLocalFix(kind: "print" | "sumatra"): void {
-  window.location.href = `psehr://fix/${kind}`;
+export function openLocalFix(kind: "print" | "sumatra" | "card"): void {
+  const frame = document.createElement("iframe");
+  frame.style.display = "none";
+  frame.src = `psehr://fix/${kind}`;
+  document.body.appendChild(frame);
+  window.setTimeout(() => frame.remove(), 4000);
+}
+
+export async function startLocalCard6(): Promise<string> {
+  const res = await localPrintFetch("/tools/card", { method: "POST" });
+  const data = (await res.json().catch(() => ({}))) as { message?: string; code?: string };
+  if (data.code === "legacy5") {
+    return "\u9019\u53f0\u53ea\u6709 5.XX\uff0c\u6c92\u6709\u8b80\u5361\u8edf\u9ad4 6.0\u30026.0 \u8981\u5f9e\u5065\u4fdd\u5c08\u7db2\u5b89\u88dd\uff0c\u7db2\u9801\u4e0d\u6703\u81ea\u5df1\u4e0b\u8f09\u3002";
+  }
+  if (data.code === "missing") {
+    return "\u9019\u53f0\u6c92\u6709\u8b80\u5361\u8edf\u9ad4 6.0\u3002\u8981\u5f9e\u5065\u4fdd\u5c08\u7db2\u5b89\u88dd\uff0c\u7db2\u9801\u4e0d\u6703\u81ea\u5df1\u4e0b\u8f09\u3002";
+  }
+  if (data.code === "started") return "\u5df2\u7d93\u958b\u555f\u9019\u53f0\u7684\u8b80\u5361\u8edf\u9ad4 6.0\u3002";
+  if (data.code === "running") return "\u9019\u53f0\u7684\u8b80\u5361\u8edf\u9ad4 6.0 \u5df2\u7d93\u5728\u8dd1\u3002";
+  return data.message || "\u8b80\u5361\u8edf\u9ad4";
+}
+
+export async function fetchDeskStatus(): Promise<LocalPrintHealth | null> {
+  try {
+    const data = await request<LocalPrintHealth & { reported?: boolean }>("/clinic/desk/status");
+    if (data.reported !== true) return null;
+    return data;
+  } catch {
+    return null;
+  }
 }
 
 export async function fetchLocalPrintHealth(): Promise<LocalPrintHealth | null> {
   try {
-    const res = await localPrintFetch("/health");
+    const res = await localPrintFetch("/health?fresh=1", { signal: AbortSignal.timeout(800) });
     if (!res.ok) return null;
     return (await res.json()) as LocalPrintHealth;
   } catch {
@@ -1810,7 +1945,11 @@ export type IcUploadSendResult = {
 };
 
 export async function sendIcUpload(dateDay: string): Promise<IcUploadSendResult> {
-  return request(`/ic-upload/send?date=${encodeURIComponent(dateDay)}`, { method: "POST" });
+  const deskSign = await signLocalSam("05");
+  return request(`/ic-upload/send?date=${encodeURIComponent(dateDay)}`, {
+    method: "POST",
+    body: JSON.stringify({ deskSign }),
+  });
 }
 
 export async function fetchIcUploadPreview(dateDay: string): Promise<IcUploadPreview> {
@@ -1866,12 +2005,23 @@ export async function fetchSameDayEncounters(
   dateDay: string,
   opts?: { includeCloud?: boolean },
 ): Promise<SameDayResult> {
-  const q = new URLSearchParams({
-    patientId,
-    date: dateDay,
-    includeCloud: String(opts?.includeCloud !== false),
+  let deskSign: DeskSign | undefined;
+  if (opts?.includeCloud !== false) {
+    try {
+      deskSign = await signLocalHc("01");
+    } catch {
+      deskSign = undefined;
+    }
+  }
+  return request(`/nhi/v1/same-day`, {
+    method: "POST",
+    body: JSON.stringify({
+      patientId,
+      date: dateDay,
+      includeCloud: opts?.includeCloud !== false,
+      deskSign,
+    }),
   });
-  return request(`/nhi/v1/same-day?${q}`);
 }
 
 export type ApiClaimsStatistics = {
@@ -1879,6 +2029,8 @@ export type ApiClaimsStatistics = {
   finishedEncounters: number;
   totalConsultationPoints: number;
   totalDrugPoints: number;
+  totalPharmacyPoints?: number;
+  totalTreatmentPoints?: number;
   totalPoints: number;
 };
 
@@ -2040,7 +2192,8 @@ export type CardProfile = {
 };
 
 export async function readCardProfile(): Promise<{ ok: boolean; source: string; profile: CardProfile; note: string }> {
-  return request(`/nhi/v1/card/read-profile`, { method: "POST" });
+  const basic = await readLocalHcBasic();
+  return request(`/nhi/v1/card/read-profile`, { method: "POST", body: JSON.stringify({ basic }) });
 }
 
 /** 統計資料（醫聖 費用統計的其他統計種類）。 */

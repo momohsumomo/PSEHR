@@ -39,6 +39,7 @@ from src.api.routers.encounter import _attach_queue_meta
 from src.core.encounter_queue import fhir_status_from_queue
 from src.core.icd_crosswalk import browse_codes, browse_headings, map_code, search_codes, search_icd10_book
 from src.core.nhi_card_bridge import (
+    CardReadResult,
     read_card_profile,
     profile_to_patient_intake,
     write_visit_to_card,
@@ -935,7 +936,8 @@ def card_console_status(
     consoleBase: str = Query("https://localhost:5066", description="讀卡機主控台基底 URL"),
     light: bool = Query(False, description="true＝只讀 Status，不打健保卡／醫事卡 Basic"),
 ) -> dict[str, Any]:
-    return console_diagnose(console_base=consoleBase, light=light)
+    del consoleBase, light
+    return {"reachable": False, "reason": "NEED_DESK_SIGN"}
 
 
 @router.get(
@@ -961,9 +963,8 @@ def vpn_reach() -> dict[str, Any]:
 def card_console_fix(
     consoleBase: str = Query("https://localhost:5066", description="讀卡機主控台基底 URL"),
 ) -> dict[str, Any]:
-    from src.core.nhi_console_repair import repair_console
-
-    return repair_console(console_base=consoleBase)
+    del consoleBase
+    return {"ok": False, "action": "unsupported", "message": "NEED_DESK_SIGN"}
 
 
 @router.post(
@@ -973,8 +974,8 @@ def card_console_fix(
     summary="讀卡→健保患者進場（主控台或 Mock，沙盒3橋接）",
 )
 def card_read_and_register(
+    body: dict[str, Any] | None = None,
     mock: bool = Query(False, description="true 時強制 Mock 卡，不呼叫主控台"),
-    consoleBase: str = Query("https://localhost:5066", description="讀卡機主控台基底 URL"),
 ) -> dict[str, Any]:
     """
     1. 探測讀卡機主控台（:5066）；mock=true 才用假卡
@@ -982,7 +983,18 @@ def card_read_and_register(
     3. 部份讀取或主控台失敗：直接 422，不改走假卡、不重試卡住
     """
     try:
-        card = read_card_profile(use_mock=mock, console_base=consoleBase)
+        basic = (body or {}).get("basic") if isinstance(body, dict) else None
+        if mock:
+            card = read_card_profile(use_mock=True)
+        elif isinstance(basic, dict):
+            from src.core.nhi_card_init_sop import map_hc_basic
+
+            profile = map_hc_basic(basic)
+            if not profile:
+                raise HTTPException(status_code=422, detail="\u9019\u53f0\u8b80\u5230\u7684\u5065\u4fdd\u5361\u8cc7\u6599\u4e0d\u5b8c\u6574\u3002")
+            card = CardReadResult(source="desk", profile=profile, consoleReachable=True, consoleError=None)
+        else:
+            raise HTTPException(status_code=422, detail="NEED_DESK_SIGN")
         if not card.profile:
             raise HTTPException(
                 status_code=422,
@@ -1043,17 +1055,23 @@ class NhiCardWriteRequest(BaseModel):
     writeDx: bool = True
     writeOrders: bool = True
     consoleBase: str = "https://localhost:5066"
+    deskSign: dict[str, Any] | None = None
+    deskSignRx: dict[str, Any] | None = None
 
 
 @router.post(
     "/v1/card/read-profile",
     summary="只讀健保卡卡面基本資料（不建檔、不掛號、不取號）",
 )
-def card_read_profile(
-    consoleBase: str = Query("https://localhost:5066", description="讀卡機主控台基底 URL"),
-) -> dict[str, Any]:
-    """IC卡內容資訊（醫聖 F8）：讀卡失敗回 422，不編造卡號或序號。"""
-    card = read_card_profile(use_mock=False, console_base=consoleBase)
+def card_read_profile(body: dict[str, Any] | None = None) -> dict[str, Any]:
+    """IC卡內容資訊：只用這台電腦送來的卡面，不讀伺服器的讀卡機。"""
+    basic = (body or {}).get("basic") if isinstance(body, dict) else None
+    if not isinstance(basic, dict):
+        raise HTTPException(status_code=422, detail="NEED_DESK_SIGN")
+    from src.core.nhi_card_init_sop import map_hc_basic
+
+    profile = map_hc_basic(basic)
+    card = CardReadResult(source="desk", profile=profile or {}, consoleReachable=True, consoleError=None)
     if not card.profile:
         raise HTTPException(
             status_code=422,
@@ -1079,6 +1097,8 @@ def card_write_visit(body: NhiCardWriteRequest) -> dict[str, Any]:
             "encounterId": body.encounterId,
             "writeDx": body.writeDx,
             "writeOrders": body.writeOrders,
+            "deskSign": body.deskSign,
+            "deskSignRx": body.deskSignRx,
         },
     )
     status = 200 if result.written else 422
@@ -1103,6 +1123,7 @@ class NhiSeqNextRequest(BaseModel):
     patientIdNo: str | None = None
     noCardReason: str | None = None
     consoleBase: str = "https://localhost:5066"
+    deskSign: dict[str, Any] | None = None
 
 
 @router.post(
@@ -1125,6 +1146,7 @@ def card_seq_next(body: NhiSeqNextRequest) -> dict[str, Any]:
         baby_treatment=body.babyTreatment,
         patient_id_no=body.patientIdNo,
         console_base=body.consoleBase,
+        desk_sign=body.deskSign,
     )
     payload = {
         "ok": result.ok,
@@ -1163,7 +1185,7 @@ def list_open_deposits_api(idNo: str = Query(..., min_length=10, max_length=10))
     "/v1/encounter/{encounter_id}/refund-deposit",
     summary="退押：核對健保卡、取號、現金退回",
 )
-def refund_deposit(encounter_id: str) -> dict[str, Any]:
+def refund_deposit(encounter_id: str, body: dict[str, Any] | None = None) -> dict[str, Any]:
     """Card must match this deposit. Sequence comes from the bureau. No invented number."""
     from src.claims.deposit_refund import apply_refund, card_matches, prepare_refund
 
@@ -1171,15 +1193,17 @@ def refund_deposit(encounter_id: str) -> dict[str, Any]:
     prepared = prepare_refund(store, encounter_id)
     if not prepared.get("ok"):
         raise HTTPException(status_code=422, detail=str(prepared.get("reason") or "無法退押"))
-    card = read_card_profile(use_mock=False)
-    profile = card.profile or {}
+    from src.core.nhi_card_init_sop import map_hc_basic
+
+    basic = (body or {}).get("basic") if isinstance(body, dict) else None
+    desk_sign = (body or {}).get("deskSign") if isinstance(body, dict) else None
+    profile = map_hc_basic(basic) if isinstance(basic, dict) else None
+    if not profile:
+        raise HTTPException(status_code=422, detail="NEED_DESK_SIGN")
     card_id = str(profile.get("idNo") or "")
     if not card_matches(str(prepared.get("idNo") or ""), card_id):
-        reason = card.consoleError or "插卡身分證與這筆押單不符，未取號、未退押。"
-        if card.profile and card_id:
-            reason = "插卡身分證與這筆押單不符，未取號、未退押。"
-        raise HTTPException(status_code=422, detail=reason)
-    result = request_visit_number(ic_exception="ic")
+        raise HTTPException(status_code=422, detail="\u63d2\u5361\u8eab\u5206\u8b49\u8207\u9019\u7b46\u62bc\u55ae\u4e0d\u7b26\uff0c\u672a\u53d6\u865f\u3001\u672a\u9000\u62bc\u3002")
+    result = request_visit_number(ic_exception="ic", desk_sign=desk_sign if isinstance(desk_sign, dict) else None)
     if not result.ok or not (result.sequenceNumber or "").strip():
         raise HTTPException(status_code=422, detail=result.reason or "沒有取到就醫序號，沒有退押。")
     got = str(result.hcIdNo or card_id)
@@ -1204,8 +1228,9 @@ def refund_deposit(encounter_id: str) -> dict[str, Any]:
 
 class NhiCancelRegisterRequest(BaseModel):
     encounterId: str
-    mode: str  # local | ic | both  → 刪除 / 退IC / 刪除+退IC
+    mode: str  # local | ic | both
     consoleBase: str = "https://localhost:5066"
+    deskSign: dict[str, Any] | None = None
 
 
 def _cancel_local_encounter(store: SqliteShadowStore, encounter_id: str) -> dict[str, Any]:
@@ -1272,6 +1297,7 @@ def cancel_register(body: NhiCancelRegisterRequest) -> dict[str, Any]:
             treatment_date_time=treat_dt,
             expected_id_no=expected_id,
             console_base=body.consoleBase,
+            desk_sign=body.deskSign,
         )
         ic_ok = result.ok
         ic_reason = result.reason

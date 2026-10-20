@@ -1,4 +1,4 @@
-﻿# -*- coding: utf-8 -*-
+# -*- coding: utf-8 -*-
 """NHI 6.0 business-end Treatment / Prescription cloud read-write.
 
 Paths (base = NHI_BUSINESS_BASE, default https://medvpndc.nhi.gov.tw/api):
@@ -15,7 +15,7 @@ from datetime import datetime
 from typing import Any
 
 from src.core.nhi_cshis6_client import DEFAULT_CONSOLE_BASE, status_hint
-from src.core.nhi_seq_bridge import _call_business, _sign_hc
+from src.core.nhi_seq_bridge import _call_business, posted_sign
 
 
 @dataclass
@@ -102,6 +102,8 @@ def write_visit_to_cloud(
     write_orders: bool = True,
     prescriptions: list[dict[str, Any]] | None = None,
     skip_reason: str | None = None,
+    desk_sign: dict[str, Any] | None = None,
+    desk_sign_rx: dict[str, Any] | None = None,
 ) -> CloudWriteResult:
     """Write diagnosis+fee (+ optional Rx) to NHI cloud. Never pretends success."""
     if skip_reason:
@@ -124,7 +126,7 @@ def write_visit_to_cloud(
         )
 
     try:
-        signed = _sign_hc(console_base=console_base, service_type="02")
+        signed = posted_sign(desk_sign)
     except RuntimeError as exc:
         return CloudWriteResult(ok=False, reason=str(exc))
 
@@ -183,7 +185,7 @@ def write_visit_to_cloud(
     if write_orders and prescriptions:
         # re-sign for second call
         try:
-            signed2 = _sign_hc(console_base=console_base, service_type="02")
+            signed2 = posted_sign(desk_sign_rx)
         except RuntimeError as exc:
             return CloudWriteResult(
                 ok=False,
@@ -255,10 +257,11 @@ def write_visit_to_cloud(
 def query_recent_treatments(
     *,
     console_base: str = DEFAULT_CONSOLE_BASE,
+    desk_sign: dict[str, Any] | None = None,
 ) -> CloudTreatQueryResult:
-    """Read recent visits from cloud (Treatment/NoNeedHPC). Needs patient HC + SAM."""
+    """Read recent visits from cloud. Signature must come from this desk's reader."""
     try:
-        signed = _sign_hc(console_base=console_base, service_type="01")
+        signed = posted_sign(desk_sign)
     except RuntimeError as exc:
         return CloudTreatQueryResult(ok=False, reason=str(exc))
 

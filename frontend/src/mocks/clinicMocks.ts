@@ -67,6 +67,10 @@ export interface QueueEntry {
   note?: string;
   /** 完診且健保卡已寫入 */
   cardWritten?: boolean;
+  /** 掛號記號第 4 碼 $ 才是初診 */
+  regCc?: string;
+  /** 這一筆有轉出單 */
+  referredOut?: boolean;
   referralSeq?: string;
   referralHospId?: string;
   referralHospName?: string;

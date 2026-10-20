@@ -1159,6 +1159,7 @@ class SqliteShadowStore(ShadowStore):
                 for i in range(0, len(items), size):
                     yield items[i : i + size]
 
+            referred_out: set[str] = set()
             for chunk in _chunks(enc_ids):
                 marks = ",".join("?" * len(chunk))
                 for er, icd, nhi, summary in conn.execute(
@@ -1181,6 +1182,34 @@ class SqliteShadowStore(ShadowStore):
                     chunk,
                 ):
                     weight_map.setdefault(er, val)
+            try:
+                slip_rows = conn.execute(
+                    "SELECT opened_on, encounter_id, medical_no FROM referral_slip WHERE kind = 'out'"
+                ).fetchall()
+            except sqlite3.OperationalError:
+                slip_rows = []
+            ids_by_day: dict[str, set[str]] = {}
+            charts_by_day: dict[tuple[str, str], set[str]] = {}
+            for row in rows:
+                day = str(row[2] or "")[:10]
+                rid = str(row[0] or "")
+                if not rid:
+                    continue
+                ids_by_day.setdefault(day, set()).add(rid)
+                chart_key = str(row[12] or "").strip().lstrip("0")
+                if chart_key:
+                    charts_by_day.setdefault((day, chart_key), set()).add(rid)
+            for opened_on, slip_enc, medical_no in slip_rows:
+                day = str(opened_on or "")[:10]
+                slip_enc = str(slip_enc or "").strip()
+                if slip_enc and slip_enc in ids_by_day.get(day, ()):
+                    referred_out.add(slip_enc)
+                    continue
+                if slip_enc:
+                    continue
+                chart_key = str(medical_no or "").strip().lstrip("0")
+                if chart_key:
+                    referred_out.update(charts_by_day.get((day, chart_key), ()))
             for chunk in _chunks(pid_ids):
                 marks = ",".join("?" * len(chunk))
                 for (apid,) in conn.execute(
@@ -1303,6 +1332,7 @@ class SqliteShadowStore(ShadowStore):
                     "oweCard": bool(row[17]),
                     "regCc": row[18] or "",
                     "regRemark": row[19] or "",
+                    "referredOut": resource_id in referred_out,
                     **{
                         k: v
                         for k, v in reg_meta.items()
@@ -2595,12 +2625,15 @@ class SqliteShadowStore(ShadowStore):
         )
         indexed_by = " INDEXED BY idx_patient_index_medical_no" if not has_filter else ""
         
+        # Pick the ids on the small index first. Joining the chart JSON first
+        # makes SQLite open every patient in the 4GB file, which is fast only
+        # while that file is still in memory.
         query = f"""
-            SELECT rc.payload_json 
-            FROM patient_index pi{indexed_by}
-            JOIN resource_cache rc 
-              ON rc.resource_type = 'Patient' AND rc.resource_id = pi.resource_id
-            WHERE 1=1
+            SELECT rc.payload_json
+            FROM (
+              SELECT pi.resource_id
+              FROM patient_index pi{indexed_by}
+              WHERE 1=1
         """
         sql_params = []
         if "name" in params and params["name"]:
@@ -2623,11 +2656,16 @@ class SqliteShadowStore(ShadowStore):
         if params.get("birthday"):
             roc = _roc_birthday_from_query(params["birthday"])
             if roc:
-                query += " AND (pi.birthday_roc = ? OR pi.birthday_roc LIKE ?)"
-                sql_params.extend([roc, f"%{roc.lstrip('0') or roc}%"])
+                forms = _birthday_forms(roc)
+                marks = ",".join("?" * len(forms))
+                iso_year = int(roc[:3]) + 1911
+                iso = f"{iso_year:04d}-{roc[3:5]}-{roc[5:7]}"
+                query += f" AND (pi.birthday_roc IN ({marks}) OR pi.birth_date = ?)"
+                sql_params.extend(forms)
+                sql_params.append(iso)
             else:
-                query += " AND pi.birthday_roc LIKE ?"
-                sql_params.append(f"%{params['birthday']}%")
+                query += " AND pi.birthday_roc = ?"
+                sql_params.append(params["birthday"])
         if params.get("q") and params.get("match") == "typed":
             q = params["q"].strip()
             digits = re.sub(r"\D", "", q)
@@ -2662,19 +2700,13 @@ class SqliteShadowStore(ShadowStore):
             roc = _roc_birthday_from_query(q)
             # 82.1.17 與 82.01.17 都是生日。只對生日，不要把去掉點之後的數字拿去對電話。
             if roc and re.search(r"\d\s*[./]\s*\d", q):
+                forms = _birthday_forms(roc)
+                marks = ",".join("?" * len(forms))
                 iso_year = int(roc[:3]) + 1911
                 iso = f"{iso_year:04d}-{roc[3:5]}-{roc[5:7]}"
-                alts = {roc, roc.lstrip("0") or roc}
-                marks = ",".join("?" * len(alts))
-                query += (
-                    f" AND (pi.birthday_roc IN ({marks}) OR pi.birth_date = ? "
-                    "OR REPLACE(REPLACE(COALESCE(pi.birthday_roc,''), '.', ''), '/', '') IN ("
-                    f"{marks}))"
-                )
-                alt_list = list(alts)
-                sql_params.extend(alt_list)
+                query += f" AND (pi.birthday_roc IN ({marks}) OR pi.birth_date = ?)"
+                sql_params.extend(forms)
                 sql_params.append(iso)
-                sql_params.extend(alt_list)
             else:
                 like = f"%{q}%"
                 phone_digits = re.sub(r"\D", "", q)
@@ -2718,7 +2750,13 @@ class SqliteShadowStore(ShadowStore):
             except ValueError:
                 pass
 
-        query += " ORDER BY pi.medical_no DESC, pi.updated_at DESC LIMIT ? OFFSET ?"
+        query += """
+              ORDER BY pi.medical_no DESC, pi.updated_at DESC
+              LIMIT ? OFFSET ?
+            ) hit
+            JOIN resource_cache rc
+              ON rc.resource_type = 'Patient' AND rc.resource_id = hit.resource_id
+        """
         sql_params.extend([limit, offset])
         
         with self._connect() as conn:
@@ -3016,6 +3054,21 @@ class SqliteShadowStore(ShadowStore):
         except Exception:
             conn.rollback()
             raise
+
+
+def _birthday_forms(roc7: str) -> list[str]:
+    """Exact birthday strings already stored. No function on the column, so the index can be used."""
+    year = int(roc7[:3])
+    month = int(roc7[3:5])
+    day = int(roc7[5:7])
+    forms = {
+        roc7,
+        roc7.lstrip("0") or roc7,
+        f"{year}.{month:02d}.{day:02d}",
+        f"{year}.{month}.{day}",
+        f"{roc7[:3]}.{roc7[3:5]}.{roc7[5:7]}",
+    }
+    return list(forms)
 
 
 def _roc_birthday_from_query(raw: str) -> str | None:
@@ -3511,6 +3564,14 @@ def _apply_index_migrations(conn: sqlite3.Connection) -> None:
     if "id_category" in patient_cols:
         conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_patient_index_id_category ON patient_index(id_category)"
+        )
+    if "birthday_roc" in patient_cols:
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_patient_birthday_roc ON patient_index(birthday_roc)"
+        )
+    if "birth_date" in patient_cols:
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_patient_birth_date ON patient_index(birth_date)"
         )
     if "id_no" in patient_cols and "medical_no" in patient_cols:
         _ensure_patient_unique_keys(conn)

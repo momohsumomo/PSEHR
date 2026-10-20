@@ -1,5 +1,8 @@
 import type { ApiQueueEntry } from "@/api/clinicApi";
 import { isoToRoc } from "@/components/clinic/HisRocDatePicker";
+import { cashDetailFileStem, cashDetailToXlsx } from "@/lib/cashDetailXlsx";
+
+export { cashDetailFileStem };
 
 /** 掛號簿／現金帳總表一列（按日彙總）。缺欄填 0，不編造。 */
 export type RegisterBookDayRow = {
@@ -426,6 +429,7 @@ export type CashDetailRow = {
   selfPay: number;
   cardDisc: number;
   doctor: string;
+  doctorId: string;
   received: number;
   arrears: number;
   misc: number;
@@ -584,6 +588,7 @@ export function buildCashDetailReport(opts: {
       selfPay: n(q.selfPay),
       cardDisc: n(q.cardDisc),
       doctor: String(q.doctorName || ""),
+      doctorId: String(q.doctorId || ""),
       received: n(q.totalFee),
       arrears: n(q.arrears),
       misc: 0,
@@ -625,6 +630,7 @@ export function buildCashDetailReport(opts: {
       selfPay: 0,
       cardDisc: 0,
       doctor: "",
+      doctorId: "",
       received: 0,
       arrears: 0,
       misc: 0,
@@ -788,24 +794,29 @@ export function cashDetailToExportText(r: CashDetailReport): string {
   ].join("\n");
 }
 
-function csvCell(value: string | number): string {
-  const text = String(value ?? "");
-  if (/[",\n]/.test(text)) return `"${text.replace(/"/g, '""')}"`;
-  return text;
+export function cashDetailWorkbook(r: CashDetailReport): Uint8Array {
+  return cashDetailToXlsx(
+    r.rows.map((row) => ({
+      dateMd: row.dateMd,
+      name: row.name,
+      chart: row.chart,
+      seg: row.seg,
+      seqText: row.seqText,
+      cardNo: row.cardNo,
+      idNo: row.idNo,
+      deposit: row.deposit,
+      caseNo: row.caseNo,
+      copayCode: row.copayCode,
+      copayAmt: row.copayAmt,
+      regFee: row.regFee,
+      received: row.received,
+      arrears: row.arrears,
+      misc: row.misc,
+      repay: row.repay,
+      returnSlip: row.returnSlip,
+      selfPay: row.selfPay,
+      doctorId: row.doctorId,
+    })),
+  );
 }
 
-export function cashDetailToExportCsv(r: CashDetailReport): string {
-  const header = [
-    "\u65e5\u671f", "\u59d3\u540d", "\u75c5\u6b77\u865f", "\u6bb5", "\u5e8f\u865f", "\u6848\u4ef6", "\u5361\u865f", "\u62bc\u91d1",
-    "\u90e8\u4ee3", "\u90e8\u984d", "\u5361\u512a", "\u85e5\u512a", "\u639b\u8cbb", "\u81ea\u8cbb", "\u5df2\u6536", "\u6b20\u6b3e",
-    "\u96dc\u8cbb", "\u9084\u6b3e", "\u9084\u55ae", "\u91ab\u5e2b",
-  ];
-  const lines = r.rows.map((row) =>
-    [
-      row.dateMd, row.name, row.chart, row.seg, row.seqText, row.caseNo, row.cardNo, row.deposit,
-      row.copayCode, row.copayAmt, row.cardDisc, row.drugDisc, row.regFee, row.selfPay, row.received,
-      row.arrears, row.misc, row.repay, row.returnSlip, row.doctor,
-    ].map(csvCell).join(","),
-  );
-  return [header.join(","), ...lines].join("\n");
-}

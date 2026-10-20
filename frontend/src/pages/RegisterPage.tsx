@@ -4,16 +4,13 @@ import { useClinicWorkspace } from "@/hooks/useClinicWorkspace";
 import { cancelRegister, CardReadError, importCareOnline, type CardFaultReport } from "@/api/clinicApi";
 import { IcCardInfoDialog } from "@/components/clinic/IcCardInfoDialog";
 import { ChangePharmacistDialog } from "@/components/clinic/ChangePharmacistDialog";
-import {
-  RegisterEditDialog,
-  emptyRegisterForm,
-  type RegisterEditForm,
-} from "@/components/clinic/RegisterEditDialog";
+import { emptyRegisterForm, type RegisterEditForm } from "@/components/clinic/RegisterEditDialog";
 import { RegisterConfirmDialog } from "@/components/clinic/RegisterConfirmDialog";
 import { useIncomingReferralAsk } from "@/components/clinic/ReferralAcceptDialogs";
 import { PatientFinderDialog } from "@/components/clinic/PatientFinderDialog";
 import { DeleteRegisterDialog } from "@/components/clinic/DeleteRegisterDialog";
 import { REGI_COLUMNS } from "@/components/clinic/HisRegisterToolBar";
+import { FIRST_VISIT_NAME, isFirstVisit, visitListMark } from "@/lib/visitListMark";
 import { ClinicShortcutBar } from "@/components/clinic/ClinicShortcutBar";
 import { RegisterOptionsDialog } from "@/components/clinic/RegisterOptionsDialog";
 import { RefundDepositDialog } from "@/components/clinic/RefundDepositDialog";
@@ -89,7 +86,7 @@ function regiCell(entry: QueueEntry, key: string): string {
     case "note":
       return entry.note?.trim() || "";
     case "preVisit":
-      return entry.prebook ? "預" : "";
+      return visitListMark(entry, { appointmentWhileWaiting: false });
     case "caseNo":
       return dash(entry.caseNo);
     case "paperCard":
@@ -144,6 +141,8 @@ function seedFromEntry(entry: QueueEntry): Partial<RegisterEditForm> {
     payType: entry.payType || "4",
     dispense: entry.dispense || "自行調劑",
     pharmacist: entry.pharmacist || lastPharmacist(),
+    doctorId: entry.doctorId || "",
+    doctorName: entry.doctorName || "",
     shift: entry.shift || "",
     room: entry.room || "",
     treatmentItem: entry.treatmentItem || "01",
@@ -247,9 +246,6 @@ export function RegisterPage() {
   const queueListRef = useRef<HTMLDivElement>(null);
 
   /** 已掛一筆 → 掛號編輯 */
-  const [editOpen, setEditOpen] = useState(false);
-  const [editForm, setEditForm] = useState<RegisterEditForm>(emptyRegisterForm());
-  const [editError, setEditError] = useState<string | null>(null);
 
   /** 掛號前確認存檔 */
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -316,21 +312,13 @@ export function RegisterPage() {
     }
   };
 
-  const openEditDialog = (seed?: Partial<RegisterEditForm>) => {
-    setEditError(null);
-    const next = { ...emptyRegisterForm(), ...seed };
-    next.pharmacist = seed?.pharmacist || lastPharmacist();
-    setEditForm(next);
-    setEditOpen(true);
-  };
-
   const openConfirmFromSeed = useCallback((seed: Partial<RegisterEditForm>) => {
     setConfirmError(null);
     setSeqNote(null);
     setCardDiagnose(null);
     const next = { ...emptyRegisterForm(), ...seed };
     next.pharmacist = seed.pharmacist || lastPharmacist();
-    next.shift = regShift;
+    if (!seed.encounterId) next.shift = regShift;
     if (!seed.visitClock) next.visitClock = nowClock();
     setRegisterOptionsOpen(false);
     setConfirmForm(next);
@@ -402,11 +390,7 @@ export function RegisterPage() {
         icException: "ic",
       };
       if (res.cardBridgeNote) setSeqNote(res.cardBridgeNote);
-      const booked = findWaitingAppointment(
-        queue,
-        { patientId: seed.patientId, idNo: seed.idNo },
-        regShift,
-      );
+      const booked = findWaitingAppointment(queue, { idNo: seed.idNo }, regShift);
       if (booked) {
         beginCheckIn(booked, {
           ...seedFromEntry(booked),
@@ -419,38 +403,19 @@ export function RegisterPage() {
         });
         return;
       }
-      const otherNote = otherShiftAppointmentNote(
-        queue,
-        { patientId: seed.patientId, idNo: seed.idNo },
-        regShift,
-      );
+      const otherNote = otherShiftAppointmentNote(queue, { idNo: seed.idNo }, regShift);
       if (otherNote) setSeqNote([res.cardBridgeNote, otherNote].filter(Boolean).join(" "));
       offerQueueNumber(regShift, (n) => {
         setConfirmForm({ ...seed, queueNumber: String(n) });
         setConfirmOpen(true);
       });
     } catch (e) {
-      const booked = selected
-        ? findWaitingAppointment(queue, { patientId: selected.patientId, idNo: selected.idNo }, regShift)
-        : null;
-      if (booked) {
-        beginCheckIn(booked, {
-          ...seedFromEntry(booked),
-          icException: "deposit",
-          noCardReason: "",
-          deposit: loadClinicRegisterDefaults().depositAmount,
-          prebook: false,
-          payType: "4",
-          pharmacist: lastPharmacist(),
-        });
-        return;
-      }
       setConfirmForm(next);
       setConfirmOpen(true);
       setConfirmError(e instanceof Error ? e.message : "讀卡失敗");
       setCardDiagnose(e instanceof CardReadError ? e.diagnose : null);
     }
-  }, [apiMode, beginCheckIn, offerQueueNumber, queue, readCardRegisterPatient, regShift, selected]);
+  }, [apiMode, beginCheckIn, offerQueueNumber, queue, readCardRegisterPatient, regShift]);
 
   const applyRegisterHub = (label: string) => {
     const act = registerHubAction(label);
@@ -537,6 +502,7 @@ export function RegisterPage() {
         });
       }
       setConfirmOpen(false);
+      if (toSave.encounterId) return;
       if (hits.length || bureauSameDay) setSameDayFlash(true);
       if (depositHold) {
         setDepositAsk({
@@ -553,25 +519,6 @@ export function RegisterPage() {
       }
     } catch (e) {
       setConfirmError(e instanceof Error ? e.message : "掛號失敗");
-    } finally {
-      setSeqBusy(false);
-      setBusy(false);
-    }
-  };
-
-  const confirmEditRegister = async () => {
-    setEditError(null);
-    setSeqBusy(true);
-    setBusy(true);
-    try {
-      await submitRegisterEdit(editForm, (fields) => {
-        const { seqNote: note, ...rest } = fields;
-        setEditForm((prev) => ({ ...prev, ...rest }));
-        setSeqNote(note);
-      }, incoming.ask);
-      setEditOpen(false);
-    } catch (e) {
-      setEditError(e instanceof Error ? e.message : "存檔失敗");
     } finally {
       setSeqBusy(false);
       setBusy(false);
@@ -677,7 +624,7 @@ export function RegisterPage() {
           tellShell("這個時段還沒有選定的掛號。");
           return;
         }
-        openEditDialog(seedFromEntry(selected));
+        openConfirmFromSeed(seedFromEntry(selected));
         break;
       case "refundDeposit":
         setRefundOpen(true);
@@ -737,7 +684,6 @@ export function RegisterPage() {
     { open: insertAsk != null, close: () => answerInsert(false) },
     { open: finderOpen, close: () => setFinderOpen(false) },
     { open: confirmOpen, close: () => setConfirmOpen(false) },
-    { open: editOpen, close: () => setEditOpen(false) },
     { open: patientEditOpen, close: () => setPatientEditOpen(false) },
     { open: deleteOpen, close: () => setDeleteOpen(false) },
     { open: icInfoOpen, close: () => setIcInfoOpen(false) },
@@ -751,7 +697,7 @@ export function RegisterPage() {
   useEffect(() => {
     const onKey = (ev: KeyboardEvent) => {
       if (ev.key === "Escape") return;
-      if (finderOpen || newPatientQuery != null || checkInAsk != null || confirmOpen || editOpen || deleteOpen || stubId || icInfoOpen || pharmacistOpen || registerOptionsOpen || patientEditOpen || printMenuOpen) {
+      if (finderOpen || newPatientQuery != null || checkInAsk != null || confirmOpen || deleteOpen || stubId || icInfoOpen || pharmacistOpen || registerOptionsOpen || patientEditOpen || printMenuOpen) {
         return;
       }
       const tag = (ev.target as HTMLElement)?.tagName;
@@ -809,7 +755,7 @@ export function RegisterPage() {
       }
       if (ev.key === "Enter" && !typing && selected) {
         ev.preventDefault();
-        openEditDialog(seedFromEntry(selected));
+        openConfirmFromSeed(seedFromEntry(selected));
         return;
       }
       if (ev.altKey && !typing) {
@@ -856,7 +802,6 @@ export function RegisterPage() {
     return () => window.removeEventListener("keydown", onKey);
   }, [
     navigate,
-    editOpen,
     confirmOpen,
     finderOpen,
     deleteOpen,
@@ -918,7 +863,6 @@ export function RegisterPage() {
     active: !(
       finderOpen ||
       confirmOpen ||
-      editOpen ||
       deleteOpen ||
       stubId ||
       registerOptionsOpen ||
@@ -1077,7 +1021,7 @@ export function RegisterPage() {
                 data-list-row=""
                 data-qid={e.encounterId}
                 onClick={() => setSelectedId(e.encounterId)}
-                onDoubleClick={() => openEditDialog(seedFromEntry(e))}
+                onDoubleClick={() => openConfirmFromSeed(seedFromEntry(e))}
                 className="cursor-pointer leading-none"
                 style={{
                   height: HIS.row.list,
@@ -1107,6 +1051,10 @@ export function RegisterPage() {
                       fontSize: isPrimary ? HIS.fs.primary : HIS.fs.body,
                       fontWeight: isPrimary ? 700 : 400,
                       textAlign: col.key === "doneMark" ? "center" : undefined,
+                      color:
+                        col.key === "patientDisplay" && isFirstVisit(e.regCc)
+                          ? FIRST_VISIT_NAME
+                          : undefined,
                     }}
                   >
                     {col.key === "doneMark" ? (
@@ -1114,10 +1062,7 @@ export function RegisterPage() {
                     ) : (
                     <span
                       style={{
-                        color:
-                          col.key === "preVisit" && regiCell(e, col.key) === "預"
-                            ? "#800080"
-                            : undefined,
+                        color: col.key === "preVisit" && visitListMark(e, { appointmentWhileWaiting: false }) ? "#800080" : undefined,
                         fontWeight: col.key === "preVisit" ? 700 : undefined,
                       }}
                     >
@@ -1280,45 +1225,6 @@ export function RegisterPage() {
         onPatientPicked={onPatientPicked}
         onSearchPatients={(q) => openFinder(q)}
         onNoCardRegister={(q) => {
-          const booked = !q && selected
-            ? findWaitingAppointment(queue, { patientId: selected.patientId, idNo: selected.idNo }, regShift)
-            : null;
-          if (booked) {
-            beginCheckIn(booked, {
-              ...seedFromEntry(booked),
-              icException: "deposit",
-              noCardReason: "",
-              deposit: loadClinicRegisterDefaults().depositAmount,
-              prebook: false,
-              payType: "4",
-              pharmacist: lastPharmacist(),
-            });
-            return;
-          }
-          if (selected?.patientId && !q) {
-            const otherNote = otherShiftAppointmentNote(
-              queue,
-              { patientId: selected.patientId, idNo: selected.idNo },
-              regShift,
-            );
-            if (otherNote) setSeqNote(otherNote);
-            openConfirmFromSeed({
-              patientId: selected.patientId,
-              idNo: selected.idNo || "",
-              birthday:
-                isoBirthDateToRoc(selected.birthday) ||
-                (selected.birthday || "").replace(/\D/g, "").slice(0, 7),
-              sex: selected.sex || "F",
-              patientName: selected.patientDisplay,
-              icException: "deposit",
-              noCardReason: "",
-              deposit: loadClinicRegisterDefaults().depositAmount,
-              prebook: false,
-              reasonText: "",
-              pharmacist: lastPharmacist(),
-            });
-            return;
-          }
           openFinder(q || searchQuery);
         }}
         onEditSelected={() => {
@@ -1414,36 +1320,6 @@ export function RegisterPage() {
             setCardDiagnose(e instanceof CardReadError ? e.diagnose : null);
           }
         }}
-      />
-
-      <RegisterEditDialog
-        open={editOpen}
-        title="掛號編輯（已掛一筆）"
-        busy={busy}
-        seqBusy={seqBusy}
-        seqNote={seqNote}
-        error={editError}
-        form={editForm}
-        onChange={(patch) => setEditForm((prev) => ({ ...prev, ...patch }))}
-        onClose={() => setEditOpen(false)}
-        onReadCard={async () => {
-          try {
-            setEditError(null);
-            const res = await readCardRegisterPatient();
-            setEditForm((prev) => ({
-              ...prev,
-              patientId: res.patientId,
-              idNo: res.validation?.idNo ?? prev.idNo,
-              birthday: res.validation?.birthdayRoc ?? prev.birthday,
-              sex: res.validation?.sex ?? prev.sex,
-              patientName: res.validation?.patientName || prev.patientName,
-              cardId: res.validation?.cardId ?? prev.cardId,
-            }));
-          } catch (e) {
-            setEditError(e instanceof Error ? e.message : "讀卡失敗");
-          }
-        }}
-        onConfirm={confirmEditRegister}
       />
 
       <SameDayFlash open={sameDayFlash} onClose={() => setSameDayFlash(false)} />

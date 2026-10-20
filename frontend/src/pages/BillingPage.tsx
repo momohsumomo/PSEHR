@@ -19,8 +19,9 @@ import {
   buildCashDetailReport,
   buildRegisterBookFromSummary,
   buildRegisterBookReport,
-  cashDetailToExportCsv,
+  cashDetailFileStem,
   cashDetailToExportText,
+  cashDetailWorkbook,
   registerBookToExportText,
   type CashDetailReport,
   type RegisterBookReport,
@@ -703,8 +704,12 @@ export function BillingPage() {
               ? registerBookToExportText(registerBookReport)
               : ""
         }
-        exportCsv={bookKind === "detail" && detailReport ? cashDetailToExportCsv(detailReport) : undefined}
-        fileBaseName={bookKind === "detail" ? "\u639b\u865f\u7c3f_\u73fe\u91d1\u5e33_\u660e\u7d30" : "\u639b\u865f\u7c3f_\u73fe\u91d1\u5e33_\u7e3d\u8a08"}
+        exportXlsx={bookKind === "detail" && detailReport ? cashDetailWorkbook(detailReport) : undefined}
+        fileBaseName={
+          bookKind === "detail" && detailReport
+            ? cashDetailFileStem(detailReport.dateFromRoc, detailReport.dateToRoc)
+            : "\u639b\u865f\u7c3f_\u73fe\u91d1\u5e33_\u7e3d\u8a08"
+        }
         size="wide"
         paper="register_book"
         statusText={bookKind === "detail" ? "現金帳明細：一人一列，一頁約十一人。" : "現金帳總計：一天一列。"}

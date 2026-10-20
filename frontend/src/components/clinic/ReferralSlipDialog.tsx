@@ -1,9 +1,9 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { HIS, HIS_FONT } from "@/lib/hisTheme";
 import { openPrintPreview } from "@/lib/printJob";
 import { buildReferralSlipHtml } from "@/lib/clinicPrintDocs";
 import { doctorDisplayName, pickClinicDoctor } from "@/lib/doctorName";
-import { fetchStaff, saveReferralSlip } from "@/api/clinicApi";
+import { fetchStaff, saveReferralSlip, uploadReferralOpen } from "@/api/clinicApi";
 import { readLocalClinicBundle } from "@/lib/clinicProfile";
 import { HospitalLookupDialog, type NhiHospital } from "@/components/clinic/HospitalLookupDialog";
 import { useEscLayer } from "@/hooks/useEscLayer";
@@ -40,6 +40,7 @@ export type ReferralArchive = {
   validUntil: string;
   purpose: string;
   suggestDoctor: string;
+  openedOn?: string;
 };
 
 const DEPTS = [
@@ -125,6 +126,26 @@ function rocToday(): string {
   return `${String(y).padStart(3, "0")}.${String(d.getMonth() + 1).padStart(2, "0")}.${String(d.getDate()).padStart(2, "0")}`;
 }
 
+function rocDay(text: string): string {
+  const raw = (text || "").trim();
+  const iso = raw.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (iso) {
+    const y = Number(iso[1]) - 1911;
+    return `${String(y).padStart(3, "0")}.${iso[2]}.${iso[3]}`;
+  }
+  const roc = raw.match(/^(\d{1,3})[./](\d{1,2})[./](\d{1,2})/);
+  if (!roc) return "";
+  return `${roc[1].padStart(3, "0")}.${roc[2].padStart(2, "0")}.${roc[3].padStart(2, "0")}`;
+}
+
+function isoDay(text: string): string {
+  const roc = rocDay(text);
+  const parts = roc.split(".");
+  if (parts.length !== 3) return "";
+  const y = Number(parts[0]) + 1911;
+  return `${y}-${parts[1]}-${parts[2]}`;
+}
+
 function plusDays(roc: string, days: number): string {
   const [ys, ms, ds] = roc.split(".");
   const dt = new Date(Number(ys) + 1911, Number(ms) - 1, Number(ds));
@@ -149,7 +170,7 @@ function markedPurpose(raw: string): string {
 }
 
 export function ReferralSlipDialog({ open, seed, onClose, encounterId, slipId, archive, onSaved }: Props) {
-  const today = useMemo(() => rocToday(), [open]);
+  const [localSlipId, setLocalSlipId] = useState(slipId || "");
   const [hosp, setHosp] = useState("");
   const [hospCode, setHospCode] = useState("");
   const [hospAddr, setHospAddr] = useState("");
@@ -165,10 +186,12 @@ export function ReferralSlipDialog({ open, seed, onClose, encounterId, slipId, a
   const [fax, setFax] = useState("");
   const [email, setEmail] = useState("");
   const [valid, setValid] = useState("");
+  const [opened, setOpened] = useState("");
   const [copy1, setCopy1] = useState(true);
-  const [copy2, setCopy2] = useState(true);
+  const [copy2, setCopy2] = useState(false);
   const [copy3, setCopy3] = useState(false);
   const [writeDa, setWriteDa] = useState(false);
+  const [uploadOnSave, setUploadOnSave] = useState(true);
   const [note, setNote] = useState("");
   const [settingsOpen, setSettingsOpen] = useState(false);
   useEscLayer([
@@ -180,7 +203,6 @@ export function ReferralSlipDialog({ open, seed, onClose, encounterId, slipId, a
   const [draft, setDraft] = useState<ReferralSettings>(() => loadReferralSettings());
   const [doctorPick, setDoctorPick] = useState("");
   const [newDoctor, setNewDoctor] = useState("");
-  const [localSlipId, setLocalSlipId] = useState(slipId || "");
 
   useEffect(() => {
     if (!open) return;
@@ -208,6 +230,7 @@ export function ReferralSlipDialog({ open, seed, onClose, encounterId, slipId, a
     setPurpose(marked || saved.defaultPurpose || "4");
     setWriteDa(saved.writeDaOnSave);
     setValid(archive?.validUntil || plusDays(rocToday(), saved.validDays));
+    setOpened(rocDay(archive?.openedOn || "") || rocToday());
     if (archive) {
       setHosp(archive.destHosp);
       setHospCode(archive.destCode);
@@ -280,11 +303,42 @@ export function ReferralSlipDialog({ open, seed, onClose, encounterId, slipId, a
       diagnosis: dx,
       note: chiefOut,
       validUntil: valid,
+      openedOn: isoDay(opened),
       status: "\u8349\u7a3f",
-    }).then((row) => {
+    }).then(async (row) => {
       setLocalSlipId(row.id);
-      setNote("\u5df2\u8a18\u5165\u8f49\u51fa\u540d\u55ae\u3002\u4e0a\u50b3\u8acb\u81ea\u884c\u958b\u8f49\u8a3a\u5e73\u53f0\uff0c\u9019\u88e1\u4e0d\u4ee3\u6309\u3002\u56de\u8986\u8acb\u5230\u96fb\u5b50\u8f49\u8a3a\u7684\u56de\u8986\u3002");
       onSaved?.();
+      if (!uploadOnSave) {
+        setNote("\u5df2\u8a18\u5165\u8f49\u51fa\u540d\u55ae\uff0c\u6c92\u4e0a\u50b3\u3002");
+        return;
+      }
+      const sent = await uploadReferralOpen({
+        encounterId: encounterId || "",
+        idNo: seed.idNo,
+        patientName: seed.name,
+        phone: seed.phone,
+        address: seed.address,
+        sex: seed.sex,
+        birth: seed.birthday,
+        diagnosis: dx,
+        summary: chiefOut || seed.chief,
+        purpose,
+        purposeNote: purpose === "6" ? purposeOther : "",
+        doctorName: doctor,
+        destCode: hospCode,
+        destDept: dept.slice(0, 2),
+        destDoctor: suggestDoc,
+        destAddress: hospAddr,
+        destPhone: hospTel,
+        openedOn: opened,
+        validUntil: valid,
+        allergy: seed.allergy,
+        treat: seed.meds,
+        exam: seed.exam,
+        ourDept: ourDept.slice(0, 2),
+        slipId: row.id,
+      });
+      setNote(sent.uploaded ? "\u5df2\u5b58\u6a94\u4e26\u4e0a\u50b3\u8f49\u51fa\u3002" : (sent.reason || "\u5df2\u5b58\u6a94\uff0c\u4e0a\u50b3\u6c92\u6210\u529f"));
     }).catch((err: unknown) => {
       setNote(err instanceof Error ? err.message : "\u8f49\u51fa\u540d\u55ae\u5b58\u6a94\u5931\u6557");
     });
@@ -293,9 +347,9 @@ export function ReferralSlipDialog({ open, seed, onClose, encounterId, slipId, a
   const printSlip = () => {
     const clinic = readLocalClinicBundle().profile;
     const copies: Array<[string, string]> = [];
-    if (copy1) copies.push(["\u7b2c\u4e00\u806f", "\u63a5\u53d7\u8f49\u8a3a\u91ab\u9662\u3001\u8a3a\u6240\u6240\u7559\u5b58"]);
-    if (copy2) copies.push(["\u7b2c\u4e8c\u806f", "\u63a5\u53d7\u8f49\u8a3a\u91ab\u9662\u3001\u8a3a\u6240\u56de\u8986\u8f49\u51fa"]);
-    if (copy3) copies.push(["\u7b2c\u4e09\u806f", "\u539f\u8a3a\u7642\u91ab\u9662\u3001\u8a3a\u6240\u7559\u5b58"]);
+    if (copy1) copies.push(["\u7b2c\u4e00\u806f\uff1a\u63a5\u53d7\u8f49\u8a3a\u91ab\u9662\u3001\u8a3a\u6240\u7559\u5b58\uff08\u85cd\u8272\uff09", ""]);
+    if (copy2) copies.push(["\u7b2c\u4e8c\u806f\uff1a\u63a5\u53d7\u8f49\u8a3a\u91ab\u9662\u3001\u8a3a\u6240\u56de\u8986\u8f49\u51fa\u91ab\u9662\u3001\u8a3a\u6240\uff08\u7d05\u8272\uff09", ""]);
+    if (copy3) copies.push(["\u7b2c\u4e09\u806f\uff1a\u539f\u8a3a\u7642\u91ab\u9662\u3001\u8a3a\u6240\u7559\u5b58\uff08\u767d\u8272\uff09", ""]);
     const pages = buildReferralSlipHtml({
       clinicName: clinic.clinicName || "",
       clinicCode: clinic.clinicCode || "",
@@ -305,6 +359,7 @@ export function ReferralSlipDialog({ open, seed, onClose, encounterId, slipId, a
       sex: seed.sex || "",
       birthday: seed.birthday || "",
       idNo: seed.idNo || "",
+      medicalNo: seed.medicalNo || "",
       phone: seed.phone || "",
       address: seed.address || "",
       chief: seed.chief || "",
@@ -313,7 +368,7 @@ export function ReferralSlipDialog({ open, seed, onClose, encounterId, slipId, a
       examOn: seed.examOn || "",
       exam: seed.exam || "",
       meds: seed.meds || "",
-      medOn: seed.medOn != null ? seed.medOn : today,
+      medOn: seed.medOn != null ? seed.medOn : opened,
       purpose,
       purposeOther,
       doctor: doctor || "",
@@ -321,7 +376,7 @@ export function ReferralSlipDialog({ open, seed, onClose, encounterId, slipId, a
       tel: tel || clinic.phone || "",
       fax: fax || "",
       email: email || "",
-      opened: today,
+      opened,
       hosp: hosp || "",
       hospCode,
       dept,
@@ -395,15 +450,16 @@ export function ReferralSlipDialog({ open, seed, onClose, encounterId, slipId, a
               <label className="flex items-center gap-1">{"\u8ca0\u8cac\u91ab\u5e2b"}<input className={`w-28 ${field}`} value={doctor} onChange={(e) => setDoctor(e.target.value)} /><span>{"\u79d1\u5225 " + ourDept}</span></label>
               <label className="flex items-center gap-1">{"\u5c08\u7dda\u96fb\u8a71"}<input className={`w-28 ${field}`} value={tel} onChange={(e) => setTel(e.target.value)} />{"\u50b3\u771f"}<input className={`w-28 ${field}`} value={fax} onChange={(e) => setFax(e.target.value)} /></label>
               <label className="flex items-center gap-1">{"\u96fb\u5b50\u4fe1\u7bb1"}<input className={`min-w-0 flex-1 ${field}`} value={email} onChange={(e) => setEmail(e.target.value)} /></label>
-              <div>{"\u8f49\u8a3a\u65e5\u671f " + today + "\u3000\u6709\u6548\u65e5\u671f "}<input className={`w-24 ${field}`} value={valid} onChange={(e) => setValid(e.target.value)} /></div>
+              <div>{"\u8f49\u8a3a\u65e5\u671f "}<input className={`w-28 ${field}`} value={opened} onChange={(e) => setOpened(e.target.value)} />{"\u3000\u6709\u6548\u65e5\u671f "}<input className={`w-24 ${field}`} value={valid} onChange={(e) => setValid(e.target.value)} /></div>
             </div>
           </div>
           <div className="mt-2 border bg-[#E8FFE8] px-2 py-1" style={{ borderColor: "#60A060" }}>
             <div className="font-bold">{"\u5b58\u6a94\u8207\u5217\u5370"}</div>
-            <label className="mr-3"><input type="checkbox" checked={copy1} onChange={(e) => setCopy1(e.target.checked)} /> {"\u7b2c\u4e00\u806f\uff1a\u63a5\u53d7\u8f49\u8a3a\u91ab\u9662\u3001\u8a3a\u6240\u6240\u7559\u5b58"}</label>
-            <label className="mr-3"><input type="checkbox" checked={copy2} onChange={(e) => setCopy2(e.target.checked)} /> {"\u7b2c\u4e8c\u806f\uff1a\u63a5\u53d7\u8f49\u8a3a\u91ab\u9662\u3001\u8a3a\u6240\u56de\u8986\u8f49\u51fa"}</label>
-            <label className="mr-3"><input type="checkbox" checked={copy3} onChange={(e) => setCopy3(e.target.checked)} /> {"\u7b2c\u4e09\u806f\uff1a\u8f49\u51fa\u91ab\u9662\u3001\u8a3a\u6240\u6240\u7559\u5b58"}</label>
+            <label className="mr-3"><input type="checkbox" checked={copy1} onChange={(e) => setCopy1(e.target.checked)} /> {"\u7b2c\u4e00\u806f\uff1a\u63a5\u53d7\u8f49\u8a3a\u91ab\u9662\u3001\u8a3a\u6240\u7559\u5b58\uff08\u85cd\u8272\uff09"}</label>
+            <label className="mr-3"><input type="checkbox" checked={copy2} onChange={(e) => setCopy2(e.target.checked)} /> {"\u7b2c\u4e8c\u806f\uff1a\u63a5\u53d7\u8f49\u8a3a\u91ab\u9662\u3001\u8a3a\u6240\u56de\u8986\u8f49\u51fa\u91ab\u9662\u3001\u8a3a\u6240\uff08\u7d05\u8272\uff09"}</label>
+            <label className="mr-3"><input type="checkbox" checked={copy3} onChange={(e) => setCopy3(e.target.checked)} /> {"\u7b2c\u4e09\u806f\uff1a\u539f\u8a3a\u7642\u91ab\u9662\u3001\u8a3a\u6240\u7559\u5b58\uff08\u767d\u8272\uff09"}</label>
             <label><input type="checkbox" checked={writeDa} onChange={(e) => setWriteDa(e.target.checked)} /> {"\u5b58\u6a94\u6642\u5beb\u5165\u5c31\u91ab\u985e\u5225 DA \u65bcIC\u5361"}</label>
+            <label className="ml-3 font-bold text-[#800000]"><input type="checkbox" checked={uploadOnSave} onChange={(e) => setUploadOnSave(e.target.checked)} /> {"\u5b58\u6a94\u6642\u4e0a\u50b3\u81f3\u5065\u4fdd\u4e2d\u5fc3"}</label>
           </div>
           {note ? <p className="mt-1 text-[12px] text-[#004000]">{note}</p> : null}
         </div>

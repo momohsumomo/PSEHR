@@ -1,14 +1,15 @@
 import { useState } from "react";
-import { fixCardConsole, type CardConsoleStatus } from "@/api/clinicApi";
+import { fixCardConsole, startLocalCard6, type CardConsoleStatus } from "@/api/clinicApi";
 
 type Props = {
   onFixed?: (status: CardConsoleStatus | null, message: string) => void;
   compact?: boolean;
   variant?: "dark" | "light";
   label?: string;
+  scope?: "host" | "local";
 };
 
-export function CardConsoleDebugButton({ onFixed, compact = false, variant = "dark", label }: Props) {
+export function CardConsoleDebugButton({ onFixed, compact = false, variant = "dark", label, scope = "host" }: Props) {
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<string | null>(null);
 
@@ -19,6 +20,17 @@ export function CardConsoleDebugButton({ onFixed, compact = false, variant = "da
     setBusy(true);
     setNote(null);
     try {
+      if (scope === "local") {
+        let msg = "";
+        try {
+          msg = await startLocalCard6();
+        } catch {
+          msg = "\u9019\u6247\u8996\u7a97\u9084\u6c92\u88ab\u5141\u8a31\u770b\u9019\u53f0\u96fb\u8166\u3002\u8acb\u95dc\u6389\u9019\u6247\uff0c\u518d\u96d9\u64ca\u9019\u53f0\u5df2\u7d93\u6709\u7684\u9023\u5230\u4e3b\u6a5f.bat\u3002\u4e0d\u7528\u518d\u4e0b\u8f09\u3002";
+        }
+        setNote(msg);
+        onFixed?.(null, msg);
+        return;
+      }
       const result = await fixCardConsole();
       const msg = result.message || (result.ok ? "\u8b80\u5361\u8edf\u9ad4\u5df2\u5c31\u7dd2\u3002" : "\u9664\u932f\u672a\u5b8c\u6210\u3002");
       setNote(msg);
