@@ -1,6 +1,6 @@
 # Hidden clinic host: API :5000 and UI :3010. No console windows.
 param(
-  [ValidateSet("start", "stop", "restart", "print", "protocol", "beacon", "discover", "firewall")]
+  [ValidateSet("start", "stop", "restart", "print", "protocol", "beacon", "discover", "firewall", "autostart")]
   [string]$Action = "start",
   [string]$Url = ""
 )
@@ -165,6 +165,30 @@ function Wait-Ready {
     Start-Sleep -Seconds 1
   }
   return $false
+}
+
+function Register-HostAutostart {
+  $vbs = Join-Path $Root "scripts\autostart_host.vbs"
+  if (-not (Test-Path -LiteralPath $vbs)) { return }
+  try {
+    $action = New-ScheduledTaskAction -Execute "wscript.exe" -Argument "//nologo `"$vbs`""
+    $trigger = New-ScheduledTaskTrigger -AtLogOn -User $env:USERNAME
+    $trigger.Delay = "PT20S"
+    $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable
+    Register-ScheduledTask -TaskName "PSEHR-host" -Action $action -Trigger $trigger -Settings $settings -Force | Out-Null
+    Write-HostLog "autostart registered"
+  } catch {
+    Write-HostLog ("autostart task " + $_.Exception.Message)
+    $startup = [Environment]::GetFolderPath("Startup")
+    $linkPath = Join-Path $startup "PSEHR-host.lnk"
+    $shell = New-Object -ComObject WScript.Shell
+    $link = $shell.CreateShortcut($linkPath)
+    $link.TargetPath = "wscript.exe"
+    $link.Arguments = "//nologo `"$vbs`""
+    $link.WorkingDirectory = $Root
+    $link.WindowStyle = 7
+    $link.Save()
+  }
 }
 
 function Start-HostPair {
@@ -346,6 +370,7 @@ switch ($Action) {
   "protocol" { Invoke-Protocol $Url }
   "beacon" { Invoke-Beacon }
   "firewall" { Allow-Lan }
+  "autostart" { Register-HostAutostart }
   "discover" {
     $ip = Find-ClinicHost
     if (-not $ip) { exit 1 }
@@ -355,7 +380,12 @@ switch ($Action) {
   default {
     try {
       Write-HostLog "start begin"
-      Start-HostPair
+      Register-HostAutostart
+      $mutex = New-Object System.Threading.Mutex($false, "Local\PSEHR-host-start")
+      $owned = $false
+      try { $owned = $mutex.WaitOne(0) } catch [System.Threading.AbandonedMutexException] { $owned = $true }
+      if (-not $owned) { Write-HostLog "start already running"; exit 0 }
+      try { Start-HostPair } finally { $mutex.ReleaseMutex() | Out-Null }
     } catch {
       Write-HostLog ("fail " + $_.Exception.Message)
       Show-HostFail

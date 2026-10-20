@@ -36,13 +36,5 @@ Set-Item -Path "HKCU:\Software\Classes\psehr" -Value "URL:PSEHR"
 New-ItemProperty -Path "HKCU:\Software\Classes\psehr" -Name "URL Protocol" -Value "" -PropertyType String -Force | Out-Null
 Set-Item -Path "HKCU:\Software\Classes\psehr\shell\open\command" -Value $cmd
 
-$startup = [Environment]::GetFolderPath("Startup")
-$linkPath = Join-Path $startup "PSEHR-host.lnk"
-$shell = New-Object -ComObject WScript.Shell
-$link = $shell.CreateShortcut($linkPath)
-$link.TargetPath = "wscript.exe"
-$link.Arguments = "//nologo `"$(Join-Path $Root 'scripts\launch_host.vbs')`" start"
-$link.WorkingDirectory = $Root
-$link.WindowStyle = 7
-$link.Save()
-Write-Host "Host tools are installed. Double-click the start bat. Other PCs use the station installer."
+& powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $Root "scripts\host_service.ps1") -Action autostart
+Write-Host "Host tools are installed. After you sign in to Windows, the clinic service starts itself. Other PCs use the client folder."
