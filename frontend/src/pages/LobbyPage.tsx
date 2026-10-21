@@ -254,7 +254,7 @@ export function LobbyPage() {
           </div>
         ))}
         <span className="ml-auto text-[12px] text-[#8EA0BA]">鍵盤 1–9、0、A、B、C、E</span>
-        <CardConsoleDebugButton compact variant="dark" align="end" label={"\u8b80\u5361\u9664\u932f"} scope="local" />
+        <CardConsoleDebugButton compact variant="dark" align="end" label={"\u91cd\u65b0\u6574\u7406\u8b80\u5361\u6a5f"} scope="local" />
       </nav>
 
       <header className="relative z-10 flex shrink-0 items-end gap-6 px-8 pb-2 pt-6">

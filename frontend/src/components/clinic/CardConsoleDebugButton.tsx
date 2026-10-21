@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { startLocalCard6, type CardConsoleStatus } from "@/api/clinicApi";
-import { DeskCardError, identifyLocalSlots, listLocalReaders } from "@/lib/localCard";
+import { DeskCardError, refreshLocalReader } from "@/lib/localCard";
 
 type Props = {
   onFixed?: (status: CardConsoleStatus | null, message: string) => void;
@@ -31,13 +31,7 @@ export function CardConsoleDebugButton({
     setBusy(true);
     setNote("");
     try {
-      const names = await listLocalReaders();
-      if (names.length === 0) {
-        setNote("\u9019\u53f0\u6c92\u6709\u770b\u5230\u8b80\u5361\u6a5f\u3002");
-        return;
-      }
-      setNote(names.length === 1 ? "\u6b63\u5728\u770b\u9019\u4e00\u53f0\u63d2\u7684\u662f\u54ea\u7a2e\u5361\u2026" : "\u6b63\u5728\u8fa8\u8a8d\u5169\u500b\u69fd\u2026");
-      const found = await identifyLocalSlots(names);
+      const found = await refreshLocalReader();
       setNote(found.note);
       onFixed?.(null, found.note);
     } catch (err) {
@@ -59,7 +53,7 @@ export function CardConsoleDebugButton({
           if (next) void load();
         }}
       >
-        {label || "\u8b80\u5361\u9664\u932f"}
+        {label || "\u91cd\u65b0\u6574\u7406\u8b80\u5361\u6a5f"}
       </button>
       {open ? (
         <div
@@ -72,7 +66,7 @@ export function CardConsoleDebugButton({
           {note ? <p className="leading-snug">{note}</p> : null}
           <div className="flex gap-1">
             <button type="button" disabled={busy} className="border bg-white px-2 py-0.5 text-black disabled:opacity-60" onClick={() => void load()}>
-              {"\u518d\u5224\u65b7\u4e00\u6b21"}
+              {"\u518d\u6574\u7406\u4e00\u6b21"}
             </button>
             {note.indexOf("\u6c92\u6709\u56de\u61c9") >= 0 ? (
               <button

@@ -493,9 +493,24 @@ public class PsehrTrustAll : ICertificatePolicy {
         $client = $tcp.AcceptTcpClient()
         $stream = $client.GetStream()
         $stream.ReadTimeout = 3000
-        $buf = New-Object byte[] 8192
-        $read = $stream.Read($buf, 0, $buf.Length)
-        $text = [Text.Encoding]::UTF8.GetString($buf, 0, $read)
+        $bucket = New-Object System.IO.MemoryStream
+        $chunk = New-Object byte[] 8192
+        while ($true) {
+          $n = 0
+          try { $n = $stream.Read($chunk, 0, $chunk.Length) } catch { break }
+          if ($n -le 0) { break }
+          $bucket.Write($chunk, 0, $n)
+          $soFar = [Text.Encoding]::UTF8.GetString($bucket.ToArray())
+          $split = $soFar.IndexOf("`r`n`r`n")
+          if ($split -lt 0) { if ($bucket.Length -gt 65536) { break }; continue }
+          $need = 0
+          foreach ($headerLine in ($soFar.Substring(0, $split) -split "`r`n")) {
+            if ($headerLine -match "^Content-Length:\s*(\d+)") { $need = [int]$Matches[1] }
+          }
+          if (($bucket.Length - $split - 4) -ge $need) { break }
+          if ($bucket.Length -gt 2000000) { break }
+        }
+        $text = [Text.Encoding]::UTF8.GetString($bucket.ToArray())
         $line = ($text -split "`r`n", 2)[0]
         $parts = $line -split " "
         $verb = $parts[0]
@@ -553,6 +568,29 @@ public class PsehrTrustAll : ICertificatePolicy {
           Send-Json $client ('{"ok":true,"printers":[' + (Get-PrinterJson) + "]}") 200
           continue
         }
+        if ($verb -eq "POST" -and $target -eq "/print") {
+          $rawBody = ""
+          $splitAt = $text.IndexOf("`r`n`r`n")
+          if ($splitAt -ge 0) { $rawBody = $text.Substring($splitAt + 4) }
+          $box = Join-Path $env:LOCALAPPDATA "PSEHR\print-box"
+          New-Item -ItemType Directory -Force -Path $box | Out-Null
+          $id = [guid]::NewGuid().ToString("n")
+          $req = Join-Path $box ($id + ".req")
+          $res = Join-Path $box ($id + ".res")
+          [IO.File]::WriteAllText($req, $rawBody, (New-Object System.Text.UTF8Encoding $false))
+          $deadline = (Get-Date).AddSeconds(70)
+          while ((Get-Date) -lt $deadline -and -not (Test-Path -LiteralPath $res)) { Start-Sleep -Milliseconds 200 }
+          if (-not (Test-Path -LiteralPath $res)) {
+            Send-Json $client '{"ok":false,"detail":"print was not taken"}' 400
+            continue
+          }
+          $answer = [IO.File]::ReadAllText($res)
+          Remove-Item -LiteralPath $req, $res -ErrorAction SilentlyContinue
+          $status = 200
+          if ($answer -match '"ok"\s*:\s*false') { $status = 400 }
+          Send-Json $client $answer $status
+          continue
+        }
         Send-Json $client '{"detail":"not found"}' 404
       } catch {
       } finally {
@@ -579,6 +617,23 @@ function Start-DeskLoop {
     Request-Release5066
     while ($true) {
       try {
+        $box = Join-Path $Root "print-box"
+        if (Test-Path -LiteralPath $box) {
+          foreach ($reqFile in @(Get-ChildItem -LiteralPath $box -Filter "*.req" -ErrorAction SilentlyContinue)) {
+            $resFile = Join-Path $box ($reqFile.BaseName + ".res")
+            try {
+              $job = [IO.File]::ReadAllText($reqFile.FullName) | ConvertFrom-Json
+              Invoke-OnePrint $job
+              $done = @{ ok = $true; printer = "$($job.printerName)" } | ConvertTo-Json -Compress
+              [IO.File]::WriteAllText($resFile, $done, (New-Object System.Text.UTF8Encoding $false))
+            } catch {
+              $fail = @{ ok = $false; detail = $_.Exception.Message } | ConvertTo-Json -Compress
+              [IO.File]::WriteAllText($resFile, $fail, (New-Object System.Text.UTF8Encoding $false))
+              Write-Log $_.Exception.Message
+            }
+            Remove-Item -LiteralPath $reqFile.FullName -ErrorAction SilentlyContinue
+          }
+        }
         $ip = Find-ClinicHost
         if ($ip) {
           $health = Get-Health | ConvertTo-Json -Depth 6 -Compress

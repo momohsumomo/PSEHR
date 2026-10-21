@@ -1749,29 +1749,6 @@ async function localPrintFetch(path: string, init?: RequestInit): Promise<Respon
   }
 }
 
-async function printViaDesk(body: {
-  printerName: string;
-  html: string;
-  widthMm: number;
-  heightMm: number;
-  feed?: "portrait" | "landscape" | "";
-}): Promise<{ ok: boolean; printer: string }> {
-  const queued = await request<{ id: string }>("/clinic/desk/print", {
-    method: "POST",
-    body: JSON.stringify(body),
-  });
-  const started = Date.now();
-  while (Date.now() - started < 60000) {
-    await new Promise((resolve) => window.setTimeout(resolve, 400));
-    const job = await request<{ state?: string; printer?: string; detail?: string }>(
-      `/clinic/desk/print/${queued.id}`,
-    );
-    if (job.state === "done") return { ok: true, printer: job.printer || body.printerName };
-    if (job.state === "error") throw new Error(job.detail || "\u9001\u5230\u5370\u8868\u6a5f\u5931\u6557");
-  }
-  throw new Error("\u9019\u53f0\u7684\u5de5\u4f5c\u7ad9\u5de5\u5177\u9084\u6c92\u6709\u628a\u9019\u5f35\u55ae\u5370\u51fa\u53bb");
-}
-
 export async function printToNamedPrinter(body: {
   printerName: string;
   html: string;
@@ -1779,25 +1756,19 @@ export async function printToNamedPrinter(body: {
   heightMm: number;
   feed?: "portrait" | "landscape" | "";
 }): Promise<{ ok: boolean; printer: string }> {
-  try {
-    return await printViaDesk(body);
-  } catch (err) {
-    const viaDesk = err instanceof Error ? err.message : "";
-    const canUseLocal = viaDesk === "Not Found" || viaDesk.indexOf("\u5de5\u4f5c\u7ad9\u5de5\u5177\u9084\u6c92\u6709\u5728\u56de\u5831") >= 0;
-    if (!canUseLocal) throw err instanceof Error ? err : new Error(viaDesk || "\u9001\u5230\u5370\u8868\u6a5f\u5931\u6557");
-    try {
-      const res = await localPrintFetch("/print", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
-      const data = (await res.json().catch(() => ({}))) as { ok?: boolean; printer?: string; detail?: string };
-      if (!res.ok) throw new Error(data.detail || viaDesk || "\u9001\u5230\u5370\u8868\u6a5f\u5931\u6557");
-      return { ok: true, printer: data.printer || body.printerName };
-    } catch {
-      throw err instanceof Error ? err : new Error(viaDesk || "\u9001\u5230\u5370\u8868\u6a5f\u5931\u6557");
-    }
+  const res = await localPrintFetch("/print", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  const data = (await res.json().catch(() => ({}))) as { ok?: boolean; printer?: string; detail?: string };
+  if (res.status === 404) {
+    throw new Error("\u9019\u53f0\u7684\u9580\u8a3a\u5de5\u5177\u9084\u6c92\u6709\u63a5\u4e0a\u5217\u5370\u3002\u8acb\u95dc\u6389\u770b\u8a3a\u8996\u7a97\uff0c\u518d\u96d9\u64ca\u958b\u555f\u9580\u8a3a\u3002");
   }
+  if (!res.ok || data.ok === false) {
+    throw new Error(data.detail || "\u9001\u5230\u5370\u8868\u6a5f\u5931\u6557");
+  }
+  return { ok: true, printer: data.printer || body.printerName };
 }
 
 export type LocalPrintHealth = {

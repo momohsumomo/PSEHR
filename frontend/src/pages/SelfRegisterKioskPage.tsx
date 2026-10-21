@@ -350,7 +350,7 @@ export function SelfRegisterKioskPage() {
     >
       <header className="relative shrink-0 border-b border-[#d7e3e8] bg-white/70 px-8 pb-4 pt-5 text-center backdrop-blur-sm">
         <div className="absolute right-3 top-3 z-20">
-          <CardConsoleDebugButton compact variant="light" align="end" scope="local" label={"\u8b80\u5361\u9664\u932f"} />
+          <CardConsoleDebugButton compact variant="light" align="end" scope="local" label={"\u91cd\u65b0\u6574\u7406\u8b80\u5361\u6a5f"} />
         </div>
         <p className="text-[1.7rem] font-semibold tracking-wide text-[#12324a]">{clinicName || "\u81ea\u52a9\u639b\u865f"}</p>
         <h1 className="mt-1 text-xl font-medium tracking-[0.22em] text-[#3d7a96]">{"\u81ea\u52a9\u639b\u865f"}</h1>

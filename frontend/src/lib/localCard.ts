@@ -253,6 +253,45 @@ export async function readLocalCardLive(): Promise<LocalCardLive> {
   }
 }
 
+function liveWord(kind: "sam" | "hpc", status: number, expire: string): string {
+  if (kind === "sam") {
+    if (status === 2) return "SAM \u5df2\u9a57\u8b49" + (expire ? "\uff0c\u6709\u6548\u5230 " + expire : "");
+    if (status === 1) return "SAM \u5df2\u8f09\u5165\uff0c\u9084\u6c92\u9a57\u8b49";
+    return "SAM \u9084\u6c92\u9a57\u8b49";
+  }
+  if (status === 3) return "\u91ab\u4e8b\u4eba\u54e1\u5361 PIN \u5df2\u9a57\u8b49" + (expire ? "\uff0c\u6709\u6548\u5230 " + expire : "");
+  if (status === 2) return "\u91ab\u4e8b\u4eba\u54e1\u5361\u5df2\u9a57\u8b49\uff0c\u9084\u6c92\u6253 PIN";
+  if (status === 1) return "\u91ab\u4e8b\u4eba\u54e1\u5361\u5728\u8b80\u5361\u6a5f\u4e0a\uff0c\u9084\u6c92\u9a57 PIN";
+  return "\u91ab\u4e8b\u4eba\u54e1\u5361\u6c92\u6709\u63d2\u4e0a";
+}
+
+export async function refreshLocalReader(): Promise<{ note: string; live: LocalCardLive }> {
+  const names = await listLocalReaders();
+  let live = await readLocalCardLive();
+  if (!live.reachable) {
+    return { live, note: "\u9019\u53f0\u7684\u8b80\u5361\u8edf\u9ad4\u6c92\u6709\u56de\u61c9\u3002" };
+  }
+  if (names.length === 0) {
+    return { live, note: "\u9019\u53f0\u6c92\u6709\u770b\u5230\u8b80\u5361\u6a5f\u3002\u8acb\u78ba\u8a8d\u8b80\u5361\u6a5f\u6709\u63d2\u4e0a\uff0c\u518d\u6309\u4e00\u6b21\u3002" };
+  }
+  if (names.length === 1 && !live.readerName) {
+    await localCshis("POST", "/api/settings/v1/PcscReader/Default", { readerName: names[0] });
+    live = await readLocalCardLive();
+  }
+  const reader = live.readerName || names[0];
+  return {
+    live,
+    note:
+      "\u8b80\u5361\u6a5f\u5df2\u91cd\u65b0\u6574\u7406\u3002\u73fe\u5728\u9019\u53f0\u662f\u300c" +
+      reader +
+      "\u300d\u3002" +
+      liveWord("sam", live.sam, live.samExpire) +
+      "\u3002" +
+      liveWord("hpc", live.hpc, live.hpcExpire) +
+      "\u3002\u63a5\u8457\u6309 SAM\u9a57\u8b49\uff0c\u518d\u6309\u91ab\u4e8b\u4eba\u54e1\u5361\u9a57\u8b49\u3002",
+  };
+}
+
 async function cloudSamId(): Promise<string> {
   const list = await localCshis("GET", "/api/settings/v1/CloudSam");
   const sams = list.sams;
