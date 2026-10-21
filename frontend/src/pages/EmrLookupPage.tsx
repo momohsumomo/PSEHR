@@ -14,6 +14,7 @@ import { HisRocDateField, rocToIso, todayRoc, normalizeRoc, clampRocEnd, isoToRo
 import { HisWinTitle } from "@/components/clinic/HisPageFrame";
 import { HIS, HIS_FONT } from "@/lib/hisTheme";
 import type { PatientHit } from "@/lib/patientSearch";
+import { takeClaimsEmr } from "@/lib/claimsEmr";
 import { useEscLayer } from "@/hooks/useEscLayer";
 import { useListNav } from "@/hooks/useListNav";
 
@@ -271,6 +272,7 @@ export function EmrLookupPage() {
     hasImage: false,
   });
   const focusReturnId = useRef<string | null>(null);
+  const [claimsSeedOn, setClaimsSeedOn] = useState(false);
 
   useEscLayer([
     { open: finderOpen, close: () => setFinderOpen(false) },
@@ -353,6 +355,20 @@ export function EmrLookupPage() {
       if (emrReplayEpoch === emrReturnEpoch) emrReplayEpoch = 0;
     }, 0);
     return () => window.clearTimeout(timer);
+  }, []);
+
+  useEffect(() => {
+    const seed = takeClaimsEmr();
+    if (!seed) return;
+    const roc = isoToRoc(seed.date.slice(0, 10));
+    if (!roc) return;
+    focusReturnId.current = seed.encounterId || null;
+    setDateFrom(roc);
+    setDateTo(roc);
+    setPatientId(seed.chartPatientId || null);
+    setPatientKey(seed.medicalNo || "");
+    setPatientLabel(seed.patientName || "");
+    setClaimsSeedOn(true);
   }, []);
 
   useEffect(() => {
@@ -464,6 +480,12 @@ export function EmrLookupPage() {
       setBusy(false);
     }
   };
+
+  useEffect(() => {
+    if (!claimsSeedOn) return;
+    setClaimsSeedOn(false);
+    void runConfirm();
+  }, [claimsSeedOn]);
 
   useEffect(() => {
     if (!resultOpen || !apiMode) return;

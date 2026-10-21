@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { ClaimSlipDialog } from "@/components/clinic/ClaimSlipDialog";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useEscLayer } from "@/hooks/useEscLayer";
 import { useClinicWorkspace } from "@/hooks/useClinicWorkspace";
@@ -62,6 +63,7 @@ export function ClaimsPage() {
   const job: ClaimJob | null = jobParam === "check" || jobParam === "build" ? jobParam : null;
   const [log, setLog] = useState<string[]>([]);
   const [preview, setPreview] = useState<ApiClaimsPreview | null>(null);
+  const [slipOpen, setSlipOpen] = useState(false);
   const backToMenu = () => navigate("/?open=claims");
   useEscLayer([{ open: true, close: backToMenu }]);
 
@@ -83,6 +85,7 @@ export function ClaimsPage() {
   useEffect(() => {
     setStep("setup");
     setPreview(null);
+    setSlipOpen(false);
   }, [selectedMonth, submitType]);
 
   useEffect(() => {
@@ -157,6 +160,7 @@ export function ClaimsPage() {
         setLog((prev) => [...prev, "檢查通過，可以產檔。"]);
       }
       setStep("checked");
+      setSlipOpen(true);
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err);
       setLog((prev) => [...prev, `檢查失敗: ${message}`]);
@@ -365,7 +369,15 @@ export function ClaimsPage() {
               onClick={() => void handleCheck()}
               className="w-full py-2 rounded-lg border border-sky-600 bg-sky-50 hover:bg-sky-100 font-bold text-xs text-sky-900 disabled:opacity-50"
             >
-              {checking ? "檢查中…" : "檢查申報資料"}
+              {checking ? "\u6aa2\u67e5\u4e2d\u2026" : "\u6aa2\u67e5\u7533\u5831\u8cc7\u6599"}
+            </button>
+            <button
+              type="button"
+              disabled={!preview?.records?.length}
+              className="w-full rounded-lg border border-slate-400 bg-white px-4 py-2 text-sm font-bold text-slate-800 hover:bg-slate-50 disabled:opacity-40"
+              onClick={() => setSlipOpen(true)}
+            >
+              {"\u770b\u55ae\u7b46"}
             </button>
             {job === "build" ? (
             <button
@@ -490,7 +502,7 @@ export function ClaimsPage() {
                   </p>
                 ) : null}
                 {(preview.records?.length ?? 0) > 40 ? (
-                  <p className="text-[10px] text-slate-400 mt-1">僅顯示前 40 筆；全數已納入組檔。</p>
+                  <p className="text-[10px] text-slate-400 mt-1">{"\u9019\u88e1\u53ea\u5217\u524d 40 \u7b46\u3002\u5168\u6708\u6bcf\u4e00\u7b46\u6309\u300c\u770b\u55ae\u7b46\u300d\u3002"}</p>
                 ) : null}
               </div>
             )}
@@ -507,6 +519,13 @@ export function ClaimsPage() {
           </div>
         </section>
       </div>
+      <ClaimSlipDialog
+        open={slipOpen}
+        onClose={() => setSlipOpen(false)}
+        records={preview?.records || []}
+        yearMonthRoc={preview?.yearMonth || ""}
+        submitType={submitType}
+      />
     </div>
   );
 }

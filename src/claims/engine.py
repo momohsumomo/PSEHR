@@ -75,6 +75,8 @@ class ClaimEncounterRecord:
     basicCopayPoints: int = 50
     drugCopayPoints: int = 0
     medicalNo: str = ""
+    # 影子庫病人編號。調閱病歷用這個找人，不拿身分證去當病人編號。
+    chartPatientId: str = ""
 
 
 @dataclass
@@ -510,6 +512,7 @@ def build_claims_summary(
                 patientId=str(patient_ref),
                 patientName=patient_name,
                 medicalNo=str(medical_no or ""),
+                chartPatientId=str(patient_id or ""),
                 diagnoses=diag_str,
                 consultationPoints=consult,
                 drugPoints=round(drug_points, 2),
