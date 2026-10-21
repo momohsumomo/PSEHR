@@ -149,7 +149,14 @@ function Export-EdgePdf([string]$Edge, [string]$HtmlPath, [string]$PdfPath, [dou
   $psi.Arguments = "--headless=new --disable-gpu --no-first-run --no-default-browser-check --disable-extensions --disable-sync --remote-allow-origins=* --user-data-dir=`"$profile`" --remote-debugging-port=0 about:blank"
   $psi.WindowStyle = [System.Diagnostics.ProcessWindowStyle]::Hidden
   $psi.UseShellExecute = $false
+  $psi.CreateNoWindow = $true
+  $psi.RedirectStandardOutput = $true
+  $psi.RedirectStandardError = $true
   $proc = [System.Diagnostics.Process]::Start($psi)
+  $edgeOut = [System.IO.File]::Create((Join-Path $dir "edge-out.txt"))
+  $edgeErr = [System.IO.File]::Create((Join-Path $dir "edge-err.txt"))
+  $null = $proc.StandardOutput.BaseStream.CopyToAsync($edgeOut)
+  $null = $proc.StandardError.BaseStream.CopyToAsync($edgeErr)
   $ws = $null
   try {
     $marker = Join-Path $profile "DevToolsActivePort"
@@ -182,13 +189,15 @@ function Export-EdgePdf([string]$Edge, [string]$HtmlPath, [string]$PdfPath, [dou
     }
     if (-not $wsUrl) { throw "edge page missing" }
     $ws = New-Object System.Net.WebSockets.ClientWebSocket
-    $null = $ws.ConnectAsync([Uri]$wsUrl, [Threading.CancellationToken]::None).Result
+    $connect = $ws.ConnectAsync([Uri]$wsUrl, [Threading.CancellationToken]::None)
+    if (-not $connect.Wait(8000)) { throw "edge socket timeout" }
     if ($ws.State -ne [System.Net.WebSockets.WebSocketState]::Open) { throw "edge socket missing" }
     $script:CdpId = 0
     function Send-CdpText([string]$Json) {
       $bytes = [Text.Encoding]::UTF8.GetBytes($Json)
       $seg = New-Object System.ArraySegment[byte] -ArgumentList (, $bytes)
-      $null = $ws.SendAsync($seg, [System.Net.WebSockets.WebSocketMessageType]::Text, $true, [Threading.CancellationToken]::None).Result
+      $send = $ws.SendAsync($seg, [System.Net.WebSockets.WebSocketMessageType]::Text, $true, [Threading.CancellationToken]::None)
+      if (-not $send.Wait(8000)) { throw "edge send timeout" }
     }
     function Read-CdpText {
       $ms = New-Object System.IO.MemoryStream
@@ -244,11 +253,10 @@ function Export-EdgePdf([string]$Edge, [string]$HtmlPath, [string]$PdfPath, [dou
   } finally {
     if ($ws) { try { $ws.Dispose() } catch {} }
     if ($proc -and -not $proc.HasExited) {
-      try {
-        $killer = Join-Path $env:SystemRoot "System32\taskkill.exe"
-        & $killer /F /T /PID "$($proc.Id)" | Out-Null
-      } catch {}
+      try { Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue } catch {}
     }
+    try { $edgeOut.Dispose() } catch {}
+    try { $edgeErr.Dispose() } catch {}
   }
   if (-not (Test-Path -LiteralPath $PdfPath) -or (Get-Item -LiteralPath $PdfPath).Length -lt 100) {
     throw "pdf was not created"
