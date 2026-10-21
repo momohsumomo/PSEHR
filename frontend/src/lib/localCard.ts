@@ -1,4 +1,4 @@
-const DIRECT = "https://127.0.0.1:5066";
+const DIRECT = "https://localhost:5066";
 
 export type DeskSign = {
   clientRandom?: string;
@@ -320,15 +320,113 @@ export async function verifyLocalSam(): Promise<LocalCardLive> {
   return readLocalCardLive();
 }
 
+const CARD_CODES: Record<number, string> = {
+  1000: "\u63a7\u5236\u8edf\u9ad4\u9084\u6c92\u521d\u59cb\u5316",
+  1002: "\u627e\u4e0d\u5230\u5b89\u5168\u6a21\u7d44",
+  1100: "\u6c92\u6709\u767c\u73fe\u8b80\u5361\u6a5f",
+  1101: "\u9084\u6c92\u6307\u5b9a\u8b80\u5361\u6a5f\u69fd",
+  1102: "\u9019\u500b\u69fd\u6c92\u6709\u63d2\u5361",
+  1103: "\u5361\u7247\u61c9\u7528\u7a0b\u5f0f\u5207\u63db\u5931\u6557",
+  1199: "\u8b80\u5361\u6a5f\u767c\u751f\u5176\u5b83\u932f\u8aa4",
+  1302: "\u91ab\u4e8b\u6a5f\u69cb\u5df2\u8d85\u904e\u5408\u7d04\u671f\u9593",
+  1303: "\u91ab\u4e8b\u6a5f\u69cb\u5df2\u505c\u6b0a",
+  1304: "SAM \u5df2\u8a3b\u92b7",
+  1400: "\u91ab\u4e8b\u4eba\u54e1\u5361\u9032\u5165\u6a21\u5f0f\u4e00\u5931\u6557",
+  1401: "\u91ab\u4e8b\u4eba\u54e1\u5361\u9032\u5165\u6a21\u5f0f\u4e8c\u5931\u6557",
+  1402: "\u91ab\u4e8b\u4eba\u54e1\u5361\u9084\u6c92\u9a57\u904e PIN",
+  1410: "\u91ab\u4e8b\u4eba\u54e1\u5361 PIN \u4e0d\u5c0d",
+  1422: "\u91ab\u4e8b\u4eba\u54e1\u6191\u8b49\u4e0d\u5728\u6709\u6548\u671f\uff0c\u6216\u91ab\u5e2b\u5361\u5df2\u904e\u671f",
+  1500: "\u5065\u4fdd\u5361\u9032\u5165\u6a21\u5f0f\u4e00\u5931\u6557\u3002\u96f2\u7aef\u85e5\u6b77\u82e5\u986f\u793a 2461500\uff0c\u5c31\u662f\u9019\u4e00\u500b 1500",
+  1501: "\u5065\u4fdd\u5361\u9032\u5165\u6a21\u5f0f\u4e8c\u5931\u6557\uff0c\u8acb\u78ba\u8a8d SAM \u5df2\u9a57\u8b49",
+  1502: "\u5065\u4fdd\u5361\u9032\u5165\u6a21\u5f0f\u4e09\u5931\u6557",
+  1516: "\u9019\u500b\u69fd\u540c\u6642\u770b\u5230\u5169\u7a2e\u5361\u3002\u4e00\u53f0\u8b80\u5361\u6a5f\u5c31\u5206\u958b\u63d2\uff1b\u5169\u53f0\u5c31\u5404\u63d2\u5404\u7684",
+  1600: "\u9019\u500b\u8b80\u5361\u6a5f\u540d\u7a31\u5df2\u7d93\u4e0d\u5728",
+  1610: "SAM \u6a94\u683c\u5f0f\u4e0d\u5c0d",
+  1611: "\u627e\u4e0d\u5230\u9019\u500b\u96f2\u7aef\u5b89\u5168\u6a21\u7d44",
+  1700: "\u9023\u4e0d\u5230\u5065\u4fdd\u7f72\uff0c\u8acb\u5148\u78ba\u8a8d\u91ab\u7642\u7db2",
+  1703: "\u8ddf\u5065\u4fdd\u7f72\u7684\u9023\u7dda\u903e\u671f\uff0c\u8acb\u518d\u6309\u4e00\u6b21\u9a57\u8b49 SAM",
+};
+
+function cardCodeText(code: number): string {
+  const text = CARD_CODES[code];
+  if (text) return text + "\uff08" + String(code) + "\uff09";
+  return "\u8b80\u5361\u8edf\u9ad4\u56de\u5831\u932f\u8aa4 " + String(code);
+}
+
+async function callCard(method: string, path: string, body?: unknown): Promise<Record<string, unknown>> {
+  const data = await localCshisRaw(method, path, body);
+  const code = data.statusCode;
+  if (typeof code === "number" && code !== 0) throw new DeskCardError(cardCodeText(code));
+  return data;
+}
+
+async function selectLocalReader(reader: string): Promise<void> {
+  if (!reader) throw new DeskCardError("\u8acb\u5148\u9078\u64c7\u8b80\u5361\u6a5f\u3002");
+  const samId = await cloudSamId();
+  if (!samId) throw new DeskCardError("\u9019\u53f0\u9084\u6c92\u532f\u5165 SAM\u3002\u6309\u300c\u532f\u5165 SAM\u300d\u3002");
+  let data = await callCard("GET", "/api/common/v1/Status");
+  let box = statusBox(data);
+  let live = typeof box.readerName === "string" ? box.readerName : "";
+  if (live !== reader) {
+    await callCard("POST", "/api/settings/v1/PcscReader/Default", { readerName: reader });
+  }
+  const initialized = box.initialized === true;
+  const name = typeof box.name === "string" ? box.name : "";
+  const restart = !initialized || name !== samId;
+  if (restart && initialized) {
+    await callCard("POST", "/api/common/v1/Finalize", {});
+  }
+  if (restart) {
+    await callCard("POST", "/api/common/v1/Initial", { name: samId });
+    data = await callCard("GET", "/api/common/v1/Status");
+    box = statusBox(data);
+    live = typeof box.readerName === "string" ? box.readerName : "";
+  }
+  if (nestedStatus(data, "sam") !== 2) {
+    await callCard("POST", "/api/sam/v1/Verification", {});
+    data = await callCard("GET", "/api/common/v1/Status");
+    box = statusBox(data);
+    live = typeof box.readerName === "string" ? box.readerName : "";
+  }
+  if (live && live !== reader) {
+    const hpc = box.hpc && typeof box.hpc === "object" ? box.hpc as Record<string, unknown> : null;
+    const hpcStatus = typeof hpc?.status === "number" ? hpc.status : 0;
+    let until = "";
+    if (hpcStatus >= 2) {
+      const shown = clock(hpc?.expireTime);
+      if (shown) until = "\u91ab\u4e8b\u4eba\u54e1\u5361\u9a57\u8b49\u6709\u6548\u5230 " + shown + "\u3002";
+    }
+    throw new DeskCardError(
+      "6.0 \u73fe\u5728\u7684\u9023\u7dda\u5728\u300c" + live + "\u300d\u3002" + until +
+      "\u9019\u6b21\u8981\u7684\u662f\u300c" + reader + "\u300d\u3002\u5df2\u9a57\u8b49\u7684\u72c0\u614b\u9084\u5728\uff0c\u6c92\u6709\u6e05\u6389\uff0c\u6240\u4ee5\u6c92\u6709\u63db\u904e\u53bb\u3002",
+    );
+  }
+}
+
+async function hpcReaderName(): Promise<string> {
+  const names = await listLocalReaders();
+  const prefer = "Generic Smart Card Reader Interface 1";
+  if (names.includes(prefer)) return prefer;
+  return names[0] || "";
+}
+
 export async function verifyLocalHpc(pin: string): Promise<LocalCardLive> {
   const trimmed = pin.trim();
   if (!trimmed) throw new DeskCardError("\u8acb\u5148\u8f38\u5165\u91ab\u4e8b\u4eba\u54e1\u5361 PIN\u3002");
-  await verifyLocalSam();
-  const result = await localCshisRaw("POST", "/api/hpc/v1/Verification/Hpc", { pin: trimmed });
-  const code = result.statusCode;
-  if (code === 1102 || code === 1400) throw new DeskCardError("\u91ab\u4e8b\u4eba\u54e1\u5361\u6c92\u6709\u63d2\u5728\u73fe\u5728\u9019\u53f0\u8b80\u5361\u6a5f\u3002");
-  if (code === 1410) throw new DeskCardError("\u91ab\u4e8b\u4eba\u54e1\u5361 PIN \u4e0d\u5c0d\u3002");
-  if (typeof code === "number" && code !== 0) throw new DeskCardError("\u91ab\u4e8b\u4eba\u54e1\u5361\u9a57\u8b49\u5931\u6557\uff08" + String(code) + "\uff09\u3002");
+  const reader = await hpcReaderName();
+  if (!reader) throw new DeskCardError("\u8acb\u5148\u9078\u64c7\u91ab\u4e8b\u4eba\u54e1\u5361\u7684\u8b80\u5361\u6a5f\u3002\u53ea\u6709\u4e00\u53f0\u5c31\u9078\u8ddf\u5065\u4fdd\u5361\u540c\u4e00\u53f0\u3002");
+  await selectLocalReader(reader);
+  let result: Record<string, unknown>;
+  try {
+    result = await callCard("POST", "/api/hpc/v1/Verification/Hpc", { pin: trimmed });
+  } catch (err) {
+    if (err instanceof DeskCardError && err.message.includes("\uff081102\uff09")) {
+      throw new DeskCardError("\u91ab\u4e8b\u4eba\u54e1\u5361\u6c92\u63d2\uff0c\u53ef\u4ee5\u7e7c\u7e8c\u3002");
+    }
+    throw err;
+  }
+  if (result.statusCode === 1102) throw new DeskCardError("\u91ab\u4e8b\u4eba\u54e1\u5361\u6c92\u63d2\uff0c\u53ef\u4ee5\u7e7c\u7e8c\u3002");
+  await callCard("GET", "/api/hpc/v1/Basic");
   return readLocalCardLive();
 }
 
