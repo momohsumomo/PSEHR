@@ -73,6 +73,7 @@ def start_local_card6() -> dict:
 _CSHIS_PATHS = {
     "/api/settings/v1/PcscReader/Readers",
     "/api/settings/v1/PcscReader/Default",
+    "/api/settings/v1/PcscReader/AutoDetected",
     "/api/settings/v1/CloudSam",
     "/api/common/v1/Status",
     "/api/common/v1/Finalize",
@@ -81,10 +82,12 @@ _CSHIS_PATHS = {
     "/api/sam/v1/Basic",
     "/api/sam/v1/Signature",
     "/api/hc/v1/Basic",
+    "/api/hc/v1/Logout",
     "/api/hc/v1/Signature/Hc",
     "/api/hc/v1/Signature/HpcHc",
     "/api/hc/v1/Verification/VirtualHc",
     "/api/hpc/v1/Basic",
+    "/api/hpc/v1/Logout",
     "/api/hpc/v1/Signature",
     "/api/hpc/v1/Verification/Hpc",
 }
@@ -93,7 +96,7 @@ _CSHIS_PATHS = {
 def proxy_local_cshis(method: str, path: str, body: dict | None) -> dict:
     """Ask this PC's card software. The page sometimes cannot open https://127.0.0.1:5066 itself."""
     verb = (method or "GET").upper()
-    if verb not in {"GET", "POST"} or path not in _CSHIS_PATHS:
+    if verb not in {"GET", "POST", "DELETE"} or path not in _CSHIS_PATHS:
         return {"ok": False, "statusCode": 400}
     import ssl
     import urllib.error

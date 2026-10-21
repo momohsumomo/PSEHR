@@ -17,12 +17,13 @@ export class DeskCardError extends Error {}
 
 const HELPER = "http://127.0.0.1:5310";
 
-async function localCshisViaHelper(method: string, path: string, body?: unknown): Promise<Record<string, unknown> | null> {
+async function localCshisViaHelper(method: string, path: string, body?: unknown, timeoutMs = 45000): Promise<Record<string, unknown> | null> {
   try {
     const res = await fetch(`${HELPER}/tools/cshis`, {
       method: "POST",
       headers: { Accept: "application/json", "Content-Type": "application/json" },
       body: JSON.stringify({ method, path, body: body ?? null }),
+      signal: AbortSignal.timeout(timeoutMs),
     });
     if (!res.ok) return null;
     const data = await res.json() as Record<string, unknown>;
@@ -45,7 +46,7 @@ async function cardSoftwareListening(): Promise<boolean> {
   }
 }
 
-async function localCshisRaw(method: string, path: string, body?: unknown): Promise<Record<string, unknown>> {
+async function localCshisRaw(method: string, path: string, body?: unknown, timeoutMs = 45000): Promise<Record<string, unknown>> {
   let res: Response;
   try {
     res = await fetch(`${DIRECT}${path}`, {
@@ -54,10 +55,14 @@ async function localCshisRaw(method: string, path: string, body?: unknown): Prom
         ? { Accept: "application/json" }
         : { Accept: "application/json", "Content-Type": "application/json" },
       body: body === undefined ? undefined : JSON.stringify(body),
+      signal: AbortSignal.timeout(timeoutMs),
     });
   } catch (err) {
-    const via = await localCshisViaHelper(method, path, body);
+    const via = await localCshisViaHelper(method, path, body, timeoutMs);
     if (via) return via;
+    if (err instanceof DOMException && err.name === "TimeoutError") {
+      throw new DeskCardError("\u8b80\u5361\u8edf\u9ad4\u9019\u6b21\u56de\u61c9\u592a\u4e45\u3002\u8acb\u6309\u53f3\u4e0a\u89d2\u91cd\u65b0\u6574\u7406\u8b80\u5361\u6a5f\u3002", { cause: err });
+    }
     if (await cardSoftwareListening()) {
       throw new DeskCardError("\u8b80\u5361\u8edf\u9ad4\u5df2\u7d93\u958b\u8457\uff0c\u9019\u500b\u8996\u7a97\u554f\u4e0d\u5230\u5361\u3002", { cause: err });
     }
@@ -141,12 +146,15 @@ async function attachLocalSam(signed: Record<string, unknown>): Promise<DeskSign
 }
 
 export async function readLocalHcBasic(): Promise<Record<string, unknown>> {
-  await ensureLocalReader();
-  const status = await localCshis("GET", "/api/common/v1/Status");
-  if (nestedStatus(status, "hc") === 0) {
-    throw new DeskCardError("\u5361\u6c92\u6709\u63d2\u4e0a\u3002");
+  await bindThisReader();
+  try {
+    return await callCard("GET", "/api/hc/v1/Basic");
+  } catch (err) {
+    if (err instanceof DeskCardError && err.message.includes("\uff081102\uff09")) {
+      throw new DeskCardError("\u9019\u500b\u69fd\u6c92\u6709\u63d2\u5361\u3002");
+    }
+    throw err;
   }
-  return localCshis("GET", "/api/hc/v1/Basic");
 }
 
 export async function readLocalSamBasic(): Promise<Record<string, unknown>> {
@@ -171,8 +179,8 @@ export async function readLocalVirtualBasic(token: string): Promise<Record<strin
 }
 
 export async function signLocalHc(serviceType: string): Promise<DeskSign> {
-  await ensureLocalReader();
-  const signed = await localCshis("POST", "/api/hc/v1/Signature/Hc", { serviceType });
+  await bindThisReader();
+  const signed = await callCard("POST", "/api/hc/v1/Signature/Hc", { serviceType });
   if (!signed.hcId || !signed.hcIdNo) {
     const basic = await localCshis("GET", "/api/hc/v1/Basic");
     signed.hcId = signed.hcId || basic.cardId || basic.cardSn || "";
@@ -253,43 +261,86 @@ export async function readLocalCardLive(): Promise<LocalCardLive> {
   }
 }
 
-function liveWord(kind: "sam" | "hpc", status: number, expire: string): string {
-  if (kind === "sam") {
-    if (status === 2) return "SAM \u5df2\u9a57\u8b49" + (expire ? "\uff0c\u6709\u6548\u5230 " + expire : "");
-    if (status === 1) return "SAM \u5df2\u8f09\u5165\uff0c\u9084\u6c92\u9a57\u8b49";
-    return "SAM \u9084\u6c92\u9a57\u8b49";
+
+async function quietCard(method: string, path: string, body?: unknown): Promise<void> {
+  try {
+    await localCshisRaw(method, path, body, 8000);
+  } catch {
+    // Releasing a slot is allowed to fail when that card is not in it.
   }
-  if (status === 3) return "\u91ab\u4e8b\u4eba\u54e1\u5361 PIN \u5df2\u9a57\u8b49" + (expire ? "\uff0c\u6709\u6548\u5230 " + expire : "");
-  if (status === 2) return "\u91ab\u4e8b\u4eba\u54e1\u5361\u5df2\u9a57\u8b49\uff0c\u9084\u6c92\u6253 PIN";
-  if (status === 1) return "\u91ab\u4e8b\u4eba\u54e1\u5361\u5728\u8b80\u5361\u6a5f\u4e0a\uff0c\u9084\u6c92\u9a57 PIN";
-  return "\u91ab\u4e8b\u4eba\u54e1\u5361\u6c92\u6709\u63d2\u4e0a";
+}
+
+async function listedReaders(): Promise<string[]> {
+  const data = await localCshisRaw("GET", "/api/settings/v1/PcscReader/Readers", undefined, 8000);
+  const readers = data.readers;
+  if (!Array.isArray(readers)) return [];
+  return readers.map((item) => String(item || "")).filter(Boolean);
+}
+
+async function detectInsertedReader(): Promise<string> {
+  const data = await localCshisRaw("POST", "/api/settings/v1/PcscReader/AutoDetected", undefined, 20000);
+  if (typeof data.statusCode === "number" && data.statusCode !== 0) return "";
+  return typeof data.readerName === "string" ? data.readerName : "";
+}
+
+/** One physical reader. One name: use it. Several names: follow the card, never Interface 1. */
+async function readerForThisPc(): Promise<string> {
+  const names = await listedReaders();
+  if (names.length === 1) return names[0];
+  if (names.length === 0) return "";
+  const found = await detectInsertedReader();
+  if (found && names.includes(found)) return found;
+  const live = await readLocalCardLive();
+  if (live.readerName && names.includes(live.readerName)) return live.readerName;
+  throw new DeskCardError("\u9019\u53f0\u770b\u5230\u4e0d\u6b62\u4e00\u500b\u8b80\u5361\u6a5f\u540d\u7a31\uff0c6.0 \u4e00\u6b21\u53ea\u9023\u4e00\u53f0\u3002\u8acb\u53ea\u7559\u73fe\u5728\u8981\u7528\u7684\u90a3\u4e00\u53f0\uff0c\u518d\u6309\u53f3\u4e0a\u89d2\u91cd\u65b0\u6574\u7406\u3002");
+}
+
+async function bindThisReader(): Promise<void> {
+  const reader = await readerForThisPc();
+  if (!reader) throw new DeskCardError("\u9019\u53f0\u6c92\u6709\u770b\u5230\u8b80\u5361\u6a5f\u3002\u8acb\u78ba\u8a8d\u8b80\u5361\u6a5f\u6709\u63d2\u4e0a\uff0c\u518d\u6309\u53f3\u4e0a\u89d2\u91cd\u65b0\u6574\u7406\u3002");
+  await selectLocalReader(reader);
+}
+
+function refreshNote(reader: string, data: Record<string, unknown>): string {
+  const hpc = nestedStatus(data, "hpc") ?? 0;
+  const hc = nestedStatus(data, "hc") ?? 0;
+  let card = "\u63d2\u91ab\u4e8b\u4eba\u54e1\u5361\u53ef\u4ee5\u9a57\u8b49\uff0c\u63d2\u5065\u4fdd\u5361\u53ef\u4ee5\u76f4\u63a5\u639b\u865f\u3002";
+  if (hpc >= 1 && hc < 1) card = "\u4e0a\u9762\u662f\u91ab\u4e8b\u4eba\u54e1\u5361\uff0c\u53ef\u4ee5\u6309\u9a57\u8b49\u3002";
+  else if (hc >= 1 && hpc < 1) card = "\u4e0a\u9762\u662f\u5065\u4fdd\u5361\uff0c\u53ef\u4ee5\u76f4\u63a5\u639b\u865f\u3002";
+  else if (hpc >= 1 && hc >= 1) card = "\u9019\u500b\u69fd\u540c\u6642\u770b\u5230\u5169\u7a2e\u5361\u3002\u4e00\u6b21\u53ea\u63d2\u4e00\u5f35\u3002";
+  return "\u5df2\u653e\u958b\u8b80\u5361\u6a5f\u4e26\u91cd\u65b0\u8b80\u53d6\u3002\u73fe\u5728\u9019\u53f0\u662f\u300c" + reader + "\u300d\u3002" + card;
 }
 
 export async function refreshLocalReader(): Promise<{ note: string; live: LocalCardLive }> {
-  const names = await listLocalReaders();
-  let live = await readLocalCardLive();
-  if (!live.reachable) {
-    return { live, note: "\u9019\u53f0\u7684\u8b80\u5361\u8edf\u9ad4\u6c92\u6709\u56de\u61c9\u3002" };
+  const probe = await readLocalCardLive();
+  if (!probe.reachable) {
+    return { live: probe, note: "\u9019\u53f0\u7684\u8b80\u5361\u8edf\u9ad4\u6c92\u6709\u56de\u61c9\u3002" };
   }
+  await quietCard("DELETE", "/api/hc/v1/Logout");
+  await quietCard("DELETE", "/api/hpc/v1/Logout");
+  await quietCard("DELETE", "/api/settings/v1/PcscReader/Default");
+  const names = await listedReaders();
   if (names.length === 0) {
-    return { live, note: "\u9019\u53f0\u6c92\u6709\u770b\u5230\u8b80\u5361\u6a5f\u3002\u8acb\u78ba\u8a8d\u8b80\u5361\u6a5f\u6709\u63d2\u4e0a\uff0c\u518d\u6309\u4e00\u6b21\u3002" };
+    return { live: await readLocalCardLive(), note: "\u9019\u53f0\u6c92\u6709\u770b\u5230\u8b80\u5361\u6a5f\u3002\u8acb\u78ba\u8a8d\u8b80\u5361\u6a5f\u6709\u63d2\u4e0a\uff0c\u518d\u6309\u4e00\u6b21\u3002" };
   }
-  if (names.length === 1 && !live.readerName) {
-    await localCshis("POST", "/api/settings/v1/PcscReader/Default", { readerName: names[0] });
-    live = await readLocalCardLive();
+  let reader = names.length === 1 ? names[0] : await detectInsertedReader();
+  if (!reader) {
+    return {
+      live: await readLocalCardLive(),
+      note: "\u770b\u5230\u591a\u500b\u8b80\u5361\u6a5f\u540d\u7a31\uff0c6.0 \u4e00\u6b21\u53ea\u9023\u4e00\u53f0\u3002\u8acb\u53ea\u7559\u73fe\u5728\u8981\u7528\u7684\u90a3\u4e00\u53f0\uff0c\u518d\u6309\u4e00\u6b21\u3002",
+    };
   }
-  const reader = live.readerName || names[0];
-  return {
-    live,
-    note:
-      "\u8b80\u5361\u6a5f\u5df2\u91cd\u65b0\u6574\u7406\u3002\u73fe\u5728\u9019\u53f0\u662f\u300c" +
-      reader +
-      "\u300d\u3002" +
-      liveWord("sam", live.sam, live.samExpire) +
-      "\u3002" +
-      liveWord("hpc", live.hpc, live.hpcExpire) +
-      "\u3002\u63a5\u8457\u6309 SAM\u9a57\u8b49\uff0c\u518d\u6309\u91ab\u4e8b\u4eba\u54e1\u5361\u9a57\u8b49\u3002",
-  };
+  try {
+    await selectLocalReader(reader);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "";
+    const stuck = message.includes("\u6c92\u6709\u63db\u904e\u53bb") || message.includes("1199") || message.includes("\uff081101\uff09");
+    if (!stuck) throw err;
+    await quietCard("POST", "/api/common/v1/Finalize", {});
+    await selectLocalReader(reader);
+  }
+  const data = await localCshisRaw("GET", "/api/common/v1/Status");
+  return { live: liveFrom(data), note: refreshNote(reader, data) };
 }
 
 async function cloudSamId(): Promise<string> {
@@ -327,7 +378,7 @@ const CARD_CODES: Record<number, string> = {
   1101: "\u9084\u6c92\u6307\u5b9a\u8b80\u5361\u6a5f\u69fd",
   1102: "\u9019\u500b\u69fd\u6c92\u6709\u63d2\u5361",
   1103: "\u5361\u7247\u61c9\u7528\u7a0b\u5f0f\u5207\u63db\u5931\u6557",
-  1199: "\u8b80\u5361\u6a5f\u767c\u751f\u5176\u5b83\u932f\u8aa4",
+  1199: "\u8b80\u5361\u6a5f\u767c\u751f\u5176\u5b83\u932f\u8aa4\u3002\u8acb\u6309\u53f3\u4e0a\u89d2\u91cd\u65b0\u6574\u7406\u8b80\u5361\u6a5f",
   1302: "\u91ab\u4e8b\u6a5f\u69cb\u5df2\u8d85\u904e\u5408\u7d04\u671f\u9593",
   1303: "\u91ab\u4e8b\u6a5f\u69cb\u5df2\u505c\u6b0a",
   1304: "SAM \u5df2\u8a3b\u92b7",
@@ -398,24 +449,15 @@ async function selectLocalReader(reader: string): Promise<void> {
     }
     throw new DeskCardError(
       "6.0 \u73fe\u5728\u7684\u9023\u7dda\u5728\u300c" + live + "\u300d\u3002" + until +
-      "\u9019\u6b21\u8981\u7684\u662f\u300c" + reader + "\u300d\u3002\u5df2\u9a57\u8b49\u7684\u72c0\u614b\u9084\u5728\uff0c\u6c92\u6709\u6e05\u6389\uff0c\u6240\u4ee5\u6c92\u6709\u63db\u904e\u53bb\u3002",
+      "\u9019\u6b21\u8981\u7684\u662f\u300c" + reader + "\u300d\u3002\u5df2\u9a57\u8b49\u7684\u72c0\u614b\u9084\u5728\uff0c\u6c92\u6709\u6e05\u6389\uff0c\u6240\u4ee5\u6c92\u6709\u63db\u904e\u53bb\u3002\u8acb\u6309\u53f3\u4e0a\u89d2\u91cd\u65b0\u6574\u7406\u8b80\u5361\u6a5f\u3002",
     );
   }
-}
-
-async function hpcReaderName(): Promise<string> {
-  const names = await listLocalReaders();
-  const prefer = "Generic Smart Card Reader Interface 1";
-  if (names.includes(prefer)) return prefer;
-  return names[0] || "";
 }
 
 export async function verifyLocalHpc(pin: string): Promise<LocalCardLive> {
   const trimmed = pin.trim();
   if (!trimmed) throw new DeskCardError("\u8acb\u5148\u8f38\u5165\u91ab\u4e8b\u4eba\u54e1\u5361 PIN\u3002");
-  const reader = await hpcReaderName();
-  if (!reader) throw new DeskCardError("\u8acb\u5148\u9078\u64c7\u91ab\u4e8b\u4eba\u54e1\u5361\u7684\u8b80\u5361\u6a5f\u3002\u53ea\u6709\u4e00\u53f0\u5c31\u9078\u8ddf\u5065\u4fdd\u5361\u540c\u4e00\u53f0\u3002");
-  await selectLocalReader(reader);
+  await bindThisReader();
   let result: Record<string, unknown>;
   try {
     result = await callCard("POST", "/api/hpc/v1/Verification/Hpc", { pin: trimmed });

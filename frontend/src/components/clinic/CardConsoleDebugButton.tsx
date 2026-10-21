@@ -29,7 +29,7 @@ export function CardConsoleDebugButton({
 
   const load = async () => {
     setBusy(true);
-    setNote("");
+    setNote("\u6b63\u5728\u653e\u958b\u8b80\u5361\u6a5f\uff0c\u8acb\u7a0d\u5019\u3002");
     try {
       const found = await refreshLocalReader();
       setNote(found.note);

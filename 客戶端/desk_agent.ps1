@@ -615,6 +615,7 @@ public class PsehrTrustAll : ICertificatePolicy {
       $allowed = @(
         "/api/settings/v1/PcscReader/Readers",
         "/api/settings/v1/PcscReader/Default",
+        "/api/settings/v1/PcscReader/AutoDetected",
         "/api/settings/v1/CloudSam",
         "/api/common/v1/Status",
         "/api/common/v1/Finalize",
@@ -623,14 +624,16 @@ public class PsehrTrustAll : ICertificatePolicy {
         "/api/sam/v1/Basic",
         "/api/sam/v1/Signature",
         "/api/hc/v1/Basic",
+        "/api/hc/v1/Logout",
         "/api/hc/v1/Signature/Hc",
         "/api/hc/v1/Signature/HpcHc",
         "/api/hc/v1/Verification/VirtualHc",
         "/api/hpc/v1/Basic",
+        "/api/hpc/v1/Logout",
         "/api/hpc/v1/Signature",
         "/api/hpc/v1/Verification/Hpc"
       )
-      if ($Method -ne "GET" -and $Method -ne "POST") { return '{"ok":false,"statusCode":400}' }
+      if ($Method -ne "GET" -and $Method -ne "POST" -and $Method -ne "DELETE") { return '{"ok":false,"statusCode":400}' }
       if ($allowed -notcontains $Path) { return '{"ok":false,"statusCode":400}' }
       try {
         $req = [System.Net.HttpWebRequest]::Create("https://127.0.0.1:5066" + $Path)
@@ -645,6 +648,8 @@ public class PsehrTrustAll : ICertificatePolicy {
           $out = $req.GetRequestStream()
           $out.Write($bytes, 0, $bytes.Length)
           $out.Close()
+        } elseif ($Method -eq "DELETE") {
+          $req.ContentLength = 0
         }
         $resp = $req.GetResponse()
         $reader = New-Object System.IO.StreamReader($resp.GetResponseStream())
