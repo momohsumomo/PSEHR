@@ -10,8 +10,9 @@ from typing import Any
 
 
 def pick_release(items: list[dict[str, Any]], prefix: str) -> dict[str, Any] | None:
-    for item in items:
-        tag = str(item.get("tag_name") or "")
-        if tag.startswith(prefix):
-            return item
-    return None
+    hits = [item for item in items if str(item.get("tag_name") or "").startswith(prefix)]
+    if not hits:
+        return None
+    # GitHub lists tags by name, so program-2026.10.21.9 comes before .10.
+    # The clinic wants the one published last.
+    return max(hits, key=lambda item: str(item.get("published_at") or item.get("created_at") or ""))

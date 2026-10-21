@@ -26,6 +26,13 @@ class AppUpdateTests(unittest.TestCase):
         self.assertEqual(pick_release(items, "drug-pack-")["tag_name"], "drug-pack-2026.10.1")
         self.assertIsNone(pick_release(items, "other-"))
 
+    def test_picks_newer_publish_when_tag_name_sorts_earlier(self) -> None:
+        items = [
+            {"tag_name": "program-2026.10.21.9", "published_at": "2026-10-21T09:18:32Z"},
+            {"tag_name": "program-2026.10.21.10", "published_at": "2026-10-21T09:33:00Z"},
+        ]
+        self.assertEqual(pick_release(items, "program-")["tag_name"], "program-2026.10.21.10")
+
     def test_dev_tree_refuses_overwrite(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
