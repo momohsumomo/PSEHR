@@ -378,6 +378,7 @@ export function ClinicOutpatientPage() {
   >(null);
   const leaveBypassRef = useRef(false);
   const afterSaveLeaveRef = useRef<(() => void) | null>(null);
+  const printSimpleSlipRef = useRef<() => void>(() => {});
   const finishReply = useCallback(() => {
     setReplyAsk(null);
     setReplyError("");
@@ -953,6 +954,7 @@ export function ClinicOutpatientPage() {
         doctorLabel = doctorId;
       }
     }
+    setSaveSpent(false);
     const draft = buildVisitSaveDraft({
       selected,
       diagnoses: displayDiagnoses,
@@ -1124,31 +1126,7 @@ export function ClinicOutpatientPage() {
         }
       }
       if (saveDraft.printRx) {
-        const clinic = readLocalClinicBundle();
-        setPrintNote("\u5df2\u958b\u555f\u9810\u89bd\u3002\u78ba\u5b9a\u5f8c\u518d\u6309\u9810\u89bd\u4e0a\u7684\u5217\u5370\u3002");
-        void openPrintPreview({
-          kind: "bag",
-          title: "\u85e5\u888b\uff0f\u8655\u65b9\u6458\u8981",
-          clinicName: clinic.profile.clinicName,
-          patientName: selected?.patientDisplay,
-          medicalNo: selected?.medicalNo,
-          lines: [
-            { label: "\u91ab\u5e2b", value: saveDraft.doctor },
-            { label: "\u5929\u6578", value: saveDraft.rxDays },
-            { label: "\u639b\u865f\u8cbb", value: saveDraft.regFee },
-            { label: "\u85e5\u8cbb", value: saveDraft.drugFee },
-            { label: "\u8a3a\u5bdf\u8cbb", value: saveDraft.consultFee },
-          ],
-          bodyHtml: currentRx
-            .map((r) => `${r.nhiCode || ""} ${r.name} ${r.sig} ${r.days}\u5929 x${r.qty ?? 1}`)
-            .join("\n"),
-        })
-          .then((result) => {
-            setPrintNote(result.printed ? `\u5df2\u9001\u5230 ${result.printer}` : "\u9810\u89bd\u5df2\u95dc\u9589\uff0c\u5c1a\u672a\u9001\u51fa\u3002");
-          })
-          .catch((err: unknown) => {
-            setPrintNote(err instanceof Error ? err.message : "\u9001\u5230\u5370\u8868\u6a5f\u5931\u6557");
-          });
+        printSimpleSlipRef.current();
       }
       committedFpRef.current[selectedEncounterId] = visitFingerprint;
       const holdForReply =
@@ -1257,14 +1235,16 @@ export function ClinicOutpatientPage() {
         setPrintNote(msg);
       });
   }, [currentDate, saveDraft, selected, ccText, displayDiagnoses, currentRx, session?.pharmacist]);
+  printSimpleSlipRef.current = printVisitReceipt;
 
   const onF9 = useCallback(() => {
-    if (saving || saveSpent || cloudAgainAsk) return;
-    if (!saveLayerOpen) {
-      void openSaveLayer();
+    if (saving || cloudAgainAsk) return;
+    if (saveLayerOpen) {
+      if (saveSpent) return;
+      void confirmSave();
       return;
     }
-    void confirmSave();
+    void openSaveLayer();
   }, [saveLayerOpen, openSaveLayer, confirmSave, saving, saveSpent, cloudAgainAsk]);
 
   const dittoRx = useCallback(
@@ -2094,6 +2074,13 @@ export function ClinicOutpatientPage() {
     ],
   );
 
+  const closeSaveLayer = useCallback(() => {
+    const spent = saveSpent;
+    setSaveLayerOpen(false);
+    afterSaveLeaveRef.current = null;
+    if (spent) closeChartNow(true);
+  }, [saveSpent, closeChartNow]);
+
   useEscLayer(
     [
       { open: replyAsk != null, close: finishReply },
@@ -2127,10 +2114,7 @@ export function ClinicOutpatientPage() {
       { open: deleteOpen, close: () => setDeleteOpen(false) },
       {
         open: saveLayerOpen,
-        close: () => {
-          setSaveLayerOpen(false);
-          afterSaveLeaveRef.current = null;
-        },
+        close: () => closeSaveLayer(),
       },
       { open: paletteOpen, close: () => setPaletteOpen(false) },
       { open: lesionOpen, close: () => setLesionOpen(false) },
@@ -3179,9 +3163,9 @@ export function ClinicOutpatientPage() {
                 </button>
                 <button
                   type="button"
-                  disabled={saving || saveSpent}
+                  disabled={saving}
                   className="border px-2 py-1 text-xs font-extrabold text-[#004000] disabled:text-[#808080]"
-                  style={{ borderColor: HIS.chromeDark, background: saveSpent ? "#D4D0C8" : "#C8F0C8" }}
+                  style={{ borderColor: HIS.chromeDark, background: "#C8F0C8" }}
                   onClick={() => onF9()}
                 >
                   F9 存檔
@@ -3261,9 +3245,9 @@ export function ClinicOutpatientPage() {
               </button>
               <button
                 type="button"
-                disabled={saving || saveSpent}
-                className="flex min-w-0 flex-1 items-center justify-center border border-[#808080] px-1 text-[13px] font-extrabold disabled:text-[#808080]"
-                style={{ background: saveSpent ? "#D4D0C8" : "#C8F0C8", color: saveSpent ? "#808080" : "#004000" }}
+                disabled={saving}
+                className="flex min-w-0 flex-1 items-center justify-center border border-[#808080] px-1 text-[13px] font-extrabold text-[#004000] disabled:text-[#808080]"
+                style={{ background: "#C8F0C8" }}
                 onClick={() => onF9()}
               >
                 F9 存檔
@@ -3445,7 +3429,7 @@ export function ClinicOutpatientPage() {
       ) : null}
       <VisitSaveConfirmPanel
         open={saveLayerOpen}
-        locked={false}
+        locked={saveSpent}
         saving={saving}
         cardNote={cardNote}
         selected={selected}
@@ -3465,7 +3449,7 @@ export function ClinicOutpatientPage() {
         onChange={(patch) => {
           setSaveDraft((d) => ({ ...d, ...patch }));
         }}
-        onClose={() => setSaveLayerOpen(false)}
+        onClose={closeSaveLayer}
         onConfirm={() => void confirmSave()}
         onPrint={printVisitReceipt}
         printNote={printNote}

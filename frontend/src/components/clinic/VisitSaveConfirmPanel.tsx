@@ -305,7 +305,7 @@ export function VisitSaveConfirmPanel({
       <header className="flex shrink-0 items-center justify-between px-2 py-1 text-white" style={{ background: HIS.titleBarFrom }}>
         <span className="font-bold">{"F9 \u5b58\u6a94\u78ba\u8a8d"}</span>
         <span>
-          {locked ? "\u5df2\u5b58\u6a94" : "\u518d\u6309 F9 \u78ba\u5b9a\u5b58\u6a94 \u00b7 Esc \u56de\u8a3a\u7642"}
+          {locked ? "\u5df2\u5b58\u6a94 \u00b7 Esc \u56de\u5019\u8a3a\u6e05\u55ae" : "\u518d\u6309 F9 \u78ba\u5b9a\u5b58\u6a94 \u00b7 Esc \u56de\u8a3a\u7642"}
         </span>
       </header>
 
