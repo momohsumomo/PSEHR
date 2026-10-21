@@ -60,13 +60,25 @@ export function preparePrint(job: PrintJob): PreparedPrint {
     (job.kind === "receipt" ? "simple" : job.kind === "bag" ? "bag" : undefined);
   const setup = setupId ? findPrintSetup(settings, setupId) : undefined;
   const paper = setup ? setupPageCss(setup) : paperCssSize(resolved.paper);
-  const html = buildPrintHtml(job, paper, resolved.fontSizePx, resolved.marginMm, resolved.paper === "order_dual");
+  const widthMm = setup?.widthMm || 210;
+  const heightMm = setup?.heightMm || 297;
+  const insetMm = setup ? Number(setup.insetMm) || 0 : 0;
+  const html = buildPrintHtml(
+    job,
+    paper,
+    resolved.fontSizePx,
+    resolved.marginMm,
+    resolved.paper === "order_dual",
+    widthMm,
+    heightMm,
+    insetMm,
+  );
   return {
     title: job.title,
     html,
     printerName: setup?.printerName.trim() || "",
-    widthMm: setup?.widthMm || 210,
-    heightMm: setup?.heightMm || 297,
+    widthMm,
+    heightMm,
     feed: setup ? setupFeed(setup) : "portrait",
   };
 }
@@ -93,6 +105,9 @@ function buildPrintHtml(
   fontSizePx: number,
   marginMm: number,
   orderDual: boolean,
+  widthMm: number,
+  heightMm: number,
+  insetMm: number,
 ): string {
   const rows = job.lines
     .map(
@@ -127,6 +142,14 @@ function buildPrintHtml(
     ? `.slip-page{box-sizing:border-box;width:${pageW};height:${pageH};margin:0;padding:0;overflow:hidden;display:flex;flex-direction:column;break-after:page;page-break-after:always;}
   .slip-page:last-child{break-after:auto;page-break-after:auto;}`
     : "";
+  const minSide = Math.min(widthMm, heightMm);
+  const fitScale =
+    (lockOnePage || paged) && insetMm > 0 && minSide > insetMm * 2 + 8
+      ? (1 - (2 * insetMm) / minSide).toFixed(4)
+      : "";
+  const fitCss = fitScale
+    ? `.slip-page{transform:scale(${fitScale});transform-origin:center center;}`
+    : "";
   return `<!doctype html><html style="color-scheme:only light;background:#fff;color:#000;forced-color-adjust:none"><head><meta charset="utf-8"/>
 <meta name="color-scheme" content="only light"/>
 <title>${escapeHtml(job.title)}</title>
@@ -148,6 +171,7 @@ function buildPrintHtml(
   .sheet { display: flex; gap: 3mm; align-items: stretch; }
   .half { flex: 1 1 0; border: 1px dashed #666; padding: 2mm; box-sizing: border-box; }
   ${pagedCss}
+  ${fitCss}
 </style></head><body>
   ${body}
 </body></html>`;

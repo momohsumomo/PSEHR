@@ -37,6 +37,8 @@ export type PrintSetup = {
   heightMm: number;
   /** 進紙方向。跟紙張長寬分開，寬 210、長 93 仍可選直向。 */
   feed?: PrinterFeed;
+  /** 內容離紙邊多遠，單位 mm。避免印表機把上下切掉。 */
+  insetMm?: number;
   printerName: string;
   footer: string;
   /** 健保或對外固定版面：只調紙張與印表機 */
@@ -59,6 +61,7 @@ export const DEFAULT_PRINT_SETUPS: PrintSetup[] = [
     label: "\u7c21\u5f0f",
     widthMm: 114,
     heightMm: 101.6,
+    insetMm: 2,
     printerName: "",
     footer: "\u672c\u6536\u64da\u907a\u5931\u6982\u4e0d\u88dc\u767c\uff0c\u85e5\u54c1\u8acb\u4fdd\u5b58\u65bc\u9670\u6dbc\u8655\u6240",
     layoutFixed: false,
@@ -124,6 +127,7 @@ export const DEFAULT_PRINT_SETUPS: PrintSetup[] = [
     label: "\u62bc\u91d1\u55ae",
     widthMm: 114,
     heightMm: 101.6,
+    insetMm: 2,
     printerName: "",
     footer: "\u6ce8 \u610f !!  \u672a\u84cb\u672c\u8a3a\u6240\u5370\u7ae0\u8005\u7121\u6548\uff0e",
     layoutFixed: true,
@@ -251,6 +255,12 @@ function mergeParts(base: PrintPart[] | undefined, saved: PrintPart[] | undefine
   });
 }
 
+function savedInset(value: unknown, base: number | undefined): number {
+  const n = Number(value);
+  if (Number.isFinite(n) && n >= 0 && n <= 15) return n;
+  return base ?? 0;
+}
+
 function mergePrintSetups(saved: PrintSetup[] | undefined): PrintSetup[] {
   const rows = Array.isArray(saved) ? saved : [];
   return DEFAULT_PRINT_SETUPS.map((base) => {
@@ -262,6 +272,7 @@ function mergePrintSetups(saved: PrintSetup[] | undefined): PrintSetup[] {
           ...base,
           printerName: String(hit.printerName || ""),
           feed: savedFeed(hit.feed),
+          insetMm: savedInset(hit.insetMm, base.insetMm),
         };
       }
       const days = Number(hit.depositDays);
@@ -278,6 +289,7 @@ function mergePrintSetups(saved: PrintSetup[] | undefined): PrintSetup[] {
         depositHolidayNote: hit.depositHolidayNote === true,
         depositSingleSide: hit.depositSingleSide === true,
         feed: savedFeed(hit.feed),
+        insetMm: savedInset(hit.insetMm, base.insetMm),
       };
     }
     const width = Number(hit.widthMm);
@@ -295,6 +307,7 @@ function mergePrintSetups(saved: PrintSetup[] | undefined): PrintSetup[] {
       receiptTitle: typeof hit.receiptTitle === "string" ? hit.receiptTitle : base.receiptTitle,
       parts: mergeParts(base.parts, hit.parts),
       feed: savedFeed(hit.feed),
+      insetMm: savedInset(hit.insetMm, base.insetMm),
     };
   });
 }

@@ -72,6 +72,7 @@ export function PrintSetupPanel({ value, onChange }: Props) {
             <th className={cell}>{"\u5bec mm"}</th>
             <th className={cell}>{"\u9577 mm"}</th>
             <th className={cell}>{"\u65b9\u5411"}</th>
+            <th className={cell}>{"\u908a\u754c"}</th>
             <th className={cell}>{"\u9810\u8a2d\u5370\u8868\u6a5f"}</th>
             <th className={cell}>{"\u8a2d\u5b9a"}</th>
             <th className={cell}>{"\u9810\u89bd"}</th>
@@ -132,6 +133,17 @@ export function PrintSetupPanel({ value, onChange }: Props) {
                   <option value="portrait">{"\u76f4\u5411"}</option>
                   <option value="landscape">{"\u6a6b\u5411"}</option>
                 </select>
+              </td>
+              <td className={cell}>
+                <input
+                  className={input}
+                  type="number"
+                  min={0}
+                  max={15}
+                  step={0.5}
+                  value={row.insetMm ?? 0}
+                  onChange={(e) => patchRow(row.id, { insetMm: Number(e.target.value) })}
+                />
               </td>
               <td className={cell}>
                 <select
