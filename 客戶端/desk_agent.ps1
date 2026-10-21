@@ -209,7 +209,12 @@ function Export-EdgePdf([string]$Edge, [string]$HtmlPath, [string]$PdfPath, [dou
     [IO.File]::WriteAllBytes($PdfPath, [Convert]::FromBase64String($data))
   } finally {
     if ($ws) { try { $ws.Dispose() } catch {} }
-    if ($proc -and -not $proc.HasExited) { & taskkill.exe /F /T /PID $proc.Id | Out-Null }
+    if ($proc -and -not $proc.HasExited) {
+      try {
+        $killer = Join-Path $env:SystemRoot "System32\taskkill.exe"
+        & $killer /F /T /PID "$($proc.Id)" | Out-Null
+      } catch {}
+    }
   }
   if (-not (Test-Path -LiteralPath $PdfPath) -or (Get-Item -LiteralPath $PdfPath).Length -lt 100) {
     throw "pdf was not created"
