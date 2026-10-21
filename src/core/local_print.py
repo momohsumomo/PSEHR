@@ -78,8 +78,15 @@ _CSHIS_PATHS = {
     "/api/common/v1/Finalize",
     "/api/common/v1/Initial",
     "/api/sam/v1/Verification",
+    "/api/sam/v1/Basic",
+    "/api/sam/v1/Signature",
     "/api/hc/v1/Basic",
+    "/api/hc/v1/Signature/Hc",
+    "/api/hc/v1/Signature/HpcHc",
+    "/api/hc/v1/Verification/VirtualHc",
     "/api/hpc/v1/Basic",
+    "/api/hpc/v1/Signature",
+    "/api/hpc/v1/Verification/Hpc",
 }
 
 
