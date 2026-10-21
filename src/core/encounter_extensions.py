@@ -143,30 +143,44 @@ def previsit_completed(payload: dict[str, Any]) -> bool:
     return False
 
 
+def previsit_visit_kind(payload: dict[str, Any]) -> str:
+    for ext in payload.get("extension") or []:
+        if ext.get("url") != PREVISIT_EXTENSION_URL:
+            continue
+        for sub in ext.get("extension") or []:
+            if sub.get("url") == "visitKind" and sub.get("valueString") in {"cosmetic", "medical"}:
+                return str(sub["valueString"])
+    return ""
+
+
 def attach_previsit_extension(
     payload: dict[str, Any],
     *,
     chief_complaint: str,
     symptom_tags: list[str],
     submitted_at: str,
+    visit_kind: str = "",
 ) -> dict[str, Any]:
     """病患預診完成後寫入 Encounter.extension。"""
     out = dict(payload)
     extensions: list[dict[str, Any]] = [
         e for e in out.get("extension") or [] if e.get("url") != PREVISIT_EXTENSION_URL
     ]
+    nested: list[dict[str, Any]] = [
+        {"url": "completed", "valueBoolean": True},
+        {"url": "chiefComplaint", "valueString": chief_complaint[:500]},
+        {
+            "url": "symptomTags",
+            "valueString": ",".join(symptom_tags[:20]),
+        },
+        {"url": "submittedAt", "valueDateTime": submitted_at},
+    ]
+    if visit_kind in {"cosmetic", "medical"}:
+        nested.append({"url": "visitKind", "valueString": visit_kind})
     extensions.append(
         {
             "url": PREVISIT_EXTENSION_URL,
-            "extension": [
-                {"url": "completed", "valueBoolean": True},
-                {"url": "chiefComplaint", "valueString": chief_complaint[:500]},
-                {
-                    "url": "symptomTags",
-                    "valueString": ",".join(symptom_tags[:20]),
-                },
-                {"url": "submittedAt", "valueDateTime": submitted_at},
-            ],
+            "extension": nested,
         }
     )
     out["extension"] = extensions

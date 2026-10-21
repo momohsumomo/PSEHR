@@ -18,6 +18,18 @@ import { HIS, HIS_FONT, HIS_QUEUE_COL_WIDTHS } from "@/lib/hisTheme";
 import { FIRST_VISIT_NAME, isFirstVisit, visitListMark } from "@/lib/visitListMark";
 import { clockLabel, compareClinicQueue, showsUploadCircle } from "@/lib/queueOrder";
 
+const COSMETIC_ROW = "#F7C6DC";
+const COSMETIC_ROW_SELECTED = "#E89BC0";
+
+export function queueRowBackground(
+  visitKind: string | undefined,
+  selected: boolean,
+  plain: string,
+): string {
+  if (visitKind !== "cosmetic") return plain;
+  return selected ? COSMETIC_ROW_SELECTED : COSMETIC_ROW;
+}
+
 const COL_WIDTH_STORAGE = "wundadi.queue.colWidths.v2";
 
 const DEFAULT_COL_WIDTHS: Record<string, number> = { ...HIS_QUEUE_COL_WIDTHS };
@@ -380,15 +392,19 @@ export function EncounterQueuePanel({
                   className="cursor-pointer leading-none"
                   style={{
                     height: HIS.row.list,
-                    background: selected
-                      ? HIS.rowSelected
-                      : finished
-                        ? HIS.rowFinished
-                        : waiting
-                          ? HIS.rowWaiting
-                          : alt
-                            ? HIS.rowAlt
-                            : "#FFFFFF",
+                    background: queueRowBackground(
+                      e.visitKind,
+                      selected,
+                      selected
+                        ? HIS.rowSelected
+                        : finished
+                          ? HIS.rowFinished
+                          : waiting
+                            ? HIS.rowWaiting
+                            : alt
+                              ? HIS.rowAlt
+                              : "#FFFFFF",
+                    ),
                     color: finished && !selected ? "#666666" : "#000000",
                   }}
                   onClick={() => onSelect(e.encounterId)}
@@ -445,8 +461,17 @@ export function EncounterQueuePanel({
                 }
                 onDoubleClick={() => enterPatient(e.encounterId)}
                 className={`w-full border-b border-slate-50 px-2.5 py-2 text-left transition ${
-                  selectedId === e.encounterId ? "bg-sky-50" : "hover:bg-slate-50"
+                  e.visitKind === "cosmetic"
+                    ? ""
+                    : selectedId === e.encounterId
+                      ? "bg-sky-50"
+                      : "hover:bg-slate-50"
                 }`}
+                style={
+                  e.visitKind === "cosmetic"
+                    ? { background: selectedId === e.encounterId ? COSMETIC_ROW_SELECTED : COSMETIC_ROW }
+                    : undefined
+                }
               >
                 <div className="mb-1 flex items-center gap-1.5">
                   <DoneMarkCell entry={e} />

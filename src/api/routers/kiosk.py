@@ -196,6 +196,7 @@ def intake_submit(body: IntakeSubmitBody) -> dict[str, Any]:
         chief_complaint=text,
         symptom_tags=tags,
         submitted_at=datetime.now().astimezone().isoformat(timespec="seconds"),
+        visit_kind=body.visitKind if body.visitKind in {"cosmetic", "medical"} else "medical",
     )
     updated = get_fhir_repository().update_resource("Encounter", body.encounterId.strip(), patched)
     try:

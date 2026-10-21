@@ -95,6 +95,7 @@ function mapApiQueue(entries: ApiQueueEntry[]): QueueEntry[] {
     ageSex: e.queueMeta.ageSex ?? "",
     hasAllergyAlert: Boolean(e.queueMeta.hasAllergyAlert),
     preVisitCompleted: Boolean(e.queueMeta.preVisitCompleted),
+    visitKind: e.queueMeta.visitKind || "",
     reasonText: e.queueMeta.reasonText ?? "",
     slotTime: e.queueMeta.slotTime,
     medicalNo: e.queueMeta.medicalNo,

@@ -1175,7 +1175,7 @@ class SqliteShadowStore(ShadowStore):
     ) -> list[dict[str, Any]]:
         """診間掛號清單。date_to 有值時改查起迄（含），可再限一位病患。"""
         result: list[dict[str, Any]] = []
-        from src.core.encounter_extensions import extract_reg_meta, previsit_completed
+        from src.core.encounter_extensions import extract_reg_meta, previsit_completed, previsit_visit_kind
 
         where = [
             "ei.queue_status != 'cancelled'",
@@ -1388,6 +1388,7 @@ class SqliteShadowStore(ShadowStore):
                     "patientId": pid,
                     "patientDisplay": display,
                     "preVisitCompleted": previsit_completed(resource),
+                    "visitKind": previsit_visit_kind(resource),
                     "hasAllergyAlert": has_allergy,
                     "reasonText": reason_text,
                     "slotTime": slot_time,
@@ -1767,7 +1768,7 @@ class SqliteShadowStore(ShadowStore):
 
     def get_encounter_queue_meta(self, encounter_id: str) -> dict[str, Any] | None:
         """取得單一掛號的詳細資料與 queueMeta。"""
-        from src.core.encounter_extensions import extract_reg_meta, previsit_completed
+        from src.core.encounter_extensions import extract_reg_meta, previsit_completed, previsit_visit_kind
         with self._connect() as conn:
             row = conn.execute(
                 """
@@ -1896,6 +1897,7 @@ class SqliteShadowStore(ShadowStore):
                 "patientId": pid,
                 "patientDisplay": display,
                 "preVisitCompleted": previsit_completed(resource),
+                "visitKind": previsit_visit_kind(resource),
                 "hasAllergyAlert": has_allergy,
                 "reasonText": reason_text,
                 "slotTime": slot_time,

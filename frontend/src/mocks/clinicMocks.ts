@@ -15,6 +15,8 @@ export interface QueueEntry {
   hasAllergyAlert: boolean;
   /** 護理／自助預診已完成 → 掛號列 💬 */
   preVisitCompleted: boolean;
+  /** 問診主要目的。cosmetic 時掛號列用粉紅底。 */
+  visitKind?: string;
   reasonText: string;
   /** 醫聖 DoctBrw 欄位（UX 展示；API 模式可逐步對齊） */
   slotTime?: string;

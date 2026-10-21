@@ -118,6 +118,7 @@ export type ApiQueueEntry = {
     patientId: string;
     patientDisplay: string;
     preVisitCompleted?: boolean;
+    visitKind?: string;
     hasAllergyAlert?: boolean;
     reasonText?: string;
     slotTime?: string;

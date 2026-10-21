@@ -39,7 +39,7 @@ import { clockLabel, compareClinicQueue, normalizeClock, nowClock, planQueueNumb
 import { depositPrintOptions, findPrintSetup, loadPrintSettings } from "@/lib/printSettings";
 import { openDepositSlip, openSavedVisitReceipt } from "@/lib/visitReceiptPrint";
 import { VisitPrintDialog } from "@/components/clinic/VisitPrintDialog";
-import { DoneMarkCell } from "@/components/clinic/EncounterQueuePanel";
+import { DoneMarkCell, queueRowBackground } from "@/components/clinic/EncounterQueuePanel";
 import { AppointmentCheckInDialog, InsertNumberDialog } from "@/components/clinic/InsertNumberDialog";
 import {
   pendingDuplicateHits,
@@ -1077,15 +1077,19 @@ export function RegisterPage() {
                 className="cursor-pointer leading-none"
                 style={{
                   height: HIS.row.list,
-                  background: selected
-                    ? "#7FFFFF"
-                    : finished
-                      ? HIS.rowFinished
-                      : waiting
-                        ? HIS.rowWaiting
-                        : alt
-                          ? HIS.rowAlt
-                          : "#FFFFFF",
+                  background: queueRowBackground(
+                    e.visitKind,
+                    selected,
+                    selected
+                      ? "#7FFFFF"
+                      : finished
+                        ? HIS.rowFinished
+                        : waiting
+                          ? HIS.rowWaiting
+                          : alt
+                            ? HIS.rowAlt
+                            : "#FFFFFF",
+                  ),
                   color: finished && !selected ? "#666666" : "#000000",
                 }}
               >

@@ -90,8 +90,6 @@ export function IntakeKioskPage() {
   const [concerns, setConcerns] = useState<string[]>([]);
   const [prior, setPrior] = useState("");
   const [result, setResult] = useState("");
-  const [chosenSex, setChosenSex] = useState<"" | "F" | "M">("");
-  const [faceOpen, setFaceOpen] = useState(false);
   const [sites, setSites] = useState<string[]>([]);
   const [symptoms, setSymptoms] = useState<string[]>([]);
   const [days, setDays] = useState("");
@@ -114,8 +112,6 @@ export function IntakeKioskPage() {
     setConcerns([]);
     setPrior("");
     setResult("");
-    setChosenSex("");
-    setFaceOpen(false);
     setSites([]);
     setSymptoms([]);
     setDays("");
@@ -203,10 +199,6 @@ export function IntakeKioskPage() {
   };
 
   const toggleSite = (id: string) => {
-    if (id === "face") {
-      setFaceOpen((open) => !open);
-      return;
-    }
     const hand = id.startsWith("hand-r") ? "r" : id.startsWith("hand-l") ? "l" : "";
     setSites((prev) => {
       if (!hand) return toggle(prev, id, 24);
@@ -249,7 +241,6 @@ export function IntakeKioskPage() {
 
   const startFromCard = () => {
     if (!picked) return;
-    if (picked.sex === "F" || picked.sex === "M") setChosenSex(picked.sex);
     if (picked.filled) setStep("again");
     else {
       setFromAgain(false);
@@ -257,7 +248,6 @@ export function IntakeKioskPage() {
     }
   };
 
-  const chartSex: "" | "F" | "M" = picked?.sex === "F" || picked?.sex === "M" ? picked.sex : chosenSex;
   const cosmeticTotal = prior === "before" ? 5 : 4;
   const totalQ = kind === "cosmetic" ? cosmeticTotal : 6;
   const questionNo = (
@@ -305,7 +295,7 @@ export function IntakeKioskPage() {
     busy ||
     (step === "aim" && !kind) ||
     (step === "concern" && concerns.length === 0) ||
-    (step === "where" && (sites.length === 0 || !chartSex)) ||
+    (step === "where" && sites.length === 0) ||
     (step === "prior" && !prior) ||
     (step === "result" && !result) ||
     (step === "what" && symptoms.length === 0) ||
@@ -410,7 +400,7 @@ export function IntakeKioskPage() {
         ) : null}
 
         {step === "aim" ? (
-          <Question title={"\u4eca\u5929\u662f\u8981\u770b\u75c5\uff0c\u9084\u662f\u8981\u505a\u91ab\u7f8e\uff1f"}>
+          <Question title={"\u4eca\u5929\u4f86\u7684\u4e3b\u8981\u76ee\u7684"}>
             <button type="button" className={`${choice} ${kind === "medical" ? onCls : ""}`} onClick={() => setKind("medical")}>
               {"\u770b\u75c5"}
             </button>
@@ -438,35 +428,20 @@ export function IntakeKioskPage() {
                 {"\u80cc\u9762"}
               </button>
             </div>
-            <div className="flex min-h-0 flex-1 items-stretch justify-center gap-2">
-              {chartSex && face === "front" ? (
-                <div className="flex h-[46%] w-36 shrink-0 flex-col self-start">
-                  <div className="min-h-0 flex-1">
-                    <FaceZoom sex={chartSex} selected={sites} onToggle={toggleSite} />
-                  </div>
-                </div>
-              ) : null}
-              <div className="flex w-8 shrink-0 items-center justify-center text-lg font-bold [writing-mode:vertical-rl]">{face === "back" ? "\u60a8\u7684\u5de6\u5074" : "\u60a8\u7684\u53f3\u5074"}</div>
-              <div className="min-h-0 w-full max-w-xl flex-1">
-                {chartSex ? (
-                  <BodyMap face={face} sex={chartSex} selected={sites} faceOpen={faceOpen} onToggle={toggleSite} />
+            <div className="flex min-h-0 flex-1 items-stretch gap-2">
+              <div className="flex min-h-0 w-[36%] flex-col">
+                {face === "front" ? (
+                  <FaceZoom selected={sites} onToggle={toggleSite} />
                 ) : (
-                  <div className="grid h-full grid-cols-1 gap-3">
-                    <button type="button" className={big} onClick={() => setChosenSex("M")}>
-                      {"\u7537\u6027"}
-                    </button>
-                    <button type="button" className={big} onClick={() => setChosenSex("F")}>
-                      {"\u5973\u6027"}
-                    </button>
-                  </div>
+                  <p className="m-auto text-center text-xl font-bold">{"\u81c9\u4e0a\u7d30\u4f4d\u8acb\u5207\u56de\u6b63\u9762"}</p>
                 )}
               </div>
-              <div className="flex w-8 shrink-0 items-center justify-center text-lg font-bold [writing-mode:vertical-rl]">{face === "back" ? "\u60a8\u7684\u53f3\u5074" : "\u60a8\u7684\u5de6\u5074"}</div>
-              {chartSex ? (
-                <div className="flex h-[52%] w-40 shrink-0 flex-col self-center">
-                  <HandsZoom face={face} selected={sites} onToggle={toggleSite} />
-                </div>
-              ) : null}
+              <div className="min-h-0 min-w-0 flex-1">
+                <BodyMap face={face} selected={sites} onToggle={toggleSite} />
+              </div>
+              <div className="flex min-h-0 w-[32%] flex-col">
+                <HandsZoom face={face} selected={sites} onToggle={toggleSite} />
+              </div>
             </div>
             <p className="min-h-8 text-center text-xl">
               {sites.length ? `\u5df2\u9078\uff1a${sites.map((id) => SITE_LABEL[id] || id).join("\u3001")}` : "\u9084\u6c92\u9078"}

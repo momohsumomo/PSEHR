@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 
 export const SITE_LABEL: Record<string, string> = {
   scalp: "\u982d\u76ae",
@@ -80,217 +80,250 @@ export const SITE_LABEL: Record<string, string> = {
   "nail-l": "\u5de6\u624b\u6307\u7532",
 };
 
-const ON = "rgba(47,111,168,0.42)";
+const SKIN = "#F6E7D8";
+const LINE = "#C4A88C";
+const DASH = "#174E78";
 
-type Frame = { x: number; y: number; w: number; h: number; view: string };
-type Part = { id: string; fx: number; fy: number; fw: number; fh: number };
+type Ellipse = { kind: "ellipse"; cx: number; cy: number; rx: number; ry: number };
+type Rect = { kind: "rect"; x: number; y: number; w: number; h: number; rx: number };
+type Shape = Ellipse | Rect;
+type Piece = { id: string; shape: Shape; side: "l" | "r" };
 
-const SHEET_W = 446.4267;
-const SHEET_H = 917.72388;
+function center(shape: Shape): { x: number; y: number } {
+  if (shape.kind === "ellipse") return { x: shape.cx, y: shape.cy };
+  return { x: shape.x + shape.w / 2, y: shape.y + shape.h / 2 };
+}
 
-function OneFigure({ view, children }: { view: string; children: ReactNode }) {
-  const [x, y, w, h] = view.split(" ").map(Number);
+function Hit({
+  shape,
+  onClick,
+}: {
+  shape: Shape;
+  onClick: () => void;
+}) {
+  const common = {
+    fill: "transparent",
+    stroke: "transparent",
+    style: { cursor: "pointer" } as const,
+    onClick,
+  };
+  if (shape.kind === "ellipse") {
+    return <ellipse cx={shape.cx} cy={shape.cy} rx={shape.rx} ry={shape.ry} {...common} />;
+  }
+  return <rect x={shape.x} y={shape.y} width={shape.w} height={shape.h} rx={shape.rx} {...common} />;
+}
+
+function Dash({ shape }: { shape: Shape }) {
+  const mark = {
+    fill: "none",
+    stroke: DASH,
+    strokeWidth: 2.4,
+    strokeDasharray: "7 5",
+    style: { pointerEvents: "none" } as const,
+  };
+  if (shape.kind === "ellipse") {
+    return <ellipse cx={shape.cx} cy={shape.cy} rx={shape.rx} ry={shape.ry} {...mark} />;
+  }
+  return <rect x={shape.x} y={shape.y} width={shape.w} height={shape.h} rx={shape.rx} {...mark} />;
+}
+
+function Draw({
+  shape,
+  on,
+  onClick,
+}: {
+  shape: Shape;
+  on: boolean;
+  onClick: () => void;
+}) {
   return (
-    <div className="flex h-full w-full items-center justify-center">
-      <div className="relative h-full max-h-full max-w-full overflow-hidden" style={{ aspectRatio: `${w} / ${h}` }}>
-        <img
-          src="/body-mf.svg"
-          alt=""
-          draggable={false}
-          className="pointer-events-none absolute max-w-none"
-          style={{
-            width: `${(SHEET_W / w) * 100}%`,
-            height: `${(SHEET_H / h) * 100}%`,
-            left: `${(-x / w) * 100}%`,
-            top: `${(-y / h) * 100}%`,
-          }}
-        />
-        <svg viewBox={view} preserveAspectRatio="none" className="absolute inset-0 h-full w-full">
+    <g>
+      {shape.kind === "ellipse" ? (
+        <ellipse cx={shape.cx} cy={shape.cy} rx={shape.rx} ry={shape.ry} fill={SKIN} stroke={LINE} strokeWidth={1.6} style={{ cursor: "pointer" }} onClick={onClick} />
+      ) : (
+        <rect x={shape.x} y={shape.y} width={shape.w} height={shape.h} rx={shape.rx} fill={SKIN} stroke={LINE} strokeWidth={1.6} style={{ cursor: "pointer" }} onClick={onClick} />
+      )}
+      {on ? <Dash shape={shape} /> : null}
+    </g>
+  );
+}
+
+type Box = { x: number; y: number; w: number; h: number };
+
+function spread(pieces: Piece[], box: Box) {
+  const rows = [...pieces].sort((a, b) => center(a.shape).y - center(b.shape).y);
+  let last = -100;
+  return rows.map((piece) => {
+    const at = center(piece.shape);
+    let top = ((at.y - box.y) / box.h) * 100;
+    if (top < last + 5.5) top = last + 5.5;
+    if (top > 97) top = 97;
+    last = top;
+    return { piece, at, top, edgeY: box.y + (top / 100) * box.h };
+  });
+}
+
+function Marked({
+  box,
+  pieces,
+  active,
+  children,
+}: {
+  box: Box;
+  pieces: Piece[];
+  active: (id: string) => boolean;
+  children: ReactNode;
+}) {
+  const picked = pieces.filter((piece) => active(piece.id));
+  const left = spread(picked.filter((piece) => piece.side === "l"), box);
+  const right = spread(picked.filter((piece) => piece.side === "r"), box);
+  const label = (row: { piece: Piece; top: number }, align: "start" | "end") => (
+    <span
+      key={row.piece.id}
+      className={`absolute whitespace-nowrap text-base font-bold text-[#102030] ${align === "end" ? "right-full mr-1" : "left-full ml-1"}`}
+      style={{ top: `${row.top}%`, transform: "translateY(-50%)" }}
+    >
+      {SITE_LABEL[row.piece.id] || row.piece.id}
+    </span>
+  );
+  return (
+    <div className="flex h-full min-h-0 w-full items-center justify-center">
+      <div className="relative h-full max-w-full" style={{ aspectRatio: `${box.w} / ${box.h}` }}>
+        <svg viewBox={`${box.x} ${box.y} ${box.w} ${box.h}`} className="h-full w-full">
           {children}
+          <g style={{ pointerEvents: "none" }}>
+            {left.map((row) => (
+              <line key={row.piece.id} x1={row.at.x} y1={row.at.y} x2={box.x} y2={row.edgeY} stroke={DASH} strokeWidth={1.5} />
+            ))}
+            {right.map((row) => (
+              <line key={row.piece.id} x1={row.at.x} y1={row.at.y} x2={box.x + box.w} y2={row.edgeY} stroke={DASH} strokeWidth={1.5} />
+            ))}
+          </g>
         </svg>
+        {left.map((row) => label(row, "end"))}
+        {right.map((row) => label(row, "start"))}
       </div>
     </div>
   );
 }
 
-const FRAMES: Record<"F" | "M", Record<"front" | "back", Frame>> = {
-  F: {
-    front: { x: 8, y: 32, w: 180, h: 400, view: "0 24 200 420" },
-    back: { x: 6, y: 508, w: 180, h: 400, view: "-2 498 196 424" },
-  },
-  M: {
-    front: { x: 272, y: 24, w: 164, h: 408, view: "258 16 192 428" },
-    back: { x: 274, y: 490, w: 162, h: 418, view: "262 480 186 440" },
-  },
-};
+const ell = (cx: number, cy: number, rx: number, ry: number): Ellipse => ({ kind: "ellipse", cx, cy, rx, ry });
+const box = (x: number, y: number, w: number, h: number, rx: number): Rect => ({ kind: "rect", x, y, w, h, rx });
 
-const FACE_VIEW: Record<"F" | "M", string> = {
-  F: "64 32 76 74",
-  M: "320 18 72 72",
-};
-
-const PARTS: Part[] = [
-  { id: "scalp", fx: 0.34, fy: 0.0, fw: 0.32, fh: 0.06 },
-  { id: "face", fx: 0.34, fy: 0.055, fw: 0.32, fh: 0.09 },
-  { id: "ear-r", fx: 0.28, fy: 0.06, fw: 0.08, fh: 0.05 },
-  { id: "ear-l", fx: 0.64, fy: 0.06, fw: 0.08, fh: 0.05 },
-  { id: "neck", fx: 0.42, fy: 0.15, fw: 0.16, fh: 0.04 },
-  { id: "chest-r", fx: 0.36, fy: 0.2, fw: 0.14, fh: 0.1 },
-  { id: "chest-l", fx: 0.5, fy: 0.2, fw: 0.14, fh: 0.1 },
-  { id: "abdomen-r", fx: 0.37, fy: 0.31, fw: 0.13, fh: 0.1 },
-  { id: "abdomen-l", fx: 0.5, fy: 0.31, fw: 0.13, fh: 0.1 },
-  { id: "groin-r", fx: 0.41, fy: 0.42, fw: 0.09, fh: 0.07 },
-  { id: "groin-l", fx: 0.5, fy: 0.42, fw: 0.09, fh: 0.07 },
-  { id: "arm-r", fx: 0.16, fy: 0.19, fw: 0.16, fh: 0.12 },
-  { id: "forearm-r", fx: 0.06, fy: 0.31, fw: 0.15, fh: 0.11 },
-  { id: "hand-r", fx: 0.0, fy: 0.41, fw: 0.2, fh: 0.1 },
-  { id: "arm-l", fx: 0.68, fy: 0.19, fw: 0.16, fh: 0.12 },
-  { id: "forearm-l", fx: 0.79, fy: 0.31, fw: 0.15, fh: 0.11 },
-  { id: "hand-l", fx: 0.8, fy: 0.41, fw: 0.2, fh: 0.1 },
-  { id: "thigh-r", fx: 0.3, fy: 0.5, fw: 0.16, fh: 0.13 },
-  { id: "thigh-l", fx: 0.54, fy: 0.5, fw: 0.16, fh: 0.13 },
-  { id: "knee-r", fx: 0.31, fy: 0.63, fw: 0.14, fh: 0.07 },
-  { id: "knee-l", fx: 0.55, fy: 0.63, fw: 0.14, fh: 0.07 },
-  { id: "shin-r", fx: 0.33, fy: 0.7, fw: 0.11, fh: 0.16 },
-  { id: "shin-l", fx: 0.56, fy: 0.7, fw: 0.11, fh: 0.16 },
-  { id: "foot-r", fx: 0.28, fy: 0.88, fw: 0.16, fh: 0.09 },
-  { id: "foot-l", fx: 0.56, fy: 0.88, fw: 0.16, fh: 0.09 },
+const BODY: Array<{ front: string; back: string; shape: Shape; backShape?: Shape; side: "l" | "r" }> = [
+  { front: "scalp", back: "occiput", shape: ell(180, 42, 34, 22), backShape: ell(180, 64, 36, 46), side: "l" },
+  { front: "ear-r", back: "ear-r-back", shape: ell(140, 76, 9, 13), side: "l" },
+  { front: "ear-l", back: "ear-l-back", shape: ell(220, 76, 9, 13), side: "r" },
+  { front: "neck", back: "nape", shape: box(164, 108, 32, 22, 8), side: "l" },
+  { front: "chest-r", back: "back-upper-r", shape: box(128, 134, 50, 64, 16), side: "l" },
+  { front: "chest-l", back: "back-upper-l", shape: box(182, 134, 50, 64, 16), side: "r" },
+  { front: "abdomen-r", back: "back-lower-r", shape: box(132, 202, 46, 58, 12), side: "l" },
+  { front: "abdomen-l", back: "back-lower-l", shape: box(182, 202, 46, 58, 12), side: "r" },
+  { front: "groin-r", back: "buttock-r", shape: box(138, 264, 38, 40, 12), side: "l" },
+  { front: "groin-l", back: "buttock-l", shape: box(184, 264, 38, 40, 12), side: "r" },
+  { front: "arm-r", back: "arm-r-back", shape: box(72, 136, 50, 62, 22), side: "l" },
+  { front: "forearm-r", back: "forearm-r-back", shape: box(64, 202, 44, 68, 20), side: "l" },
+  { front: "hand-r", back: "hand-r-back", shape: ell(82, 286, 20, 16), side: "l" },
+  { front: "arm-l", back: "arm-l-back", shape: box(238, 136, 50, 62, 22), side: "r" },
+  { front: "forearm-l", back: "forearm-l-back", shape: box(252, 202, 44, 68, 20), side: "r" },
+  { front: "hand-l", back: "hand-l-back", shape: ell(278, 286, 20, 16), side: "r" },
+  { front: "thigh-r", back: "thigh-r-back", shape: box(124, 310, 44, 86, 20), side: "l" },
+  { front: "thigh-l", back: "thigh-l-back", shape: box(192, 310, 44, 86, 20), side: "r" },
+  { front: "knee-r", back: "knee-r-back", shape: ell(146, 408, 20, 14), side: "l" },
+  { front: "knee-l", back: "knee-l-back", shape: ell(214, 408, 20, 14), side: "r" },
+  { front: "shin-r", back: "calf-r", shape: box(132, 424, 30, 96, 14), side: "l" },
+  { front: "shin-l", back: "calf-l", shape: box(198, 424, 30, 96, 14), side: "r" },
+  { front: "foot-r", back: "foot-r-back", shape: ell(140, 536, 28, 14), side: "l" },
+  { front: "foot-l", back: "foot-l-back", shape: ell(214, 536, 28, 14), side: "r" },
 ];
-
-const BACK_ID: Record<string, string> = {
-  scalp: "occiput",
-  neck: "nape",
-  "ear-r": "ear-r-back",
-  "ear-l": "ear-l-back",
-  "chest-r": "back-upper-r",
-  "chest-l": "back-upper-l",
-  "abdomen-r": "back-lower-r",
-  "abdomen-l": "back-lower-l",
-  "groin-r": "buttock-r",
-  "groin-l": "buttock-l",
-  "arm-r": "arm-r-back",
-  "arm-l": "arm-l-back",
-  "forearm-r": "forearm-r-back",
-  "forearm-l": "forearm-l-back",
-  "hand-r": "hand-r-back",
-  "hand-l": "hand-l-back",
-  "thigh-r": "thigh-r-back",
-  "thigh-l": "thigh-l-back",
-  "knee-r": "knee-r-back",
-  "knee-l": "knee-l-back",
-  "shin-r": "calf-r",
-  "shin-l": "calf-l",
-  "foot-r": "foot-r-back",
-  "foot-l": "foot-l-back",
-};
-
-const FACE_PARTS: Array<Part & { label: string }> = [
-  { id: "face-r", label: "\u53f3\u9830", fx: 0.04, fy: 0.46, fw: 0.32, fh: 0.2 },
-  { id: "face-l", label: "\u5de6\u9830", fx: 0.64, fy: 0.46, fw: 0.32, fh: 0.2 },
-  { id: "jaw-r", label: "\u4e0b\u984e", fx: 0.04, fy: 0.68, fw: 0.26, fh: 0.16 },
-  { id: "jaw-l", label: "\u4e0b\u984e", fx: 0.7, fy: 0.68, fw: 0.26, fh: 0.16 },
-  { id: "forehead-r", label: "\u984d", fx: 0.16, fy: 0.02, fw: 0.3, fh: 0.16 },
-  { id: "forehead-l", label: "\u984d", fx: 0.54, fy: 0.02, fw: 0.3, fh: 0.16 },
-  { id: "temple-r", label: "\u592a\u967d", fx: 0.0, fy: 0.16, fw: 0.18, fh: 0.16 },
-  { id: "temple-l", label: "\u592a\u967d", fx: 0.82, fy: 0.16, fw: 0.18, fh: 0.16 },
-  { id: "chin", label: "\u4e0b\u5df4", fx: 0.32, fy: 0.8, fw: 0.36, fh: 0.16 },
-  { id: "eyelid-r", label: "\u773c\u76ae", fx: 0.12, fy: 0.26, fw: 0.26, fh: 0.1 },
-  { id: "eyelid-l", label: "\u773c\u76ae", fx: 0.62, fy: 0.26, fw: 0.26, fh: 0.1 },
-  { id: "undereye-r", label: "\u773c\u4e0b", fx: 0.12, fy: 0.37, fw: 0.26, fh: 0.09 },
-  { id: "undereye-l", label: "\u773c\u4e0b", fx: 0.62, fy: 0.37, fw: 0.26, fh: 0.09 },
-  { id: "nose", label: "\u9f3b", fx: 0.4, fy: 0.3, fw: 0.2, fh: 0.24 },
-  { id: "lip", label: "\u5507", fx: 0.34, fy: 0.62, fw: 0.32, fh: 0.1 },
-  { id: "glabella", label: "\u7709\u5fc3", fx: 0.38, fy: 0.18, fw: 0.24, fh: 0.1 },
-];
-
-function placed(frame: Frame, part: Part, back: boolean) {
-  const fx = back ? 1 - part.fx - part.fw : part.fx;
-  return {
-    id: back ? BACK_ID[part.id] || "" : part.id,
-    x: frame.x + fx * frame.w,
-    y: frame.y + part.fy * frame.h,
-    w: part.fw * frame.w,
-    h: part.fh * frame.h,
-  };
-}
 
 type MapProps = {
   face: "front" | "back";
-  sex: "F" | "M";
   selected: string[];
-  faceOpen?: boolean;
   onToggle: (id: string) => void;
 };
 
-export function BodyMap({ face, sex, selected, faceOpen, onToggle }: MapProps) {
+export function BodyMap({ face, selected, onToggle }: MapProps) {
   const back = face === "back";
-  const frame = FRAMES[sex][face];
-  const boxes = PARTS.map((part) => placed(frame, part, back)).filter((box) => box.id);
+  const pieces: Piece[] = BODY.flatMap((part) => {
+    const id = back ? part.back : part.front;
+    if (!id) return [];
+    return [{ id, shape: back && part.backShape ? part.backShape : part.shape, side: part.side }];
+  });
+  const on = (id: string) => selected.includes(id);
   return (
-    <OneFigure view={frame.view}>
-      {boxes.map((box) => {
-        const on = box.id === "face" ? !!faceOpen : selected.includes(box.id);
-        return (
-          <rect
-            key={box.id}
-            x={box.x}
-            y={box.y}
-            width={box.w}
-            height={box.h}
-            rx={6}
-            fill={on ? ON : "transparent"}
-            style={{ cursor: "pointer" }}
-            onClick={() => onToggle(box.id)}
-          />
-        );
-      })}
-    </OneFigure>
+    <Marked box={{ x: 48, y: 8, w: 264, h: 560 }} pieces={pieces} active={on}>
+      {!back ? (
+        <ellipse cx={180} cy={78} rx={32} ry={28} fill={SKIN} stroke={LINE} strokeWidth={1.6} style={{ pointerEvents: "none" }} />
+      ) : null}
+      {pieces.map((piece) => (
+        <Draw key={piece.id} shape={piece.shape} on={on(piece.id)} onClick={() => onToggle(piece.id)} />
+      ))}
+    </Marked>
   );
 }
 
-type ZoomProps = {
-  sex: "F" | "M";
-  selected: string[];
-  onToggle: (id: string) => void;
-};
-
-export function FaceZoom({ sex, selected, onToggle }: ZoomProps) {
-  const [vx, vy, vw, vh] = FACE_VIEW[sex].split(" ").map(Number);
-  return (
-    <OneFigure view={FACE_VIEW[sex]}>
-      {FACE_PARTS.map((part) => {
-        const on = selected.includes(part.id);
-        const x = vx + part.fx * vw;
-        const y = vy + part.fy * vh;
-        const w = part.fw * vw;
-        const h = part.fh * vh;
-        return (
-          <g key={part.id} style={{ cursor: "pointer" }} onClick={() => onToggle(part.id)}>
-            <rect x={x} y={y} width={w} height={h} rx={3} fill={on ? "#174E78" : "transparent"} stroke={on ? "#174E78" : "transparent"} strokeWidth={0.8} />
-            {on ? (
-              <text x={x + w / 2} y={y + h / 2} textAnchor="middle" dominantBaseline="central" fontSize={Math.min(vw, vh) * 0.07} fill="#ffffff" style={{ pointerEvents: "none" }}>
-                {part.label}
-              </text>
-            ) : null}
-          </g>
-        );
-      })}
-    </OneFigure>
-  );
-}
-
-const HAND_FINGERS: Array<{ name: string; x: number; y: number; w: number; h: number; label: string }> = [
-  { name: "thumb", x: 2, y: 58, w: 24, h: 42, label: "\u62c7" },
-  { name: "index", x: 30, y: 6, w: 15, h: 54, label: "\u98df" },
-  { name: "middle", x: 47, y: 0, w: 15, h: 60, label: "\u4e2d" },
-  { name: "ring", x: 64, y: 8, w: 15, h: 50, label: "\u7121" },
-  { name: "little", x: 81, y: 18, w: 15, h: 40, label: "\u5c0f" },
+const FACE: Piece[] = [
+  { id: "forehead-r", side: "l", shape: ell(112, 108, 40, 30) },
+  { id: "forehead-l", side: "r", shape: ell(188, 108, 40, 30) },
+  { id: "temple-r", side: "l", shape: ell(62, 168, 22, 28) },
+  { id: "temple-l", side: "r", shape: ell(238, 168, 22, 28) },
+  { id: "face-r", side: "l", shape: ell(92, 214, 30, 28) },
+  { id: "face-l", side: "r", shape: ell(208, 214, 30, 28) },
+  { id: "jaw-r", side: "l", shape: ell(98, 262, 28, 20) },
+  { id: "jaw-l", side: "r", shape: ell(202, 262, 28, 20) },
+  { id: "eyelid-r", side: "l", shape: ell(112, 168, 26, 13) },
+  { id: "eyelid-l", side: "r", shape: ell(188, 168, 26, 13) },
+  { id: "undereye-r", side: "l", shape: ell(112, 192, 24, 11) },
+  { id: "undereye-l", side: "r", shape: ell(188, 192, 24, 11) },
+  { id: "glabella", side: "r", shape: ell(150, 142, 16, 12) },
+  { id: "nose", side: "r", shape: ell(150, 202, 14, 26) },
+  { id: "lip", side: "l", shape: ell(150, 242, 30, 12) },
+  { id: "chin", side: "r", shape: ell(150, 292, 22, 16) },
 ];
 
-function handFingers(side: "r" | "l") {
-  if (side === "r") return HAND_FINGERS;
-  return HAND_FINGERS.map((box) => ({ ...box, x: 100 - box.x - box.w }));
+type ZoomProps = {
+  selected: string[];
+  onToggle: (id: string) => void;
+};
+
+export function FaceZoom({ selected, onToggle }: ZoomProps) {
+  const on = (id: string) => selected.includes(id);
+  return (
+    <Marked box={{ x: 28, y: 28, w: 244, h: 320 }} pieces={FACE} active={on}>
+      <ellipse cx={150} cy={185} rx={108} ry={145} fill="#F3D7C4" stroke={LINE} strokeWidth={2} style={{ pointerEvents: "none" }} />
+      {FACE.map((piece) => (
+        <Hit key={piece.id} shape={piece.shape} onClick={() => onToggle(piece.id)} />
+      ))}
+      <g fill="none" stroke="#8D6B52" strokeWidth={2.2} strokeLinecap="round" style={{ pointerEvents: "none" }}>
+        <path d="M86 150 Q112 136 138 152" />
+        <path d="M162 152 Q188 136 214 150" />
+        <path d="M92 168 Q112 160 132 168 Q112 178 92 168" />
+        <path d="M168 168 Q188 160 208 168 Q188 178 168 168" />
+        <path d="M150 166 L144 214 Q150 222 156 214 Z" />
+        <path d="M124 240 Q150 232 176 240" />
+        <path d="M128 246 Q150 258 172 246" />
+      </g>
+      {FACE.filter((piece) => on(piece.id)).map((piece) => (
+        <Dash key={`d-${piece.id}`} shape={piece.shape} />
+      ))}
+    </Marked>
+  );
 }
+
+type Finger = { name: "thumb" | "index" | "middle" | "ring" | "little"; d: string; nail: Ellipse };
+
+const FINGERS: Finger[] = [
+  { name: "thumb", d: "M74 175 C50 162 26 134 20 106 C14 82 34 68 48 82 C66 98 84 142 90 176 Z", nail: ell(32, 98, 8, 5) },
+  { name: "index", d: "M78 188 C74 140 70 72 78 40 C84 22 104 20 110 38 C118 70 114 142 106 188 Z", nail: ell(94, 32, 9, 6) },
+  { name: "middle", d: "M102 186 C100 128 96 52 106 20 C114 4 136 4 142 22 C150 54 146 132 138 186 Z", nail: ell(124, 14, 10, 6) },
+  { name: "ring", d: "M134 188 C138 136 144 64 154 36 C162 18 182 20 186 38 C192 70 184 140 172 188 Z", nail: ell(170, 30, 9, 6) },
+  { name: "little", d: "M166 190 C174 156 184 118 194 96 C204 76 220 80 218 98 C214 128 198 168 184 192 Z", nail: ell(206, 90, 8, 5) },
+];
+
+const PALM = "M72 168 C64 180 58 210 68 238 C80 266 108 278 132 276 C158 274 180 254 184 226 C188 196 178 172 164 164 L78 164 C76 164 74 166 72 168 Z";
+const HAND_MIRROR = 230;
+const HAND_BOX: Box = { x: 0, y: 0, w: 230, h: 310 };
 
 export function HandsZoom({
   face,
@@ -301,54 +334,64 @@ export function HandsZoom({
   selected: string[];
   onToggle: (id: string) => void;
 }) {
+  const [side, setSide] = useState<"r" | "l">("r");
+  const palmId = face === "back" ? `hand-${side}-back` : `hand-${side}`;
+  const mirror = side === "l";
+  const xOf = (x: number) => (mirror ? HAND_MIRROR - x : x);
+  const pieces: Piece[] = [
+    { id: palmId, side: "l", shape: ell(xOf(126), 220, 8, 8) },
+    ...FINGERS.map((finger) => ({
+      id: `finger-${side}-${finger.name}`,
+      side: "l" as const,
+      shape: ell(xOf(finger.nail.cx), finger.nail.cy, 4, 4),
+    })),
+    { id: `nail-${side}`, side: "l", shape: ell(xOf(124), 14, 4, 4) },
+  ];
+  const tab = (on: boolean) =>
+    `rounded-xl border-4 border-[#2060A0] py-2 text-xl font-bold ${on ? "bg-[#2060A0] text-white" : "bg-white text-black"}`;
   return (
-    <div className="grid h-full grid-cols-2 gap-1">
-      {(["r", "l"] as const).map((side) => {
-        const palmId = face === "back" ? `hand-${side}-back` : `hand-${side}`;
-        const palmOn = selected.includes(palmId);
-        const palm = side === "r" ? { x: 28, y: 64, w: 68, h: 78 } : { x: 4, y: 64, w: 68, h: 78 };
-        return (
-          <div key={side} className="flex min-h-0 flex-col">
-            <p className="text-center text-base font-bold">{side === "r" ? "\u53f3\u624b" : "\u5de6\u624b"}</p>
-            <svg viewBox="0 0 100 150" className="min-h-0 w-full flex-1">
-              <rect
-                x={palm.x}
-                y={palm.y}
-                width={palm.w}
-                height={palm.h}
-                rx={16}
-                fill={palmOn ? "#174E78" : "#F6E6D4"}
-                stroke={palmOn ? "#174E78" : "transparent"}
-                strokeWidth={1.4}
+    <div className="flex h-full min-h-0 flex-col gap-1">
+      <div className="grid shrink-0 grid-cols-2 gap-1">
+        <button type="button" className={tab(side === "r")} onClick={() => setSide("r")}>{"\u53f3\u624b"}</button>
+        <button type="button" className={tab(side === "l")} onClick={() => setSide("l")}>{"\u5de6\u624b"}</button>
+      </div>
+      <div className="min-h-0 flex-1">
+        <Marked box={HAND_BOX} pieces={pieces} active={(id) => selected.includes(id)}>
+          <g transform={mirror ? `translate(${HAND_MIRROR} 0) scale(-1 1)` : undefined}>
+            {FINGERS.map((finger) => {
+              const id = `finger-${side}-${finger.name}`;
+              const on = selected.includes(id);
+              return (
+                <g key={id}>
+                  <path d={finger.d} fill={SKIN} stroke={LINE} strokeWidth={1.6} strokeLinejoin="round" style={{ cursor: "pointer" }} onClick={() => onToggle(id)} />
+                  {on ? <path d={finger.d} fill="none" stroke={DASH} strokeWidth={2.4} strokeDasharray="7 5" style={{ pointerEvents: "none" }} /> : null}
+                </g>
+              );
+            })}
+            <path d={PALM} fill={SKIN} stroke={LINE} strokeWidth={1.6} strokeLinejoin="round" style={{ cursor: "pointer" }} onClick={() => onToggle(palmId)} />
+            {selected.includes(palmId) ? <path d={PALM} fill="none" stroke={DASH} strokeWidth={2.4} strokeDasharray="7 5" style={{ pointerEvents: "none" }} /> : null}
+            <g fill="none" stroke={LINE} strokeWidth={1.2} strokeLinecap="round" style={{ pointerEvents: "none" }}>
+              <path d="M96 176 C110 184 128 184 146 174" />
+              <path d="M90 200 C112 210 140 208 160 196" />
+            </g>
+            {FINGERS.map((finger) => (
+              <ellipse
+                key={`nail-${finger.name}`}
+                cx={finger.nail.cx}
+                cy={finger.nail.cy}
+                rx={finger.nail.rx}
+                ry={finger.nail.ry}
+                fill="#F8F1EA"
+                stroke={selected.includes(`nail-${side}`) ? DASH : LINE}
+                strokeWidth={selected.includes(`nail-${side}`) ? 2.4 : 1.3}
+                strokeDasharray={selected.includes(`nail-${side}`) ? "4 3" : undefined}
                 style={{ cursor: "pointer" }}
-                onClick={() => onToggle(palmId)}
+                onClick={() => onToggle(`nail-${side}`)}
               />
-              {palmOn ? (
-                <text x={palm.x + palm.w / 2} y={palm.y + palm.h / 2} textAnchor="middle" fill="#ffffff" fontSize={12} style={{ pointerEvents: "none" }}>
-                  {"\u624b\u638c"}
-                </text>
-              ) : null}
-              {handFingers(side).map((box) => {
-                const id = `finger-${side}-${box.name}`;
-                const on = selected.includes(id);
-                return (
-                  <g key={id} style={{ cursor: "pointer" }} onClick={() => onToggle(id)}>
-                    <rect x={box.x} y={box.y} width={box.w} height={box.h} rx={7} fill={on ? "#174E78" : "#F6E6D4"} stroke={on ? "#174E78" : "transparent"} strokeWidth={1.4} />
-                    {on ? (
-                      <text x={box.x + box.w / 2} y={box.y + box.h / 2} textAnchor="middle" dominantBaseline="central" fill="#ffffff" fontSize={11} style={{ pointerEvents: "none" }}>
-                        {box.label}
-                      </text>
-                    ) : null}
-                  </g>
-                );
-              })}
-            </svg>
-            <button type="button" className={`rounded-xl border-2 border-[#2060A0] py-1 text-base font-bold ${selected.includes(`nail-${side}`) ? "kiosk-pick" : "bg-white text-black"}`} onClick={() => onToggle(`nail-${side}`)}>
-              {"\u6307\u7532"}
-            </button>
-          </div>
-        );
-      })}
+            ))}
+          </g>
+        </Marked>
+      </div>
     </div>
   );
 }
