@@ -22,7 +22,7 @@ from src.core.nhi_referral import (
     upload_file,
     _ymd,
 )
-from src.core.referral_desk import list_slips, mark_uploaded, save_slip
+from src.core.referral_desk import list_slips, mark_uploaded, physician_ids, save_slip
 
 router = APIRouter(prefix="/nhi/v1/referral", tags=["NHI-referral"])
 
@@ -50,6 +50,24 @@ class ReferralSlipBody(BaseModel):
     serial: str = ""
     validUntil: str = ""
     status: str = ""
+    historyText: str | None = None
+    treatText: str | None = None
+    sex: str | None = None
+    birth: str | None = None
+    phone: str | None = None
+    address: str | None = None
+    contact: str | None = None
+    allergyText: str | None = None
+    destDept: str | None = None
+    destDoctor: str | None = None
+    destTel: str | None = None
+    destAddr: str | None = None
+    purposeNote: str | None = None
+    examOn: str | None = None
+    ourDept: str | None = None
+    handoff: str | None = None
+    drugs: str | None = None
+    aux: str | None = None
 
 
 class ReferralReplyBody(BaseModel):
@@ -67,6 +85,13 @@ class ReferralReplyBody(BaseModel):
     expectReferral: bool = False
     replyDate: str = ""
     slipId: str = ""
+
+
+class ReferralResultBody(BaseModel):
+    id: str = ""
+    localId: str = ""
+    nhiId: str = ""
+    status: str = ""
 
 
 class ReferralOpenBody(BaseModel):
@@ -235,10 +260,30 @@ def referral_slips(kind: str = "") -> dict[str, Any]:
     return {"items": list_slips(kind)}
 
 
+@router.get("/physicians")
+def referral_physicians() -> dict[str, Any]:
+    return {"items": physician_ids(list(get_shadow_store().get_staff_list()))}
+
+
+@router.post("/result")
+def referral_upload_result(body: ReferralResultBody) -> dict[str, Any]:
+    """Store the bureau receipt. This does not call the upload dll."""
+    slip = body.id.strip()
+    if not slip:
+        return {"ok": False, "reason": "\u6c92\u6709\u6307\u5b9a\u54ea\u4e00\u7b46"}
+    mark_uploaded(
+        slip,
+        local_id=body.localId.strip(),
+        nhi_id=body.nhiId.strip(),
+        status=body.status.strip() or "\u5df2\u4e0a\u50b3",
+    )
+    return {"ok": True}
+
+
 @router.post("/slips")
 def referral_save_slip(body: ReferralSlipBody) -> dict[str, Any]:
     try:
-        item = save_slip(body.model_dump())
+        item = save_slip(body.model_dump(exclude_unset=True))
     except ValueError as exc:
         return {"ok": False, "reason": str(exc)}
     return {"ok": True, "item": item}

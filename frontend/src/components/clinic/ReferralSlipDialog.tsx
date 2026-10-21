@@ -305,6 +305,20 @@ export function ReferralSlipDialog({ open, seed, onClose, encounterId, slipId, a
       validUntil: valid,
       openedOn: isoDay(opened),
       status: "\u8349\u7a3f",
+      phone: seed.phone,
+      address: seed.address,
+      sex: seed.sex,
+      birth: seed.birthday,
+      allergyText: seed.allergy || "",
+      destDept: dept.slice(0, 2),
+      destDoctor: suggestDoc,
+      destTel: hospTel,
+      destAddr: hospAddr,
+      purposeNote: purpose === "6" ? purposeOther : "",
+      examOn: seed.examOn || "",
+      treatText: seed.meds,
+      historyText: seed.exam || "",
+      ourDept: ourDept.slice(0, 2),
     }).then(async (row) => {
       setLocalSlipId(row.id);
       onSaved?.();

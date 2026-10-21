@@ -2,6 +2,7 @@
 import unittest
 
 from src.core.nhi_referral import choose_incoming, parse_slips
+from src.core.referral_desk import physician_ids
 
 
 SAMPLE = (
@@ -30,6 +31,16 @@ class ReferralParseTests(unittest.TestCase):
         self.assertEqual(chosen.serial, "2019002112345678")
         self.assertEqual(chosen.kind, "2")
         self.assertFalse(chosen.deleted)
+
+    def test_physician_list_keeps_id_and_drops_pin(self) -> None:
+        rows = physician_ids(
+            [
+                {"name": "\u7532", "nhiId": "A123456789", "pin": "1234"},
+                {"name": "\u4e59", "nhiId": "not-an-id", "pin": "9999"},
+            ]
+        )
+        self.assertEqual(rows, [{"name": "\u7532", "nhiId": "A123456789"}])
+        self.assertNotIn("pin", rows[0])
 
 
 if __name__ == "__main__":

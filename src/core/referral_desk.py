@@ -131,7 +131,80 @@ def save_slip(body: dict[str, Any]) -> dict[str, Any]:
             """,
             fields,
         )
-    return _public(fields)
+        _write_slip_extra(conn, slip_id, body)
+        stored = conn.execute(
+            "SELECT * FROM referral_slip WHERE id=?",
+            (slip_id,),
+        ).fetchone()
+    return _public(dict(stored))
+
+
+_SHEET_KEYS = (
+    ("sex", "sex"),
+    ("birth", "birth"),
+    ("phone", "phone"),
+    ("address", "address"),
+    ("contact", "contact"),
+    ("allergy", "allergyText"),
+    ("destDept", "destDept"),
+    ("destDoctor", "destDoctor"),
+    ("destTel", "destTel"),
+    ("destAddr", "destAddr"),
+    ("purposeNote", "purposeNote"),
+    ("examOn", "examOn"),
+    ("ourDept", "ourDept"),
+    ("handoff", "handoff"),
+    ("drugs", "drugs"),
+    ("aux", "aux"),
+)
+
+
+def _write_slip_extra(conn, slip_id: str, body: dict[str, Any]) -> None:
+    """Keep upload fields that are not columns. Omitted keys stay as they were."""
+    sets: list[str] = []
+    params: dict[str, Any] = {"id": slip_id}
+    if "historyText" in body:
+        sets.append("history_text=:history_text")
+        params["history_text"] = str(body.get("historyText") or "")
+    if "treatText" in body:
+        sets.append("treat_text=:treat_text")
+        params["treat_text"] = str(body.get("treatText") or "")
+    patch: dict[str, str] = {}
+    for stored, incoming in _SHEET_KEYS:
+        if incoming in body:
+            patch[stored] = str(body.get(incoming) or "")
+    if patch:
+        row = conn.execute(
+            "SELECT sheet_json FROM referral_slip WHERE id=?",
+            (slip_id,),
+        ).fetchone()
+        current: dict[str, Any] = {}
+        if row and row[0]:
+            try:
+                parsed = json.loads(row[0])
+            except json.JSONDecodeError:
+                parsed = {}
+            if isinstance(parsed, dict):
+                current = parsed
+        current.update(patch)
+        sets.append("sheet_json=:sheet_json")
+        params["sheet_json"] = json.dumps(current, ensure_ascii=True)
+    if not sets:
+        return
+    conn.execute(
+        "UPDATE referral_slip SET " + ", ".join(sets) + " WHERE id=:id",
+        params,
+    )
+
+
+def physician_ids(staff: list[dict[str, Any]]) -> list[dict[str, str]]:
+    """Name and personnel id only. Pins stay out of this list."""
+    found: list[dict[str, str]] = []
+    for row in staff:
+        nhi = str(row.get("nhiId") or "").strip().upper()
+        if len(nhi) == 10 and nhi[0].isalpha() and nhi[1:].isdigit():
+            found.append({"name": str(row.get("name") or "").strip(), "nhiId": nhi})
+    return found
 
 
 def mark_uploaded(slip_id: str, *, local_id: str, nhi_id: str, status: str) -> None:
@@ -204,6 +277,10 @@ def _public(fields: dict[str, Any]) -> dict[str, Any]:
         "examOn": extra.get("examOn") or "",
         "medOn": extra.get("medOn") or "",
         "purposeNote": extra.get("purposeNote") or "",
+        "ourDept": extra.get("ourDept") or "",
+        "handoff": extra.get("handoff") or "",
+        "drugs": extra.get("drugs") or "",
+        "aux": extra.get("aux") or "",
     }
 
 

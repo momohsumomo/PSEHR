@@ -932,6 +932,10 @@ export type ReferralSlipRow = {
   examOn?: string;
   medOn?: string;
   purposeNote?: string;
+  ourDept?: string;
+  handoff?: string;
+  drugs?: string;
+  aux?: string;
   serial: string;
   validUntil: string;
   status: string;

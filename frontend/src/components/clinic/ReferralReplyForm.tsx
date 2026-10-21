@@ -52,9 +52,9 @@ export function ReferralReplyForm({
   const [serial, setSerial] = useState(row.serial || "");
   const [replyDay, setReplyDay] = useState(rocToday());
   const [dx, setDx] = useState(row.diagnosis || "");
-  const [drugs, setDrugs] = useState(row.treatText || "");
-  const [aux, setAux] = useState(row.historyText || row.note || "");
-  const [handoff, setHandoff] = useState("");
+  const [drugs, setDrugs] = useState(row.drugs || row.treatText || "");
+  const [aux, setAux] = useState(row.aux || row.historyText || "");
+  const [handoff, setHandoff] = useState(row.handoff || "");
   const [dept, setDept] = useState((row.dept || "11").slice(0, 2));
   const [doctor, setDoctor] = useState(row.doctor || "");
   const [doctorId, setDoctorId] = useState("");
@@ -67,9 +67,9 @@ export function ReferralReplyForm({
     setSerial(row.serial || "");
     setReplyDay(rocDay(row.openedOn || "") || rocToday());
     setDx(row.diagnosis || "");
-    setDrugs(row.treatText || "");
-    setAux(row.historyText || row.note || "");
-    setHandoff("");
+    setDrugs(row.drugs || row.treatText || "");
+    setAux(row.aux || row.historyText || "");
+    setHandoff(row.handoff || "");
     setDept((row.dept || "11").slice(0, 2));
     setDoctor(row.doctor || "");
     setDoctorId("");
@@ -79,7 +79,7 @@ export function ReferralReplyForm({
     const medicalNo = row.medicalNo;
     const receivedOn = row.openedOn || "";
     const hadDrugs = Boolean((row.treatText || "").trim());
-    const hadChief = Boolean((row.historyText || row.note || "").trim());
+    const hadChief = Boolean((row.aux || row.historyText || "").trim());
     const hadDx = Boolean((row.diagnosis || "").trim());
     const hadDoctor = Boolean((row.doctor || "").trim());
     let cancel = false;
@@ -165,10 +165,13 @@ export function ReferralReplyForm({
         diagnosis: dx,
         treatText: drugs,
         historyText: aux,
-        note: aux,
+        note: handoff,
         purpose,
         dept,
         doctor,
+        drugs,
+        aux,
+        handoff,
         status: upload ? "\u5df2\u56de\u8986" : "\u5df2\u5b58\u6a94",
       });
       onSaved();
