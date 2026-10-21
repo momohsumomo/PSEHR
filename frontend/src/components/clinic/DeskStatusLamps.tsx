@@ -6,6 +6,7 @@ import {
   startLocalCard6,
   type LocalPrintHealth,
 } from "@/api/clinicApi";
+import { readLocalCardLive, verifyLocalHpc, verifyLocalSam, type LocalCardLive } from "@/lib/localCard";
 import { loadPrintSettings } from "@/lib/printSettings";
 
 const SUMATRA_PAGE = "https://www.sumatrapdfreader.org/download-free-pdf-viewer";
@@ -108,6 +109,37 @@ function printerLamp(health: LocalPrintHealth | null, loaded: boolean): PrintLam
   return { tone: "ok", label: "\u5370\u8868\u6a5f", hint: "\u5df2\u9078\u7684\u5370\u8868\u6a5f\u5728\u7dda" };
 }
 
+function CardButton({
+  tone,
+  label,
+  hint,
+  disabled,
+  onClick,
+}: {
+  tone: Tone;
+  label: string;
+  hint: string;
+  disabled?: boolean;
+  onClick: () => void;
+}) {
+  const color = tone === "ok" ? "#3DDC6A" : tone === "bad" ? "#E25B5B" : "#E0B84A";
+  return (
+    <button
+      type="button"
+      title={hint}
+      disabled={disabled}
+      className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.06] px-2 py-0.5 text-[12px] text-[#E7EEF8] disabled:opacity-60"
+      onClick={onClick}
+    >
+      <span
+        className="inline-block h-2.5 w-2.5 rounded-full"
+        style={{ background: color, boxShadow: tone === "ok" ? "0 0 8px #3DDC6A" : undefined }}
+      />
+      {label}
+    </button>
+  );
+}
+
 function Lamp({
   tone,
   label,
@@ -147,6 +179,10 @@ export function DeskStatusLamps({ sync, syncHint }: Props) {
   const [printHealth, setPrintHealth] = useState<LocalPrintHealth | null>(null);
   const [printLoaded, setPrintLoaded] = useState(false);
   const [note, setNote] = useState("");
+  const [live, setLive] = useState<LocalCardLive | null>(null);
+  const [pinOpen, setPinOpen] = useState(false);
+  const [pin, setPin] = useState("");
+  const [cardBusy, setCardBusy] = useState(false);
 
   const localSeen = useRef(false);
 
@@ -167,9 +203,16 @@ export function DeskStatusLamps({ sync, syncHint }: Props) {
       }
       apply(await fetchLocalPrintHealth());
     };
+    const refreshLive = () => {
+      void readLocalCardLive().then((next) => {
+        if (!gone) setLive(next);
+      });
+    };
     void loadPrint();
+    refreshLive();
     const timer = window.setInterval(() => {
       if (gone) return;
+      refreshLive();
       void fetchDeskStatus().then((health) => {
         if (gone || !health) return;
         apply(health);
@@ -223,61 +266,92 @@ export function DeskStatusLamps({ sync, syncHint }: Props) {
   };
 
   const card6 = printHealth?.card6;
-  const cardTone: Tone = !printLoaded
-    ? "wait"
-    : !printHealth
-      ? "bad"
-        : card6
-          ? card6.installed && card6.running
-            ? "ok"
-            : "bad"
-          : "bad";
-  const cardLabel = cardTone === "bad"
-    ? !printHealth
-      ? "\u8b80\u5361\u6a5f\u672a\u67e5"
-      : card6?.installed
-        ? "\u8b80\u5361\u6a5f\u6c92\u958b"
-        : card6
-          ? "\u8b80\u5361\u6a5f\u6c92\u67096.0"
-          : "\u8b80\u5361\u6a5f\u96e2\u7dda"
-    : "\u8b80\u5361\u6a5f";
-  const cardHint = !printLoaded
-    ? "\u6b63\u5728\u78ba\u8a8d\u9019\u53f0\u96fb\u8166"
-    : !printHealth
-      ? LOCAL_BLOCKED
-      : !card6
-        ? "\u9019\u53f0\u6c92\u6709\u56de\u5831\u8b80\u5361\u6a5f\u3002\u4e0d\u6703\u6539\u770b\u4e3b\u6a5f\u3002"
-        : card6.installed && card6.running
-          ? "\u9019\u53f0\u7684\u8b80\u5361\u8edf\u9ad4 6.0 \u6709\u5728\u807d"
-          : card6.legacy5
-            ? "\u9019\u53f0\u53ea\u6709 5.XX\uff0c\u6c92\u6709 6.0\u3002\u4e0d\u7b97\u5df2\u88dd\u597d"
-            : card6.installed
-              ? "\u9019\u53f0\u6709 6.0\uff0c\u4f46\u9084\u6c92\u958b"
-              : "\u9019\u53f0\u6c92\u6709\u8b80\u5361\u8edf\u9ad4 6.0";
+  const samTone: Tone = !live ? "wait" : !live.reachable ? "bad" : live.sam === 2 ? "ok" : live.sam === 1 ? "wait" : "bad";
+  const hpcTone: Tone = !live ? "wait" : !live.reachable ? "bad" : live.hpc === 3 ? "ok" : live.hpc >= 1 ? "wait" : "bad";
+  const samHint = !live
+    ? "\u6b63\u5728\u8b80\u9019\u53f0\u7684\u8b80\u5361\u8edf\u9ad4"
+    : !live.reachable
+      ? "\u9019\u53f0\u7684\u8b80\u5361\u8edf\u9ad4\u6c92\u6709\u56de\u61c9\u3002\u9ede\u4e00\u4e0b\u6703\u8a66\u8457\u958b 6.0 \u518d\u9a57\u8b49"
+      : live.sam === 2
+        ? "SAM \u5df2\u9a57\u8b49" + (live.samExpire ? "\uff0c\u6709\u6548\u5230 " + live.samExpire : "")
+        : live.sam === 1
+          ? "SAM \u5df2\u8f09\u5165\uff0c\u9084\u6c92\u5411\u5065\u4fdd\u7f72\u9a57\u8b49\u3002\u9ede\u4e00\u4e0b\u9a57\u8b49"
+          : "\u9ede\u4e00\u4e0b\u505a SAM \u9a57\u8b49";
+  const hpcHint = !live
+    ? "\u6b63\u5728\u8b80\u9019\u53f0\u7684\u8b80\u5361\u8edf\u9ad4"
+    : !live.reachable
+      ? "\u9019\u53f0\u7684\u8b80\u5361\u8edf\u9ad4\u6c92\u6709\u56de\u61c9"
+      : live.hpc === 3
+        ? "\u91ab\u4e8b\u4eba\u54e1\u5361 PIN \u5df2\u9a57\u8b49" + (live.hpcExpire ? "\uff0c\u6709\u6548\u5230 " + live.hpcExpire : "") + "\u3002\u9ede\u4e00\u4e0b\u53ef\u4ee5\u518d\u9a57"
+        : live.hpc === 2
+          ? "\u91ab\u4e8b\u4eba\u54e1\u5361\u5df2\u9a57\u8b49\uff0c\u9084\u6c92\u6253 PIN"
+          : live.hpc === 1
+            ? "\u91ab\u4e8b\u4eba\u54e1\u5361\u5728\u8b80\u5361\u6a5f\u4e0a\uff0c\u9084\u6c92\u9a57 PIN"
+            : "\u91ab\u4e8b\u4eba\u54e1\u5361\u6c92\u6709\u63d2\u5728\u73fe\u5728\u9019\u53f0\u8b80\u5361\u6a5f\u3002\u9ede\u4e00\u4e0b\u8f38\u5165 PIN";
 
-  const fixCard = () => {
-    if (!printHealth) {
-      wakeLocal();
+  const onSam = () => {
+    if (cardBusy) return;
+    if (card6 && !card6.installed) {
+      setNote("\u9019\u53f0\u6c92\u6709\u8b80\u5361\u8edf\u9ad4 6.0\u30026.0 \u8981\u5f9e\u5065\u4fdd\u5c08\u7db2\u5b89\u88dd\uff0c\u9019\u88e1\u4e0d\u6703\u81ea\u5df1\u4e0b\u8f09\u3002");
       return;
     }
-    if (!card6) {
-      setNote("\u6b63\u5728\u8655\u7406\u9019\u53f0\u7684\u8b80\u5361\u8edf\u9ad4\u2026");
-      void fixCardConsole()
-        .then((result) => setNote(result.message))
-        .catch((err: unknown) => setNote(err instanceof Error ? err.message : "\u8b80\u5361\u8edf\u9ad4\u6c92\u958b\u8d77\u4f86"));
-      return;
-    }
-    if (!card6.installed) {
-      setNote(cardHint + "\u30026.0 \u8981\u5f9e\u5065\u4fdd\u5c08\u7db2\u5b89\u88dd\uff0c\u9019\u88e1\u4e0d\u6703\u81ea\u5df1\u4e0b\u8f09\u3002");
-      return;
-    }
-    setNote("\u6b63\u5728\u958b\u9019\u53f0\u7684\u8b80\u5361\u8edf\u9ad4 6.0\u2026");
-    void startLocalCard6()
-      .then((msg) => {
-        setNote(msg);
-        return reloadLocal();
+    setCardBusy(true);
+    const run = async () => {
+      if (!live?.reachable) {
+        if (!printHealth) {
+          wakeLocal();
+          return;
+        }
+        if (!card6) {
+          setNote("\u6b63\u5728\u8655\u7406\u9019\u53f0\u7684\u8b80\u5361\u8edf\u9ad4\u2026");
+          const result = await fixCardConsole();
+          setNote(result.message);
+        } else if (!card6.running) {
+          setNote("\u6b63\u5728\u958b\u9019\u53f0\u7684\u8b80\u5361\u8edf\u9ad4 6.0\u2026");
+          const msg = await startLocalCard6();
+          setNote(msg);
+          await reloadLocal();
+        }
+      }
+      setNote("\u6b63\u5728\u9a57\u8b49 SAM\u2026");
+      const next = await verifyLocalSam();
+      setLive(next);
+      setNote(next.sam === 2
+        ? "SAM \u5df2\u9a57\u8b49" + (next.samExpire ? "\uff0c\u6709\u6548\u5230 " + next.samExpire : "")
+        : "SAM \u9084\u6c92\u9a57\u8b49\u5b8c\u6210");
+    };
+    void run()
+      .catch((err: unknown) => {
+        setNote(err instanceof Error ? err.message : "SAM \u9a57\u8b49\u5931\u6557");
+        void readLocalCardLive().then(setLive);
       })
-      .catch(() => wakeLocal());
+      .finally(() => setCardBusy(false));
+  };
+
+  const onHpc = () => {
+    if (cardBusy) return;
+    setPinOpen(true);
+    setPin("");
+  };
+
+  const submitPin = () => {
+    const value = pin;
+    setPin("");
+    setCardBusy(true);
+    setNote("\u6b63\u5728\u9a57\u8b49\u91ab\u4e8b\u4eba\u54e1\u5361\u2026");
+    void verifyLocalHpc(value)
+      .then((next) => {
+        setLive(next);
+        setPinOpen(false);
+        setNote(next.hpc === 3
+          ? "\u91ab\u4e8b\u4eba\u54e1\u5361 PIN \u5df2\u9a57\u8b49" + (next.hpcExpire ? "\uff0c\u6709\u6548\u5230 " + next.hpcExpire : "")
+          : "\u91ab\u4e8b\u4eba\u54e1\u5361\u9084\u6c92\u9a57\u5b8c PIN");
+      })
+      .catch((err: unknown) => {
+        setNote(err instanceof Error ? err.message : "\u91ab\u4e8b\u4eba\u54e1\u5361\u9a57\u8b49\u5931\u6557");
+        void readLocalCardLive().then(setLive);
+      })
+      .finally(() => setCardBusy(false));
   };
   const fixPdf = () => {
     if (!printHealth) {
@@ -292,17 +366,43 @@ export function DeskStatusLamps({ sync, syncHint }: Props) {
     setNote(pdf.hint);
   };
 
+  const samLabel = live?.sam === 2 && live.samExpire ? "SAM\u9a57\u8b49 " + live.samExpire : "SAM\u9a57\u8b49";
+  const hpcLabel = live?.hpc === 3 && live.hpcExpire ? "\u91ab\u4e8b\u4eba\u54e1\u5361 " + live.hpcExpire : "\u91ab\u4e8b\u4eba\u54e1\u5361\u9a57\u8b49";
+
   const unseen = printLoaded && !printHealth;
   const unseenHint =
     "\u9019\u53f0\u9084\u6c92\u6709\u56de\u5831\u3002\u8acb\u628a\u5ba2\u6236\u7aef\u8cc7\u6599\u593e\u653e\u5230\u9019\u53f0\u96fb\u8166\u7684\u4e00\u500b\u56fa\u5b9a\u4f4d\u7f6e\uff0c\u96d9\u64ca\u88e1\u9762\u7684\u300c\u958b\u555f\u9580\u8a3a\u300d\u3002\u684c\u9762\u6703\u51fa\u73fe\u6377\u5f91\uff0c\u767b\u5165\u5f8c\u4e5f\u6703\u81ea\u5df1\u8dd1\u3002\u76f4\u63a5\u958b\u7db2\u5740\u4e5f\u770b\u5f97\u5230\u9019\u53f0\u7684\u5370\u8868\u6a5f\u3001\u8b80\u5361\u548c VPN\u3002\u8cc7\u6599\u71c8\u554f\u7684\u662f\u8a3a\u6240\u4e3b\u6a5f\u3002";
 
   return (
-    <span className="flex flex-wrap items-center gap-1.5">
+    <div className="flex flex-wrap items-center justify-end gap-1.5">
+      <CardButton tone={samTone} label={samLabel} hint={samHint} disabled={cardBusy} onClick={onSam} />
+      <CardButton tone={hpcTone} label={hpcLabel} hint={hpcHint} disabled={cardBusy} onClick={onHpc} />
+      {pinOpen ? (
+        <form
+          className="inline-flex items-center gap-1"
+          onSubmit={(event) => {
+            event.preventDefault();
+            submitPin();
+          }}
+        >
+          <input
+            type="password"
+            autoFocus
+            value={pin}
+            autoComplete="off"
+            placeholder="PIN"
+            className="w-16 rounded border border-white/15 bg-black/30 px-1.5 py-0.5 text-[12px] text-[#E7EEF8]"
+            onChange={(event) => setPin(event.target.value)}
+          />
+          <button type="submit" disabled={cardBusy || !pin.trim()} className="rounded border border-white/15 px-1.5 py-0.5 text-[12px] text-[#E7EEF8] disabled:opacity-60">
+            {"\u9a57\u8b49"}
+          </button>
+        </form>
+      ) : null}
       {unseen ? (
         <Lamp tone="wait" label={"\u672c\u6a5f\u672a\u770b"} hint={unseenHint} />
       ) : (
         <>
-      <Lamp tone={cardTone} label={cardLabel} hint={cardHint} onFix={fixCard} />
       <Lamp tone={pdf.tone} label={pdf.label} hint={pdf.hint} onFix={fixPdf} />
       <Lamp
         tone={printer.tone}
@@ -326,6 +426,6 @@ export function DeskStatusLamps({ sync, syncHint }: Props) {
         onFix={() => setNote(syncHint)}
       />
       {note ? <span className="text-[12px] text-[#F3D48A]">{note}</span> : null}
-    </span>
+    </div>
   );
 }

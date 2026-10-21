@@ -87,17 +87,17 @@ export const DEFAULT_FEES: ClinicFees = {
 };
 
 export const DEFAULT_PROFILE: ClinicProfileFields = {
-  clinicGrade: "D ??h?|??",
-  region: "A ???q???a?a??",
+  clinicGrade: "D \u57fa\u5c64\u9662\u6240",
+  region: "A \u672c\u5cf6\u5e73\u5730\u5730\u5340",
   clinicCode: "3521013662",
-  clinicName: "?o??????M??E??",
-  licenseNo: "?n????E?r?? 3521013662 ??",
+  clinicName: "\u74ba\u5230\u5e95\u76ae\u819a\u5c08\u79d1\u8a3a\u6240",
+  licenseNo: "\u885b\u8a3a\u5b57\u7b2c 3521013662 \u865f",
   controlCertNo: "",
   mainDept: "11 \u76ae\u819a\u79d1",
-  dispenseType: "0 ?????",
+  dispenseType: "0 \u81ea\u884c\u8abf\u5291",
   phone: "06-2882555",
   zipCode: "701",
-  address: "?x?n???F??R????153-1??",
+  address: "\u53f0\u5357\u5e02\u6771\u5340\u5d07\u660e\u8def153-1\u865f",
   engAddress: "No. 153-1, Chongming Rd., East Dist., Tainan City 701, Taiwan",
   defaultDoctorId: "",
   defaultPharmacistId: "",
@@ -152,6 +152,19 @@ function normalizeFees(raw: Partial<ClinicFees> | undefined): ClinicFees {
   return fees;
 }
 
+function healClinicText(value: string, fallback: string): string {
+  const text = (value || "").trim();
+  if (!text || text.includes("?")) return fallback;
+  if (/[\u4e00-\u9fff]/.test(fallback) && !/[\u4e00-\u9fff]/.test(text)) return fallback;
+  return text;
+}
+
+function healClinicName(value: string): string {
+  const text = healClinicText(value, DEFAULT_PROFILE.clinicName);
+  if (text.replace(/^\u74e3/, "\u74ba") === DEFAULT_PROFILE.clinicName) return DEFAULT_PROFILE.clinicName;
+  return text;
+}
+
 function fromBundle(data: ClinicProfileBundle): {
   profile: ClinicProfileFields;
   fees: ClinicFees;
@@ -161,6 +174,12 @@ function fromBundle(data: ClinicProfileBundle): {
   if (!profile.mainDept || profile.mainDept.includes("?")) {
     profile.mainDept = "11 \u76ae\u819a\u79d1";
   }
+  profile.clinicGrade = healClinicText(profile.clinicGrade, DEFAULT_PROFILE.clinicGrade);
+  profile.region = healClinicText(profile.region, DEFAULT_PROFILE.region);
+  profile.clinicName = healClinicName(profile.clinicName);
+  profile.licenseNo = healClinicText(profile.licenseNo, DEFAULT_PROFILE.licenseNo);
+  profile.dispenseType = healClinicText(profile.dispenseType, DEFAULT_PROFILE.dispenseType);
+  profile.address = healClinicText(profile.address, DEFAULT_PROFILE.address);
   return {
     profile,
     fees: normalizeFees(data.fees as Partial<ClinicFees>),

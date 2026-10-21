@@ -41,8 +41,10 @@ function Close-HostWindows {
 function Stop-HostPorts {
   $ErrorActionPreference = "SilentlyContinue"
   foreach ($p in 5000, 3010) {
-    Get-NetTCPConnection -LocalPort $p -State Listen | ForEach-Object {
-      Stop-ListenerPid ([int]$_.OwningProcess)
+    $conns = @()
+    try { $conns = @(Get-NetTCPConnection -LocalPort $p -State Listen -ErrorAction SilentlyContinue) } catch { $conns = @() }
+    foreach ($conn in $conns) {
+      Stop-ListenerPid ([int]$conn.OwningProcess)
     }
   }
   Get-CimInstance Win32_Process | Where-Object {
@@ -59,9 +61,11 @@ function Stop-HostPorts {
   Start-Sleep -Seconds 2
   $left = @()
   foreach ($p in 5000, 3010) {
-    Get-NetTCPConnection -LocalPort $p -State Listen | ForEach-Object {
-      if ($_.OwningProcess -and $_.OwningProcess -gt 4) { $left += [int]$_.OwningProcess }
-    }
+    try {
+      Get-NetTCPConnection -LocalPort $p -State Listen -ErrorAction SilentlyContinue | ForEach-Object {
+        if ($_.OwningProcess -and $_.OwningProcess -gt 4) { $left += [int]$_.OwningProcess }
+      }
+    } catch {}
   }
   $left = @($left | Select-Object -Unique)
   if ($left.Count -gt 0) {

@@ -95,7 +95,7 @@ DEFAULT_PROFILE: dict[str, Any] = {
         "clinicGrade": "D \u57fa\u5c64\u9662\u6240",
         "region": "A \u672c\u5cf6\u5e73\u5730\u5730\u5340",
         "clinicCode": "3521013662",
-        "clinicName": "\u74e3\u5230\u5e95\u76ae\u819a\u5c08\u79d1\u8a3a\u6240",
+        "clinicName": "\u74ba\u5230\u5e95\u76ae\u819a\u5c08\u79d1\u8a3a\u6240",
         "licenseNo": "\u885b\u8a3a\u5b57\u7b2c 3521013662 \u865f",
         "controlCertNo": "",
         "mainDept": "11 \u76ae\u819a\u79d1",

@@ -34,15 +34,17 @@ DLL_PATH = Path(os.environ.get("NHI_EIIAPI_DLL", r"Z:\SC\nhi_eiiapi.dll"))
 WORK_DIR = Path(os.environ.get("NHI_REFERRAL_WORKDIR", r"C:\Temp\wundadi-ref"))
 POWERSHELL32 = Path(r"C:\Windows\SysWOW64\WindowsPowerShell\v1.0\powershell.exe")
 COM_PORT = int(os.environ.get("NHI_REFERRAL_COM_PORT", "0"))
-_PF86 = Path(os.environ.get("ProgramFiles(x86)", r"C:\Program Files (x86)"))
-# IPR_ETB_API / IPR_ETA_API: NHI_DownloadB's second argument is the reader DLL.
-# This PC has no C:\Reader.dll. SysWOW64\CsHis.dll is the library that exports
-# OpenComPort, which that call loads.
+# IPR_ETA_API / IPR_ETB_API: NHI_DownloadB(port, Reader.dll, file, type, localId, nhiId).
+# Type 10 opens a referral, type 04 replies. Return 0 means the bureau took the file.
+# The second argument is the card-reader Reader.dll, never CsHis.dll.
 COMPAT_READER_CANDIDATES = (
-    Path(r"C:\Windows\SysWOW64\CsHis.dll"),
+    Path(r"C:\Reader.dll"),
     Path(r"C:\Windows\SysWOW64\Reader.dll"),
     Path(r"C:\Windows\System32\Reader.dll"),
-    Path(r"C:\Reader.dll"),
+    Path(r"Z:\SC\reader_A.dll"),
+    Path(r"Z:\SC\reader_B.dll"),
+    Path(r"Z:\SC\reader_C.dll"),
+    Path(r"Z:\SC\reader_D.dll"),
 )
 _NEED_READER = (
     "\u56de\u5fa9\u8aaa\u660e\u66f8\u7684\u4e0a\u50b3\u51fd\u5f0f\u662f NHI_DownloadB\uff0c"
@@ -478,9 +480,7 @@ def upload_file(xml_bytes: bytes, *, type_code: str, name: str, port: int | None
             nhi_id = line.split("=", 1)[1].strip()
     if code == 0:
         return {"ok": True, "code": 0, "localId": local_id, "nhiId": nhi_id, "path": str(target)}
-    if code == 5002:
-        reason = "\u8b80\u5361\u6a5f\u51fd\u5f0f\u56de 5002\uff1a\u5361\u7247\u5df2\u8a3b\u92b7\u3002\u4f5c\u696d\u8fa8\u8b58\u78bc\u662f\u7a7a\u7684\uff0c\u6a94\u6848\u6c92\u6709\u4ea4\u51fa\u53bb\u3002"
-    elif code == 5010:
+    if code == 5010:
         reason = (
             "\u4e0a\u50b3\u51fd\u5f0f\u56de 5010\u3002XML \u5df2\u7167\u6279\u6b21\u683c\u5f0f\u7d44\u597d\u4e26\u4ea4\u7d66 NHI_DownloadB\uff0c"
             "\u9019\u6b21\u6c92\u6709\u88ab\u6536\u4e0b\u3002"

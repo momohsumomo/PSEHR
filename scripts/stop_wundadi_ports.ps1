@@ -2,14 +2,15 @@
 $ErrorActionPreference = "SilentlyContinue"
 $ports = @(5000, 3010)
 foreach ($p in $ports) {
-  Get-NetTCPConnection -LocalPort $p -State Listen |
-    ForEach-Object {
-      $procId = $_.OwningProcess
-      if ($procId -and $procId -ne 0) {
-        Write-Host "  kill PID $procId port $p"
-        Stop-Process -Id $procId -Force
-      }
+  $conns = @()
+  try { $conns = @(Get-NetTCPConnection -LocalPort $p -State Listen -ErrorAction SilentlyContinue) } catch { $conns = @() }
+  foreach ($conn in $conns) {
+    $procId = $conn.OwningProcess
+    if ($procId -and $procId -ne 0) {
+      Write-Host "  kill PID $procId port $p"
+      Stop-Process -Id $procId -Force
     }
+  }
 }
 Get-CimInstance Win32_Process |
   Where-Object {

@@ -212,6 +212,87 @@ function statusBox(data: Record<string, unknown>): Record<string, unknown> {
   return data;
 }
 
+export type LocalCardLive = {
+  reachable: boolean;
+  sam: number;
+  samExpire: string;
+  hpc: number;
+  hpcExpire: string;
+  readerName: string;
+};
+
+function clock(raw: unknown): string {
+  if (typeof raw !== "string" || !raw) return "";
+  const date = new Date(raw);
+  if (Number.isNaN(date.getTime())) return "";
+  const pad = (value: number) => String(value).padStart(2, "0");
+  return pad(date.getMonth() + 1) + "/" + pad(date.getDate()) + " " + pad(date.getHours()) + ":" + pad(date.getMinutes());
+}
+
+function liveFrom(data: Record<string, unknown>): LocalCardLive {
+  const box = statusBox(data);
+  const sam = box.sam && typeof box.sam === "object" ? box.sam as Record<string, unknown> : null;
+  const hpc = box.hpc && typeof box.hpc === "object" ? box.hpc as Record<string, unknown> : null;
+  return {
+    reachable: true,
+    sam: typeof sam?.status === "number" ? sam.status : 0,
+    samExpire: clock(sam?.expireTime),
+    hpc: typeof hpc?.status === "number" ? hpc.status : 0,
+    hpcExpire: clock(hpc?.expireTime),
+    readerName: typeof box.readerName === "string" ? box.readerName : "",
+  };
+}
+
+const LIVE_DOWN: LocalCardLive = { reachable: false, sam: 0, samExpire: "", hpc: 0, hpcExpire: "", readerName: "" };
+
+export async function readLocalCardLive(): Promise<LocalCardLive> {
+  try {
+    return liveFrom(await localCshisRaw("GET", "/api/common/v1/Status"));
+  } catch {
+    return LIVE_DOWN;
+  }
+}
+
+async function cloudSamId(): Promise<string> {
+  const list = await localCshis("GET", "/api/settings/v1/CloudSam");
+  const sams = list.sams;
+  const first = Array.isArray(sams) ? sams[0] as Record<string, unknown> : undefined;
+  return String(first?.samId || "");
+}
+
+export async function verifyLocalSam(): Promise<LocalCardLive> {
+  const samId = await cloudSamId();
+  if (!samId) throw new DeskCardError("\u9019\u53f0\u9084\u6c92\u532f\u5165 SAM\u3002");
+  let data = await localCshis("GET", "/api/common/v1/Status");
+  const box = statusBox(data);
+  const initialized = box.initialized === true;
+  const name = typeof box.name === "string" ? box.name : "";
+  const restart = !initialized || name !== samId;
+  if (restart && initialized) {
+    await localCshis("POST", "/api/common/v1/Finalize", {});
+  }
+  if (restart) {
+    await localCshis("POST", "/api/common/v1/Initial", { name: samId });
+    data = await localCshis("GET", "/api/common/v1/Status");
+  }
+  if (nestedStatus(data, "sam") !== 2) {
+    await localCshis("POST", "/api/sam/v1/Verification", {});
+  }
+  return readLocalCardLive();
+}
+
+export async function verifyLocalHpc(pin: string): Promise<LocalCardLive> {
+  const trimmed = pin.trim();
+  if (!trimmed) throw new DeskCardError("\u8acb\u5148\u8f38\u5165\u91ab\u4e8b\u4eba\u54e1\u5361 PIN\u3002");
+  await verifyLocalSam();
+  const result = await localCshisRaw("POST", "/api/hpc/v1/Verification/Hpc", { pin: trimmed });
+  const code = result.statusCode;
+  if (code === 1102 || code === 1400) throw new DeskCardError("\u91ab\u4e8b\u4eba\u54e1\u5361\u6c92\u6709\u63d2\u5728\u73fe\u5728\u9019\u53f0\u8b80\u5361\u6a5f\u3002");
+  if (code === 1410) throw new DeskCardError("\u91ab\u4e8b\u4eba\u54e1\u5361 PIN \u4e0d\u5c0d\u3002");
+  if (typeof code === "number" && code !== 0) throw new DeskCardError("\u91ab\u4e8b\u4eba\u54e1\u5361\u9a57\u8b49\u5931\u6557\uff08" + String(code) + "\uff09\u3002");
+  return readLocalCardLive();
+}
+
 async function pointReader(readerName: string): Promise<void> {
   const cloud = await localCshis("GET", "/api/settings/v1/CloudSam");
   const sams = cloud.sams;
