@@ -74,6 +74,148 @@ function Get-PrintSettings([double]$Width, [double]$Height, [string]$Feed) {
   return $lock
 }
 
+function Format-Mm([double]$Value) {
+  return $Value.ToString("0.###", [Globalization.CultureInfo]::InvariantCulture)
+}
+
+function Convert-SlipForFeed([string]$Html, [double]$Width, [double]$Height, [string]$Feed) {
+  $chosen = "$Feed".ToLower()
+  if ($chosen -eq "portrait" -and $Width -gt ($Height + 2)) {
+    $short = Format-Mm $Height
+    $long = Format-Mm $Width
+    $style = '<style id="ys-short-edge">@page{size:' + $short + 'mm ' + $long + 'mm;margin:0 !important;}html,body{margin:0 !important;padding:0 !important;width:' + $short + 'mm !important;height:' + $long + 'mm !important;overflow:hidden !important;background:#fff !important;}.ys-rot{width:' + $long + 'mm;height:' + $short + 'mm;transform-origin:top left;transform:rotate(90deg) translateY(-' + $short + 'mm);}</style>'
+    $head = $Html.IndexOf("</head>")
+    if ($head -ge 0) { $Html = $Html.Substring(0, $head) + $style + $Html.Substring($head) }
+    else { $Html = $style + $Html }
+    $lower = $Html.ToLower()
+    $start = $lower.IndexOf("<body")
+    if ($start -lt 0) {
+      $Html = '<div class="ys-rot">' + $Html + "</div>"
+    } else {
+      $openEnd = $Html.IndexOf(">", $start)
+      $close = $lower.LastIndexOf("</body>")
+      if ($openEnd -ge 0 -and $close -gt $openEnd) {
+        $Html = $Html.Substring(0, $openEnd + 1) + '<div class="ys-rot">' + $Html.Substring($openEnd + 1, $close - ($openEnd + 1)) + "</div>" + $Html.Substring($close)
+      }
+    }
+    return @{ Html = $Html; Width = $Height; Height = $Width; Feed = "portrait" }
+  }
+  return @{ Html = $Html; Width = $Width; Height = $Height; Feed = $chosen }
+}
+
+function Export-EdgePdf([string]$Edge, [string]$HtmlPath, [string]$PdfPath, [double]$WidthMm, [double]$HeightMm) {
+  if ($WidthMm -le 0) { $WidthMm = 210 }
+  if ($HeightMm -le 0) { $HeightMm = 297 }
+  $dir = Split-Path -Parent $HtmlPath
+  $profile = Join-Path $dir "edge-profile"
+  if (Test-Path -LiteralPath $profile) { Remove-Item -LiteralPath $profile -Recurse -Force -ErrorAction SilentlyContinue }
+  New-Item -ItemType Directory -Force -Path $profile | Out-Null
+  $psi = New-Object System.Diagnostics.ProcessStartInfo
+  $psi.FileName = $Edge
+  $psi.Arguments = "--headless=new --disable-gpu --no-first-run --no-default-browser-check --disable-extensions --disable-sync --remote-allow-origins=* --user-data-dir=`"$profile`" --remote-debugging-port=0 about:blank"
+  $psi.WindowStyle = [System.Diagnostics.ProcessWindowStyle]::Hidden
+  $psi.UseShellExecute = $false
+  $proc = [System.Diagnostics.Process]::Start($psi)
+  $ws = $null
+  try {
+    $marker = Join-Path $profile "DevToolsActivePort"
+    $deadline = (Get-Date).AddSeconds(15)
+    $port = 0
+    while ((Get-Date) -lt $deadline) {
+      if ($proc.HasExited) { throw "edge exited" }
+      if (Test-Path -LiteralPath $marker) {
+        $line = @(Get-Content -LiteralPath $marker -ErrorAction SilentlyContinue)[0]
+        if ($line -match "^\d+$") { $port = [int]$line; break }
+      }
+      Start-Sleep -Milliseconds 50
+    }
+    if ($port -le 0) { throw "edge debug port missing" }
+    $wsUrl = ""
+    $lookUntil = (Get-Date).AddSeconds(8)
+    while ((Get-Date) -lt $lookUntil -and -not $wsUrl) {
+      try { $pages = @(Invoke-RestMethod -Uri ("http://127.0.0.1:{0}/json/list" -f $port) -TimeoutSec 5) } catch { $pages = @() }
+      foreach ($page in $pages) {
+        if ("$($page.type)" -eq "page" -and $page.webSocketDebuggerUrl) { $wsUrl = [string]$page.webSocketDebuggerUrl; break }
+      }
+      if (-not $wsUrl) { Start-Sleep -Milliseconds 100 }
+    }
+    if (-not $wsUrl) {
+      $created = Invoke-WebRequest -Uri ("http://127.0.0.1:{0}/json/new?about:blank" -f $port) -Method Put -UseBasicParsing -TimeoutSec 5
+      Add-Type -AssemblyName System.Web.Extensions -ErrorAction SilentlyContinue
+      $serNew = New-Object System.Web.Script.Serialization.JavaScriptSerializer
+      $made = $serNew.DeserializeObject($created.Content)
+      if ($made -and $made["webSocketDebuggerUrl"]) { $wsUrl = [string]$made["webSocketDebuggerUrl"] }
+    }
+    if (-not $wsUrl) { throw "edge page missing" }
+    $ws = New-Object System.Net.WebSockets.ClientWebSocket
+    $null = $ws.ConnectAsync([Uri]$wsUrl, [Threading.CancellationToken]::None).Result
+    if ($ws.State -ne [System.Net.WebSockets.WebSocketState]::Open) { throw "edge socket missing" }
+    $script:CdpId = 0
+    function Send-CdpText([string]$Json) {
+      $bytes = [Text.Encoding]::UTF8.GetBytes($Json)
+      $seg = New-Object System.ArraySegment[byte] -ArgumentList (, $bytes)
+      $null = $ws.SendAsync($seg, [System.Net.WebSockets.WebSocketMessageType]::Text, $true, [Threading.CancellationToken]::None).Result
+    }
+    function Read-CdpText {
+      $ms = New-Object System.IO.MemoryStream
+      $buf = New-Object byte[] 131072
+      do {
+        $seg = New-Object System.ArraySegment[byte] -ArgumentList (, $buf)
+        $task = $ws.ReceiveAsync($seg, [Threading.CancellationToken]::None)
+        if (-not $task.Wait(20000)) { throw "edge read timeout" }
+        $got = $task.Result
+        if ($got.MessageType -eq [System.Net.WebSockets.WebSocketMessageType]::Close) { throw "edge closed" }
+        $ms.Write($buf, 0, $got.Count)
+      } while (-not $got.EndOfMessage)
+      return [Text.Encoding]::UTF8.GetString($ms.ToArray())
+    }
+    function Call-Cdp([string]$Method, [string]$ParamsJson) {
+      $script:CdpId++
+      $id = $script:CdpId
+      if ($ParamsJson) { $json = '{"id":' + $id + ',"method":"' + $Method + '","params":' + $ParamsJson + '}' }
+      else { $json = '{"id":' + $id + ',"method":"' + $Method + '"}' }
+      Send-CdpText $json
+      $deadline2 = (Get-Date).AddSeconds(40)
+      while ((Get-Date) -lt $deadline2) {
+        $text = Read-CdpText
+        if ($text -notmatch ('"id"\s*:\s*' + $id + '\D')) { continue }
+        Add-Type -AssemblyName System.Web.Extensions -ErrorAction SilentlyContinue
+        $ser = New-Object System.Web.Script.Serialization.JavaScriptSerializer
+        $ser.MaxJsonLength = 67108864
+        $ser.RecursionLimit = 20
+        $msg = $ser.DeserializeObject($text)
+        if ($msg["error"]) { throw "edge refused the page" }
+        return $msg["result"]
+      }
+      throw "edge reply timeout"
+    }
+    Call-Cdp "Page.enable" "{}" | Out-Null
+    $uri = (New-Object System.Uri ([string]$HtmlPath)).AbsoluteUri
+    $uriJson = ($uri | ConvertTo-Json -Compress)
+    Call-Cdp "Page.navigate" ('{"url":' + $uriJson + '}') | Out-Null
+    $readyDeadline = (Get-Date).AddSeconds(15)
+    while ((Get-Date) -lt $readyDeadline) {
+      $state = Call-Cdp "Runtime.evaluate" '{"expression":"document.readyState","returnByValue":true}'
+      if ($state -and $state["result"] -and "$($state["result"]["value"])" -eq "complete") { break }
+      Start-Sleep -Milliseconds 50
+    }
+    $paperW = ($WidthMm / 25.4).ToString("0.########", [Globalization.CultureInfo]::InvariantCulture)
+    $paperH = ($HeightMm / 25.4).ToString("0.########", [Globalization.CultureInfo]::InvariantCulture)
+    $pdfParams = '{"landscape":false,"displayHeaderFooter":false,"printBackground":true,"scale":1,"paperWidth":' + $paperW + ',"paperHeight":' + $paperH + ',"marginTop":0,"marginBottom":0,"marginLeft":0,"marginRight":0,"preferCSSPageSize":false}'
+    $pdf = Call-Cdp "Page.printToPDF" $pdfParams
+    $data = ""
+    if ($pdf) { $data = [string]$pdf["data"] }
+    if (-not $data) { throw "pdf was not created" }
+    [IO.File]::WriteAllBytes($PdfPath, [Convert]::FromBase64String($data))
+  } finally {
+    if ($ws) { try { $ws.Dispose() } catch {} }
+    if ($proc -and -not $proc.HasExited) { & taskkill.exe /F /T /PID $proc.Id | Out-Null }
+  }
+  if (-not (Test-Path -LiteralPath $PdfPath) -or (Get-Item -LiteralPath $PdfPath).Length -lt 100) {
+    throw "pdf was not created"
+  }
+}
+
 function Get-Card6 {
   $pf86 = ${env:ProgramFiles(x86)}
   if (-not $pf86) { $pf86 = "C:\Program Files (x86)" }
@@ -289,19 +431,16 @@ function Invoke-OnePrint($job) {
   if (-not $edge) { throw "Edge is not installed" }
   $dir = Join-Path $env:TEMP ("psehr-" + [guid]::NewGuid().ToString("n"))
   New-Item -ItemType Directory -Force -Path $dir | Out-Null
-  $htmlPath = Join-Path $dir "slip.html"
-  $pdf = Join-Path $dir "slip.pdf"
-  [IO.File]::WriteAllText($htmlPath, $html, (New-Object System.Text.UTF8Encoding $false))
-  $uri = (New-Object System.Uri ([string]$htmlPath)).AbsoluteUri
-  & $edge --headless=new --disable-gpu --no-first-run --print-to-pdf="$pdf" $uri | Out-Null
-  $waited = 0
-  while (-not (Test-Path -LiteralPath $pdf) -and $waited -lt 40) { Start-Sleep -Milliseconds 250; $waited++ }
-  if (-not (Test-Path -LiteralPath $pdf)) { throw "pdf was not created" }
   $width = 0.0
   $height = 0.0
   try { $width = [double]$job.widthMm } catch {}
   try { $height = [double]$job.heightMm } catch {}
-  $settings = Get-PrintSettings $width $height "$($job.feed)"
+  $turned = Convert-SlipForFeed $html $width $height "$($job.feed)"
+  $htmlPath = Join-Path $dir "slip.html"
+  $pdf = Join-Path $dir "slip.pdf"
+  [IO.File]::WriteAllText($htmlPath, [string]$turned.Html, (New-Object System.Text.UTF8Encoding $false))
+  Export-EdgePdf $edge $htmlPath $pdf ([double]$turned.Width) ([double]$turned.Height)
+  $settings = Get-PrintSettings ([double]$turned.Width) ([double]$turned.Height) ([string]$turned.Feed)
   & $exe -silent -print-to $printer -print-settings $settings -exit-when-done $pdf | Out-Null
 }
 
