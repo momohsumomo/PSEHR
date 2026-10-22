@@ -314,7 +314,7 @@ export function CurrentRxWidget({
         style={{ borderColor: HIS.chromeBorder, background: HIS.chrome }}
       >
         {active
-          ? "單擊選取，Del 刪除 · 空白列直接打字 · 雙擊覆蓋，Enter 蓋上，↑↓ 或點別處取消 · 選單開著 ↑↓ 在選單裡移動"
+          ? "\u55ae\u64ca\u9078\u53d6\uff0cDel \u522a\u9664 \u00b7 \u9078\u4e2d\u5f8c\u76f4\u63a5\u6253\u5b57 \u00b7 \u96d9\u64ca\u8986\u84cb\uff0cEnter \u84cb\u4e0a\uff0c\u2191\u2193 \u6216\u9ede\u5225\u8655\u53d6\u6d88 \u00b7 \u9078\u55ae\u958b\u8457 \u2191\u2193 \u5728\u9078\u55ae\u88e1\u79fb\u52d5"
           : "點此區後再編輯處置"}
       </div>
     </section>

@@ -1,4 +1,5 @@
-import { fetchWorkspace, type WorkspaceResponse } from "@/api/clinicApi";
+import { fetchStaff, fetchWorkspace, type WorkspaceResponse } from "@/api/clinicApi";
+import { pharmacistDisplayName } from "@/lib/doctorName";
 import { buildDepositSlipHtml } from "@/lib/clinicPrintDocs";
 import { readLocalClinicBundle } from "@/lib/clinicProfile";
 import { lastClinicDept } from "@/lib/clinicSession";
@@ -75,7 +76,7 @@ function drugsOf(ws: WorkspaceResponse): RxLine[] {
       route: "po",
       payMark: mark,
       selfPay: mark === "\u81ea" || mark === "\u6750",
-      memo: marks.memo,
+      memo: marks.memo || String((meta as { memo?: string }).memo || ""),
       bodySite: marks.bodySite,
       unitPrice: meta.unitPrice == null ? undefined : Number(meta.unitPrice),
     };
@@ -85,6 +86,13 @@ function drugsOf(ws: WorkspaceResponse): RxLine[] {
 /** Saved visit, same dual receipt as the chart print. */
 export async function openSavedVisitReceipt(entry: QueueEntry, visitDate: string): Promise<void> {
   const ws = await fetchWorkspace(entry.encounterId, { historyLimit: 0 });
+  let people: { id: string; name: string }[] = [];
+  try {
+    people = await fetchStaff();
+  } catch {
+    people = [];
+  }
+  const pharmacistName = pharmacistDisplayName(entry.pharmacist, people, "");
   const clinic = readLocalClinicBundle();
   const setup = findPrintSetup(loadPrintSettings(), "simple");
   const profile = clinic.profile;
@@ -106,7 +114,7 @@ export async function openSavedVisitReceipt(entry: QueueEntry, visitDate: string
       caseNo: entry.caseNo || "",
       cardNo: entry.treatSeq || "",
       doctor: entry.doctorName || "",
-      pharmacist: entry.pharmacist || "",
+      pharmacist: pharmacistName,
       chief: ws.chiefComplaint || entry.reasonText || "",
       diagnoses: diagnosesOf(ws),
       drugs: drugsOf(ws),

@@ -159,6 +159,9 @@ export function SelfRegisterKioskPage() {
     const aged = applyAgeFees({
       age: ageYearsFromRoc(birthdayRoc),
       baseReg: Number(base.regFee) || 0,
+      listReg: selfPay
+        ? Number(defaults.regFeeSelfPay) || 0
+        : Number(defaults.regFeeOutpatient) || 0,
       baseCopay: selfPay ? 0 : Number(base.copayAmt) || 0,
       baseDisc: selfPay ? 0 : Number(base.copayDiscAmt) || 0,
       selfPay,

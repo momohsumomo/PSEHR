@@ -57,7 +57,10 @@ function money(n: number): string {
 
 export function applyAgeFees(args: {
   age: number | null;
+  /** Fee after the identity discount. */
   baseReg: number;
+  /** Clinic list price before the identity discount. Age uses this, and does not subtract again. */
+  listReg?: number;
   baseCopay: number;
   baseDisc: number;
   selfPay: boolean;
@@ -65,12 +68,14 @@ export function applyAgeFees(args: {
   policy: AgeFeePolicy;
 }): AgeFeeQuote {
   const p = args.policy;
+  const list = args.listReg != null && args.listReg > 0 ? args.listReg : args.baseReg;
   let reg = args.baseReg;
   let disc = args.baseDisc;
   const copay = args.baseCopay;
   const notes: string[] = [];
   let askStudent = false;
   const age = args.age;
+  let ageOff = 0;
 
   if (age != null && !args.selfPay && age < p.copayFreeUnder) {
     disc = Math.max(disc, copay);
@@ -78,13 +83,13 @@ export function applyAgeFees(args: {
       `\u672a\u6eff${p.copayFreeUnder}\u6b72\uff0c\u90e8\u5206\u8ca0\u64d4 0\uff0c\u639b\u865f\u8cbb\u7167\u6536`,
     );
   } else if (age != null && age >= p.copayFreeUnder && age < p.studentAutoUntil) {
-    reg = Math.max(0, reg - p.studentDiscount);
+    ageOff = p.studentDiscount;
     notes.push(
       `\u6eff${p.copayFreeUnder}\u6b72\u3001\u672a\u6eff${p.studentAutoUntil}\u6b72\uff0c\u639b\u865f\u8cbb\u6e1b ${p.studentDiscount}`,
     );
   } else if (age != null && age >= p.studentAutoUntil && age <= p.studentAskUntil) {
     if (args.student === true) {
-      reg = Math.max(0, reg - p.studentDiscount);
+      ageOff = p.studentDiscount;
       notes.push(`\u5b78\u751f\uff0c\u639b\u865f\u8cbb\u6e1b ${p.studentDiscount}`);
     } else if (args.student === false) {
       notes.push(`\u4e0d\u662f\u5b78\u751f\uff0c\u639b\u865f\u8cbb\u4e0d\u6e1b`);
@@ -97,8 +102,13 @@ export function applyAgeFees(args: {
   }
 
   if (age != null && age >= p.seniorAge) {
-    reg = Math.max(0, args.baseReg - p.seniorDiscount);
+    ageOff = p.seniorDiscount;
     notes.push(`\u6eff${p.seniorAge}\u6b72\uff0c\u639b\u865f\u8cbb\u6e1b ${p.seniorDiscount}`);
+  }
+
+  if (ageOff > 0) {
+    const fromList = Math.max(0, list - ageOff);
+    reg = Math.min(reg, fromList);
   }
 
   if (args.selfPay) {

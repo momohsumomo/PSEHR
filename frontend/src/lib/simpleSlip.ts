@@ -69,6 +69,11 @@ function show(v: string | number | undefined | null): string {
   return s;
 }
 
+/** Chief stays one line. Each original break is marked so the print still shows it. */
+export function markChiefBreaks(value: string | undefined | null): string {
+  return String(value ?? "").replace(/\r\n|\r|\n/g, '"');
+}
+
 function asNumber(v: string | number | undefined | null): number | null {
   const raw = String(v ?? "").trim();
   if (!raw || raw === "\u2014" || raw === "-") return null;
@@ -276,7 +281,7 @@ function pageHtml(
       ? `<div style="${glow("chart")}${glow("idno")}${glow("birthday")}">${who}(${esc(show(input.sex))})${idPart}${birth}</div>
       <div>&lt;${esc(show(input.visitDate))}&gt;\u79d1\u5225:${esc(show(input.dept))}\u6848\u4ef6:${esc(show(input.caseNo))}\u5361\u865f:${esc(show(input.cardNo))}</div>
       <div style="${glow("doctor")}${glow("pharmacist")}">${whoLine}</div>
-      <div style="border:${showChief ? "1px solid #000" : "0"};min-height:12px;margin-top:1px;padding:1px;${glow("chief")}">${showChief ? esc(show(input.chief)) : ""}</div>
+      <div style="border:${showChief ? "1px solid #000" : "0"};min-height:12px;margin-top:1px;padding:1px;${glow("chief")}">${showChief ? esc(show(markChiefBreaks(input.chief))) : ""}</div>
       <div style="${glow("dx")}">${showDx ? dx || "\u2014" : ""}</div>`
       : `<div>${who}\u3000${esc(show(input.visitDate))}\u3000\u7e8c${pageIndex + 1}</div>`;
   const depositBit = hide("deposit") ? "" : `\u62bc\u91d1:${esc(show(input.deposit))}\u3000`;

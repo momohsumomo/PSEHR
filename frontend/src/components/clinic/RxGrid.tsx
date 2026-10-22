@@ -108,7 +108,7 @@ function cellValue(line: RxLine, key: string, usages?: CatalogUsage[]): string {
     case "totalAmount":
       return (
         line.totalAmount ||
-        computeTotalAmount(line.qty, line.days, line.sig, usages) ||
+        computeTotalAmount(line.qty, line.days, line.sig, usages, line.unit) ||
         ""
       );
     case "bodySite":
@@ -611,7 +611,7 @@ export function RxGrid({
                 tabIndex={sel ? 0 : -1}
                 className="cursor-default leading-none outline-none"
                 style={{
-                  background: sel ? HIS.rowSelected : rowIdx % 2 ? "#FFFFE0" : HIS.rxBg,
+                  background: sel ? "#E5F6E3" : rowIdx % 2 ? "#FFFFE0" : HIS.rxBg,
                   color: "#000",
                   height: 20,
                   outline: sel ? "1px solid #808000" : undefined,
@@ -647,13 +647,50 @@ export function RxGrid({
                     !e.metaKey &&
                     !e.altKey &&
                     onChangeLine &&
-                    (isDraft || !(line.name || "").trim())
+                    isEditableDraftCol(focusCol)
                   ) {
                     e.preventDefault();
+                    e.stopPropagation();
                     editOrigin.current = { ...line };
-                    setFocusCol("name");
-                    onChangeLine(line.id, { name: e.key });
-                    setEditCell({ id: line.id, key: "name" });
+                    const key = focusCol;
+                    if (key === "name" || key === "shortName") {
+                      if (isDraft || !(line.name || "").trim()) {
+                        onChangeLine(line.id, { name: e.key });
+                        setEditCell({ id: line.id, key });
+                        onCoverQuery?.(e.key);
+                      } else {
+                        setCoverOn(true);
+                        setCoverText(e.key);
+                        setEditCell({ id: line.id, key });
+                        onCoverQuery?.(e.key);
+                      }
+                      return;
+                    }
+                    if (key === "qty") {
+                      if (!/[\d.]/.test(e.key)) return;
+                      setQtyDraft(e.key === "." ? "0." : e.key);
+                      setCoverOn(false);
+                      setEditCell({ id: line.id, key });
+                      return;
+                    }
+                    if (key === "days") {
+                      if (!/\d/.test(e.key)) return;
+                      onChangeLine(line.id, patchWithTotal(line, { days: Number(e.key) }, usages));
+                      setCoverOn(false);
+                      setEditCell({ id: line.id, key });
+                      return;
+                    }
+                    if (key === "sig") {
+                      onChangeLine(line.id, patchWithTotal(line, { sig: e.key }, usages));
+                      setCoverOn(false);
+                      setEditCell({ id: line.id, key });
+                      return;
+                    }
+                    if (key === "route") {
+                      onChangeLine(line.id, { route: e.key });
+                      setCoverOn(false);
+                      setEditCell({ id: line.id, key });
+                    }
                   }
                 }}
               >
@@ -682,10 +719,10 @@ export function RxGrid({
                         maxWidth: col.widthCh ? `${col.widthCh}ch` : undefined,
                         textAlign:
                           pay || memo || narrow || col.key === "totalAmount" ? "center" : undefined,
-                        background: cellHot ? "#7EB6FF" : pay && mark ? "#D0D0D0" : undefined,
+                        background: cellHot ? "#C6EBC2" : pay && mark ? "#D0D0D0" : undefined,
                         cursor: canEdit ? "text" : "default",
                         minWidth: pay || memo ? "1.4rem" : undefined,
-                        outline: cellHot ? "2px solid #0047AB" : undefined,
+                        outline: cellHot ? "1px solid #3C8C40" : undefined,
                         outlineOffset: -2,
                       }}
                       title={
@@ -777,10 +814,10 @@ export function RxGrid({
                             fontSize: primary ? HIS.fs.body : HIS.fs.secondary,
                             fontFamily: HIS_FONT,
                             fontWeight: primary ? 700 : 400,
-                            color: HIS.inputBlue,
+                            color: "#111",
                             textAlign: narrow ? "center" : "left",
                             cursor: "text",
-                            background: "#7EB6FF",
+                            background: "#C6EBC2",
                           }}
                           value={
                             coverOn

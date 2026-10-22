@@ -83,7 +83,7 @@ import { openDepositSlip } from "@/lib/visitReceiptPrint";
 import { VisitPrintDialog } from "@/components/clinic/VisitPrintDialog";
 import { buildSimpleSlipHtml, storedSelfPayText, visitCashParts } from "@/lib/simpleSlip";
 import { buildDepositSlipHtml } from "@/lib/clinicPrintDocs";
-import { doctorDisplayName, pickClinicDoctor } from "@/lib/doctorName";
+import { doctorDisplayName, pharmacistDisplayName, pickClinicDoctor } from "@/lib/doctorName";
 import { openNhiCloudRx } from "@/lib/nhiCloud";
 import { registerHubAction } from "@/lib/registerHubActions";
 import { RefundDepositDialog } from "@/components/clinic/RefundDepositDialog";
@@ -1176,7 +1176,19 @@ export function ClinicOutpatientPage() {
     const profile = clinic.profile;
     const cash = visitCashParts(selected);
     setPrintNote("\u5df2\u958b\u555f\u9810\u89bd\u3002\u78ba\u5b9a\u5f8c\u518d\u6309\u9810\u89bd\u4e0a\u7684\u5217\u5370\u3002");
-    void openPrintPreview({
+    void (async () => {
+      let people: { id: string; name: string }[] = [];
+      try {
+        people = await fetchStaff();
+      } catch {
+        people = [];
+      }
+      const pharmacistName = pharmacistDisplayName(
+        selected?.pharmacist,
+        people,
+        session?.pharmacist,
+      );
+      return openPrintPreview({
       kind: "receipt",
       layout: "paged",
       setupId: "simple",
@@ -1193,7 +1205,7 @@ export function ClinicOutpatientPage() {
         caseNo: saveDraft.caseNo,
         cardNo: saveDraft.cardNo,
         doctor: saveDraft.doctor,
-        pharmacist: selected?.pharmacist || session?.pharmacist || "",
+        pharmacist: pharmacistName,
         chief: ccText,
         diagnoses: displayDiagnoses,
         drugs: currentRx,
@@ -1225,7 +1237,8 @@ export function ClinicOutpatientPage() {
         showWarning: partOn(setup, "warning"),
       }),
       lines: [],
-    })
+    });
+    })()
       .then((result) => {
         setPrintNote(
           result.printed ? `\u5df2\u9001\u5230 ${result.printer}` : "\u9810\u89bd\u5df2\u95dc\u9589\uff0c\u5c1a\u672a\u9001\u51fa\u3002",

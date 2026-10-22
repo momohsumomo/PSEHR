@@ -76,12 +76,19 @@ export function usageCalcLabel(u: CatalogUsage): string {
   return "\u4e0d\u6307\u5b9a";
 }
 
-/** Compute total display e.g. "14 #"; blank when unspecified */
+/** MEDICAL.UNIT. Blank in the master still shows as #. */
+export function doseUnit(unit: string | undefined): string {
+  const text = String(unit || "").trim();
+  return text || "#";
+}
+
+/** Compute total display e.g. "1tu" / "7#"; blank when unspecified */
 export function computeTotalAmount(
   qty: number | undefined,
   days: number | undefined,
   sig: string | undefined,
   usages: CatalogUsage[] | undefined,
+  unit?: string,
 ): string {
   const q = Number(qty);
   if (!(q > 0)) return "";
@@ -91,9 +98,10 @@ export function computeTotalAmount(
   const mode = String(hit?.isTotal ?? "");
   const freq = Number(hit?.frequency) > 0 ? Number(hit?.frequency) : 0;
   const d = Number(days) > 0 ? Number(days) : 0;
+  const mark = doseUnit(unit);
   let total: number | null = null;
   if (mode === "3" && freq <= 0) {
-    return "1 #";
+    return `1${mark}`;
   }
   if (mode === "0") {
     total = q;
@@ -106,7 +114,7 @@ export function computeTotalAmount(
     Math.abs(total - Math.round(total)) < 1e-6
       ? Math.round(total)
       : Number(total.toFixed(2));
-  return `${rounded} #`;
+  return `${rounded}${mark}`;
 }
 
 export function withComputedTotal<
@@ -115,21 +123,25 @@ export function withComputedTotal<
     days?: number;
     sig?: string;
     totalAmount?: string;
+    unit?: string;
   },
 >(line: T, usages: CatalogUsage[] | undefined, previousSig?: string): T {
   const mode = usageIsTotal(line.sig, usages);
   const freq = packageFrequency(line.sig, usages);
+  const mark = doseUnit(line.unit);
   if (mode === "3" && freq <= 0) {
     const prev = usageIsTotal(previousSig, usages);
     const switching = previousSig != null && prev !== "3";
     const current = (line.totalAmount || "").trim();
+    const staleHash = current.endsWith(" #") || current.endsWith("#");
+    const keep = !switching && current && !(staleHash && mark !== "#");
     return {
       ...line,
-      totalAmount: !switching && current ? current : "1 #",
+      totalAmount: keep ? current : `1${mark}`,
     };
   }
   return {
     ...line,
-    totalAmount: computeTotalAmount(line.qty, line.days, line.sig, usages),
+    totalAmount: computeTotalAmount(line.qty, line.days, line.sig, usages, line.unit),
   };
 }

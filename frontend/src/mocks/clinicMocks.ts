@@ -166,7 +166,9 @@ export interface RxLine {
   payMark?: RxPayMark;
   memo?: string;
   shortName?: string;
-  /** 總量（顯示用，如 7 #／1 Bx） */
+  /** MEDICAL.UNIT，總量後面的單位，例如 tu、B、次、# */
+  unit?: string;
+  /** 總量（顯示用，如 7#／1tu／1B） */
   totalAmount?: string;
   /** 部位 */
   bodySite?: string;

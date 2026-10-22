@@ -270,6 +270,9 @@ export function RegisterConfirmDialog({
     const aged = applyAgeFees({
       age: ageYearsFromRoc(form.birthday),
       baseReg: Number(base.regFee) || 0,
+      listReg: isSelf
+        ? Number(defaults.regFeeSelfPay) || Number(base.regFee) || 0
+        : Number(defaults.regFeeOutpatient) || Number(base.regFee) || 0,
       baseCopay: isSelf ? 0 : Number(base.copayAmt) || 0,
       baseDisc: isSelf ? 0 : Number(base.copayDiscAmt) || 0,
       selfPay: isSelf,

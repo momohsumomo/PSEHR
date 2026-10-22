@@ -137,6 +137,10 @@ def nhi_medication_to_fhir(
         extensions.append(
             {"url": f"{BILLING_EXT_BASE}/bodySite", "valueString": intake.bodySite.strip()}
         )
+    if intake.payMark is not None:
+        extensions.append({"url": PAY_MARK_EXT, "valueString": intake.payMark.strip()})
+    if intake.memo is not None:
+        extensions.append({"url": MEMO_MARK_EXT, "valueString": intake.memo.strip()})
     data["extension"] = extensions
     return data
 

@@ -862,10 +862,10 @@ class SqliteShadowStore(ShadowStore):
                 rxnorm_code = excluded.rxnorm_code,
                 drug_text = excluded.drug_text,
                 status = excluded.status,
-                days_supply = excluded.days_supply,
-                quantity = excluded.quantity,
-                unit_price = excluded.unit_price,
-                pack_version = excluded.pack_version,
+                days_supply = COALESCE(excluded.days_supply, medication_request_index.days_supply),
+                quantity = COALESCE(excluded.quantity, medication_request_index.quantity),
+                unit_price = COALESCE(excluded.unit_price, medication_request_index.unit_price),
+                pack_version = COALESCE(excluded.pack_version, medication_request_index.pack_version),
                 updated_at = datetime('now')
             """,
             (
@@ -886,6 +886,21 @@ class SqliteShadowStore(ShadowStore):
             conn.execute(
                 "UPDATE medication_request_index SET body_site = ? WHERE resource_id = ?",
                 (fields.get("body_site") or None, resource_id),
+            )
+        if "pay_mark" in fields:
+            conn.execute(
+                "UPDATE medication_request_index SET pay_mark = ? WHERE resource_id = ?",
+                (fields.get("pay_mark") or None, resource_id),
+            )
+        if "memo_mark" in fields:
+            conn.execute(
+                "UPDATE medication_request_index SET memo_mark = ? WHERE resource_id = ?",
+                (fields.get("memo_mark") or None, resource_id),
+            )
+        if "useage" in fields:
+            conn.execute(
+                "UPDATE medication_request_index SET useage = ? WHERE resource_id = ?",
+                (fields.get("useage") or None, resource_id),
             )
 
     def get_cached_resource(
@@ -2338,6 +2353,7 @@ class SqliteShadowStore(ShadowStore):
                         "lineSort": line_sort,
                         "useage": useage,
                         "payMark": pay_mark,
+                        "memo": memo_mark,
                     },
                 }
             )
@@ -3854,6 +3870,10 @@ def _medication_request_index_fields(payload: dict[str, Any]) -> dict[str, Any]:
     unit_price: float | None = None
     pack_version: str | None = None
     body_site: str | None = None
+    pay_mark: str | None = None
+    memo_mark: str | None = None
+    saw_pay = False
+    saw_memo = False
 
     dispense = payload.get("dispenseRequest") or {}
     if isinstance(dispense, dict):
@@ -3884,8 +3904,14 @@ def _medication_request_index_fields(payload: dict[str, Any]) -> dict[str, Any]:
             pack_version = str(ext["valueString"])
         elif url.endswith("/bodySite"):
             body_site = str(ext.get("valueString") or "").strip()
+        elif url.endswith("/payMark"):
+            saw_pay = True
+            pay_mark = str(ext.get("valueString") or "").strip()
+        elif url.endswith("/memoMark"):
+            saw_memo = True
+            memo_mark = str(ext.get("valueString") or "").strip()
 
-    return {
+    out: dict[str, Any] = {
         "patient_id": patient_id,
         "encounter_id": encounter_id,
         "nhi_code": stickers["nhiMedCode"],
@@ -3898,6 +3924,17 @@ def _medication_request_index_fields(payload: dict[str, Any]) -> dict[str, Any]:
         "pack_version": pack_version,
         "body_site": body_site,
     }
+    if saw_pay:
+        out["pay_mark"] = pay_mark
+    if saw_memo:
+        out["memo_mark"] = memo_mark
+    if "dosageInstruction" in payload:
+        doses = payload.get("dosageInstruction") or []
+        text = ""
+        if isinstance(doses, list) and doses and isinstance(doses[0], dict):
+            text = str(doses[0].get("text") or "").strip()
+        out["useage"] = text or None
+    return out
 
 
 def _index_row_to_api(resource_type: str, row: dict[str, Any]) -> dict[str, Any]:

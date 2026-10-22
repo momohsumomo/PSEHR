@@ -40,6 +40,7 @@ import {
   buildConditionIntake,
   buildMedicationIntake,
   buildSoapIntake,
+  medicationSaveBody,
   extractPatientIdNo,
 } from "@/utils/nhiIntake";
 import {
@@ -277,7 +278,7 @@ function mapRxFromWorkspace(
       route: "po",
       selfPay: payMark === "\u81ea" || payMark === "\u6750",
       payMark: payMark || "",
-      memo: marks.memo || "",
+      memo: marks.memo || String((meta as { memo?: string }).memo || ""),
       bodySite: marks.bodySite || "",
       unitPrice:
         meta.unitPrice === null || meta.unitPrice === undefined
@@ -993,16 +994,7 @@ export function useClinicWorkspace(options?: {
       for (const line of lines) {
         if (!line.nhiCode?.trim()) continue;
         if (!isDraftId(line.id) && line.id && patientId) {
-          await updateMedicationRequest(line.id, {
-            status: "active",
-            intent: "order",
-            subject: { reference: `Patient/${patientId}` },
-            encounter: { reference: `Encounter/${selectedEncounterId}` },
-            drugText: line.name,
-            nhiCode: line.nhiCode,
-            dosageInstruction: [{ text: line.sig || "依醫囑" }],
-            bodySite: line.bodySite || "",
-          });
+          await updateMedicationRequest(line.id, medicationSaveBody(patientId, selectedEncounterId, line));
           continue;
         }
         const body = buildMedicationIntake(selectedEncounterId, line, patientIdNo);
@@ -1171,16 +1163,7 @@ export function useClinicWorkspace(options?: {
       }
       for (const line of visit.medications) {
         if (!isDraftId(line.id) && line.id && pid) {
-          await updateMedicationRequest(line.id, {
-            status: "active",
-            intent: "order",
-            subject: { reference: `Patient/${pid}` },
-            encounter: { reference: `Encounter/${eid}` },
-            drugText: line.name,
-            nhiCode: line.nhiCode,
-            dosageInstruction: [{ text: line.sig || "依醫囑" }],
-            bodySite: line.bodySite || "",
-          });
+          await updateMedicationRequest(line.id, medicationSaveBody(pid, eid, line));
         } else if (line.nhiCode?.trim()) {
           await registerMedication(buildMedicationIntake(eid, line, patientIdNo));
         }

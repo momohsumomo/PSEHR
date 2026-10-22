@@ -540,7 +540,7 @@ export function DiagnosesWidget({
               const d = isCommitted ? displayDiagnoses[row] : null;
               const draftVal = !isCommitted ? drafts[row - displayDiagnoses.length] ?? "" : "";
               const sel = row === selectedIdx;
-              const cellBg = sel ? HIS.rowSelected : HIS.dxBg;
+              const cellBg = sel ? "#E5F6E3" : HIS.dxBg;
               const preview = !isCommitted && draftVal && sel && hits[pickIdx] ? hits[pickIdx] : null;
               const values = isCommitted
                 ? [icd9For(d), d?.text || "", d?.icd10 || d?.nhiIcd10 || ""]
@@ -559,8 +559,8 @@ export function DiagnosesWidget({
                         style={{
                           borderColor: "#A0A0A0",
                           fontSize: col === 1 ? 12 : 11,
-                          background: sel && focusCol === col ? "#7EB6FF" : undefined,
-                          outline: sel && focusCol === col ? "2px solid #0047AB" : undefined,
+                          background: sel && focusCol === col ? "#C6EBC2" : undefined,
+                          outline: sel && focusCol === col ? "1px solid #3C8C40" : undefined,
                           outlineOffset: -2,
                         }}
                         onMouseDown={(e) => {
@@ -622,8 +622,8 @@ export function DiagnosesWidget({
                             height: 18,
                             fontFamily: HIS_FONT,
                             fontWeight: col === 1 ? 700 : 400,
-                            background: sel && focusCol === col ? "#7EB6FF" : "transparent",
-                            color: HIS.inputBlue,
+                            background: sel && focusCol === col ? "#C6EBC2" : "transparent",
+                            color: sel && focusCol === col ? "#111" : HIS.inputBlue,
                             cursor: editingKey === `${row}:${col}` ? "text" : "default",
                             caretColor: editingKey === `${row}:${col}` ? undefined : "transparent",
                           }}
@@ -704,21 +704,25 @@ export function DiagnosesWidget({
                               e.key.length === 1 &&
                               !e.ctrlKey &&
                               !e.metaKey &&
-                              !e.altKey &&
-                              !String(values[col] || "").trim()
+                              !e.altKey
                             ) {
                               e.preventDefault();
                               const key = `${row}:${col}`;
+                              const shown = String(values[col] || "");
                               if (editBackup.current?.key !== key) {
                                 editBackup.current = {
                                   key,
-                                  text: isCommitted ? "" : drafts[row - displayDiagnoses.length] ?? "",
+                                  text: isCommitted ? shown : drafts[row - displayDiagnoses.length] ?? "",
                                   dx: isCommitted && d ? { ...d } : null,
                                 };
                               }
                               setEditingKey(key);
                               setTypedInRow(row);
                               const v = e.key;
+                              if (shown.trim()) {
+                                setCover({ row, col, text: v });
+                                return;
+                              }
                               if (!isCommitted) {
                                 const di = row - displayDiagnoses.length;
                                 setDrafts((prev) => {

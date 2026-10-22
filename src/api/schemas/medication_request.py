@@ -39,6 +39,10 @@ class MedicationRequestBody(BaseModel):
     nhiCode: str | None = Field(None, description="台灣健保藥品碼，例：AC44121")
     rxnormCode: str | None = Field(None, description="國際 RxNorm，例：1292")
     bodySite: str | None = Field(None, description="列印用部位")
+    payMark: str | None = Field(None, description="計費標記，例如 自")
+    memo: str | None = Field(None, description="註記，例如 [")
+    daysSupply: int | None = Field(None, description="給藥日份")
+    quantity: float | None = Field(None, description="次量")
 
     def to_fhir_dict(self) -> dict[str, Any]:
         existing = self.medicationCodeableConcept.to_fhir() if self.medicationCodeableConcept else None
@@ -65,11 +69,42 @@ class MedicationRequestBody(BaseModel):
             data["encounter"] = self.encounter.to_fhir()
         if self.dosageInstruction:
             data["dosageInstruction"] = [d.to_fhir() for d in self.dosageInstruction]
+        extensions: list[dict[str, Any]] = []
         if self.bodySite is not None:
-            data["extension"] = [
+            extensions.append(
                 {
                     "url": "https://clinic.org/fhir/StructureDefinition/billing/bodySite",
                     "valueString": self.bodySite.strip(),
                 }
-            ]
+            )
+        if self.payMark is not None:
+            extensions.append(
+                {
+                    "url": "https://clinic.org/fhir/StructureDefinition/billing/payMark",
+                    "valueString": self.payMark.strip(),
+                }
+            )
+        if self.memo is not None:
+            extensions.append(
+                {
+                    "url": "https://clinic.org/fhir/StructureDefinition/billing/memoMark",
+                    "valueString": self.memo.strip(),
+                }
+            )
+        if self.daysSupply is not None:
+            extensions.append(
+                {
+                    "url": "https://wundadi.local/fhir/StructureDefinition/medication-billing/daysSupply",
+                    "valueInteger": int(self.daysSupply),
+                }
+            )
+        if self.quantity is not None:
+            extensions.append(
+                {
+                    "url": "https://wundadi.local/fhir/StructureDefinition/medication-billing/quantity",
+                    "valueDecimal": float(self.quantity),
+                }
+            )
+        if extensions:
+            data["extension"] = extensions
         return data

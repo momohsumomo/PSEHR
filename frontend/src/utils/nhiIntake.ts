@@ -62,11 +62,35 @@ export function buildMedicationIntake(
     daysSupply: line.days > 0 ? line.days : 1,
     quantity: (line.qty ?? 0) > 0 ? Number(line.qty) : 1,
     bodySite: line.bodySite?.trim() || "",
+    payMark: line.payMark || "",
+    memo: line.memo || "",
   };
   if (line.rxnorm && RXNORM_RE.test(line.rxnorm)) {
     body.rxnormCode = line.rxnorm;
   }
   return body;
+}
+
+/** Existing chart lines. Marks, days, qty, and sig go with the save. */
+export function medicationSaveBody(
+  patientId: string,
+  encounterId: string,
+  line: RxLine,
+): Record<string, unknown> {
+  return {
+    status: "active",
+    intent: "order",
+    subject: { reference: `Patient/${patientId}` },
+    encounter: { reference: `Encounter/${encounterId}` },
+    drugText: line.name,
+    nhiCode: line.nhiCode,
+    dosageInstruction: [{ text: line.sig?.trim() || "\u4f9d\u91ab\u56d1" }],
+    bodySite: line.bodySite || "",
+    payMark: line.payMark || "",
+    memo: line.memo || "",
+    daysSupply: line.days > 0 ? line.days : 1,
+    quantity: line.qty != null && Number(line.qty) > 0 ? Number(line.qty) : 1,
+  };
 }
 
 export function buildSoapIntake(
