@@ -30,6 +30,13 @@ export type CatalogDrug = {
   restrain?: string;
   unit?: string;
   dosimeter?: string;
+  /** MEDICAL.DRUGTYPE 劑型，例如錠劑、乳膏劑 */
+  drugType?: string;
+  appearance?: string;
+  cloudCat?: string;
+  maxMonth?: string;
+  expiry?: string;
+  warnDate?: string;
   useType?: string;
   cast?: string;
   typeName?: string;

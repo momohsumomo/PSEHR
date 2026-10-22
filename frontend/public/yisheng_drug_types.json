@@ -1,0 +1,1964 @@
+{
+  "forms": [
+    "膜衣錠",
+    "膠囊",
+    "乳膏劑",
+    "錠劑",
+    "外用凝膠劑",
+    "注射液",
+    "軟膏劑",
+    "德周洛怡乳膏",
+    "膠囊劑",
+    "普特皮軟膏",
+    "注射劑",
+    "內服液劑",
+    "軟膠囊劑",
+    "暢寧錠",
+    "欣福膜衣錠",
+    "可立舒乳膏",
+    "皮質醇軟膏",
+    "緩炎迅錠",
+    "遠疼貼貼片",
+    "賴克廔膜衣錠",
+    "頓安膚乳膏",
+    "無黴乳膏",
+    "可立舒軟膏",
+    "液1毫克/公撮",
+    "苯赫索錠",
+    "去氫可體醇錠",
+    "黴淨乳膏",
+    "（貝皮質醇）",
+    "愛麗霜乳膏",
+    "凝膠０．１％",
+    "杏化潤柔滋霜",
+    "信東愛達信錠",
+    "杏止敏液",
+    "必克多黴乳膏",
+    "永克黴錠",
+    "德周撲敏乳膏",
+    "炎徐放膜衣錠",
+    "得膚寶軟膏",
+    "力維舒錠",
+    "Y婷凝膠 0.1%",
+    "滅殺除癌錠",
+    "紫菌素乳膏",
+    "停敏絲５公絲",
+    "得　膜衣錠",
+    "剋?錠",
+    "弘心寧膜衣錠",
+    "血循暢錠",
+    "\" 若平膜衣錠",
+    "美膚達凝膠",
+    "普妥　膜衣錠",
+    "衛肺特糖衣錠",
+    "柔雅麗乳膏",
+    "膚格外用乳膏",
+    "斯樂腸溶錠",
+    "腸溶微粒膠",
+    "可易適泡沫液",
+    "貝他每松軟膏",
+    "10 毫克/公克",
+    "透析液 17 號",
+    "黴星平錠",
+    "無花乾癬藥膏",
+    "膚樂尼乳膏",
+    "複方甘草合劑",
+    "痛風寧片",
+    "樂麗疹糖衣錠",
+    "達來乳膏",
+    "歐特疹糖衣錠",
+    "點眼膏劑",
+    "洗劑",
+    "腸溶糖衣錠",
+    "糖衣錠",
+    "抗疹敏糖衣錠",
+    "氧化鎂錠",
+    "公克(本溶塞)",
+    "蜜可舒乳膏",
+    "庖福乳膏",
+    "膠　０．１％",
+    "利膚軟膏",
+    "克癬乳膏",
+    "欲克黴乳膏",
+    "悠力素乳膏",
+    "\" 蜜膚欣乳膏",
+    "元\" 膚吉乳膏",
+    "（咪唑尼達）",
+    "納提芬乳膏",
+    "倍達舒乳膏",
+    "爾爽親水軟膏",
+    "見達松乳膏",
+    "吉舒乳膏",
+    "四益乳膏",
+    "燙膚舒乳膏",
+    "妥膚定乳膏",
+    "克（沈澱硫）",
+    "貝比嬰兒擦劑",
+    "氧化鋅油膏",
+    "施革欣軟膏",
+    "倍可舒凝膠",
+    "南光克黴淨錠",
+    "命得生注射劑",
+    "得百利寧錠",
+    "克黴先錠",
+    "胃利贊膜衣錠",
+    "（安西諾隆）",
+    "加斯克兒錠",
+    "佩你安錠",
+    "克林達黴素）",
+    "強力施美藥膏",
+    "陝砟蔥?公撮",
+    "抗濾兒膜衣錠",
+    "化去角質乳膏",
+    "\" 黴特克舒錠",
+    "豐樂源糖衣錠",
+    "來喜妥錠",
+    "陝砟蔥?公克",
+    "美克利靜片",
+    "欣外用噴霧劑",
+    "（??美洒辛）",
+    "外用液劑",
+    "奧樂敏糖衣錠",
+    "保麗娜液",
+    "普麗液",
+    "瑪克癬乳膏",
+    "利達平注射劑",
+    "法路寧膜衣錠",
+    "好克敏膜衣錠",
+    "健多博針劑",
+    "剋菌寧錠",
+    "快得健乳膏",
+    "克庖疹乳膏",
+    "克癇膜衣錠",
+    "寧針５０公絲",
+    "維他命Ｂ６錠",
+    "艾剋樂芙乳膏",
+    "協帝 膜衣錠",
+    "硫酸阿托品錠",
+    "歐婷嫩滋乳膏",
+    "特蒂樂乳膏",
+    "保兒力維持液",
+    "思麗安乳膏",
+    "利血達膜衣錠",
+    "保溼康膠漿",
+    "q欣凝膠 1.5%",
+    "愛康娜軟膏",
+    "匹普林奈錠",
+    "培胃治錠",
+    "咀嚼錠",
+    "口內膏",
+    "糖漿劑",
+    "點眼液劑",
+    "洗髮劑",
+    "注射液劑",
+    "預充填式注射",
+    "緩釋錠"
+  ],
+  "rows": [
+    {
+      "alias": "CET",
+      "nhiCode": "A043306100",
+      "drugType": "暢寧錠"
+    },
+    {
+      "alias": "ORO",
+      "nhiCode": "A005191100",
+      "drugType": "抗疹敏糖衣錠"
+    },
+    {
+      "alias": "KEF",
+      "nhiCode": "A015660100",
+      "drugType": "膠囊"
+    },
+    {
+      "alias": "OFL",
+      "nhiCode": "A038554100",
+      "drugType": "欣福膜衣錠"
+    },
+    {
+      "alias": "MGO",
+      "nhiCode": "A013382100",
+      "drugType": "氧化鎂錠"
+    },
+    {
+      "alias": "PRE",
+      "nhiCode": "A003365100",
+      "drugType": "去氫可體醇錠"
+    },
+    {
+      "alias": "ACZO",
+      "nhiCode": "A034127329",
+      "drugType": "公克(本溶塞)"
+    },
+    {
+      "alias": "AZE",
+      "nhiCode": "A036865399",
+      "drugType": "蜜可舒乳膏"
+    },
+    {
+      "alias": "ACY",
+      "nhiCode": "A044971399",
+      "drugType": "庖福乳膏"
+    },
+    {
+      "alias": "ADA?",
+      "nhiCode": "A044573399",
+      "drugType": "膠　０．１％"
+    },
+    {
+      "alias": "B/N",
+      "nhiCode": "A022990399",
+      "drugType": "利膚軟膏"
+    },
+    {
+      "alias": "CAN+B",
+      "nhiCode": "A037580399",
+      "drugType": "克癬乳膏"
+    },
+    {
+      "alias": "ECO+TR",
+      "nhiCode": "A025567399",
+      "drugType": "欲克黴乳膏"
+    },
+    {
+      "alias": "CRO",
+      "nhiCode": "A026636399",
+      "drugType": "悠力素乳膏"
+    },
+    {
+      "alias": "ELO?",
+      "nhiCode": "A046349321",
+      "drugType": "\" 蜜膚欣乳膏"
+    },
+    {
+      "alias": "FUS",
+      "nhiCode": "A044973399",
+      "drugType": "元\" 膚吉乳膏"
+    },
+    {
+      "alias": "METRO",
+      "nhiCode": "A035869330",
+      "drugType": "（咪唑尼達）"
+    },
+    {
+      "alias": "NAF?",
+      "nhiCode": "A042725399",
+      "drugType": "納提芬乳膏"
+    },
+    {
+      "alias": "CLO",
+      "nhiCode": "A044394399",
+      "drugType": "德周洛怡乳膏"
+    },
+    {
+      "alias": "CAN",
+      "nhiCode": "A041972321",
+      "drugType": "黴淨乳膏"
+    },
+    {
+      "alias": "BESM",
+      "nhiCode": "A029279399",
+      "drugType": "倍達舒乳膏"
+    },
+    {
+      "alias": "BEVERA",
+      "nhiCode": "A012745399",
+      "drugType": "爾爽親水軟膏"
+    },
+    {
+      "alias": "GENTAS",
+      "nhiCode": "A041980399",
+      "drugType": "見達松乳膏"
+    },
+    {
+      "alias": "CORT H",
+      "nhiCode": "A035883329",
+      "drugType": "吉舒乳膏"
+    },
+    {
+      "alias": "FOUR",
+      "nhiCode": "A021573324",
+      "drugType": "四益乳膏"
+    },
+    {
+      "alias": "UBURN",
+      "nhiCode": "A032571399",
+      "drugType": "燙膚舒乳膏"
+    },
+    {
+      "alias": "TOPIDI",
+      "nhiCode": "A038712399",
+      "drugType": "妥膚定乳膏"
+    },
+    {
+      "alias": "ACNE",
+      "nhiCode": "A033153343",
+      "drugType": "克（沈澱硫）"
+    },
+    {
+      "alias": "BESO",
+      "nhiCode": "A034569399",
+      "drugType": "（貝皮質醇）"
+    },
+    {
+      "alias": "SINB",
+      "nhiCode": "A020215399",
+      "drugType": "貝比嬰兒擦劑"
+    },
+    {
+      "alias": "ADE",
+      "nhiCode": "A024519399",
+      "drugType": "愛麗霜乳膏"
+    },
+    {
+      "alias": "ZO",
+      "nhiCode": "",
+      "drugType": "氧化鋅油膏"
+    },
+    {
+      "alias": "CLOB",
+      "nhiCode": "A036315399",
+      "drugType": "可立舒乳膏"
+    },
+    {
+      "alias": "DIF",
+      "nhiCode": "B022587335",
+      "drugType": "凝膠０．１％"
+    },
+    {
+      "alias": "SILK",
+      "nhiCode": "B023403343",
+      "drugType": "施革欣軟膏"
+    },
+    {
+      "alias": "BECM",
+      "nhiCode": "A045205399",
+      "drugType": "倍可舒凝膠"
+    },
+    {
+      "alias": "CORTUH",
+      "nhiCode": "A019614329",
+      "drugType": "杏化潤柔滋霜"
+    },
+    {
+      "alias": "TERB",
+      "nhiCode": "A044683100",
+      "drugType": "南光克黴淨錠"
+    },
+    {
+      "alias": "DEXJ",
+      "nhiCode": "A012474209",
+      "drugType": "注射液"
+    },
+    {
+      "alias": "METJ",
+      "nhiCode": "A029085245",
+      "drugType": "命得生注射劑"
+    },
+    {
+      "alias": "B12J",
+      "nhiCode": "N006650209",
+      "drugType": "注射液"
+    },
+    {
+      "alias": "BCJ",
+      "nhiCode": "N001446212",
+      "drugType": "注射液"
+    },
+    {
+      "alias": "PRED",
+      "nhiCode": "A003365100",
+      "drugType": "去氫可體醇錠"
+    },
+    {
+      "alias": "ACE",
+      "nhiCode": "A020707100",
+      "drugType": "得百利寧錠"
+    },
+    {
+      "alias": "ALD",
+      "nhiCode": "A041545100",
+      "drugType": "信東愛達信錠"
+    },
+    {
+      "alias": "CETI",
+      "nhiCode": "A043306100",
+      "drugType": "暢寧錠"
+    },
+    {
+      "alias": "CAM",
+      "nhiCode": "A044682100",
+      "drugType": "克黴先錠"
+    },
+    {
+      "alias": "WEL",
+      "nhiCode": "A037601100",
+      "drugType": "胃利贊膜衣錠"
+    },
+    {
+      "alias": "CETIR",
+      "nhiCode": "A049628143",
+      "drugType": "杏止敏液"
+    },
+    {
+      "alias": "NINC",
+      "nhiCode": "A021981499",
+      "drugType": "（安西諾隆）"
+    },
+    {
+      "alias": "KET",
+      "nhiCode": "A035183399",
+      "drugType": "必克多黴乳膏"
+    },
+    {
+      "alias": "DOX",
+      "nhiCode": "A035692100",
+      "drugType": "膠囊"
+    },
+    {
+      "alias": "YUC",
+      "nhiCode": "AC29730100",
+      "drugType": "永克黴錠"
+    },
+    {
+      "alias": "BETA",
+      "nhiCode": "A044367399",
+      "drugType": "德周撲敏乳膏"
+    },
+    {
+      "alias": "GAS",
+      "nhiCode": "A029828100",
+      "drugType": "加斯克兒錠"
+    },
+    {
+      "alias": "RIF",
+      "nhiCode": "A016953100",
+      "drugType": "膠囊"
+    },
+    {
+      "alias": "PERI",
+      "nhiCode": "AC04737100",
+      "drugType": "佩你安錠"
+    },
+    {
+      "alias": "KENAMJ",
+      "nhiCode": "A011475209",
+      "drugType": "注射液"
+    },
+    {
+      "alias": "KENAJ",
+      "nhiCode": "A011476221",
+      "drugType": "注射液"
+    },
+    {
+      "alias": "VOR",
+      "nhiCode": "A038019100",
+      "drugType": "炎徐放膜衣錠"
+    },
+    {
+      "alias": "DERMA",
+      "nhiCode": "A037622399",
+      "drugType": "克林達黴素）"
+    },
+    {
+      "alias": "CB1",
+      "nhiCode": "N004550399",
+      "drugType": "強力施美藥膏"
+    },
+    {
+      "alias": "CORT S",
+      "nhiCode": "A029825321",
+      "drugType": "皮質醇軟膏"
+    },
+    {
+      "alias": "DAIVOB",
+      "nhiCode": "B023936343",
+      "drugType": "得膚寶軟膏"
+    },
+    {
+      "alias": "DECARI",
+      "nhiCode": "A025466100",
+      "drugType": "力維舒錠"
+    },
+    {
+      "alias": "BENA",
+      "nhiCode": "A014622212",
+      "drugType": "注射液"
+    },
+    {
+      "alias": "BOKEY",
+      "nhiCode": "A0373441G0",
+      "drugType": "膠囊"
+    },
+    {
+      "alias": "ADA",
+      "nhiCode": "A049280399",
+      "drugType": "Y婷凝膠 0.1%"
+    },
+    {
+      "alias": "CLEO",
+      "nhiCode": "A037093399",
+      "drugType": "陝砟蔥?公撮"
+    },
+    {
+      "alias": "MTX",
+      "nhiCode": "B022726100",
+      "drugType": "滅殺除癌錠"
+    },
+    {
+      "alias": "FERALL",
+      "nhiCode": "A045451100",
+      "drugType": "膠囊"
+    },
+    {
+      "alias": "CLO2MT",
+      "nhiCode": "A044394321",
+      "drugType": "德周洛怡乳膏"
+    },
+    {
+      "alias": "GENTA5",
+      "nhiCode": "A034124399",
+      "drugType": "紫菌素乳膏"
+    },
+    {
+      "alias": "DUOD1",
+      "nhiCode": "WDD0801010SQ",
+      "drugType": "錠劑"
+    },
+    {
+      "alias": "INDO",
+      "nhiCode": "A011806100",
+      "drugType": "膠囊"
+    },
+    {
+      "alias": "FAMVIR",
+      "nhiCode": "B022179100",
+      "drugType": "抗濾兒膜衣錠"
+    },
+    {
+      "alias": "DENO",
+      "nhiCode": "A045972100",
+      "drugType": "停敏絲５公絲"
+    },
+    {
+      "alias": "PROSC",
+      "nhiCode": "A044331100",
+      "drugType": "得　膜衣錠"
+    },
+    {
+      "alias": "ITRA",
+      "nhiCode": "A046283100",
+      "drugType": "膠囊"
+    },
+    {
+      "alias": "KETSHI",
+      "nhiCode": "",
+      "drugType": "膜衣錠"
+    },
+    {
+      "alias": "CLO2M",
+      "nhiCode": "A044394321",
+      "drugType": "德周洛怡乳膏"
+    },
+    {
+      "alias": "CLOV",
+      "nhiCode": "A044394399",
+      "drugType": "德周洛怡乳膏"
+    },
+    {
+      "alias": "CLOVM",
+      "nhiCode": "A044394399",
+      "drugType": "德周洛怡乳膏"
+    },
+    {
+      "alias": "BETAM",
+      "nhiCode": "A044367399",
+      "drugType": "德周撲敏乳膏"
+    },
+    {
+      "alias": "C6",
+      "nhiCode": "",
+      "drugType": "膜衣錠"
+    },
+    {
+      "alias": "ERYTH",
+      "nhiCode": "A003775100",
+      "drugType": "膠囊"
+    },
+    {
+      "alias": "VIRLES",
+      "nhiCode": "A039368100",
+      "drugType": "剋?錠"
+    },
+    {
+      "alias": "DIPYR",
+      "nhiCode": "A023644100",
+      "drugType": "弘心寧膜衣錠"
+    },
+    {
+      "alias": "TRENTA",
+      "nhiCode": "A033201100",
+      "drugType": "血循暢錠"
+    },
+    {
+      "alias": "UREA40",
+      "nhiCode": "A049888329",
+      "drugType": "化去角質乳膏"
+    },
+    {
+      "alias": "STIL",
+      "nhiCode": "A045147100",
+      "drugType": "\" 若平膜衣錠"
+    },
+    {
+      "alias": "GMDISC",
+      "nhiCode": "",
+      "drugType": "膜衣錠"
+    },
+    {
+      "alias": "SCITON",
+      "nhiCode": "",
+      "drugType": "膜衣錠"
+    },
+    {
+      "alias": "ADE30",
+      "nhiCode": "A024519343",
+      "drugType": "愛麗霜乳膏"
+    },
+    {
+      "alias": "SUNLIG",
+      "nhiCode": "",
+      "drugType": "乳膏劑"
+    },
+    {
+      "alias": "KELO-6",
+      "nhiCode": "",
+      "drugType": "乳膏劑"
+    },
+    {
+      "alias": "KELO15",
+      "nhiCode": "",
+      "drugType": "膜衣錠"
+    },
+    {
+      "alias": "METRO",
+      "nhiCode": "A040815399",
+      "drugType": "美膚達凝膠"
+    },
+    {
+      "alias": "FUNGI",
+      "nhiCode": "AC45950100",
+      "drugType": "\" 黴特克舒錠"
+    },
+    {
+      "alias": "BESO25",
+      "nhiCode": "A034569340",
+      "drugType": "（貝皮質醇）"
+    },
+    {
+      "alias": "SEN250",
+      "nhiCode": "",
+      "drugType": "膜衣錠"
+    },
+    {
+      "alias": "美手術",
+      "nhiCode": "",
+      "drugType": "膜衣錠"
+    },
+    {
+      "alias": "診療費",
+      "nhiCode": "",
+      "drugType": "膜衣錠"
+    },
+    {
+      "alias": "藥事費",
+      "nhiCode": "",
+      "drugType": "膜衣錠"
+    },
+    {
+      "alias": "ORO",
+      "nhiCode": "N013084100",
+      "drugType": "豐樂源糖衣錠"
+    },
+    {
+      "alias": "LASIX",
+      "nhiCode": "A030749100",
+      "drugType": "來喜妥錠"
+    },
+    {
+      "alias": "自費藥",
+      "nhiCode": "",
+      "drugType": "膜衣錠"
+    },
+    {
+      "alias": "LIPID",
+      "nhiCode": "B022889100",
+      "drugType": "普妥　膜衣錠"
+    },
+    {
+      "alias": "ADALAT",
+      "nhiCode": "A028131100",
+      "drugType": "膠囊"
+    },
+    {
+      "alias": "遁埂",
+      "nhiCode": "",
+      "drugType": "膜衣錠"
+    },
+    {
+      "alias": "DERMA",
+      "nhiCode": "A044464399",
+      "drugType": "陝砟蔥?公克"
+    },
+    {
+      "alias": "注埂",
+      "nhiCode": "",
+      "drugType": "膜衣錠"
+    },
+    {
+      "alias": "DEXJ",
+      "nhiCode": "A015279209",
+      "drugType": "注射液"
+    },
+    {
+      "alias": "RIFATE",
+      "nhiCode": "B022060100",
+      "drugType": "衛肺特糖衣錠"
+    },
+    {
+      "alias": "LASER",
+      "nhiCode": "",
+      "drugType": "膜衣錠"
+    },
+    {
+      "alias": "自費處",
+      "nhiCode": "",
+      "drugType": "膜衣錠"
+    },
+    {
+      "alias": "MECLIZ",
+      "nhiCode": "N012916100",
+      "drugType": "美克利靜片"
+    },
+    {
+      "alias": "CHYMO",
+      "nhiCode": "N001851100",
+      "drugType": "緩炎迅錠"
+    },
+    {
+      "alias": "SUTURE",
+      "nhiCode": "",
+      "drugType": "膜衣錠"
+    },
+    {
+      "alias": "CHYMOS",
+      "nhiCode": "N001851100",
+      "drugType": "緩炎迅錠"
+    },
+    {
+      "alias": "MIXIL",
+      "nhiCode": "",
+      "drugType": "乳膏劑"
+    },
+    {
+      "alias": "LIDOP",
+      "nhiCode": "A049320382",
+      "drugType": "遠疼貼貼片"
+    },
+    {
+      "alias": "PLAQUE",
+      "nhiCode": "B022376100",
+      "drugType": "賴克廔膜衣錠"
+    },
+    {
+      "alias": "LOM",
+      "nhiCode": "B020042335",
+      "drugType": "欣外用噴霧劑"
+    },
+    {
+      "alias": "001",
+      "nhiCode": "01",
+      "drugType": "膠囊"
+    },
+    {
+      "alias": "002",
+      "nhiCode": "02",
+      "drugType": "膠囊"
+    },
+    {
+      "alias": "ELO",
+      "nhiCode": "A048391321",
+      "drugType": "頓安膚乳膏"
+    },
+    {
+      "alias": "HQH10",
+      "nhiCode": "",
+      "drugType": "乳膏劑"
+    },
+    {
+      "alias": "UREA10",
+      "nhiCode": "A049471329",
+      "drugType": "柔雅麗乳膏"
+    },
+    {
+      "alias": "UREA30",
+      "nhiCode": "A049471343",
+      "drugType": "柔雅麗乳膏"
+    },
+    {
+      "alias": "ROA",
+      "nhiCode": "B014966100",
+      "drugType": "膠囊"
+    },
+    {
+      "alias": "T-IMEX",
+      "nhiCode": "",
+      "drugType": "乳膏劑"
+    },
+    {
+      "alias": "ANTI10",
+      "nhiCode": "A020296329",
+      "drugType": "無黴乳膏"
+    },
+    {
+      "alias": "NEOTI",
+      "nhiCode": "B022118100",
+      "drugType": "膠囊"
+    },
+    {
+      "alias": "COLOR",
+      "nhiCode": "",
+      "drugType": "膜衣錠"
+    },
+    {
+      "alias": "INDOME",
+      "nhiCode": "A032325325",
+      "drugType": "（??美洒辛）"
+    },
+    {
+      "alias": "TARAC",
+      "nhiCode": "A049903343",
+      "drugType": "膚格外用乳膏"
+    },
+    {
+      "alias": "PROT10",
+      "nhiCode": "B023346329",
+      "drugType": "普特皮軟膏"
+    },
+    {
+      "alias": "KET",
+      "nhiCode": "A035183329",
+      "drugType": "必克多黴乳膏"
+    },
+    {
+      "alias": "PROT5",
+      "nhiCode": "B023346321",
+      "drugType": "普特皮軟膏"
+    },
+    {
+      "alias": "CLOO",
+      "nhiCode": "A044394399",
+      "drugType": "德周洛怡乳膏"
+    },
+    {
+      "alias": "清粉刺",
+      "nhiCode": "",
+      "drugType": "膜衣錠"
+    },
+    {
+      "alias": "XAMIOL",
+      "nhiCode": "B025159343",
+      "drugType": "外用凝膠劑"
+    },
+    {
+      "alias": "GENTA3",
+      "nhiCode": "A034124399",
+      "drugType": "紫菌素乳膏"
+    },
+    {
+      "alias": "SALA",
+      "nhiCode": "B019749100",
+      "drugType": "斯樂腸溶錠"
+    },
+    {
+      "alias": "CLOBEX",
+      "nhiCode": "",
+      "drugType": "外用液劑"
+    },
+    {
+      "alias": "MINOX2",
+      "nhiCode": "",
+      "drugType": "膜衣錠"
+    },
+    {
+      "alias": "ADA5",
+      "nhiCode": "A049280321",
+      "drugType": "Y婷凝膠 0.1%"
+    },
+    {
+      "alias": "ORO",
+      "nhiCode": "N000218100",
+      "drugType": "奧樂敏糖衣錠"
+    },
+    {
+      "alias": "SODER",
+      "nhiCode": "",
+      "drugType": "乳膏劑"
+    },
+    {
+      "alias": "POLYL",
+      "nhiCode": "B018134361",
+      "drugType": "保麗娜液"
+    },
+    {
+      "alias": "PLOYE",
+      "nhiCode": "B018428368",
+      "drugType": "普麗液"
+    },
+    {
+      "alias": "諮詢",
+      "nhiCode": "",
+      "drugType": "膜衣錠"
+    },
+    {
+      "alias": "DUOD2",
+      "nhiCode": "WDD0801010SQ",
+      "drugType": "錠劑"
+    },
+    {
+      "alias": "WEL",
+      "nhiCode": "AB37601100",
+      "drugType": "膜衣錠"
+    },
+    {
+      "alias": "KEF",
+      "nhiCode": "AC15660100",
+      "drugType": "膠囊"
+    },
+    {
+      "alias": "MYCO",
+      "nhiCode": "A049804329",
+      "drugType": "瑪克癬乳膏"
+    },
+    {
+      "alias": "BOKEY",
+      "nhiCode": "AC373441G0",
+      "drugType": "腸溶微粒膠"
+    },
+    {
+      "alias": "PERI",
+      "nhiCode": "AC047371G0",
+      "drugType": "錠劑"
+    },
+    {
+      "alias": "INDO",
+      "nhiCode": "NC08167100",
+      "drugType": "膠囊"
+    },
+    {
+      "alias": "RETA",
+      "nhiCode": "B016989213",
+      "drugType": "利達平注射劑"
+    },
+    {
+      "alias": "TRAND",
+      "nhiCode": "A041226100",
+      "drugType": "膠囊"
+    },
+    {
+      "alias": "VIMAX",
+      "nhiCode": "A049063340",
+      "drugType": "可易適泡沫液"
+    },
+    {
+      "alias": "BETAM",
+      "nhiCode": "A019616399",
+      "drugType": "貝他每松軟膏"
+    },
+    {
+      "alias": "BETA",
+      "nhiCode": "A019616399",
+      "drugType": "貝他每松軟膏"
+    },
+    {
+      "alias": "CLO",
+      "nhiCode": "A036315399",
+      "drugType": "可立舒乳膏"
+    },
+    {
+      "alias": "TRAM",
+      "nhiCode": "A041557100",
+      "drugType": "膠囊"
+    },
+    {
+      "alias": "DIF",
+      "nhiCode": "B022587399",
+      "drugType": "凝膠０．１％"
+    },
+    {
+      "alias": "LASIX",
+      "nhiCode": "AB30749100",
+      "drugType": "錠劑"
+    },
+    {
+      "alias": "DEXJ",
+      "nhiCode": "AC12474209",
+      "drugType": "注射液"
+    },
+    {
+      "alias": "CLOM",
+      "nhiCode": "A036315399",
+      "drugType": "可立舒乳膏"
+    },
+    {
+      "alias": "CLOO",
+      "nhiCode": "A028562399",
+      "drugType": "可立舒軟膏"
+    },
+    {
+      "alias": "VAC",
+      "nhiCode": "AC54992100",
+      "drugType": "膜衣錠"
+    },
+    {
+      "alias": "ALEDO",
+      "nhiCode": "A049919323",
+      "drugType": "10 毫克/公克"
+    },
+    {
+      "alias": "DOX",
+      "nhiCode": "AC19411100",
+      "drugType": "腸溶微粒膠"
+    },
+    {
+      "alias": "ERYTH",
+      "nhiCode": "AC03775100",
+      "drugType": "膠囊"
+    },
+    {
+      "alias": "VOR",
+      "nhiCode": "AC38019100",
+      "drugType": "炎徐放膜衣錠"
+    },
+    {
+      "alias": "RIF",
+      "nhiCode": "AC16953100",
+      "drugType": "膠囊"
+    },
+    {
+      "alias": "KENAJ",
+      "nhiCode": "AC11476229",
+      "drugType": "注射液"
+    },
+    {
+      "alias": "KENAMJ",
+      "nhiCode": "AC11475209",
+      "drugType": "注射液"
+    },
+    {
+      "alias": "CHYMO",
+      "nhiCode": "NC01851100",
+      "drugType": "緩炎迅錠"
+    },
+    {
+      "alias": "TARAC",
+      "nhiCode": "AC49903343",
+      "drugType": "膚格外用乳膏"
+    },
+    {
+      "alias": "CLOO",
+      "nhiCode": "AC28562399",
+      "drugType": "可立舒軟膏"
+    },
+    {
+      "alias": "CLOBE",
+      "nhiCode": "B025013351",
+      "drugType": "透析液 17 號"
+    },
+    {
+      "alias": "BENO",
+      "nhiCode": "A042798329",
+      "drugType": "液1毫克/公撮"
+    },
+    {
+      "alias": "ELO",
+      "nhiCode": "AC48391321",
+      "drugType": "頓安膚乳膏"
+    },
+    {
+      "alias": "PROSC",
+      "nhiCode": "AC44331100",
+      "drugType": "得　膜衣錠"
+    },
+    {
+      "alias": "PROS",
+      "nhiCode": "AC48557100",
+      "drugType": "法路寧膜衣錠"
+    },
+    {
+      "alias": "ADALAT",
+      "nhiCode": "AC28131100",
+      "drugType": "注射液"
+    },
+    {
+      "alias": "ELOT",
+      "nhiCode": "AC48391321",
+      "drugType": "頓安膚乳膏"
+    },
+    {
+      "alias": "LEVOC",
+      "nhiCode": "AC52354100",
+      "drugType": "好克敏膜衣錠"
+    },
+    {
+      "alias": "CETIN",
+      "nhiCode": "AC43502100",
+      "drugType": "健多博針劑"
+    },
+    {
+      "alias": "KETO",
+      "nhiCode": "A030774100",
+      "drugType": "剋菌寧錠"
+    },
+    {
+      "alias": "QUAD",
+      "nhiCode": "A023729321",
+      "drugType": "快得健乳膏"
+    },
+    {
+      "alias": "TERF",
+      "nhiCode": "A047091100",
+      "drugType": "黴星平錠"
+    },
+    {
+      "alias": "CALCI",
+      "nhiCode": "A048276343",
+      "drugType": "無花乾癬藥膏"
+    },
+    {
+      "alias": "ACY",
+      "nhiCode": "A042877399",
+      "drugType": "克庖疹乳膏"
+    },
+    {
+      "alias": "VOR",
+      "nhiCode": "AB38019100",
+      "drugType": "克癇膜衣錠"
+    },
+    {
+      "alias": "FLU",
+      "nhiCode": "A043112329",
+      "drugType": "膚樂尼乳膏"
+    },
+    {
+      "alias": "OFLO",
+      "nhiCode": "A038213100",
+      "drugType": "欣福膜衣錠"
+    },
+    {
+      "alias": "COUGH",
+      "nhiCode": "A028606163",
+      "drugType": "複方甘草合劑"
+    },
+    {
+      "alias": "CETII",
+      "nhiCode": "AC49628143",
+      "drugType": "錠劑"
+    },
+    {
+      "alias": "B12J",
+      "nhiCode": "NC06650209",
+      "drugType": "寧針５０公絲"
+    },
+    {
+      "alias": "BCJ",
+      "nhiCode": "NC01446212",
+      "drugType": "維他命Ｂ６錠"
+    },
+    {
+      "alias": "KET",
+      "nhiCode": "AC35183329",
+      "drugType": "注射劑"
+    },
+    {
+      "alias": "ACY",
+      "nhiCode": "A035391399",
+      "drugType": "艾剋樂芙乳膏"
+    },
+    {
+      "alias": "WEL",
+      "nhiCode": "AC37601100",
+      "drugType": "苯赫索錠"
+    },
+    {
+      "alias": "CETY",
+      "nhiCode": "AC44710100",
+      "drugType": "協帝 膜衣錠"
+    },
+    {
+      "alias": "ALL",
+      "nhiCode": "AC56751100",
+      "drugType": "注射液"
+    },
+    {
+      "alias": "ATR",
+      "nhiCode": "N013928100",
+      "drugType": "硫酸阿托品錠"
+    },
+    {
+      "alias": "EUR",
+      "nhiCode": "AC47432343",
+      "drugType": "歐婷嫩滋乳膏"
+    },
+    {
+      "alias": "A0.1",
+      "nhiCode": "A025237321",
+      "drugType": "特蒂樂乳膏"
+    },
+    {
+      "alias": "GENTAS",
+      "nhiCode": "AC49877321",
+      "drugType": "注射劑"
+    },
+    {
+      "alias": "PREDN",
+      "nhiCode": "N013906100",
+      "drugType": "痛風寧片"
+    },
+    {
+      "alias": "TRA",
+      "nhiCode": "AC56706100",
+      "drugType": "保兒力維持液"
+    },
+    {
+      "alias": "CORT3",
+      "nhiCode": "A029825348",
+      "drugType": "皮質醇軟膏"
+    },
+    {
+      "alias": "NEO25",
+      "nhiCode": "B022117100",
+      "drugType": "膠囊"
+    },
+    {
+      "alias": "CORT3",
+      "nhiCode": "A029825321",
+      "drugType": "皮質醇軟膏"
+    },
+    {
+      "alias": "ORO",
+      "nhiCode": "A033194100",
+      "drugType": "樂麗疹糖衣錠"
+    },
+    {
+      "alias": "ANTI11",
+      "nhiCode": "A020296329",
+      "drugType": "無黴乳膏"
+    },
+    {
+      "alias": "ZALA",
+      "nhiCode": "A043847335",
+      "drugType": "達來乳膏"
+    },
+    {
+      "alias": "SKIN",
+      "nhiCode": "",
+      "drugType": "思麗安乳膏"
+    },
+    {
+      "alias": "OUT",
+      "nhiCode": "A009570100",
+      "drugType": "歐特疹糖衣錠"
+    },
+    {
+      "alias": "DENO",
+      "nhiCode": "AC45972100",
+      "drugType": "停敏絲５公絲"
+    },
+    {
+      "alias": "UREA",
+      "nhiCode": "AC49888329",
+      "drugType": "利血達膜衣錠"
+    },
+    {
+      "alias": "PASCA",
+      "nhiCode": "A023336329",
+      "drugType": "保溼康膠漿"
+    },
+    {
+      "alias": "ESECIN",
+      "nhiCode": "AC52416338",
+      "drugType": "q欣凝膠 1.5%"
+    },
+    {
+      "alias": "AKANA",
+      "nhiCode": "A029949324",
+      "drugType": "愛康娜軟膏"
+    },
+    {
+      "alias": "PIPRI",
+      "nhiCode": "AC15910100",
+      "drugType": "匹普林奈錠"
+    },
+    {
+      "alias": "GMINJ",
+      "nhiCode": "AC23114212",
+      "drugType": "培胃治錠"
+    },
+    {
+      "alias": "STIL",
+      "nhiCode": "AC45147100",
+      "drugType": "\" 若平膜衣錠"
+    },
+    {
+      "alias": "PREDN",
+      "nhiCode": "NC13906100",
+      "drugType": "痛風寧片"
+    },
+    {
+      "alias": "CETI",
+      "nhiCode": "AC43306100",
+      "drugType": "暢寧錠"
+    },
+    {
+      "alias": "OFLO",
+      "nhiCode": "AB38213100",
+      "drugType": "欣福膜衣錠"
+    },
+    {
+      "alias": "COUGH",
+      "nhiCode": "AC28606163",
+      "drugType": "複方甘草合劑"
+    },
+    {
+      "alias": "TRAND",
+      "nhiCode": "AC41226100",
+      "drugType": "膠囊"
+    },
+    {
+      "alias": "ZALA",
+      "nhiCode": "AB43847335",
+      "drugType": "達來乳膏"
+    },
+    {
+      "alias": "TRAND",
+      "nhiCode": "AB41226100",
+      "drugType": "膠囊"
+    },
+    {
+      "alias": "ITRA",
+      "nhiCode": "AB46283100",
+      "drugType": "膠囊"
+    },
+    {
+      "alias": "OUT",
+      "nhiCode": "AC09570100",
+      "drugType": "歐特疹糖衣錠"
+    },
+    {
+      "alias": "PUTAN",
+      "nhiCode": "AC44921100",
+      "drugType": "咀嚼錠"
+    },
+    {
+      "alias": "SKYTON",
+      "nhiCode": "AC501161G0",
+      "drugType": "膜衣錠"
+    },
+    {
+      "alias": "BETAMT",
+      "nhiCode": "AC19616321",
+      "drugType": "軟膏劑"
+    },
+    {
+      "alias": "MENI",
+      "nhiCode": "AC41918100",
+      "drugType": "錠劑"
+    },
+    {
+      "alias": "ACYT",
+      "nhiCode": "AC35391321",
+      "drugType": "乳膏劑"
+    },
+    {
+      "alias": "CLOMT",
+      "nhiCode": "AC36315324",
+      "drugType": "乳膏劑"
+    },
+    {
+      "alias": "CLOOT",
+      "nhiCode": "AC28562324",
+      "drugType": "軟膏劑"
+    },
+    {
+      "alias": "CLOT",
+      "nhiCode": "AC36315324",
+      "drugType": "乳膏劑"
+    },
+    {
+      "alias": "BETAT",
+      "nhiCode": "AC19616321",
+      "drugType": "軟膏劑"
+    },
+    {
+      "alias": "METROT",
+      "nhiCode": "A040815329",
+      "drugType": "外用凝膠劑"
+    },
+    {
+      "alias": "LIDOP",
+      "nhiCode": "AC49320382",
+      "drugType": "遠疼貼貼片"
+    },
+    {
+      "alias": "DIPYR",
+      "nhiCode": "AC23644100",
+      "drugType": "弘心寧膜衣錠"
+    },
+    {
+      "alias": "TRENTA",
+      "nhiCode": "AC33201100",
+      "drugType": "血循暢錠"
+    },
+    {
+      "alias": "GENTAT",
+      "nhiCode": "AC34124321",
+      "drugType": "乳膏劑"
+    },
+    {
+      "alias": "ORO",
+      "nhiCode": "AC33194100",
+      "drugType": "樂麗疹糖衣錠"
+    },
+    {
+      "alias": "UBURNT",
+      "nhiCode": "AC32571338",
+      "drugType": "乳膏劑"
+    },
+    {
+      "alias": "A0.1T",
+      "nhiCode": "A042501321",
+      "drugType": "乳膏劑"
+    },
+    {
+      "alias": "NINCT",
+      "nhiCode": "AC21981423",
+      "drugType": "口內膏"
+    },
+    {
+      "alias": "OTM",
+      "nhiCode": "A052555421",
+      "drugType": "點眼膏劑"
+    },
+    {
+      "alias": "PITY",
+      "nhiCode": "",
+      "drugType": "錠劑"
+    },
+    {
+      "alias": "AZEIC",
+      "nhiCode": "AC41753321",
+      "drugType": "乳膏劑"
+    },
+    {
+      "alias": "NEOTI",
+      "nhiCode": "BC22118100",
+      "drugType": "膠囊"
+    },
+    {
+      "alias": "SALA",
+      "nhiCode": "BC19749100",
+      "drugType": "斯樂腸溶錠"
+    },
+    {
+      "alias": "PLAQUE",
+      "nhiCode": "BC22376100",
+      "drugType": "賴克廔膜衣錠"
+    },
+    {
+      "alias": "LIPID",
+      "nhiCode": "BC22889100",
+      "drugType": "普妥　膜衣錠"
+    },
+    {
+      "alias": "MTX",
+      "nhiCode": "BC22726100",
+      "drugType": "滅殺除癌錠"
+    },
+    {
+      "alias": "RIFATE",
+      "nhiCode": "BC22060100",
+      "drugType": "衛肺特糖衣錠"
+    },
+    {
+      "alias": "PROT5",
+      "nhiCode": "BC23346321",
+      "drugType": "普特皮軟膏"
+    },
+    {
+      "alias": "DAIVOB",
+      "nhiCode": "BC23936343",
+      "drugType": "得膚寶軟膏"
+    },
+    {
+      "alias": "CLOBE",
+      "nhiCode": "BC25013351",
+      "drugType": "透析液 17 號"
+    },
+    {
+      "alias": "XAMIOL",
+      "nhiCode": "BC25159343",
+      "drugType": "外用凝膠劑"
+    },
+    {
+      "alias": "FLUC",
+      "nhiCode": "AC44680100",
+      "drugType": "膠囊劑"
+    },
+    {
+      "alias": "ALED",
+      "nhiCode": "A049919330",
+      "drugType": "外用凝膠劑"
+    },
+    {
+      "alias": "SINBA",
+      "nhiCode": "A020215343",
+      "drugType": "洗劑"
+    },
+    {
+      "alias": "ROA20",
+      "nhiCode": "BC14966100",
+      "drugType": "膠囊"
+    },
+    {
+      "alias": "OTM",
+      "nhiCode": "AC52555421",
+      "drugType": "點眼膏劑"
+    },
+    {
+      "alias": "FINA",
+      "nhiCode": "AC49769100",
+      "drugType": "膜衣錠"
+    },
+    {
+      "alias": "DERM",
+      "nhiCode": "AC37622329",
+      "drugType": "外用凝膠劑"
+    },
+    {
+      "alias": "BESTM",
+      "nhiCode": "AC29279329",
+      "drugType": "乳膏劑"
+    },
+    {
+      "alias": "DOXE",
+      "nhiCode": "AC26975100",
+      "drugType": "膠囊劑"
+    },
+    {
+      "alias": "EFUCON",
+      "nhiCode": "AC35869335",
+      "drugType": "外用凝膠劑"
+    },
+    {
+      "alias": "BENO",
+      "nhiCode": "AC42798329",
+      "drugType": "液1毫克/公撮"
+    },
+    {
+      "alias": "A0.1T",
+      "nhiCode": "AC42501321",
+      "drugType": "乳膏劑"
+    },
+    {
+      "alias": "FLU",
+      "nhiCode": "AC43112329",
+      "drugType": "膚樂尼乳膏"
+    },
+    {
+      "alias": "ALEDO",
+      "nhiCode": "AC49919323",
+      "drugType": "10 毫克/公克"
+    },
+    {
+      "alias": "ALED",
+      "nhiCode": "AC49919330",
+      "drugType": "外用凝膠劑"
+    },
+    {
+      "alias": "LYSO",
+      "nhiCode": "AC33531100",
+      "drugType": "錠劑"
+    },
+    {
+      "alias": "CORTH",
+      "nhiCode": "A035883329",
+      "drugType": "乳膏劑"
+    },
+    {
+      "alias": "ADAP",
+      "nhiCode": "AC46290321",
+      "drugType": "外用凝膠劑"
+    },
+    {
+      "alias": "DECARI",
+      "nhiCode": "AC25466100",
+      "drugType": "力維舒錠"
+    },
+    {
+      "alias": "WEL",
+      "nhiCode": "AB37601100",
+      "drugType": "苯赫索錠"
+    },
+    {
+      "alias": "AZEL",
+      "nhiCode": "AC44649321",
+      "drugType": "乳膏劑"
+    },
+    {
+      "alias": "ADAP15",
+      "nhiCode": "AC49280335",
+      "drugType": "外用凝膠劑"
+    },
+    {
+      "alias": "INDER",
+      "nhiCode": "BC221431G0",
+      "drugType": "錠劑"
+    },
+    {
+      "alias": "GRIS",
+      "nhiCode": "A028055100",
+      "drugType": "錠劑"
+    },
+    {
+      "alias": "ODOR",
+      "nhiCode": "",
+      "drugType": "外用凝膠劑"
+    },
+    {
+      "alias": "CETIR",
+      "nhiCode": "AC44023143",
+      "drugType": "內服液劑"
+    },
+    {
+      "alias": "DINCO",
+      "nhiCode": "A043361151",
+      "drugType": "糖漿劑"
+    },
+    {
+      "alias": "SALAZ",
+      "nhiCode": "AB43929100",
+      "drugType": "錠劑"
+    },
+    {
+      "alias": "LYRI",
+      "nhiCode": "BC24995100",
+      "drugType": "膠囊劑"
+    },
+    {
+      "alias": "BENAF",
+      "nhiCode": "AC48376329",
+      "drugType": "乳膏劑"
+    },
+    {
+      "alias": "ANKO",
+      "nhiCode": "AC48032321",
+      "drugType": "乳膏劑"
+    },
+    {
+      "alias": "CARD",
+      "nhiCode": "AC48168100",
+      "drugType": "錠劑"
+    },
+    {
+      "alias": "TERF",
+      "nhiCode": "AC47091100",
+      "drugType": "黴星平錠"
+    },
+    {
+      "alias": "DIF",
+      "nhiCode": "BC22587321",
+      "drugType": "外用凝膠劑"
+    },
+    {
+      "alias": "METRO",
+      "nhiCode": "BC21784335",
+      "drugType": "外用凝膠劑"
+    },
+    {
+      "alias": "PREBA",
+      "nhiCode": "AC59068100",
+      "drugType": "膠囊劑"
+    },
+    {
+      "alias": "CETIRI",
+      "nhiCode": "AC52532100",
+      "drugType": "膜衣錠"
+    },
+    {
+      "alias": "CALF",
+      "nhiCode": "AC58104343",
+      "drugType": "軟膏劑"
+    },
+    {
+      "alias": "GENIQ",
+      "nhiCode": "AC42899100",
+      "drugType": "膜衣錠"
+    },
+    {
+      "alias": "BADINE",
+      "nhiCode": "AC45249321",
+      "drugType": "軟膏劑"
+    },
+    {
+      "alias": "JARD",
+      "nhiCode": "BC26405100",
+      "drugType": "膜衣錠"
+    },
+    {
+      "alias": "KHOI",
+      "nhiCode": "AC48396321",
+      "drugType": "乳膏劑"
+    },
+    {
+      "alias": "SOR",
+      "nhiCode": "AC40706151",
+      "drugType": "內服液劑"
+    },
+    {
+      "alias": "ULEXT",
+      "nhiCode": "A026636329",
+      "drugType": "乳膏劑"
+    },
+    {
+      "alias": "ADAP5",
+      "nhiCode": "AC49280321",
+      "drugType": "外用凝膠劑"
+    },
+    {
+      "alias": "VIMAX",
+      "nhiCode": "AC49063340",
+      "drugType": "可易適泡沫液"
+    },
+    {
+      "alias": "IMOD",
+      "nhiCode": "AC39595100",
+      "drugType": "膠囊劑"
+    },
+    {
+      "alias": "TIMOL",
+      "nhiCode": "AC38663421",
+      "drugType": "點眼液劑"
+    },
+    {
+      "alias": "BIFO",
+      "nhiCode": "AC33730329",
+      "drugType": "乳膏劑"
+    },
+    {
+      "alias": "BM",
+      "nhiCode": "AC59035157",
+      "drugType": "內服液劑"
+    },
+    {
+      "alias": "KID",
+      "nhiCode": "AC46614143",
+      "drugType": "內服液劑"
+    },
+    {
+      "alias": "MUSCO",
+      "nhiCode": "AB318961G0",
+      "drugType": "錠劑"
+    },
+    {
+      "alias": "DULCO",
+      "nhiCode": "BC256961G0",
+      "drugType": "腸溶糖衣錠"
+    },
+    {
+      "alias": "IVER",
+      "nhiCode": "BC27134100",
+      "drugType": "錠劑"
+    },
+    {
+      "alias": "AVODA",
+      "nhiCode": "BC23952100",
+      "drugType": "軟膠囊劑"
+    },
+    {
+      "alias": "BENO",
+      "nhiCode": "AC42798338",
+      "drugType": "液1毫克/公撮"
+    },
+    {
+      "alias": "VIRLES",
+      "nhiCode": "AC39368100",
+      "drugType": "剋?錠"
+    },
+    {
+      "alias": "SCAL30",
+      "nhiCode": "",
+      "drugType": "乳膏劑"
+    },
+    {
+      "alias": "BECLO",
+      "nhiCode": "AC45388324",
+      "drugType": "軟膏劑"
+    },
+    {
+      "alias": "PRESON",
+      "nhiCode": "NC13753100",
+      "drugType": "錠劑"
+    },
+    {
+      "alias": "PROT10",
+      "nhiCode": "BC23346329",
+      "drugType": "普特皮軟膏"
+    },
+    {
+      "alias": "GENI",
+      "nhiCode": "AC42899100",
+      "drugType": "膜衣錠"
+    },
+    {
+      "alias": "HEMO",
+      "nhiCode": "N009215340",
+      "drugType": "軟膏劑"
+    },
+    {
+      "alias": "METR30",
+      "nhiCode": "BC21784343",
+      "drugType": "外用凝膠劑"
+    },
+    {
+      "alias": "DIPY",
+      "nhiCode": "AC138011G0",
+      "drugType": "糖衣錠"
+    },
+    {
+      "alias": "SANYL",
+      "nhiCode": "NB099311G0",
+      "drugType": "糖衣錠"
+    },
+    {
+      "alias": "ELIDE",
+      "nhiCode": "BC23645329",
+      "drugType": "乳膏劑"
+    },
+    {
+      "alias": "FUMEL",
+      "nhiCode": "AC38540321",
+      "drugType": "乳膏劑"
+    },
+    {
+      "alias": "THRO",
+      "nhiCode": "AC270111G0",
+      "drugType": "腸溶糖衣錠"
+    },
+    {
+      "alias": "ROA10",
+      "nhiCode": "BC14967100",
+      "drugType": "軟膠囊劑"
+    },
+    {
+      "alias": "VGENT",
+      "nhiCode": "AC38652212",
+      "drugType": "注射劑"
+    },
+    {
+      "alias": "ACYTT",
+      "nhiCode": "AC60537321",
+      "drugType": "乳膏劑"
+    },
+    {
+      "alias": "ALD",
+      "nhiCode": "AC415451G0",
+      "drugType": "信東愛達信錠"
+    },
+    {
+      "alias": "CLO125",
+      "nhiCode": "BC25013358",
+      "drugType": "洗髮劑"
+    },
+    {
+      "alias": "XAREL",
+      "nhiCode": "BC25129100",
+      "drugType": "膜衣錠"
+    },
+    {
+      "alias": "INDOY",
+      "nhiCode": "AC01154100",
+      "drugType": "膠囊劑"
+    },
+    {
+      "alias": "OMALI",
+      "nhiCode": "KC01062209",
+      "drugType": "注射液劑"
+    },
+    {
+      "alias": "DUPIX",
+      "nhiCode": "KC01082212",
+      "drugType": "預充填式注射"
+    },
+    {
+      "alias": "Y00001",
+      "nhiCode": "Y000001",
+      "drugType": "注射劑"
+    },
+    {
+      "alias": "CIBI",
+      "nhiCode": "BC28235100",
+      "drugType": "膜衣錠"
+    },
+    {
+      "alias": "NEO25",
+      "nhiCode": "BC22117100",
+      "drugType": "膠囊"
+    },
+    {
+      "alias": "SINBA",
+      "nhiCode": "A020215357",
+      "drugType": "洗劑"
+    },
+    {
+      "alias": "DUTA",
+      "nhiCode": "BC28120100",
+      "drugType": "軟膠囊劑"
+    },
+    {
+      "alias": "PLAQUE",
+      "nhiCode": "BC223761G0",
+      "drugType": "賴克廔膜衣錠"
+    },
+    {
+      "alias": "BISTIN",
+      "nhiCode": "AC61514100",
+      "drugType": "錠劑"
+    },
+    {
+      "alias": "ACZO",
+      "nhiCode": "A034127329",
+      "drugType": "外用凝膠劑"
+    },
+    {
+      "alias": "CAPA",
+      "nhiCode": "AC26272100",
+      "drugType": "膜衣錠"
+    },
+    {
+      "alias": "MET",
+      "nhiCode": "AC481301G0",
+      "drugType": "緩釋錠"
+    },
+    {
+      "alias": "MINO",
+      "nhiCode": "BC07538100",
+      "drugType": "錠劑"
+    },
+    {
+      "alias": "OZYN",
+      "nhiCode": "AC62047100",
+      "drugType": "軟膠囊劑"
+    }
+  ]
+}

@@ -1,5 +1,18 @@
 import type { DiagnosisRow, RxLine } from "@/mocks/clinicMocks";
 
+const ORDER_CODE = /^\d{5}[A-Z]$/i;
+
+function blankSigStaysBlank(nhiCode: string): boolean {
+  const code = nhiCode.trim().toUpperCase();
+  return ORDER_CODE.test(code) && !code.startsWith("00") && !code.startsWith("052");
+}
+
+function sigForSave(line: RxLine): string {
+  const sig = line.sig?.trim() || "";
+  if (sig || blankSigStaysBlank(line.nhiCode || "")) return sig;
+  return "\u4f9d\u91ab\u56d1";
+}
+
 const ICD10_RE = /^[A-Z]\d{2}(\.\d{1,4})?$/i;
 const NHI_ICD_RE = /^[A-Z0-9]{3,10}$/i;
 const NHI_MED_RE = /^[A-Z0-9]{4,16}$/i;
@@ -58,7 +71,7 @@ export function buildMedicationIntake(
     encounterId,
     drugText: line.name.trim(),
     nhiCode,
-    sig: line.sig?.trim() || "\u4f9d\u91ab\u56d1",
+    sig: sigForSave(line),
     daysSupply: line.days > 0 ? line.days : 1,
     quantity: (line.qty ?? 0) > 0 ? Number(line.qty) : 1,
     bodySite: line.bodySite?.trim() || "",
@@ -84,7 +97,7 @@ export function medicationSaveBody(
     encounter: { reference: `Encounter/${encounterId}` },
     drugText: line.name,
     nhiCode: line.nhiCode,
-    dosageInstruction: [{ text: line.sig?.trim() || "\u4f9d\u91ab\u56d1" }],
+    dosageInstruction: [{ text: sigForSave(line) }],
     bodySite: line.bodySite || "",
     payMark: line.payMark || "",
     memo: line.memo || "",

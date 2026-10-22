@@ -204,6 +204,7 @@ function BodySiteDialog({
   const [phrases, setPhrases] = useState<BodyPhrase[]>([]);
   const [query, setQuery] = useState("");
   const [picked, setPicked] = useState<string[]>(() => splitSites(value));
+  const [typed, setTyped] = useState(value);
   useEffect(() => {
     let cancel = false;
     void fetch("/body_sites.json")
@@ -223,7 +224,21 @@ function BodySiteDialog({
     (row) => !q || row.name.includes(q) || row.code.includes(q),
   );
   const toggle = (name: string) => {
-    setPicked((prev) => (prev.includes(name) ? prev.filter((item) => item !== name) : [...prev, name]));
+    setPicked((prev) => {
+      const next = prev.includes(name) ? prev.filter((item) => item !== name) : [...prev, name];
+      setTyped(next.join(" "));
+      return next;
+    });
+  };
+  const addTyped = () => {
+    const text = query.trim();
+    if (!text) return;
+    setPicked((prev) => {
+      const next = prev.includes(text) ? prev : [...prev, text];
+      setTyped(next.join(" "));
+      return next;
+    });
+    setQuery("");
   };
   return createPortal(
     <div className="fixed inset-0 z-[240] flex items-center justify-center bg-black/35" onMouseDown={onClose}>
@@ -234,12 +249,26 @@ function BodySiteDialog({
       >
         <div className="bg-[#0A5AD6] px-2 py-1 text-xs font-bold text-white">{"\u90e8\u4f4d\u4f5c\u696d"}</div>
         <div className="px-2 py-1 text-xs font-bold">{drugName || "\u8655\u7f6e"}</div>
-        <div className="mx-2 min-h-[1.6rem] border bg-white px-1 text-xs leading-6">{picked.join(" ")}</div>
+        <input
+          className="mx-2 min-h-[1.6rem] border bg-white px-1 text-xs"
+          value={typed}
+          autoFocus
+          onChange={(e) => {
+            const text = e.target.value;
+            setTyped(text);
+            setPicked(splitSites(text));
+          }}
+        />
         <input
           className="mx-2 mt-1 border px-1 text-xs"
           value={query}
-          autoFocus
+          placeholder={"\u641c\u5c0b\u6216\u81ea\u5df1\u6253\uff0cEnter \u52a0\u9032\u4e0a\u9762"}
           onChange={(e) => setQuery(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key !== "Enter") return;
+            e.preventDefault();
+            addTyped();
+          }}
         />
         <div className="m-2 grid min-h-0 flex-1 grid-cols-5 gap-px overflow-auto border border-[#808080] bg-[#808080]">
           {shown.map((row) => {
@@ -265,7 +294,7 @@ function BodySiteDialog({
             type="button"
             className="border bg-[#D4D0C8] px-2 py-0.5 text-xs font-bold"
             onClick={() => {
-              onApply(picked.join(" "));
+              onApply(typed.trim());
               onClose();
             }}
           >

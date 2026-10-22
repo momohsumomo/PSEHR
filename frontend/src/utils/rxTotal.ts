@@ -6,7 +6,7 @@ export type CatalogUsage = {
   code: string;
   /** USEAGE.FREQUENCY */
   frequency?: number;
-  /** USEAGE.ISTOTAL: 0=qty is total; 1=qty*freq*days; 2/3=unspecified */
+  /** USEAGE.ISTOTAL: 0=qty is the total; 1 and 2=qty*freq*days; 3=do not multiply */
   isTotal?: UsageCalcMode | string;
   label?: string;
   eatType?: string;
@@ -70,7 +70,7 @@ export function usageIsTotal(
 export function usageCalcLabel(u: CatalogUsage): string {
   const mode = String(u.isTotal ?? "");
   const freq = Number(u.frequency) > 0 ? Number(u.frequency) : 0;
-  if (mode === "1" && freq > 0) return `\u6b21\u91cf(\u6578\u91cf*${freq}*\u5929\u6578)`;
+  if ((mode === "1" || mode === "2") && freq > 0) return `\u6b21\u91cf(\u6578\u91cf*${freq}*\u5929\u6578)`;
   if (mode === "0") return "\u7e3d\u91cf(\u6578\u91cf\u7b49\u65bc\u7e3d\u91cf)";
   if (mode === "3" && freq <= 0) return "\u7e3d\u91cf\u4e0d\u8ddf\u6578\u91cf";
   return "\u4e0d\u6307\u5b9a";
@@ -105,8 +105,10 @@ export function computeTotalAmount(
   }
   if (mode === "0") {
     total = q;
-  } else if (mode === "1" && freq > 0 && d > 0) {
+  } else if ((mode === "1" || mode === "2") && freq > 0 && d > 0) {
     total = q * freq * d;
+  } else if (mode === "3") {
+    total = q;
   } else {
     return "";
   }

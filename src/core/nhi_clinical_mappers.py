@@ -90,7 +90,11 @@ def nhi_medication_to_fhir(
     resolved_unit_price: float | None = None,
     pack_version: str | None = None,
 ) -> dict[str, Any]:
-    sig = intake.sig or "依醫囑"
+    from src.claims.yisheng_rules import is_order_code
+
+    sig = (intake.sig or "").strip()
+    if not sig and not is_order_code(intake.nhiCode or ""):
+        sig = "\u4f9d\u91ab\u56d1"
     days = int(intake.daysSupply or 1)
     qty = float(intake.quantity if intake.quantity is not None else 1)
     unit_price = intake.unitPrice if intake.unitPrice is not None else resolved_unit_price

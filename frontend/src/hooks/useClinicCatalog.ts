@@ -55,6 +55,29 @@ function normalizeCatalog(raw: ClinicCatalog): ClinicCatalog {
   };
 }
 
+type DrugTypeRow = { alias?: string; nhiCode?: string; drugType?: string };
+
+function attachDrugTypes(catalog: ClinicCatalog, rows: DrugTypeRow[]): ClinicCatalog {
+  const byPair = new Map<string, string>();
+  for (const row of rows) {
+    const alias = String(row.alias || "").trim().toUpperCase();
+    const nhi = String(row.nhiCode || "").trim().toUpperCase();
+    const form = String(row.drugType || "").trim();
+    if (!alias || !form) continue;
+    byPair.set(`${alias}|${nhi}`, form);
+  }
+  return {
+    ...catalog,
+    drugs: catalog.drugs.map((drug) => {
+      if (String(drug.drugType || "").trim()) return drug;
+      const alias = String(drug.alias || drug.shortName || "").trim().toUpperCase();
+      const nhi = String(drug.nhiCode || "").trim().toUpperCase();
+      const form = byPair.get(`${alias}|${nhi}`) || "";
+      return form ? { ...drug, drugType: form } : drug;
+    }),
+  };
+}
+
 function drugKey(d: { nhiCode?: string; drugNo?: string; name?: string; alias?: string }): string {
   // 必須用 drugNo／alias，不能用 nhiCode：同健保碼可有多筆診所自定名（如 條 vs 條涼）
   return String(d.drugNo || d.alias || d.name || d.nhiCode || "").trim();
@@ -141,6 +164,15 @@ export function useClinicCatalog() {
       }
     } catch (e) {
       setNotice(e instanceof Error ? `載入目錄失敗：${e.message}` : "載入目錄失敗");
+    }
+    try {
+      const extra = await fetch("/yisheng_drug_types.json");
+      if (extra.ok) {
+        const body = (await extra.json()) as { rows?: DrugTypeRow[] };
+        baseCat = attachDrugTypes(baseCat, body.rows || []);
+      }
+    } catch {
+      /* 劑型清單沒載到時，藥品其他欄位仍可用 */
     }
     let ov = EMPTY_OVERRIDES;
     try {

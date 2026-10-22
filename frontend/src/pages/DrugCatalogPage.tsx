@@ -37,6 +37,7 @@ type DrugForm = {
   unit: string;
   usage: string;
   doseForm: string;
+  drugType: string;
   dose: string;
   amount: string;
   totalPrice: string;
@@ -89,6 +90,7 @@ const emptyForm = (): DrugForm => ({
   unit: "",
   usage: "",
   doseForm: "",
+  drugType: "",
   dose: "",
   amount: "",
   totalPrice: "",
@@ -115,6 +117,7 @@ const emptyForm = (): DrugForm => ({
 export function DrugCatalogPage() {
   const navigate = useNavigate();
   const { catalog, loaded, notice: loadNotice, upsertDrug, removeDrug } = useClinicCatalog();
+  const [drugForms, setDrugForms] = useState<string[]>([]);
   const [search, setSearch] = useState("");
   const [filterOpen, setFilterOpen] = useState(true);
   const [selectedCode, setSelectedCode] = useState<string | null>(null);
@@ -131,6 +134,21 @@ export function DrugCatalogPage() {
       setNotice(loadNotice || `已載入 ${catalog.drugs.length} 筆`);
     }
   }, [loaded, catalog.drugs.length, loadNotice]);
+
+  useEffect(() => {
+    let cancel = false;
+    void fetch("/yisheng_drug_types.json")
+      .then((res) => (res.ok ? res.json() : { forms: [] }))
+      .then((body: { forms?: string[] }) => {
+        if (!cancel) setDrugForms((body.forms || []).filter(Boolean));
+      })
+      .catch(() => {
+        if (!cancel) setDrugForms([]);
+      });
+    return () => {
+      cancel = true;
+    };
+  }, []);
 
   useEscLayer([{ open: true, close: () => navigate("/") }]);
 
@@ -183,6 +201,12 @@ export function DrugCatalogPage() {
       unit: d.unit || "",
       usage: d.sig || "",
       doseForm: d.dosimeter || "",
+      drugType: d.drugType || "",
+      appearance: d.appearance || "",
+      cloudCat: d.cloudCat || "",
+      maxMonth: textNum(d.maxMonth),
+      expiry: d.expiry || "",
+      warnDate: d.warnDate || "",
       dose: textNum(d.dose),
       amount: textNum(d.dose2),
       totalPrice: textNum(d.totalPrice),
@@ -228,9 +252,12 @@ export function DrugCatalogPage() {
       return;
     }
     const num = (raw: string) => (raw.trim() === "" ? null : Number(raw));
+    const existing =
+      catalog.drugs.find((d) => (d.drugNo || d.alias || d.name || d.nhiCode) === drugNo) || {};
     setBusy(true);
     try {
       await upsertDrug({
+        ...existing,
         drugNo,
         alias: form.alias.trim(),
         shortName: form.alias.trim(),
@@ -255,6 +282,12 @@ export function DrugCatalogPage() {
         typeName: form.customCat,
         unit: form.unit,
         dosimeter: form.doseForm,
+        drugType: form.drugType.trim(),
+        appearance: form.appearance,
+        cloudCat: form.cloudCat.trim(),
+        maxMonth: form.maxMonth.trim(),
+        expiry: form.expiry.trim(),
+        warnDate: form.warnDate.trim(),
         dose: num(form.dose),
         dose2: num(form.amount),
         stock: num(form.stock),
@@ -395,7 +428,17 @@ export function DrugCatalogPage() {
               <input className={hisInputClass} value={form.usage} onChange={(e) => setForm({ ...form, usage: e.target.value })} />
             </HisField>
             <HisField label="劑型">
-              <input className={hisInputClass} value={form.doseForm} onChange={(e) => setForm({ ...form, doseForm: e.target.value })} />
+              <input
+                className={hisInputClass}
+                list="yisheng-drug-forms"
+                value={form.drugType}
+                onChange={(e) => setForm({ ...form, drugType: e.target.value })}
+              />
+              <datalist id="yisheng-drug-forms">
+                {drugForms.map((name) => (
+                  <option key={name} value={name} />
+                ))}
+              </datalist>
             </HisField>
           </div>
           <div className="grid grid-cols-4 gap-1">

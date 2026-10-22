@@ -161,6 +161,7 @@ def map_drug(row: dict[str, str], adapt: str = "") -> dict | None:
         "restrain": _clean(row.get("RESTRAIN") or ""),
         "unit": _clean(row.get("UNIT") or ""),
         "dosimeter": _clean(row.get("DOSIMETER") or ""),
+        "drugType": _clean(row.get("DRUGTYPE") or ""),
         "useType": _clean(row.get("USE_TYPE") or ""),
         "cast": cast,
         "typeName": typ,
