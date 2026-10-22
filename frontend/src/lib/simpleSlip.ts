@@ -160,15 +160,17 @@ function leftTable(rows: RxLine[], fontPx: number): string {
         const days = row.days ? String(row.days) : "";
         const total = show(row.totalAmount) === "\u2014" ? "" : show(row.totalAmount);
         const site = (row.bodySite || "").trim();
+        const clip = "display:block;overflow:hidden;white-space:nowrap;";
+        const cell = "overflow:hidden;vertical-align:top;";
         return `<tr>
-          <td style="width:1.5em;">${esc(payPrefix(row))}</td>
-          <td style="word-break:break-all;">${esc(show(row.name))}</td>
-          <td style="width:1.2em;">${esc(memoMark(row))}</td>
-          <td style="width:2.8em;text-align:right;">${esc(qty)}</td>
-          <td style="width:4.2em;">${esc(sig)}</td>
-          <td style="width:2.2em;text-align:right;">${esc(days)}</td>
-          <td style="width:3.6em;text-align:right;">${esc(total)}</td>
-          <td style="width:3.2em;">${esc(site)}</td>
+          <td style="${cell}width:4%;">${esc(payPrefix(row))}</td>
+          <td style="${cell}width:46%;"><div style="${clip}">${esc(show(row.name))}</div></td>
+          <td style="${cell}width:3%;">${esc(memoMark(row))}</td>
+          <td style="${cell}width:7%;text-align:right;">${esc(qty)}</td>
+          <td style="${cell}width:11%;"><div style="${clip}">${esc(sig)}</div></td>
+          <td style="${cell}width:6%;text-align:right;">${esc(days)}</td>
+          <td style="${cell}width:9%;text-align:right;">${esc(total)}</td>
+          <td style="${cell}width:14%;"><div style="${clip}">${esc(site)}</div></td>
         </tr>`;
       })
       .join("") || `<tr><td colspan="8">\u2014</td></tr>`;
