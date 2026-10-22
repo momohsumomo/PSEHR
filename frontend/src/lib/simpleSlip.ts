@@ -1,5 +1,5 @@
 import type { DiagnosisRow, RxLine } from "@/mocks/clinicMocks";
-import { selfPayCeiling } from "@/lib/selfPayMoney";
+import { ceilCashTen, rawSelfPay } from "@/lib/selfPayMoney";
 
 export type SimpleSlipInput = {
   medicalNo: string;
@@ -87,8 +87,8 @@ function memoMark(row: RxLine): string {
 
 function resolvedSelfPay(input: SimpleSlipInput): string {
   const stored = asNumber(input.selfPay);
-  if (stored != null && stored > 0) return String(stored);
-  const amount = selfPayCeiling(input.drugs);
+  const base = stored != null && stored > 0 ? stored : rawSelfPay(input.drugs);
+  const amount = ceilCashTen(base);
   if (amount <= 0) return "\u2014";
   return String(amount);
 }

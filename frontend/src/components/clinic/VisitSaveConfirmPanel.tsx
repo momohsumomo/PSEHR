@@ -5,7 +5,7 @@ import { HIS, HIS_FONT } from "@/lib/hisTheme";
 import { skipsCloudWrite } from "@/lib/queueOrder";
 import type { DiagnosisRow, QueueEntry, RxLine } from "@/mocks/clinicMocks";
 import { formatBirthdayRoc } from "@/lib/patientSearch";
-import { selfPayCeiling } from "@/lib/selfPayMoney";
+import { ceilCashTen, selfPayCeiling } from "@/lib/selfPayMoney";
 
 export type VisitSaveDraft = {
   caseNo: string;
@@ -130,7 +130,8 @@ export function buildVisitSaveDraft(args: {
     consultFee: consult,
     burden,
     selfPayBasis: String(selfBasis),
-    selfPay: storedSelf != null && storedSelf > 0 ? moneyText(storedSelf) : String(selfBasis),
+    selfPay:
+      storedSelf != null && storedSelf > 0 ? String(ceilCashTen(storedSelf)) : String(selfBasis),
     orderCode: DASH,
     orderStaff: "",
     orderTime: "",
