@@ -1,0 +1,19 @@
+---
+description: 簡式與押金單的直向進紙已經印對，禁止再改轉向、紙張對調或縮放
+alwaysApply: true
+---
+
+# 列印方向已鎖定
+
+簡式收據和押金單這段已經在診所印對。以後改邊界、金額、版面文字時，不准再動方向。
+
+鎖定的行為：
+
+- 預覽維持寬 210、長 93。不要把這兩個數字對調，不要把預覽改成直的重排。
+- 列印設定的方向選直向時，送進印表機的紙是寬 93、長 210，內容轉 90 度，方向維持直向。
+- 選橫向時不轉，仍送 210×93。
+- 診斷證明、轉診單是 210×297 直向，不轉。
+- 轉向只做一次，在 `frontend/src/lib/printJob.ts` 的 `turnWidePortraitJob`。客戶端若看到寬已經小於長，不要再轉第二次。
+- 邊界用四周留白。不准再用 `transform: scale`。
+
+不要改 `turnWidePortraitJob`、`Convert-SlipForFeed`、`ys-rot` 的角度，也不要改 Sumatra 的 `portrait` / `landscape` 字串。

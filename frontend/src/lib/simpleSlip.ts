@@ -1,4 +1,5 @@
 import type { DiagnosisRow, RxLine } from "@/mocks/clinicMocks";
+import { chargedSelfPay } from "@/lib/selfPayMoney";
 
 export type SimpleSlipInput = {
   medicalNo: string;
@@ -84,24 +85,10 @@ function memoMark(row: RxLine): string {
   return (row.memo || "").trim();
 }
 
-/** Lines marked \u81ea / \u6750, or memo [ / @, add their price into the self-pay total. */
-function lineSelfPay(row: RxLine): number {
-  const mark = payPrefix(row);
-  const memo = memoMark(row);
-  const counted = mark === "\u81ea" || mark === "\u6750" || memo.includes("[") || memo.includes("@");
-  if (!counted) return 0;
-  const price = Number(row.unitPrice);
-  if (!Number.isFinite(price) || price === 0) return 0;
-  const qty = Number(row.qty);
-  const q = Number.isFinite(qty) && qty > 0 ? qty : 1;
-  return price * q;
-}
-
 function resolvedSelfPay(input: SimpleSlipInput): string {
   const stored = asNumber(input.selfPay);
-  const fromLines = input.drugs.reduce((sum, row) => sum + lineSelfPay(row), 0);
-  const amount = Math.max(stored ?? 0, Math.round(fromLines));
-  if (amount === 0 && stored == null && fromLines === 0) return "\u2014";
+  const amount = chargedSelfPay(input.drugs, stored);
+  if (amount === 0 && stored == null) return "\u2014";
   return String(amount);
 }
 

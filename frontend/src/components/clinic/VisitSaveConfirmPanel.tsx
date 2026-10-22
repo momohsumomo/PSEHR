@@ -5,6 +5,7 @@ import { HIS, HIS_FONT } from "@/lib/hisTheme";
 import { skipsCloudWrite } from "@/lib/queueOrder";
 import type { DiagnosisRow, QueueEntry, RxLine } from "@/mocks/clinicMocks";
 import { formatBirthdayRoc } from "@/lib/patientSearch";
+import { chargedSelfPay, selfPayCeiling } from "@/lib/selfPayMoney";
 
 export type VisitSaveDraft = {
   caseNo: string;
@@ -45,28 +46,6 @@ function yuanNumber(v: unknown): number | null {
   if (!s || s === DASH || s === "-") return null;
   const n = Number(s.replace(/[^\d.-]/g, ""));
   return Number.isFinite(n) ? n : null;
-}
-
-function ceilYuan(n: number): number {
-  const nearest = Math.round(n);
-  if (Math.abs(n - nearest) < 0.001) return nearest;
-  return Math.ceil(n - 1e-9);
-}
-
-/** Self-pay drugs and procedures, then round up to the next yuan. */
-export function selfPayCeiling(rows: RxLine[]): number {
-  const raw = rows.reduce((sum, row) => {
-    const mark = (row.payMark || (row.selfPay ? "\u81ea" : "")).trim();
-    const memo = (row.memo || "").trim();
-    const counted = mark === "\u81ea" || mark === "\u6750" || memo.includes("[") || memo.includes("@");
-    if (!counted) return sum;
-    const price = Number(row.unitPrice);
-    if (!Number.isFinite(price) || price === 0) return sum;
-    const qty = Number(row.qty);
-    const q = Number.isFinite(qty) && qty > 0 ? qty : 1;
-    return sum + price * q;
-  }, 0);
-  return ceilYuan(raw);
 }
 
 function moneyText(n: number): string {
@@ -151,7 +130,7 @@ export function buildVisitSaveDraft(args: {
     consultFee: consult,
     burden,
     selfPayBasis: String(selfBasis),
-    selfPay: storedSelf != null && storedSelf > 0 ? moneyText(storedSelf) : String(selfBasis),
+    selfPay: moneyText(chargedSelfPay(args.currentRx, storedSelf)),
     orderCode: DASH,
     orderStaff: "",
     orderTime: "",
