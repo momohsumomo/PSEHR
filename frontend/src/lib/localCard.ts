@@ -327,32 +327,32 @@ async function selectNamedReader(reader: string): Promise<void> {
   }
 }
 
-/** Health-card reads stay on the reader chosen at the register kiosk. */
-async function bindHealthCardReader(): Promise<void> {
-  const saved = savedHealthCardReader();
-  if (!saved) {
-    await bindThisReader();
-    return;
+/** One physical reader. A driver may still list Interface 0 and Interface 1. */
+function soleReader(names: string[]): string {
+  if (names.length === 0) {
+    throw new DeskCardError("\u9019\u53f0\u6c92\u6709\u770b\u5230\u8b80\u5361\u6a5f\u3002\u8acb\u78ba\u8a8d\u8b80\u5361\u6a5f\u6709\u63d2\u4e0a\uff0c\u518d\u6309\u4e00\u6b21\u3002");
   }
-  const names = await listedReaders();
-  if (!names.includes(saved)) {
-    await bindThisReader();
-    return;
-  }
-  await selectNamedReader(saved);
+  if (names.length === 1) return names[0];
+  const contact = names.find((name) => /interface\s*0$/i.test(name));
+  if (contact) return contact;
+  const other = names.find((name) => !/interface\s*1$/i.test(name));
+  return other || names[0];
 }
 
-export async function assignHealthCardReader(readerName: string): Promise<string> {
+/** Health-card reads use the reader designated on this computer. */
+async function bindHealthCardReader(): Promise<void> {
   const names = await listedReaders();
-  if (names.length === 0) {
-    throw new DeskCardError("\u9019\u53f0\u6c92\u6709\u770b\u5230\u8b80\u5361\u6a5f\u3002\u8acb\u78ba\u8a8d\u8b80\u5361\u6a5f\u6709\u63d2\u4e0a\uff0c\u518d\u6309\u91cd\u65b0\u6574\u7406\u8b80\u5361\u6a5f\u3002");
-  }
-  if (!names.includes(readerName)) {
-    throw new DeskCardError("\u9019\u53f0\u6c92\u6709\u9019\u500b\u8b80\u5361\u6a5f\u3002\u8acb\u6309\u91cd\u65b0\u6574\u7406\u8b80\u5361\u6a5f\u5f8c\u518d\u6307\u5b9a\u3002");
-  }
-  await selectNamedReader(readerName);
-  rememberHealthCardReader(readerName);
-  return "\u4ee5\u5f8c\u5065\u4fdd\u5361\u7528\u9019\u4e00\u53f0\uff1a\u300c" + readerName + "\u300d\u3002\u9019\u4e00\u6b65\u53ea\u6307\u5b9a\u8b80\u5361\u6a5f\uff0c\u6c92\u6709\u8b80\u5361\u7247\u3002";
+  const saved = savedHealthCardReader();
+  const reader = saved && names.includes(saved) ? saved : soleReader(names);
+  await selectNamedReader(reader);
+  if (reader !== saved) rememberHealthCardReader(reader);
+}
+
+export async function assignHealthCardReader(): Promise<string> {
+  const reader = soleReader(await listedReaders());
+  await selectNamedReader(reader);
+  rememberHealthCardReader(reader);
+  return "\u5df2\u6307\u5b9a\u8b80\u5361\u6a5f\u3002\u4e4b\u5f8c\u53ef\u4ee5\u8b80\u5065\u4fdd\u5361\u3002";
 }
 
 function refreshNote(reader: string, data: Record<string, unknown>): string {
