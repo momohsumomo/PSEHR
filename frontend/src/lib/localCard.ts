@@ -146,7 +146,7 @@ async function attachLocalSam(signed: Record<string, unknown>): Promise<DeskSign
 }
 
 export async function readLocalHcBasic(): Promise<Record<string, unknown>> {
-  await bindThisReader();
+  await bindHealthCardReader();
   try {
     return await callCard("GET", "/api/hc/v1/Basic");
   } catch (err) {
@@ -179,7 +179,7 @@ export async function readLocalVirtualBasic(token: string): Promise<Record<strin
 }
 
 export async function signLocalHc(serviceType: string): Promise<DeskSign> {
-  await bindThisReader();
+  await bindHealthCardReader();
   const signed = await callCard("POST", "/api/hc/v1/Signature/Hc", { serviceType });
   if (!signed.hcId || !signed.hcIdNo) {
     const basic = await localCshis("GET", "/api/hc/v1/Basic");
@@ -299,6 +299,60 @@ async function bindThisReader(): Promise<void> {
   const reader = await readerForThisPc();
   if (!reader) throw new DeskCardError("\u9019\u53f0\u6c92\u6709\u770b\u5230\u8b80\u5361\u6a5f\u3002\u8acb\u78ba\u8a8d\u8b80\u5361\u6a5f\u6709\u63d2\u4e0a\uff0c\u518d\u6309\u53f3\u4e0a\u89d2\u91cd\u65b0\u6574\u7406\u3002");
   await selectLocalReader(reader);
+}
+
+const HC_READER_KEY = "psehr.hcReader";
+
+export function savedHealthCardReader(): string {
+  try {
+    return localStorage.getItem(HC_READER_KEY) || "";
+  } catch {
+    return "";
+  }
+}
+
+function rememberHealthCardReader(name: string): void {
+  localStorage.setItem(HC_READER_KEY, name);
+}
+
+async function selectNamedReader(reader: string): Promise<void> {
+  try {
+    await selectLocalReader(reader);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "";
+    const stuck = message.includes("\u6c92\u6709\u63db\u904e\u53bb") || message.includes("1199") || message.includes("\uff081101\uff09");
+    if (!stuck) throw err;
+    await quietCard("POST", "/api/common/v1/Finalize", {});
+    await selectLocalReader(reader);
+  }
+}
+
+/** Health-card reads stay on the reader chosen at the register kiosk. */
+async function bindHealthCardReader(): Promise<void> {
+  const saved = savedHealthCardReader();
+  if (!saved) {
+    await bindThisReader();
+    return;
+  }
+  const names = await listedReaders();
+  if (!names.includes(saved)) {
+    await bindThisReader();
+    return;
+  }
+  await selectNamedReader(saved);
+}
+
+export async function assignHealthCardReader(readerName: string): Promise<string> {
+  const names = await listedReaders();
+  if (names.length === 0) {
+    throw new DeskCardError("\u9019\u53f0\u6c92\u6709\u770b\u5230\u8b80\u5361\u6a5f\u3002\u8acb\u78ba\u8a8d\u8b80\u5361\u6a5f\u6709\u63d2\u4e0a\uff0c\u518d\u6309\u91cd\u65b0\u6574\u7406\u8b80\u5361\u6a5f\u3002");
+  }
+  if (!names.includes(readerName)) {
+    throw new DeskCardError("\u9019\u53f0\u6c92\u6709\u9019\u500b\u8b80\u5361\u6a5f\u3002\u8acb\u6309\u91cd\u65b0\u6574\u7406\u8b80\u5361\u6a5f\u5f8c\u518d\u6307\u5b9a\u3002");
+  }
+  await selectNamedReader(readerName);
+  rememberHealthCardReader(readerName);
+  return "\u4ee5\u5f8c\u5065\u4fdd\u5361\u7528\u9019\u4e00\u53f0\uff1a\u300c" + readerName + "\u300d\u3002\u9019\u4e00\u6b65\u53ea\u6307\u5b9a\u8b80\u5361\u6a5f\uff0c\u6c92\u6709\u8b80\u5361\u7247\u3002";
 }
 
 function refreshNote(reader: string, data: Record<string, unknown>): string {

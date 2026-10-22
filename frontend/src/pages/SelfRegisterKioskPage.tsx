@@ -16,6 +16,7 @@ import { identityVisitFees, matchIdCategory } from "@/lib/idCategory";
 import { lastPharmacist, shiftForClock } from "@/lib/clinicSession";
 import { mapApiPatientToHit, type PatientHit } from "@/lib/patientSearch";
 import { shiftQueueNumbers, takeSmallestQueueNumber } from "@/lib/queueOrder";
+import { AssignHcReaderButton } from "@/components/clinic/AssignHcReaderButton";
 import { CardConsoleDebugButton } from "@/components/clinic/CardConsoleDebugButton";
 
 function maskName(name: string): string {
@@ -349,7 +350,8 @@ export function SelfRegisterKioskPage() {
       }}
     >
       <header className="relative shrink-0 border-b border-[#d7e3e8] bg-white/70 px-8 pb-4 pt-5 text-center backdrop-blur-sm">
-        <div className="absolute right-3 top-3 z-20">
+        <div className="absolute right-3 top-3 z-20 flex items-start gap-2">
+          <AssignHcReaderButton />
           <CardConsoleDebugButton compact variant="light" align="end" scope="local" label={"\u91cd\u65b0\u6574\u7406\u8b80\u5361\u6a5f"} />
         </div>
         <p className="text-[1.7rem] font-semibold tracking-wide text-[#12324a]">{clinicName || "\u81ea\u52a9\u639b\u865f"}</p>
