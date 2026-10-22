@@ -142,7 +142,8 @@ function PreviewWindow({ req, onClose }: { req: Req; onClose: () => void }) {
       return;
     }
     const name = req.printerName;
-    setHint("\u6b63\u5728\u9001\u5230\u9019\u53f0\u7684\u5370\u8868\u6a5f\u2026");
+    sentName.current = name;
+    setHint("\u5df2\u4ea4\u7d66\u9019\u53f0\u5370\u8868\u6a5f\uff0c\u96e2\u958b\u9019\u500b\u756b\u9762\u4e5f\u6703\u5370\u5b8c\u3002");
     void printToNamedPrinter({
       printerName: name,
       html: req.html,
@@ -151,10 +152,8 @@ function PreviewWindow({ req, onClose }: { req: Req; onClose: () => void }) {
       feed: req.feed || "portrait",
     })
       .then((sent) => {
-        const shown = sent.printer || name;
-        sentName.current = shown;
         if (!aliveRef.current) return;
-        setHint("\u5df2\u9001\u5230 " + shown);
+        setHint("\u5df2\u4ea4\u7d66 " + (sent.printer || name) + "\uff0c\u96e2\u958b\u4e5f\u6703\u5370\u5b8c\u3002");
       })
       .catch((err: unknown) => {
         sentName.current = "";

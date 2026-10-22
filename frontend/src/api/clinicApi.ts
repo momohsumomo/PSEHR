@@ -1763,11 +1763,21 @@ export async function printToNamedPrinter(body: {
   feed?: "portrait" | "landscape" | "";
 }): Promise<{ ok: boolean; printer: string }> {
   const job = turnWidePortraitJob(body);
-  const res = await localPrintFetch("/print", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(job),
-  });
+  const payload = JSON.stringify(job);
+  const post = (keepalive: boolean) =>
+    localPrintFetch("/print", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: payload,
+      keepalive,
+    });
+  let res: Response;
+  try {
+    res = await post(payload.length <= 60000);
+  } catch (err) {
+    if (payload.length > 60000) throw err;
+    res = await post(false);
+  }
   const data = (await res.json().catch(() => ({}))) as { ok?: boolean; printer?: string; detail?: string };
   if (res.status === 404) {
     throw new Error("\u9019\u53f0\u7684\u9580\u8a3a\u5de5\u5177\u9084\u6c92\u6709\u63a5\u4e0a\u5217\u5370\u3002\u8acb\u95dc\u6389\u770b\u8a3a\u8996\u7a97\uff0c\u518d\u96d9\u64ca\u958b\u555f\u9580\u8a3a\u3002");

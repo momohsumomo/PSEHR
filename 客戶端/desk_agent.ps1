@@ -756,23 +756,22 @@ public class PsehrTrustAll : ICertificatePolicy {
           $rawBody = ""
           $splitAt = $text.IndexOf("`r`n`r`n")
           if ($splitAt -ge 0) { $rawBody = $text.Substring($splitAt + 4) }
+          if (-not $rawBody.Trim()) {
+            Send-Json $client '{"ok":false,"detail":"empty print"}' 400
+            continue
+          }
           $box = Join-Path $env:LOCALAPPDATA "PSEHR\print-box"
           New-Item -ItemType Directory -Force -Path $box | Out-Null
           $id = [guid]::NewGuid().ToString("n")
           $req = Join-Path $box ($id + ".req")
-          $res = Join-Path $box ($id + ".res")
           [IO.File]::WriteAllText($req, $rawBody, (New-Object System.Text.UTF8Encoding $false))
-          $deadline = (Get-Date).AddSeconds(70)
-          while ((Get-Date) -lt $deadline -and -not (Test-Path -LiteralPath $res)) { Start-Sleep -Milliseconds 200 }
-          if (-not (Test-Path -LiteralPath $res)) {
-            Send-Json $client '{"ok":false,"detail":"print was not taken"}' 400
-            continue
-          }
-          $answer = [IO.File]::ReadAllText($res)
-          Remove-Item -LiteralPath $req, $res -ErrorAction SilentlyContinue
-          $status = 200
-          if ($answer -match '"ok"\s*:\s*false') { $status = 400 }
-          Send-Json $client $answer $status
+          $printer = ""
+          try {
+            $payload = $rawBody | ConvertFrom-Json
+            if ($payload.printerName) { $printer = "$($payload.printerName)" }
+          } catch {}
+          $note = @{ ok = $true; queued = $true; printer = $printer } | ConvertTo-Json -Compress
+          Send-Json $client $note 200
           continue
         }
         Send-Json $client '{"detail":"not found"}' 404
@@ -800,6 +799,7 @@ function Start-DeskLoop {
     Start-LocalPrinterListener
     Request-Release5066
     try { if (Find-Edge) { Ensure-PrintEdge (Find-Edge) } } catch { Write-Log $_.Exception.Message }
+    $nextSide = [datetime]::MinValue
     while ($true) {
       try {
         $box = Join-Path $Root "print-box"
@@ -816,29 +816,32 @@ function Start-DeskLoop {
               [IO.File]::WriteAllText($resFile, $fail, (New-Object System.Text.UTF8Encoding $false))
               Write-Log $_.Exception.Message
             }
-            Remove-Item -LiteralPath $reqFile.FullName -ErrorAction SilentlyContinue
+            Remove-Item -LiteralPath $reqFile.FullName, $resFile -ErrorAction SilentlyContinue
           }
         }
-        $ip = Find-ClinicHost
-        if ($ip) {
-          $health = Get-Health | ConvertTo-Json -Depth 6 -Compress
-          Invoke-DeskJson ("http://{0}:3010/api/clinic/desk/report" -f $ip) "POST" $health | Out-Null
-          $pending = Invoke-RestMethod -Uri ("http://{0}:3010/api/clinic/desk/jobs" -f $ip) -TimeoutSec 8
-          foreach ($job in @($pending.jobs)) {
-            if (-not $job -or -not $job.id) { continue }
-            try {
-              Invoke-OnePrint $job
-              $done = @{ ok = $true; printer = "$($job.printerName)" } | ConvertTo-Json -Compress
-              Invoke-DeskJson ("http://{0}:3010/api/clinic/desk/jobs/{1}" -f $ip, $job.id) "POST" $done | Out-Null
-            } catch {
-              $fail = @{ ok = $false; detail = $_.Exception.Message } | ConvertTo-Json -Compress
-              try { Invoke-DeskJson ("http://{0}:3010/api/clinic/desk/jobs/{1}" -f $ip, $job.id) "POST" $fail | Out-Null } catch {}
-              Write-Log $_.Exception.Message
+        if ((Get-Date) -ge $nextSide) {
+          $nextSide = (Get-Date).AddSeconds(4)
+          $ip = Find-ClinicHost
+          if ($ip) {
+            $health = Get-Health | ConvertTo-Json -Depth 6 -Compress
+            Invoke-DeskJson ("http://{0}:3010/api/clinic/desk/report" -f $ip) "POST" $health | Out-Null
+            $pending = Invoke-RestMethod -Uri ("http://{0}:3010/api/clinic/desk/jobs" -f $ip) -TimeoutSec 8
+            foreach ($job in @($pending.jobs)) {
+              if (-not $job -or -not $job.id) { continue }
+              try {
+                Invoke-OnePrint $job
+                $done = @{ ok = $true; printer = "$($job.printerName)" } | ConvertTo-Json -Compress
+                Invoke-DeskJson ("http://{0}:3010/api/clinic/desk/jobs/{1}" -f $ip, $job.id) "POST" $done | Out-Null
+              } catch {
+                $fail = @{ ok = $false; detail = $_.Exception.Message } | ConvertTo-Json -Compress
+                try { Invoke-DeskJson ("http://{0}:3010/api/clinic/desk/jobs/{1}" -f $ip, $job.id) "POST" $fail | Out-Null } catch {}
+                Write-Log $_.Exception.Message
+              }
             }
           }
         }
       } catch { Write-Log $_.Exception.Message }
-      Start-Sleep -Seconds 4
+      Start-Sleep -Milliseconds 250
     }
   } finally {
     $mutex.ReleaseMutex() | Out-Null

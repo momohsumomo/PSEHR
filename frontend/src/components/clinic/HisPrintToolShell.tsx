@@ -293,7 +293,7 @@ export function HisPrintToolShell({
         heightMm,
         feed,
       };
-      setHint("\u6b63\u5728\u9001\u5230\u9019\u53f0\u7684\u5370\u8868\u6a5f\u2026");
+      setHint("\u5df2\u4ea4\u7d66\u9019\u53f0\u5370\u8868\u6a5f\uff0c\u96e2\u958b\u9019\u500b\u756b\u9762\u4e5f\u6703\u5370\u5b8c\u3002");
       void printToNamedPrinter(job)
         .then((sent) => {
           if (!aliveRef.current) return;
