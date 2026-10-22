@@ -71,7 +71,7 @@ import {
   applyClinicDrugDisplayNames,
   resolvePackageLines,
 } from "@/utils/catalogRx";
-import { cancelRegister, writeVisitToCard, CardReadError, type CardFaultReport, patchEncounterReg, previewVisitCase, fetchStaff, replyReferral, saveReferralSlip, claimChartOpen, releaseChartOpen, CHART_IN_USE } from "@/api/clinicApi";
+import { cancelRegister, writeVisitToCard, CardReadError, type CardFaultReport, patchEncounterReg, previewVisitCase, fetchStaff, saveReferralSlip, claimChartOpen, releaseChartOpen, CHART_IN_USE } from "@/api/clinicApi";
 import { displayCase, prescriptionDays, prescriptionOrders, storedCase } from "@/lib/caseMark";
 import { ageYearsMonths } from "@/lib/ageLabel";
 import { roomLabel, roomNumber } from "@/lib/roomMark";
@@ -3487,81 +3487,31 @@ export function ClinicOutpatientPage() {
             if (!selectedEncounterId) return;
             setReplyBusy(true);
             setReplyError("");
-            if (!draft.upload) {
-              void saveReferralSlip({
-                kind: "reply",
-                encounterId: selectedEncounterId,
-                patientName: selected?.patientDisplay || "",
-                medicalNo: selected?.medicalNo || "",
-                idNo: selected?.idNo || "",
-                destHosp: replyAsk.hosp,
-                serial: draft.serial,
-                diagnosis: draft.diagnosis,
-                note: draft.note,
-                treatText: draft.drugs || replyAsk.meds,
-                historyText: draft.aux,
-                drugs: draft.drugs,
-                aux: draft.aux,
-                handoff: draft.note,
-                purpose: draft.purpose,
-                doctor: selected?.doctorName || "",
-                status: "\u5df2\u5b58\u6a94",
-              })
-                .then(() => {
-                  setCardNote("\u8f49\u8a3a\u56de\u8986\u5df2\u5b58\u6a94\uff0c\u6c92\u4e0a\u50b3");
-                  finishReply();
-                })
-                .catch((err: unknown) => {
-                  setReplyError(err instanceof Error ? err.message : "\u56de\u8986\u5b58\u6a94\u5931\u6557");
-                })
-                .finally(() => setReplyBusy(false));
-              return;
-            }
-            void replyReferral({
+            void saveReferralSlip({
+              kind: "reply",
               encounterId: selectedEncounterId,
+              patientName: selected?.patientDisplay || "",
+              medicalNo: selected?.medicalNo || "",
+              idNo: selected?.idNo || "",
+              destHosp: replyAsk.hosp,
               serial: draft.serial,
-              doctorId: selected?.doctorId || loadClinicRegisterDefaults().defaultDoctorId || undefined,
               diagnosis: draft.diagnosis,
               note: draft.note,
+              treatText: draft.drugs || replyAsk.meds,
+              historyText: draft.aux,
               drugs: draft.drugs,
               aux: draft.aux,
+              handoff: draft.note,
               purpose: draft.purpose,
-              expectReferral: true,
+              doctor: selected?.doctorName || "",
+              status: "\u5df2\u5b58\u6a94",
             })
-              .then(async (ref) => {
-                if (!ref.uploaded) {
-                  setReplyError(ref.reason || "\u56de\u8986\u6c92\u9001\u51fa");
-                  return;
-                }
-                try {
-                  await saveReferralSlip({
-                    kind: "reply",
-                    encounterId: selectedEncounterId,
-                    patientName: selected?.patientDisplay || "",
-                    medicalNo: selected?.medicalNo || "",
-                    idNo: selected?.idNo || "",
-                    destHosp: replyAsk.hosp,
-                    serial: draft.serial,
-                    diagnosis: draft.diagnosis,
-                    note: draft.note,
-                    treatText: draft.drugs || replyAsk.meds,
-                    historyText: draft.aux,
-                    drugs: draft.drugs,
-                    aux: draft.aux,
-                    handoff: draft.note,
-                    purpose: draft.purpose,
-                    doctor: selected?.doctorName || "",
-                    status: "\u5df2\u56de\u8986",
-                  });
-                } catch {
-                  /* upload already accepted */
-                }
-                setCardNote(`\u5df2\u4e0a\u50b3\u8f49\u8a3a\u56de\u5fa9\uff0c\u5e8f\u865f ${ref.serial}`);
-                void refreshQueue();
+              .then(() => {
+                setCardNote("\u8f49\u8a3a\u56de\u8986\u5df2\u5b58\u6a94\u3002\u4e0a\u50b3\u8acb\u5230\u53e6\u4e00\u53f0\u96fb\u8166\u7528\u8f49\u8a3a\u4e0a\u50b3\u5de5\u5177\u3002");
                 finishReply();
               })
               .catch((err: unknown) => {
-                setReplyError(err instanceof Error ? err.message : "\u56de\u8986\u6c92\u9001\u51fa");
+                setReplyError(err instanceof Error ? err.message : "\u56de\u8986\u5b58\u6a94\u5931\u6557");
               })
               .finally(() => setReplyBusy(false));
           }}

@@ -3,7 +3,7 @@ import { HIS, HIS_FONT } from "@/lib/hisTheme";
 import { openPrintPreview } from "@/lib/printJob";
 import { buildReferralSlipHtml } from "@/lib/clinicPrintDocs";
 import { doctorDisplayName, pickClinicDoctor } from "@/lib/doctorName";
-import { fetchStaff, saveReferralSlip, uploadReferralOpen } from "@/api/clinicApi";
+import { fetchStaff, saveReferralSlip } from "@/api/clinicApi";
 import { readLocalClinicBundle } from "@/lib/clinicProfile";
 import { HospitalLookupDialog, type NhiHospital } from "@/components/clinic/HospitalLookupDialog";
 import { useEscLayer } from "@/hooks/useEscLayer";
@@ -191,7 +191,6 @@ export function ReferralSlipDialog({ open, seed, onClose, encounterId, slipId, a
   const [copy2, setCopy2] = useState(false);
   const [copy3, setCopy3] = useState(false);
   const [writeDa, setWriteDa] = useState(false);
-  const [uploadOnSave, setUploadOnSave] = useState(true);
   const [note, setNote] = useState("");
   const [settingsOpen, setSettingsOpen] = useState(false);
   useEscLayer([
@@ -319,40 +318,10 @@ export function ReferralSlipDialog({ open, seed, onClose, encounterId, slipId, a
       treatText: seed.meds,
       historyText: seed.exam || "",
       ourDept: ourDept.slice(0, 2),
-    }).then(async (row) => {
+    }).then((row) => {
       setLocalSlipId(row.id);
       onSaved?.();
-      if (!uploadOnSave) {
-        setNote("\u5df2\u8a18\u5165\u8f49\u51fa\u540d\u55ae\uff0c\u6c92\u4e0a\u50b3\u3002");
-        return;
-      }
-      const sent = await uploadReferralOpen({
-        encounterId: encounterId || "",
-        idNo: seed.idNo,
-        patientName: seed.name,
-        phone: seed.phone,
-        address: seed.address,
-        sex: seed.sex,
-        birth: seed.birthday,
-        diagnosis: dx,
-        summary: chiefOut || seed.chief,
-        purpose,
-        purposeNote: purpose === "6" ? purposeOther : "",
-        doctorName: doctor,
-        destCode: hospCode,
-        destDept: dept.slice(0, 2),
-        destDoctor: suggestDoc,
-        destAddress: hospAddr,
-        destPhone: hospTel,
-        openedOn: opened,
-        validUntil: valid,
-        allergy: seed.allergy,
-        treat: seed.meds,
-        exam: seed.exam,
-        ourDept: ourDept.slice(0, 2),
-        slipId: row.id,
-      });
-      setNote(sent.uploaded ? "\u5df2\u5b58\u6a94\u4e26\u4e0a\u50b3\u8f49\u51fa\u3002" : (sent.reason || "\u5df2\u5b58\u6a94\uff0c\u4e0a\u50b3\u6c92\u6210\u529f"));
+      setNote("\u5df2\u8a18\u5165\u8f49\u51fa\u540d\u55ae\u3002\u4e0a\u50b3\u8acb\u5230\u53e6\u4e00\u53f0\u96fb\u8166\u7528\u8f49\u8a3a\u4e0a\u50b3\u5de5\u5177\u3002");
     }).catch((err: unknown) => {
       setNote(err instanceof Error ? err.message : "\u8f49\u51fa\u540d\u55ae\u5b58\u6a94\u5931\u6557");
     });
@@ -473,7 +442,6 @@ export function ReferralSlipDialog({ open, seed, onClose, encounterId, slipId, a
             <label className="mr-3"><input type="checkbox" checked={copy2} onChange={(e) => setCopy2(e.target.checked)} /> {"\u7b2c\u4e8c\u806f\uff1a\u63a5\u53d7\u8f49\u8a3a\u91ab\u9662\u3001\u8a3a\u6240\u56de\u8986\u8f49\u51fa\u91ab\u9662\u3001\u8a3a\u6240\uff08\u7d05\u8272\uff09"}</label>
             <label className="mr-3"><input type="checkbox" checked={copy3} onChange={(e) => setCopy3(e.target.checked)} /> {"\u7b2c\u4e09\u806f\uff1a\u539f\u8a3a\u7642\u91ab\u9662\u3001\u8a3a\u6240\u7559\u5b58\uff08\u767d\u8272\uff09"}</label>
             <label><input type="checkbox" checked={writeDa} onChange={(e) => setWriteDa(e.target.checked)} /> {"\u5b58\u6a94\u6642\u5beb\u5165\u5c31\u91ab\u985e\u5225 DA \u65bcIC\u5361"}</label>
-            <label className="ml-3 font-bold text-[#800000]"><input type="checkbox" checked={uploadOnSave} onChange={(e) => setUploadOnSave(e.target.checked)} /> {"\u5b58\u6a94\u6642\u4e0a\u50b3\u81f3\u5065\u4fdd\u4e2d\u5fc3"}</label>
           </div>
           {note ? <p className="mt-1 text-[12px] text-[#004000]">{note}</p> : null}
         </div>

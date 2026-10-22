@@ -112,7 +112,6 @@ export type ReferralReplyDraft = {
   drugs: string;
   aux: string;
   purpose: string;
-  upload: boolean;
 };
 
 export function ReferralReplyDialog({
@@ -145,7 +144,6 @@ export function ReferralReplyDialog({
   const [drugs, setDrugs] = useState(meds);
   const [text, setText] = useState(note);
   const [purpose, setPurpose] = useState("4");
-  const [uploadOnSave, setUploadOnSave] = useState(true);
   const [localError, setLocalError] = useState("");
   const box = "w-full border border-[#808080] bg-white px-1 py-0.5";
   const copyChart = async (part: "drugs" | "chief") => {
@@ -169,7 +167,7 @@ export function ReferralReplyDialog({
     <div className="fixed inset-0 z-[80] flex flex-col" style={{ fontFamily: HIS_FONT, background: "#F4F1EA" }}>
       <header className="flex shrink-0 items-center justify-between bg-[#2060A0] px-3 py-1 text-white">
         <span className="font-bold">{"\u8f49\u8a3a\u56de\u8986"}</span>
-        <span className="text-[13px]">{"\u9019\u6b21\u5df2\u5b58\u6a94\u3002\u586b\u5b8c\u518d\u9001\u51fa\uff0c\u6216\u7559\u5230\u4e4b\u5f8c\u518d\u56de\u3002"}</span>
+        <span className="text-[13px]">{"\u56de\u8986\u5148\u5b58\u5728\u9019\u53f0\u3002\u4e0a\u50b3\u7528\u53e6\u4e00\u53f0\u7684\u8f49\u8a3a\u4e0a\u50b3\u5de5\u5177\u3002"}</span>
       </header>
       <div className="min-h-0 flex-1 overflow-auto p-3">
         <div className="mx-auto max-w-4xl border border-black bg-white p-2 text-[14px]">
@@ -217,10 +215,6 @@ export function ReferralReplyDialog({
               </button>
             </div>
           </label>
-          <label className="mb-2 flex items-center gap-2 font-bold text-[#800000]">
-            <input type="checkbox" checked={uploadOnSave} onChange={(e) => setUploadOnSave(e.target.checked)} />
-            {"\u5b58\u6a94\u6642\u4e0a\u50b3\u81f3\u5065\u4fdd\u4e2d\u5fc3"}
-          </label>
           {localError || error ? <p className="mb-2 text-red-800">{localError || error}</p> : null}
           <div className="flex gap-2">
             <button
@@ -247,11 +241,10 @@ export function ReferralReplyDialog({
                   drugs: drugs.trim(),
                   aux: text.trim(),
                   purpose,
-                  upload: uploadOnSave,
                 });
               }}
             >
-              {"\u9001\u51fa\u56de\u8986"}
+              {"\u5b58\u6a94"}
             </button>
             <button type="button" className="border border-[#333] bg-white px-3 py-1" onClick={onSkip}>
               {"\u7a0d\u5f8c\u518d\u56de"}

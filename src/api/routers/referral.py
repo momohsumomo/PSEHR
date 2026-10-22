@@ -1,8 +1,7 @@
-"""Card-in referral lookup, and reply upload on save."""
+"""Card-in referral lookup. Saving a slip stays local; upload runs on the other PC."""
 
 from __future__ import annotations
 
-from datetime import date, datetime
 from typing import Any
 
 from fastapi import APIRouter
@@ -12,16 +11,7 @@ from src.app.bootstrap import get_fhir_repository, get_shadow_store
 from src.core.encounter_extensions import attach_reg_extension, extract_reg_meta
 from src.core.nhi_fhir_mapper import TW_NATIONAL_ID_SYSTEM
 from src.core.nhi_cshis6_client import DEFAULT_HOSPITAL_ID
-from src.core.nhi_referral import (
-    OPEN_TYPE_CODE,
-    REPLY_TYPE_CODE,
-    build_open_xml,
-    _icd_code,
-    build_reply_xml,
-    query_referrals,
-    upload_file,
-    _ymd,
-)
+from src.core.nhi_referral import query_referrals
 from src.core.referral_desk import list_slips, mark_uploaded, physician_ids, save_slip
 
 router = APIRouter(prefix="/nhi/v1/referral", tags=["NHI-referral"])
@@ -328,219 +318,22 @@ def referral_query(body: ReferralQueryBody) -> dict[str, Any]:
 
 @router.post("/reply")
 def referral_reply(body: ReferralReplyBody) -> dict[str, Any]:
-    """Reply from a serial already on file. Does not read the patient's health card."""
-    encounter = None
-    reg: dict[str, Any] = {}
-    id_no = (body.idNo or "").strip().upper()
-    if (body.encounterId or "").strip():
-        try:
-            encounter, reg, stored = _load(body.encounterId)
-        except LookupError as exc:
-            return {"ok": False, "skipped": False, "uploaded": False, "reason": str(exc), "serial": ""}
-        id_no = id_no or stored
-    serial = (body.serial or "").strip() or str(reg.get("referralSeq") or "")
-    if reg.get("referralLocalId") and not (body.serial or "").strip():
-        return {
-            "ok": True,
-            "skipped": True,
-            "uploaded": False,
-            "reason": "",
-            "serial": reg.get("referralSeq") or "",
-        }
-    if not serial:
-        return {
-            "ok": True,
-            "skipped": True,
-            "uploaded": False,
-            "reason": (
-                "\u8acb\u586b\u8f49\u8a3a\u55ae\u5e8f\u865f\u3002\u5e8f\u865f\u5f9e\u8f49\u8a3a\u5e73\u53f0\u4e0b\u8f09\uff0c"
-                "\u4e0d\u5fc5\u518d\u63d2\u75c5\u60a3\u5065\u4fdd\u5361\u3002"
-                if body.expectReferral
-                else ""
-            ),
-            "serial": "",
-        }
-    if not id_no:
-        return {
-            "ok": False,
-            "skipped": False,
-            "uploaded": False,
-            "reason": "\u7f3a\u8eab\u5206\u8b49\uff0c\u7121\u6cd5\u7d44\u56de\u8986\u3002",
-            "serial": serial,
-        }
-    open_date = str(reg.get("referralDate") or "")
-    doctor = _reply_doctor(body, reg)
-    if not doctor:
-        return {
-            "ok": False,
-            "skipped": False,
-            "uploaded": False,
-            "reason": "\u627e\u4e0d\u5230\u91ab\u5e2b\u8eab\u5206\u8b49\uff0c\u56de\u5fa9\u6c92\u9001\u51fa",
-            "serial": serial,
-        }
-    reply_day = _ymd(body.replyDate) if (body.replyDate or "").strip() else date.today().strftime("%Y%m%d")
-    roc = f"{date.today().year - 1911:03d}{date.today().strftime('%m%d')}"
-    profile = _clinic_profile()
-    hosp = str(profile.get("clinicCode") or DEFAULT_HOSPITAL_ID)
-    tel = str(profile.get("phone") or "").strip()
-    if not tel:
-        return {
-            "ok": False,
-            "skipped": False,
-            "uploaded": False,
-            "reason": "\u56de\u5fa9\u6a94\u7f3a\u9662\u6240\u96fb\u8a71\u3002\u6c92\u6709\u9001\u51fa\u3002",
-            "serial": serial,
-        }
-    if not _icd_code(body.diagnosis):
-        return {
-            "ok": False,
-            "skipped": False,
-            "uploaded": False,
-            "reason": "\u56de\u5fa9\u6a94\u7f3a\u4e3b\u8a3a\u65b7\u4ee3\u78bc\u3002\u8acb\u586b ICD-10\uff0c\u4e0d\u542b\u5c0f\u6578\u9ede\u3002\u6c92\u6709\u9001\u51fa\u3002",
-            "serial": serial,
-        }
-    xml_bytes = build_reply_xml(
-        serial=serial,
-        patient_id=id_no,
-        doctor_id=doctor,
-        reply_date=reply_day,
-        diagnosis=body.diagnosis.strip(),
-        purpose=body.purpose or "4",
-        dept=(body.dept or "11")[:2],
-        tel=tel,
-        email=str(profile.get("email") or ""),
-        drugs=body.drugs.strip(),
-        aux=body.aux.strip(),
-        note=body.note.strip(),
-        hosp=hosp,
-    )
-    stamp = datetime.now().strftime("%H%M%S")
-    name = "ETB%s-%s%s.xml" % (hosp, roc, stamp[-3:])
-    sent = upload_file(xml_bytes, type_code=REPLY_TYPE_CODE, name=name)
-    if not sent.get("ok"):
-        return {
-            "ok": False,
-            "skipped": False,
-            "uploaded": False,
-            "reason": sent.get("reason") or "\u4e0a\u50b3\u5931\u6557",
-            "serial": serial,
-            "code": sent.get("code"),
-        }
-    if encounter is not None and (body.encounterId or "").strip():
-        _save_reg(
-            body.encounterId,
-            encounter,
-            {
-                "referralSeq": serial,
-                "referralDate": open_date,
-                "referralLocalId": sent.get("localId") or "0",
-                "referralNhiId": sent.get("nhiId") or "",
-            },
-        )
-    mark_uploaded(
-        body.slipId,
-        local_id=str(sent.get("localId") or ""),
-        nhi_id=str(sent.get("nhiId") or ""),
-        status="\u5df2\u56de\u8986",
-    )
+    """The clinic PC only stores the reply. Upload is the other computer's tool."""
     return {
-        "ok": True,
+        "ok": False,
         "skipped": False,
-        "uploaded": True,
-        "reason": "",
-        "serial": serial,
-        "localId": sent.get("localId") or "",
-        "nhiId": sent.get("nhiId") or "",
+        "uploaded": False,
+        "reason": "這台主程式只存轉診。上傳請到沒有讀卡軟體 6.0 的電腦，用轉診上傳工具。",
+        "serial": (body.serial or "").strip(),
     }
 
 
 @router.post("/open")
 def referral_open(body: ReferralOpenBody) -> dict[str, Any]:
-    """Save is the caller's job. This hands one open slip to NHI_DownloadB, type 10."""
-    profile = _clinic_profile()
-    hosp = str(profile.get("clinicCode") or DEFAULT_HOSPITAL_ID)
-    id_no = (body.idNo or "").strip().upper()
-    if body.encounterId and not id_no:
-        try:
-            _encounter, _reg, stored = _load(body.encounterId)
-        except LookupError as exc:
-            return {"ok": False, "uploaded": False, "reason": str(exc), "serial": ""}
-        id_no = stored
-    doctor = _doctor_id_no(
-        body.doctorId or _claim_doctor_id(body.encounterId) or _doctor_id_by_name(body.doctorName)
-    )
-    missing = []
-    if not id_no:
-        missing.append("\u8eab\u5206\u8b49")
-    if not (body.patientName or "").strip():
-        missing.append("\u59d3\u540d")
-    if not (body.phone or "").strip():
-        missing.append("\u96fb\u8a71")
-    if not (body.summary or "").strip():
-        missing.append("\u75c5\u60c5\u6458\u8981")
-    if not (body.diagnosis or "").strip():
-        missing.append("\u4e3b\u8a3a\u65b7")
-    if not doctor:
-        missing.append("\u91ab\u5e2b\u8eab\u5206\u8b49")
-    if not (body.destCode or "").strip():
-        missing.append("\u8f49\u5165\u9662\u6240\u4ee3\u78bc")
-    if missing:
-        return {
-            "ok": False,
-            "uploaded": False,
-            "reason": "\u8f49\u51fa\u4e0a\u50b3\u9084\u7f3a\uff1a" + "\u3001".join(missing),
-            "serial": "",
-        }
-    roc = "%03d%s" % (date.today().year - 1911, date.today().strftime("%m%d"))
-    dept = (body.destDept or "11").strip()[:2]
-    our = (body.ourDept or "11").strip()[:2]
-    xml_bytes = build_open_xml(
-        patient_id=id_no,
-        patient_name=body.patientName.strip(),
-        phone=body.phone.strip(),
-        summary=body.summary.strip(),
-        diagnosis=body.diagnosis.strip(),
-        purpose=body.purpose or "4",
-        doctor_id=doctor,
-        doctor_phone=str(profile.get("phone") or ""),
-        opened_on=body.openedOn,
-        dest_code=body.destCode.strip(),
-        dest_dept=dept,
-        valid_until=body.validUntil,
-        hosp=hosp,
-        address=str(profile.get("address") or ""),
-        sex=body.sex,
-        birth=body.birth,
-        contact=body.contact,
-        patient_address=body.address,
-        exam=body.exam,
-        allergy=body.allergy,
-        treat=body.treat,
-        purpose_note=body.purposeNote,
-        dest_doctor=body.destDoctor,
-        dest_address=body.destAddress,
-        dest_phone=body.destPhone,
-        handoff=body.handoff,
-        our_dept=our,
-        fax="",
-        email=str(profile.get("email") or ""),
-    )
-    stamp = datetime.now().strftime("%H%M%S")
-    name = "ETA%s-%s%s.xml" % (hosp, roc, stamp[-3:])
-    sent = upload_file(xml_bytes, type_code=OPEN_TYPE_CODE, name=name)
-    if sent.get("ok"):
-        mark_uploaded(
-            body.slipId,
-            local_id=str(sent.get("localId") or ""),
-            nhi_id=str(sent.get("nhiId") or ""),
-            status="\u5df2\u4e0a\u50b3",
-        )
+    """The clinic PC only stores the open slip. Upload is the other computer's tool."""
     return {
-        "ok": bool(sent.get("ok")),
-        "uploaded": bool(sent.get("ok")),
-        "reason": "" if sent.get("ok") else (sent.get("reason") or "\u4e0a\u50b3\u5931\u6557"),
-        "serial": sent.get("nhiId") or sent.get("localId") or "",
-        "localId": sent.get("localId") or "",
-        "nhiId": sent.get("nhiId") or "",
-        "code": sent.get("code"),
+        "ok": False,
+        "uploaded": False,
+        "reason": "這台主程式只存轉診。上傳請到沒有讀卡軟體 6.0 的電腦，用轉診上傳工具。",
+        "serial": "",
     }

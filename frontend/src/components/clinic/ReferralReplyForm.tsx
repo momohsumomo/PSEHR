@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { fetchStaff, replyReferral, saveReferralSlip, type ReferralSlipRow } from "@/api/clinicApi";
+import { fetchStaff, saveReferralSlip, type ReferralSlipRow } from "@/api/clinicApi";
 import { loadClinicRegisterDefaults } from "@/lib/clinicProfile";
 import { doctorDisplayName, pickClinicDoctor } from "@/lib/doctorName";
 import { autoDittoReplyChart, chartDittoText } from "@/lib/referralDitto";
@@ -57,8 +57,6 @@ export function ReferralReplyForm({
   const [handoff, setHandoff] = useState(row.handoff || "");
   const [dept, setDept] = useState((row.dept || "11").slice(0, 2));
   const [doctor, setDoctor] = useState(row.doctor || "");
-  const [doctorId, setDoctorId] = useState("");
-  const [upload, setUpload] = useState(true);
   const [busy, setBusy] = useState(false);
   const [hint, setHint] = useState("");
 
@@ -72,8 +70,6 @@ export function ReferralReplyForm({
     setHandoff(row.handoff || "");
     setDept((row.dept || "11").slice(0, 2));
     setDoctor(row.doctor || "");
-    setDoctorId("");
-    setUpload(true);
     setHint("");
     const idNo = row.idNo;
     const medicalNo = row.medicalNo;
@@ -91,10 +87,7 @@ export function ReferralReplyForm({
           staff.find((person) => person.id === defaults.defaultDoctorId) ||
           pickClinicDoctor(staff);
         if (cancel) return;
-        if (chosen) {
-          setDoctorId(chosen.id);
-          if (!hadDoctor) setDoctor(doctorDisplayName(chosen.name, chosen.id) || chosen.name || "");
-        }
+        if (chosen && !hadDoctor) setDoctor(doctorDisplayName(chosen.name, chosen.id) || chosen.name || "");
       } catch {
         /* doctor id is also resolved on the server */
       }
@@ -136,28 +129,6 @@ export function ReferralReplyForm({
     }
     setBusy(true);
     try {
-      if (upload) {
-        const ref = await replyReferral({
-          encounterId: row.encounterId || undefined,
-          idNo: row.idNo,
-          serial: serialText,
-          doctorId: doctorId || undefined,
-          doctorName: doctor,
-          diagnosis: dx,
-          drugs,
-          aux,
-          purpose,
-          dept,
-          note: handoff,
-          replyDate: replyDay,
-          expectReferral: true,
-          slipId: row.id,
-        });
-        if (!ref.uploaded) {
-          onNote(ref.reason || "\u56de\u8986\u6c92\u9001\u51fa");
-          return;
-        }
-      }
       await saveReferralSlip({
         ...row,
         kind: "reply",
@@ -172,10 +143,10 @@ export function ReferralReplyForm({
         drugs,
         aux,
         handoff,
-        status: upload ? "\u5df2\u56de\u8986" : "\u5df2\u5b58\u6a94",
+        status: "\u5df2\u5b58\u6a94",
       });
       onSaved();
-      onNote(upload ? "\u5df2\u5b58\u6a94\u4e26\u4e0a\u50b3\u56de\u8986\u3002" : "\u56de\u8986\u5df2\u5b58\u6a94\uff0c\u6c92\u4e0a\u50b3\u3002");
+      onNote("\u56de\u8986\u5df2\u5b58\u6a94\u3002\u4e0a\u50b3\u8acb\u5230\u53e6\u4e00\u53f0\u96fb\u8166\u7528\u8f49\u8a3a\u4e0a\u50b3\u5de5\u5177\u3002");
     } catch (err: unknown) {
       onNote(err instanceof Error ? err.message : "\u56de\u8986\u6c92\u9001\u51fa");
     } finally {
@@ -255,10 +226,6 @@ export function ReferralReplyForm({
           <textarea className={`${box} min-h-14`} value={handoff} onChange={(e) => setHandoff(e.target.value)} />
         </div>
       </div>
-      <label className="mt-2 flex items-center gap-2 font-bold text-[#800000]">
-        <input type="checkbox" checked={upload} onChange={(e) => setUpload(e.target.checked)} />
-        {"\u5b58\u6a94\u6642\u4e0a\u50b3\u81f3\u5065\u4fdd\u4e2d\u5fc3"}
-      </label>
       <div className="mt-2 flex gap-1">
         <button type="button" className="border border-[#808080] bg-[#D4D0C8] px-2 py-1 font-bold" onClick={() => window.open(PLATFORM_URL, "_blank", "noopener")}>
           {"\u958b\u555f\u8f49\u8a3a\u5e73\u53f0"}
