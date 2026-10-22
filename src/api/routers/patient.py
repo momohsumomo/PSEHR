@@ -17,8 +17,8 @@ router = APIRouter(prefix="/fhir", tags=["Patient"])
 def list_patients(
     name: str | None = Query(None, description="篩選病患姓名"),
     identifier: str | None = Query(None, description="篩選身分證字號或病歷號"),
-    q: str | None = Query(None, description="綜合搜尋：姓名／身分證／手機／生日"),
-    match: str | None = Query(None, description="typed＝只對上輸入格式所屬欄位"),
+    q: str | None = Query(None, description="依格式只查一個欄位：病歷號、生日、電話、身分證或姓名"),
+    match: str | None = Query(None, description="保留參數。q 一律依格式只查所屬欄位"),
     phone: str | None = Query(None, description="篩選電話／手機"),
     birthday: str | None = Query(None, description="篩選民國生日，如 0820117 或 82.1.17"),
     limit: int = Query(100, alias="_count", description="限制筆數"),

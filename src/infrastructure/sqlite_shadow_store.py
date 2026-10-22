@@ -2805,86 +2805,16 @@ class SqliteShadowStore(ShadowStore):
         if params.get("birthday"):
             roc = _roc_birthday_from_query(params["birthday"])
             if roc:
-                forms = _birthday_forms(roc)
-                marks = ",".join("?" * len(forms))
-                iso_year = int(roc[:3]) + 1911
-                iso = f"{iso_year:04d}-{roc[3:5]}-{roc[5:7]}"
-                query += f" AND (pi.birthday_roc IN ({marks}) OR pi.birth_date = ?)"
-                sql_params.extend(forms)
-                sql_params.append(iso)
+                clause, clause_params = _birthday_lookup_sql(roc)
+                query += clause
+                sql_params.extend(clause_params)
             else:
                 query += " AND pi.birthday_roc = ?"
                 sql_params.append(params["birthday"])
-        if params.get("q") and params.get("match") == "typed":
-            q = params["q"].strip()
-            digits = re.sub(r"\D", "", q)
-            id_m = re.fullmatch(r"[A-Za-z][12]\d{8}", q)
-            roc = _roc_birthday_from_query(q) if re.search(r"[./]", q) or len(digits) == 7 else None
-            if roc and len(digits) == 7 and not re.search(r"[./]", q):
-                month = int(digits[3:5])
-                day = int(digits[5:7])
-                if not (1 <= month <= 12 and 1 <= day <= 31):
-                    roc = None
-            if id_m:
-                query += " AND UPPER(COALESCE(pi.id_no,'')) = ?"
-                sql_params.append(q.upper())
-            elif roc:
-                query += " AND pi.birthday_roc = ?"
-                sql_params.append(roc)
-            elif q.startswith("0") and re.fullmatch(r"0\d{8,10}", digits):
-                query += (
-                    " AND (REPLACE(REPLACE(REPLACE(COALESCE(pi.phone,''), '-', ''), ' ', ''), '+', '') = ?"
-                    " OR REPLACE(REPLACE(REPLACE(COALESCE(pi.phone2,''), '-', ''), ' ', ''), '+', '') = ?)"
-                )
-                sql_params.extend([digits, digits])
-            elif re.fullmatch(r"\d{1,8}", q):
-                bare = q.lstrip("0") or "0"
-                query += " AND (pi.medical_no = ? OR LTRIM(COALESCE(pi.medical_no,''), '0') = ?)"
-                sql_params.extend([q, bare])
-            else:
-                query += " AND (COALESCE(pi.family_name,'') || COALESCE(pi.given_name,'')) LIKE ?"
-                sql_params.append(f"{q}%")
-        elif params.get("q"):
-            q = params["q"].strip()
-            roc = _roc_birthday_from_query(q)
-            # 82.1.17 與 82.01.17 都是生日。只對生日，不要把去掉點之後的數字拿去對電話。
-            if roc and re.search(r"\d\s*[./]\s*\d", q):
-                forms = _birthday_forms(roc)
-                marks = ",".join("?" * len(forms))
-                iso_year = int(roc[:3]) + 1911
-                iso = f"{iso_year:04d}-{roc[3:5]}-{roc[5:7]}"
-                query += f" AND (pi.birthday_roc IN ({marks}) OR pi.birth_date = ?)"
-                sql_params.extend(forms)
-                sql_params.append(iso)
-            else:
-                like = f"%{q}%"
-                phone_digits = re.sub(r"\D", "", q)
-                clauses = [
-                    "(COALESCE(pi.family_name,'') || COALESCE(pi.given_name,'')) LIKE ?",
-                    "pi.resource_id LIKE ?",
-                    "pi.id_no LIKE ?",
-                    "pi.identifier LIKE ?",
-                    "pi.medical_no LIKE ?",
-                    "pi.phone LIKE ?",
-                    "REPLACE(REPLACE(REPLACE(COALESCE(pi.phone,''), '-', ''), ' ', ''), '+', '') LIKE ?",
-                    "pi.birthday_roc LIKE ?",
-                ]
-                sql_params.extend(
-                    [
-                        like,
-                        like,
-                        like,
-                        like,
-                        like,
-                        like,
-                        f"%{phone_digits}%" if phone_digits else like,
-                        like,
-                    ]
-                )
-                if roc:
-                    clauses.append("pi.birthday_roc = ?")
-                    sql_params.append(roc)
-                query += " AND (" + " OR ".join(clauses) + ")"
+        if params.get("q"):
+            clause, clause_params = patient_lookup_sql(params["q"])
+            query += clause
+            sql_params.extend(clause_params)
 
         limit = 100
         offset = 0
@@ -3206,17 +3136,28 @@ class SqliteShadowStore(ShadowStore):
 
 
 def _birthday_forms(roc7: str) -> list[str]:
-    """Exact birthday strings already stored. No function on the column, so the index can be used."""
+    """Exact birthday strings already stored. No function on the column, so the index can be used.
+
+    102.1.1、102.01.01、102.01.1、102.1.01 都是同一天。斜線也收。
+    """
     year = int(roc7[:3])
     month = int(roc7[3:5])
     day = int(roc7[5:7])
+    pads = (
+        (f"{month:02d}", f"{day:02d}"),
+        (str(month), str(day)),
+        (f"{month:02d}", str(day)),
+        (str(month), f"{day:02d}"),
+    )
     forms = {
         roc7,
         roc7.lstrip("0") or roc7,
-        f"{year}.{month:02d}.{day:02d}",
-        f"{year}.{month}.{day}",
         f"{roc7[:3]}.{roc7[3:5]}.{roc7[5:7]}",
+        f"{roc7[:3]}/{roc7[3:5]}/{roc7[5:7]}",
     }
+    for mm, dd in pads:
+        forms.add(f"{year}.{mm}.{dd}")
+        forms.add(f"{year}/{mm}/{dd}")
     return list(forms)
 
 
@@ -3239,6 +3180,87 @@ def _roc_birthday_from_query(raw: str) -> str | None:
     if len(digits) == 6:
         return f"0{digits}"
     return None
+
+
+def _like_prefix(text: str) -> str:
+    escaped = text.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+    return escaped + "%"
+
+
+def _birthday_lookup_sql(roc: str) -> tuple[str, list]:
+    forms = _birthday_forms(roc)
+    marks = ",".join("?" * len(forms))
+    iso_year = int(roc[:3]) + 1911
+    iso = f"{iso_year:04d}-{roc[3:5]}-{roc[5:7]}"
+    sql = (
+        " AND pi.resource_id IN ("
+        f"SELECT resource_id FROM patient_index WHERE birthday_roc IN ({marks}) "
+        "UNION SELECT resource_id FROM patient_index WHERE birth_date = ?)"
+    )
+    return sql, [*forms, iso]
+
+
+def patient_lookup_sql(raw: str) -> tuple[str, list]:
+    """Classify a typed patient search so each format hits one indexed column.
+
+    Dotted or slashed dates are birthdays. Seven digits with a real month and
+    day are birthdays. A leading 0 and 9–11 digits is a phone. Any other
+    digits are a chart number only. A letter plus digits is an ID. Everything
+    else is a name prefix.
+    """
+    q = (raw or "").strip()
+    if not q:
+        return "", []
+    compact = re.sub(r"\s+", "", q)
+    if re.search(r"\d", compact) and re.search(r"[./]", compact):
+        roc = _roc_birthday_from_query(compact)
+        if not roc:
+            return " AND 0", []
+        return _birthday_lookup_sql(roc)
+    if re.fullmatch(r"\d{7}", q):
+        month = int(q[3:5])
+        day = int(q[5:7])
+        if 1 <= month <= 12 and 1 <= day <= 31:
+            return _birthday_lookup_sql(q)
+    if re.fullmatch(r"[A-Za-z][A-Za-z0-9]?\d+", q):
+        if re.fullmatch(r"[A-Za-z][A-Za-z0-9]\d{8}", q):
+            keys = list({q, q.upper(), q.lower()})
+            marks = ",".join("?" * len(keys))
+            return f" AND pi.id_no IN ({marks})", keys
+        return " AND pi.id_no LIKE ? ESCAPE '\\'", [_like_prefix(q.upper())]
+    digits = re.sub(r"\D", "", q)
+    if re.fullmatch(r"[0-9+\- ]+", q) and digits.startswith("0") and re.fullmatch(r"0\d{8,10}", digits):
+        like_prefix = digits + "%"
+        like_any = "%" + digits + "%"
+        return (
+            " AND (pi.phone = ? OR COALESCE(pi.phone2,'') = ?"
+            " OR pi.phone LIKE ? OR COALESCE(pi.phone2,'') LIKE ?"
+            " OR pi.phone LIKE ? OR COALESCE(pi.phone2,'') LIKE ?)",
+            [digits, digits, like_prefix, like_prefix, like_any, like_any],
+        )
+    if re.fullmatch(r"\d+", q):
+        bare = q.lstrip("0") or "0"
+        values = {q, bare}
+        # 103396 就是這六碼，不要再補成 0103396 去對到另一本。
+        # 較短的號碼才補 6 碼、7 碼，對上前面補零的病歷號。
+        if len(bare) < 6:
+            values.add(bare.zfill(6))
+            values.add(bare.zfill(7))
+        keys = list(values)
+        marks = ",".join("?" * len(keys))
+        return f" AND pi.medical_no IN ({marks})", keys
+    clauses = [
+        "pi.family_name LIKE ? ESCAPE '\\'",
+        "pi.given_name LIKE ? ESCAPE '\\'",
+    ]
+    params: list = [_like_prefix(q), _like_prefix(q)]
+    if len(q) >= 2:
+        clauses.append("(pi.family_name = ? AND pi.given_name LIKE ? ESCAPE '\\')")
+        params.extend([q[0], _like_prefix(q[1:])])
+    if len(q) >= 3:
+        clauses.append("(pi.family_name = ? AND pi.given_name LIKE ? ESCAPE '\\')")
+        params.extend([q[:2], _like_prefix(q[2:])])
+    return " AND (" + " OR ".join(clauses) + ")", params
 
 
 def _age_from_birth_date(birth_date: str, as_of: str | None = None) -> str | None:
@@ -3717,6 +3739,10 @@ def _apply_index_migrations(conn: sqlite3.Connection) -> None:
     if "birthday_roc" in patient_cols:
         conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_patient_birthday_roc ON patient_index(birthday_roc)"
+        )
+    if "given_name" in patient_cols:
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_patient_index_given ON patient_index(given_name)"
         )
     if "birth_date" in patient_cols:
         conn.execute(

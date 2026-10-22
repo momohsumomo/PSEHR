@@ -61,7 +61,7 @@ export function PatientFinderDialog({ open, initialQuery = "", onClose, onSelect
     setLoading(true);
     setError(null);
     try {
-      const res = await fetchPatients({ q, _count: 400 });
+      const res = await fetchPatients({ q, _count: 80 });
       const mapped = (res.entry ?? []).map((e) => mapApiPatientToHit(e.resource));
       setHits(mapped);
       setSelectedIdx(0);

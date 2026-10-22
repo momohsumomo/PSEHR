@@ -3614,7 +3614,7 @@ export function ClinicOutpatientPage() {
         currentRx={currentRx}
         draft={saveDraft}
         waiting={shiftQueue
-          .filter((e) => e.queueStatus === "waiting" || e.queueStatus === "in_progress")
+          .filter((e) => !e.prebook && (e.queueStatus === "waiting" || e.queueStatus === "in_progress"))
           .slice()
           .sort((a, b) => (Number(a.queueNumber) || 0) - (Number(b.queueNumber) || 0))
           .map((e) => ({
