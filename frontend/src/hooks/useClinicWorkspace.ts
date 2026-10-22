@@ -67,21 +67,35 @@ import {
 } from "@/mocks";
 
 function queueStamp(date: string, rows: QueueEntry[]): string {
+  // cardWritten is the yellow circle. Leave it out and another computer
+  // keeps the checkmark until the clinic page is opened again.
   const body = rows
     .map((row) =>
       [
         row.encounterId,
         row.queueNumber,
         row.queueStatus,
+        row.cardWritten ? 1 : 0,
         row.shift,
         row.slotTime,
+        row.room,
         row.patientDisplay,
+        row.medicalNo,
+        row.diseaseName,
+        row.caseNo,
+        row.note,
+        row.reasonText,
+        row.weight,
         row.deposit,
         row.regFee,
         row.copayAmt,
+        row.drugFee,
+        row.totalFee,
         row.treatSeq,
         row.icException,
+        row.regCc,
         row.prebook ? 1 : 0,
+        row.referredOut ? 1 : 0,
       ].join("|"),
     )
     .join("\n");

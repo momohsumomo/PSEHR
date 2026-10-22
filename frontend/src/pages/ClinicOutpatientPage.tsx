@@ -1639,6 +1639,7 @@ export function ClinicOutpatientPage() {
       return;
     }
     setClinicTab("list");
+    void refreshQueue();
     const idx = filteredQueue.findIndex((row) => row.encounterId === eid);
     if (idx >= 0 && idx + 1 < filteredQueue.length) {
       setSelectedEncounterId(filteredQueue[idx + 1].encounterId);
@@ -1653,6 +1654,7 @@ export function ClinicOutpatientPage() {
     navigate,
     searchParams,
     filteredQueue,
+    refreshQueue,
     setSelectedEncounterId,
   ]);
 
