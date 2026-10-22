@@ -628,16 +628,22 @@ export function RegisterPage() {
     setDeleteOpen(true);
   };
 
+  const closePatientEdit = () => {
+    setPatientEditOpen(false);
+    setFinderPatient(null);
+  };
+
   const openPatientEdit = () => {
     if (!selected?.patientId) {
       tellShell("這個時段還沒有選定的掛號。");
       return;
     }
+    setFinderPatient(null);
     setPatientEditOpen(true);
   };
 
   const patientEditSeed = useMemo((): PatientEditSeed | null => {
-    if (finderPatient?.patientId) return finderPatient;
+    if (patientEditOpen && finderPatient?.patientId) return finderPatient;
     if (!selected?.patientId) return null;
     return {
       patientId: selected.patientId,
@@ -647,7 +653,7 @@ export function RegisterPage() {
       sex: selected.sex || "",
       medicalNo: selected.medicalNo || "",
     };
-  }, [finderPatient, selected]);
+  }, [patientEditOpen, finderPatient, selected]);
 
   const runRegisterShortcut = (action: (typeof REGISTER_SHORTCUT_BAR)[number]["action"]) => {
     switch (action) {
@@ -719,7 +725,7 @@ export function RegisterPage() {
     { open: insertAsk != null, close: () => answerInsert(false) },
     { open: finderOpen, close: () => setFinderOpen(false) },
     { open: confirmOpen, close: () => setConfirmOpen(false) },
-    { open: patientEditOpen, close: () => setPatientEditOpen(false) },
+    { open: patientEditOpen, close: closePatientEdit },
     { open: deleteOpen, close: () => setDeleteOpen(false) },
     { open: icInfoOpen, close: () => setIcInfoOpen(false) },
     { open: pharmacistOpen, close: () => setPharmacistOpen(false) },
@@ -1296,10 +1302,7 @@ export function RegisterPage() {
       />
       <PatientEditDialog
         open={patientEditOpen}
-        onClose={() => {
-          setPatientEditOpen(false);
-          setFinderPatient(null);
-        }}
+        onClose={closePatientEdit}
         seed={patientEditSeed}
         onSaved={() => void refreshQueue()}
       />

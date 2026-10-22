@@ -2055,6 +2055,11 @@ export function ClinicOutpatientPage() {
     setDeleteOpen(true);
   }, [selectedEncounterId]);
 
+  const closePatientEdit = useCallback(() => {
+    setPatientEditOpen(false);
+    setFinderPatient(null);
+  }, []);
+
   const openPatientEdit = useCallback(() => {
     const entry =
       selected ?? queue.find((q) => q.encounterId === selectedEncounterId) ?? null;
@@ -2062,6 +2067,7 @@ export function ClinicOutpatientPage() {
       setActionError("請先在清單選一筆再 F5 病患");
       return;
     }
+    setFinderPatient(null);
     setSelectedEncounterId(entry.encounterId);
     setPatientEditOpen(true);
   }, [selected, queue, selectedEncounterId, setSelectedEncounterId]);
@@ -2246,7 +2252,7 @@ export function ClinicOutpatientPage() {
       { open: finderOpen, close: () => setFinderOpen(false) },
       { open: printMenuOpen, close: () => setPrintMenuOpen(false) },
       { open: certificateOpen, close: () => setCertificateOpen(false) },
-      { open: patientEditOpen, close: () => setPatientEditOpen(false) },
+      { open: patientEditOpen, close: closePatientEdit },
       { open: !!stubId, close: () => setStubId(null) },
       { open: otherMenuOpen, close: () => setOtherMenuOpen(false) },
       {
@@ -2689,7 +2695,7 @@ export function ClinicOutpatientPage() {
   ).length;
 
   const patientEditSeed = useMemo((): PatientEditSeed | null => {
-    if (finderPatient?.patientId) return finderPatient;
+    if (patientEditOpen && finderPatient?.patientId) return finderPatient;
     const entry =
       selected ?? queue.find((q) => q.encounterId === selectedEncounterId) ?? null;
     if (!entry?.patientId) return null;
@@ -2708,7 +2714,7 @@ export function ClinicOutpatientPage() {
       sex: entry.sex || (entry.ageSex?.endsWith("M") ? "M" : "F"),
       medicalNo: entry.medicalNo,
     };
-  }, [finderPatient, selected, queue, selectedEncounterId]);
+  }, [patientEditOpen, finderPatient, selected, queue, selectedEncounterId]);
 
   const certificateSeed = useMemo(() => {
     const dx = displayDiagnoses
@@ -3667,10 +3673,7 @@ export function ClinicOutpatientPage() {
       />
       <PatientEditDialog
         open={patientEditOpen}
-        onClose={() => {
-          setPatientEditOpen(false);
-          setFinderPatient(null);
-        }}
+        onClose={closePatientEdit}
         seed={patientEditSeed}
         onSaved={() => void refreshQueue()}
       />
