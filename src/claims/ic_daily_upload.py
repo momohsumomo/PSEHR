@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import json
+import re
 from typing import Any
 
 from src.claims.engine import (
@@ -16,8 +17,16 @@ from src.claims.engine import (
 from src.claims.yisheng_rules import half_up_points, is_order_code
 from src.core.encounter_extensions import extract_reg_meta
 
-# ??2 ???`?N?????C?r???}?Y??????? B?A??r????? A?C
+# 6.0 normal sequences are W001-W999. Other letter codes are abnormal uploads.
+_W_SEQ = re.compile(r"W\d{3}")
 _FORMAT = "nhi-ic-upload-2.0"
+
+
+def _abnormal_seq(seq: str) -> bool:
+    text = (seq or "").strip().upper()
+    if _W_SEQ.fullmatch(text):
+        return False
+    return bool(text) and text[:1].isalpha()
 
 
 def _esc(value: Any) -> str:
@@ -305,7 +314,7 @@ def _assess(
     treat_id = str(reg.get("treatmentNumber") or "").strip()
     if len(treat_id) != 20:
         reasons.append("\u6c92\u6709\u5c31\u91ab\u8b58\u5225\u78bc")
-    abnormal = seq[:1].isalpha()
+    abnormal = _abnormal_seq(seq)
     card = str(reg.get("hcId") or "").strip()
     if not abnormal and len(card) != 12:
         reasons.append("\u6c92\u6709\u5065\u4fdd\u5361\u865f")
@@ -332,7 +341,7 @@ def _compose(
     routes: dict,
 ) -> tuple[dict[str, Any], str]:
     seq = treat_seq.strip()
-    abnormal = seq[:1].isalpha()
+    abnormal = _abnormal_seq(seq)
     when = _visit_time(reg, iso_day, slot)
     doctor = _resolve_staff_nhi(doctor_raw, staff_by_id, staff_by_name)
     card = str(reg.get("hcId") or card_fallback or "").strip()

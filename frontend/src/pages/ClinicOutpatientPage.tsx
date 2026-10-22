@@ -3688,13 +3688,13 @@ export function ClinicOutpatientPage() {
       />
       <PatientFinderDialog
         open={finderOpen}
+        paused={patientEditOpen}
         initialQuery={finderSeed}
         onClose={() => setFinderOpen(false)}
         onSelect={onPatientPickedForRegister}
         allowCreate
         onCreate={(q) => setNewPatientQuery(q)}
         onEdit={(hit) => {
-          setFinderOpen(false);
           setFinderPatient({
             patientId: hit.id,
             name: hit.name,

@@ -185,3 +185,67 @@ def test_orders_follow_the_prescription_not_a_rewritten_code():
     assert lab["D05"] == "4"
     assert treat["D02"] == "2"
     assert all(row["D02"] != "9" for row in orders)
+
+
+def test_w_sequence_uploads_as_normal_and_keeps_sam_and_card():
+    from src.claims.ic_daily_upload import _assess, _compose
+
+    class _Store:
+        def list_medication_requests(self, encounter_id):
+            return []
+
+        def list_conditions(self, encounter_id):
+            return []
+
+    common = dict(
+        institution="3521013662",
+        id_no="A123456789",
+        birthday="0800101",
+        doctor_raw="A100000001",
+        staff_by_id={},
+        staff_by_name={},
+    )
+    reg = {
+        "treatSeq": "W001",
+        "samId": "123456789012",
+        "hcId": "000012345678",
+        "treatmentNumber": "12345678901234567890",
+        "caseNo": "04",
+    }
+    assert _assess(reg=reg, treat_seq="W001", **common) == []
+    rec, _note = _compose(
+        reg=reg,
+        treat_seq="W001",
+        iso_day="2026-10-22",
+        slot="",
+        fee_copay=0,
+        card_fallback="",
+        store=_Store(),
+        encounter_id="enc",
+        usages={},
+        routes={},
+        **common,
+    )
+    assert rec["h01"] == "A"
+    assert rec["mb1"]["M13"] == "W001"
+    assert rec["mb1"]["M07"] == "01"
+    assert rec["mb1"]["M01"] == "123456789012"
+    assert rec["mb1"]["M02"] == "000012345678"
+
+    bad = dict(reg, treatSeq="A000")
+    bad_rec, _note = _compose(
+        reg=bad,
+        treat_seq="A000",
+        iso_day="2026-10-22",
+        slot="",
+        fee_copay=0,
+        card_fallback="",
+        store=_Store(),
+        encounter_id="enc",
+        usages={},
+        routes={},
+        **common,
+    )
+    assert bad_rec["h01"] == "B"
+    assert "M01" not in bad_rec["mb1"]
+    assert "M02" not in bad_rec["mb1"]

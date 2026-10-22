@@ -15,13 +15,15 @@ type Props = {
   onCreate?: (query: string) => void;
   /** Opens that patient's master edit. Same result as picking them and pressing F5. */
   onEdit?: (hit: PatientHit) => void;
+  /** Keep this search mounted while a dialog opened from it is on top. */
+  paused?: boolean;
 };
 
 /**
  * 醫聖風格共用「找人」視窗。
  * Enter／雙擊＝選定病患（呼叫端決定後續：掛號確認／填病歷條件），不是掛號。
  */
-export function PatientFinderDialog({ open, initialQuery = "", onClose, onSelect, allowCreate, onCreate, onEdit }: Props) {
+export function PatientFinderDialog({ open, initialQuery = "", onClose, onSelect, allowCreate, onCreate, onEdit, paused = false }: Props) {
   const [query, setQuery] = useState(initialQuery);
   const [hits, setHits] = useState<PatientHit[]>([]);
   const [selectedIdx, setSelectedIdx] = useState(0);
@@ -34,7 +36,7 @@ export function PatientFinderDialog({ open, initialQuery = "", onClose, onSelect
   const emptyOpened = useRef("");
   const onFinderIndex = useCallback((i: number) => setSelectedIdx(i), []);
   useListNav({
-    active: open && hits.length > 0,
+    active: open && !paused && hits.length > 0,
     length: hits.length,
     index: selectedIdx,
     onIndex: onFinderIndex,
@@ -104,12 +106,27 @@ export function PatientFinderDialog({ open, initialQuery = "", onClose, onSelect
   }, [open, allowCreate, onCreate, searched, loading, error, hits.length, lastSearched]);
 
   useEffect(() => {
-    if (!open) return;
+    if (!open || paused) return;
     const row = listRef.current?.querySelector(`[data-idx="${selectedIdx}"]`);
     row?.scrollIntoView({ block: "nearest" });
-  }, [selectedIdx, open]);
+  }, [selectedIdx, open, paused]);
 
-  if (!open) return null;
+  const wasPaused = useRef(false);
+  useEffect(() => {
+    if (!open) {
+      wasPaused.current = false;
+      return;
+    }
+    if (paused) {
+      wasPaused.current = true;
+      return;
+    }
+    if (!wasPaused.current) return;
+    wasPaused.current = false;
+    requestAnimationFrame(() => inputRef.current?.focus());
+  }, [open, paused]);
+
+  if (!open || paused) return null;
 
   const confirmHit = (hit: PatientHit) => {
     onSelect(hit);
