@@ -81,6 +81,28 @@ SITE_LABEL = {
     "finger-l-ring": "\u5de6\u7121\u540d\u6307",
     "finger-l-little": "\u5de6\u5c0f\u6307",
     "nail-l": "\u5de6\u624b\u6307\u7532",
+    "body_head": "\u982d\u9838",
+    "body_chest_abdomen": "\u80f8\u8179",
+    "body_back": "\u80cc\u90e8",
+    "body_arm_right": "\u53f3\u4e0a\u80a2",
+    "body_arm_left": "\u5de6\u4e0a\u80a2",
+    "body_leg_right": "\u53f3\u4e0b\u80a2",
+    "body_leg_left": "\u5de6\u4e0b\u80a2",
+    "body_genital_buttock": "\u751f\u6b96\u81c0\u90e8",
+    "face_forehead": "\u984d\u982d",
+    "face_nose_glabella": "\u5370\u5802\u9f3b\u90e8",
+    "face_left_cheek": "\u5de6\u81c9\u9830",
+    "face_right_cheek": "\u53f3\u81c9\u9830",
+    "face_perioral": "\u53e3\u5468",
+    "face_chin": "\u4e0b\u5df4",
+    "hand_right_palmar_fingers": "\u53f3\u624b\u638c\u9762\u624b\u6307",
+    "hand_right_palmar_palm": "\u53f3\u624b\u638c",
+    "hand_right_dorsal_fingers": "\u53f3\u624b\u80cc\u9762\u624b\u6307",
+    "hand_right_dorsal_dorsum": "\u53f3\u624b\u80cc",
+    "hand_left_palmar_fingers": "\u5de6\u624b\u638c\u9762\u624b\u6307",
+    "hand_left_palmar_palm": "\u5de6\u624b\u638c",
+    "hand_left_dorsal_fingers": "\u5de6\u624b\u80cc\u9762\u624b\u6307",
+    "hand_left_dorsal_dorsum": "\u5de6\u624b\u80cc",
 }
 
 SITE_EN = {
@@ -161,6 +183,28 @@ SITE_EN = {
     "finger-l-ring": "L ring finger",
     "finger-l-little": "L little finger",
     "nail-l": "L fingernails",
+    "body_head": "head and neck",
+    "body_chest_abdomen": "chest and abdomen",
+    "body_back": "back",
+    "body_arm_right": "R arm",
+    "body_arm_left": "L arm",
+    "body_leg_right": "R leg",
+    "body_leg_left": "L leg",
+    "body_genital_buttock": "genital area and buttocks",
+    "face_forehead": "forehead",
+    "face_nose_glabella": "nose and glabella",
+    "face_left_cheek": "L cheek",
+    "face_right_cheek": "R cheek",
+    "face_perioral": "perioral area",
+    "face_chin": "chin",
+    "hand_right_palmar_fingers": "R palmar fingers",
+    "hand_right_palmar_palm": "R palm",
+    "hand_right_dorsal_fingers": "R dorsal fingers",
+    "hand_right_dorsal_dorsum": "R dorsum of hand",
+    "hand_left_palmar_fingers": "L palmar fingers",
+    "hand_left_palmar_palm": "L palm",
+    "hand_left_dorsal_fingers": "L dorsal fingers",
+    "hand_left_dorsal_dorsum": "L dorsum of hand",
 }
 
 SYMPTOM_LABEL = {
@@ -259,9 +303,9 @@ _PAIRS = (
 )
 _PAIR_OF = {side: row for row in _PAIRS for side in row[:2]}
 
-_FACE_RIGHT = {"face-r", "eyelid-r", "forehead-r", "temple-r", "undereye-r", "jaw-r"}
-_FACE_LEFT = {"face-l", "eyelid-l", "forehead-l", "temple-l", "undereye-l", "jaw-l"}
-_FACE_MID = {"forehead", "glabella", "nose", "lip", "chin"}
+_FACE_RIGHT = {"face-r", "eyelid-r", "forehead-r", "temple-r", "undereye-r", "jaw-r", "face_right_cheek"}
+_FACE_LEFT = {"face-l", "eyelid-l", "forehead-l", "temple-l", "undereye-l", "jaw-l", "face_left_cheek"}
+_FACE_MID = {"forehead", "glabella", "nose", "lip", "chin", "face_forehead", "face_nose_glabella", "face_perioral", "face_chin"}
 _FACE_ALL = _FACE_RIGHT | _FACE_LEFT | _FACE_MID
 
 CONCERN_LABEL = {

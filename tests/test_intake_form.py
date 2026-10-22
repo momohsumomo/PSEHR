@@ -97,3 +97,33 @@ class IntakeFormTests(unittest.TestCase):
             text,
             "Cosmetic consult for spot removal and nevus removal on the R cheek. Post treatment, darker.",
         )
+
+    def test_open_anatomy_zones_keep_their_names(self):
+        text = compose_kiosk_note(
+            sites=["body_arm_right", "face_forehead", "hand_left_dorsal_dorsum"],
+            symptoms=["itch"],
+            days="3",
+            severity="5",
+            seen_other_doctor=False,
+        )
+        self.assertIn("R arm", text)
+        self.assertIn("forehead", text)
+        self.assertIn("L dorsum of hand", text)
+
+    def test_all_new_face_zones_read_as_the_whole_face(self):
+        text = compose_kiosk_note(
+            sites=[
+                "face_forehead",
+                "face_nose_glabella",
+                "face_left_cheek",
+                "face_right_cheek",
+                "face_perioral",
+                "face_chin",
+            ],
+            symptoms=["acne"],
+            days="7",
+            severity="4",
+            seen_other_doctor=False,
+        )
+        self.assertIn("whole face", text)
+        self.assertNotIn("glabella", text)

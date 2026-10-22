@@ -5,8 +5,6 @@ import { BodyMap, FaceZoom, HandsZoom, SITE_LABEL } from "@/components/kiosk/Bod
 type Card = { encounterId: string; maskedName: string; idTail: string; filled?: boolean; sex?: string; access?: string };
 type Step = "id" | "again" | "aim" | "concern" | "where" | "what" | "days" | "score" | "doctor" | "prior" | "result" | "done";
 type Kind = "medical" | "cosmetic";
-type Side = "r" | "l";
-
 const SYMPTOMS: Array<[string, string]> = [
   ["itch", "\u7662"],
   ["red", "\u7d05"],
@@ -52,10 +50,6 @@ function birthdayReady(text: string): boolean {
   const head = Number(text.slice(0, 3));
   const rocNow = new Date().getFullYear() - 1911;
   return !(head >= 100 && head <= rocNow);
-}
-
-function clearFingers(list: string[], side: Side): string[] {
-  return list.filter((id) => !id.startsWith(`finger-${side}-`) && id !== `nail-${side}`);
 }
 
 const CONCERN_GROUPS: Array<{ title: string; items: Array<[string, string]> }> = [
@@ -199,13 +193,7 @@ export function IntakeKioskPage() {
   };
 
   const toggleSite = (id: string) => {
-    const hand = id.startsWith("hand-r") ? "r" : id.startsWith("hand-l") ? "l" : "";
-    setSites((prev) => {
-      if (!hand) return toggle(prev, id, 24);
-      if (prev.includes(id)) return clearFingers(prev.filter((item) => item !== id), hand);
-      if (prev.length >= 24) return prev;
-      return [...prev, id];
-    });
+    setSites((prev) => toggle(prev, id, 24));
   };
 
   const send = async () => {
