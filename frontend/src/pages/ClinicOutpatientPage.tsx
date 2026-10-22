@@ -81,7 +81,7 @@ import { openPrintPreview } from "@/lib/printJob";
 import { depositPrintOptions, findPrintSetup, loadPrintSettings, partOn } from "@/lib/printSettings";
 import { openDepositSlip } from "@/lib/visitReceiptPrint";
 import { VisitPrintDialog } from "@/components/clinic/VisitPrintDialog";
-import { buildSimpleSlipHtml, visitCashParts } from "@/lib/simpleSlip";
+import { buildSimpleSlipHtml, storedSelfPayText, visitCashParts } from "@/lib/simpleSlip";
 import { buildDepositSlipHtml } from "@/lib/clinicPrintDocs";
 import { doctorDisplayName, pickClinicDoctor } from "@/lib/doctorName";
 import { openNhiCloudRx } from "@/lib/nhiCloud";
@@ -1202,7 +1202,7 @@ export function ClinicOutpatientPage() {
         deposit: cash.deposit,
         regFee: cash.regFee || saveDraft.regFee,
         burden: cash.burden || saveDraft.burden,
-        selfPay: saveDraft.selfPay || selected?.selfPay || "",
+        selfPay: storedSelfPayText(selected?.selfPay, saveDraft.selfPay),
         clinicName: profile.clinicName,
         address: profile.address,
         clinicCode: profile.clinicCode,

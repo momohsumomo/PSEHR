@@ -106,6 +106,17 @@ function feeText(value: unknown): string {
   return s;
 }
 
+/** A saved self-pay amount. Zero and a blank draft do not count. */
+export function storedSelfPayText(...values: unknown[]): string {
+  for (const value of values) {
+    const s = String(value ?? "").trim();
+    if (!s || s === "\u2014" || s === "-") continue;
+    const n = Number(s.replace(/[^\d.-]/g, ""));
+    if (Number.isFinite(n) && n > 0) return String(Math.round(n));
+  }
+  return "";
+}
+
 /** Cash parts stored on the visit. Zero is a real amount. */
 export function visitCashParts(
   entry: { regFee?: string; copayAmt?: string; burdenFee?: string; deposit?: string } | null | undefined,
