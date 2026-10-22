@@ -38,7 +38,7 @@ export function selfPayCeiling(rows: RxLine[]): number {
 export function chargedSelfPay(rows: RxLine[], stored: number | null): number {
   const raw = rawSelfPay(rows);
   const ceiled = ceilCashTen(raw);
-  if (stored == null || !Number.isFinite(stored)) return ceiled;
+  if (stored == null || !Number.isFinite(stored) || stored <= 0) return ceiled;
   const unmodified =
     Math.abs(stored - raw) < 0.001 || Math.abs(stored - Math.round(raw)) < 0.001;
   if (unmodified) return ceiled;
