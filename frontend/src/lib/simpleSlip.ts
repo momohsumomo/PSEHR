@@ -92,8 +92,8 @@ function resolvedSelfPay(input: SimpleSlipInput): string {
   return String(amount);
 }
 
-function payable(regFee: string, burden: string, selfPay: string): string {
-  const parts = [regFee, burden, selfPay].map(asNumber);
+function payable(regFee: string, burden: string, deposit: string, selfPay: string): string {
+  const parts = [regFee, burden, deposit, selfPay].map(asNumber);
   if (parts.every((n) => n == null)) return "\u2014";
   const sum = parts.reduce((s, n) => s + (n ?? 0), 0);
   return String(Math.round(sum));
@@ -293,7 +293,7 @@ function pageHtml(
 /** Left order slip and right receipt. Extra drug lines continue on the next sheet. */
 export function buildSimpleSlipHtml(input: SimpleSlipInput): string {
   const selfText = resolvedSelfPay(input);
-  const due = payable(input.regFee, input.burden, selfText);
+  const due = payable(input.regFee, input.burden, input.deposit, selfText);
   const pages = paginate(input.drugs);
   return pages
     .map((rows, index) => pageHtml(input, rows, index, index === pages.length - 1, due, selfText))
