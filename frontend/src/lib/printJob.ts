@@ -187,6 +187,46 @@ function escapeHtml(s: string): string {
     .replace(/"/g, "&quot;");
 }
 
+function formatMm(value: number): string {
+  return String(Math.round(value * 1000) / 1000);
+}
+
+/** Wide sheet plus portrait feed is turned before it leaves this page.
+ *  The preview stays 210 by 93. The printer receives 93 by 210. */
+export function turnWidePortraitJob<T extends {
+  html: string;
+  widthMm: number;
+  heightMm: number;
+  feed?: "portrait" | "landscape" | "";
+}>(job: T): T {
+  const feed = (job.feed || "").toLowerCase();
+  const width = Number(job.widthMm);
+  const height = Number(job.heightMm);
+  if (feed !== "portrait" || !(width > height + 2) || job.html.includes('id="ys-short-edge"')) return job;
+  const shortSide = formatMm(height);
+  const longSide = formatMm(width);
+  const style =
+    '<style id="ys-short-edge">@page{size:' + shortSide + "mm " + longSide + "mm;margin:0 !important;}" +
+    "html,body{margin:0 !important;padding:0 !important;width:" + shortSide + "mm !important;height:" + longSide + "mm !important;overflow:hidden !important;background:#fff !important;}" +
+    ".ys-rot{width:" + longSide + "mm;height:" + shortSide + "mm;transform-origin:top left;transform:rotate(90deg) translateY(-" + shortSide + "mm);}</style>";
+  let html = job.html;
+  const head = html.toLowerCase().indexOf("</head>");
+  if (head >= 0) html = html.slice(0, head) + style + html.slice(head);
+  else html = style + html;
+  const lower = html.toLowerCase();
+  const start = lower.indexOf("<body");
+  if (start < 0) {
+    html = '<div class="ys-rot">' + html + "</div>";
+  } else {
+    const openEnd = html.indexOf(">", start);
+    const close = lower.lastIndexOf("</body>");
+    if (openEnd >= 0 && close > openEnd) {
+      html = html.slice(0, openEnd + 1) + '<div class="ys-rot">' + html.slice(openEnd + 1, close) + "</div>" + html.slice(close);
+    }
+  }
+  return { ...job, html, widthMm: height, heightMm: width, feed: "portrait" };
+}
+
 /** Draw the slip inside this page. A separate frame gets repainted by Chrome dark mode. */
 export function previewSheetMarkup(html: string): string {
   const raw = Array.from(html.matchAll(/<style[^>]*>([\s\S]*?)<\/style>/gi))

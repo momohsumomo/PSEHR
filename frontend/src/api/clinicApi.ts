@@ -1,5 +1,6 @@
 import { API_BASE, API_ENABLED } from "@/config/sandbox";
 import { loadLocalDeviceMeta } from "@/lib/clinicDevice";
+import { turnWidePortraitJob } from "@/lib/printJob";
 import { localReaderReachable, readLocalHcBasic, readLocalVirtualBasic, signLocalHc, signLocalSam, type DeskSign } from "@/lib/localCard";
 
 function workstationHeader(): string {
@@ -1761,10 +1762,11 @@ export async function printToNamedPrinter(body: {
   heightMm: number;
   feed?: "portrait" | "landscape" | "";
 }): Promise<{ ok: boolean; printer: string }> {
+  const job = turnWidePortraitJob(body);
   const res = await localPrintFetch("/print", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
+    body: JSON.stringify(job),
   });
   const data = (await res.json().catch(() => ({}))) as { ok?: boolean; printer?: string; detail?: string };
   if (res.status === 404) {
