@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { fetchStaff, patchEncounterReg, type ApiStaffRecord } from "@/api/clinicApi";
 import { useEscLayer } from "@/hooks/useEscLayer";
-import { saveClinicSession, type ClinicSession } from "@/lib/clinicSession";
+import { loadClinicSession, saveClinicSession, type ClinicSession } from "@/lib/clinicSession";
 import { HIS, HIS_FONT } from "@/lib/hisTheme";
 
 export type PharmacistVisitRow = {
@@ -73,7 +73,13 @@ export function ChangePharmacistDialog({ open, onClose, date, shift, dept, rows,
     }
     setBusy(true);
     setError(null);
-    saveClinicSession({ date, shift, pharmacist: name, dept: dept || "皮膚科" });
+    saveClinicSession({
+      date,
+      shift,
+      pharmacist: name,
+      dept: dept || "皮膚科",
+      room: loadClinicSession()?.room || "1",
+    });
     const failed: string[] = [];
     for (const row of rows) {
       if (!row.patientId) {

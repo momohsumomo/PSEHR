@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import type { CatalogDiagnosis } from "@/types/clinicCatalog";
+import { textHasAllWords } from "@/utils/catalogSearch";
 
 export type IcdSplit = {
   icd9: string;
@@ -131,7 +132,8 @@ export function briefDiagnoses(
     }
     const en = (row.nameEn || row.text || "").toLowerCase();
     const zh = (row.nameZh || "").toLowerCase();
-    return en.includes(needle) || zh.includes(needle);
+    const blob = `${en} ${zh}`;
+    return blob.includes(needle) || textHasAllWords(blob, needle);
   });
   return hits.slice(0, limit);
 }

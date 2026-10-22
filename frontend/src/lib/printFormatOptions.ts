@@ -31,6 +31,7 @@ const USED: Record<PrintSetupId, string[]> = {
   ],
   certificate: [],
   referral: [],
+  releaseRx: [],
 };
 
 const PRINT_ON_BY_DEFAULT = new Set([

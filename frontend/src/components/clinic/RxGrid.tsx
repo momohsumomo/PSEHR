@@ -542,7 +542,7 @@ export function RxGrid({
       <table
         ref={tableRef}
         className="w-full border-collapse text-left text-black"
-        style={{ fontFamily: HIS_FONT, fontSize: fontSizePx }}
+        style={{ fontFamily: HIS_FONT, fontSize: fontSizePx, tableLayout: readonly ? "fixed" : undefined }}
         onKeyDown={(e) => {
           if (!active) return;
           if (e.key === "ArrowDown") {
@@ -720,6 +720,9 @@ export function RxGrid({
                         textAlign:
                           pay || memo || narrow || col.key === "totalAmount" ? "center" : undefined,
                         background: cellHot ? "#C6EBC2" : pay && mark ? "#D0D0D0" : undefined,
+                        whiteSpace: readonly ? "nowrap" : undefined,
+                        overflow: readonly ? "hidden" : undefined,
+                        textOverflow: readonly ? "ellipsis" : undefined,
                         cursor: canEdit ? "text" : "default",
                         minWidth: pay || memo ? "1.4rem" : undefined,
                         outline: cellHot ? "1px solid #3C8C40" : undefined,
@@ -859,6 +862,7 @@ export function RxGrid({
                               onChangeLine?.(line.id, { route: v });
                             } else {
                               onChangeLine?.(line.id, { name: v });
+                              onCoverQuery?.(v);
                             }
                           }}
                           onFocus={(e) => {
@@ -1034,6 +1038,7 @@ export function RxGrid({
               }}
               onMouseDown={(e) => e.stopPropagation()}
               onWheel={(e) => {
+                if (e.ctrlKey || e.metaKey) return;
                 e.stopPropagation();
                 const host = e.target instanceof Element ? e.target.closest("ul") : null;
                 if (!(host instanceof HTMLElement)) {

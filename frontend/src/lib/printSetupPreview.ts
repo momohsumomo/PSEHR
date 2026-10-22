@@ -1,5 +1,6 @@
 import type { SciniRow } from "@/api/clinicApi";
 import { depositFlagsFromDraft, flagState, isCheckbox, rowKey, simpleFlagOn, simplePatchFromFlags } from "@/lib/printFormatOptions";
+import { buildReleaseRxHtml } from "@/lib/releaseRx";
 import { buildSimpleSlipHtml } from "@/lib/simpleSlip";
 import {
   buildAuditSheetHtml,
@@ -328,6 +329,28 @@ function definedPages(
   items: SciniRow[],
   draft: Record<string, string>,
 ): string[] | null {
+  if (id === "releaseRx") {
+    return [buildReleaseRxHtml({
+      caseNo: "01",
+      clinicName: face.clinic.name,
+      clinicCode: face.clinic.code,
+      address: face.clinic.address,
+      phone: face.clinic.phone,
+      name: "\u7bc4\u4f8b",
+      idNo: "A000000000",
+      sex: "\u5973",
+      birthday: "0800101",
+      medicalNo: "000000",
+      dept: "\u76ae\u819a\u79d1",
+      visitDate: "115.10.20",
+      cardNo: "0001",
+      queueNo: "1",
+      doctor: "\u7bc4\u4f8b\u91ab\u5e2b",
+      pharmacist: "\u7bc4\u4f8b\u85e5\u5e2b",
+      diagnoses: [{ code: "L30.9", text: "\u76ae\u819a\u708e" }],
+      drugs: [{ name: "\u6b62\u75db\u85e5 500mg", sig: "\u4e00\u6b21\u4e00\u7c92", days: 3, qty: "1", total: "9" }],
+    })];
+  }
   if (id === "certificate") {
     return [buildCertificateHtml({
       clinicCode: face.clinic.code,

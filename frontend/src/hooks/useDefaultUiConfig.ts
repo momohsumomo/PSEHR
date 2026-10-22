@@ -6,6 +6,20 @@ import {
   type ShortcutBarItem,
 } from "@/types/uiConfig";
 
+function withRoomColumn(columns: string[], keys: string[]): {
+  queueColumns: string[];
+  queueColumnKeys: string[];
+} {
+  if (keys.includes("room")) return { queueColumns: columns, queueColumnKeys: keys };
+  const shiftAt = keys.indexOf("shift");
+  const at = shiftAt >= 0 ? shiftAt + 1 : keys.length;
+  const nextKeys = keys.slice();
+  nextKeys.splice(at, 0, "room");
+  const nextCols = columns.slice();
+  if (!nextCols.includes("診間")) nextCols.splice(Math.min(at, nextCols.length), 0, "診間");
+  return { queueColumns: nextCols, queueColumnKeys: nextKeys };
+}
+
 const DEFAULT_SHORTCUT_BAR: ShortcutBarItem[] = [
   { key: "F2", label: "掛號", action: "register", enabled: true },
   { key: "F3", label: "診療", action: "clinicMain", enabled: true },
@@ -73,8 +87,10 @@ export function useDefaultUiConfig() {
     })(),
     ccTemplates: config.ccTemplates ?? [],
     sections: config.sections ?? FALLBACK_UI_CONFIG.sections!,
-    queueColumns: config.queueColumns ?? FALLBACK_UI_CONFIG.queueColumns!,
-    queueColumnKeys: config.queueColumnKeys ?? FALLBACK_UI_CONFIG.queueColumnKeys!,
+    ...withRoomColumn(
+      config.queueColumns ?? FALLBACK_UI_CONFIG.queueColumns!,
+      config.queueColumnKeys ?? FALLBACK_UI_CONFIG.queueColumnKeys!,
+    ),
     currentRxColumns: config.currentRxColumns ?? FALLBACK_UI_CONFIG.currentRxColumns!,
     defaultUsages: config.defaultUsages ?? [
       "QD",

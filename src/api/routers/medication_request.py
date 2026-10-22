@@ -5,12 +5,29 @@ from __future__ import annotations
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query
+from pydantic import BaseModel
 
 from src.api.schemas.medication_request import MedicationRequestBody
 from src.app.bootstrap import get_fhir_repository, get_shadow_store
 from src.infrastructure.sqlite_shadow_store import SqliteShadowStore
 
 router = APIRouter(prefix="/fhir", tags=["MedicationRequest"])
+
+
+class RetainChartBody(BaseModel):
+    medicationIds: list[str] | None = None
+    conditionIds: list[str] | None = None
+
+
+@router.post("/Encounter/{encounter_id}/retain-chart")
+def retain_encounter_chart(encounter_id: str, body: RetainChartBody) -> dict[str, bool]:
+    """The last chart save replaces what the screen and the claim file read."""
+    _store().retain_encounter_chart(
+        encounter_id,
+        medication_ids=body.medicationIds,
+        condition_ids=body.conditionIds,
+    )
+    return {"ok": True}
 
 
 def _store() -> SqliteShadowStore:

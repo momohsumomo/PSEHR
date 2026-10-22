@@ -25,7 +25,9 @@ export type PrintSetupId =
   | "audit"
   | "certificate"
   | "referral"
-  | "deposit";
+  | "deposit"
+  | "releaseRx"
+  | "labSlip";
 
 /** 進紙方向，跟紙張長寬分開記。 */
 export type PrinterFeed = "portrait" | "landscape";
@@ -135,6 +137,28 @@ export const DEFAULT_PRINT_SETUPS: PrintSetup[] = [
     depositShowId: false,
     depositHolidayNote: false,
     depositSingleSide: false,
+  },
+  {
+    id: "releaseRx",
+    label: "\u4ea4\u4ed8\u8655\u65b9\u7b8b",
+    widthMm: 297,
+    heightMm: 210,
+    feed: "landscape",
+    insetMm: 0,
+    printerName: "",
+    footer: "",
+    layoutFixed: false,
+  },
+  {
+    id: "labSlip",
+    label: "\u4ea4\u4ed8\u6aa2\u9a57\u8655\u65b9\u7b8b",
+    widthMm: 297,
+    heightMm: 210,
+    feed: "landscape",
+    insetMm: 0,
+    printerName: "",
+    footer: "",
+    layoutFixed: false,
   },
 ];
 

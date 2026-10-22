@@ -14,6 +14,27 @@ DEFAULT_INSTITUTION_CODE = "3521013662"
 DEFAULT_DEPT = "11"
 DEFAULT_CONSULT_FEE_CODE = "00101C"
 _VIRTUAL_ORDER = re.compile(r"^(R00[1-8]|S00[1-4])$")
+# 免部分負擔代號。d40 記 0，d43 記原本應收的基本＋藥品部分負擔。
+_EXEMPT_COPAY = {
+    "003",
+    "004",
+    "005",
+    "006",
+    "901",
+    "902",
+    "903",
+    "904",
+    "906",
+    "907",
+    "908",
+    "909",
+    "910",
+    "911",
+    "912",
+    "913",
+    "914",
+    "915",
+}
 
 
 def render_nhi_outpatient_xml(
@@ -244,6 +265,8 @@ def _render_ddata(
     dbody: list[str] = [
         _t("d3", id_no),
     ]
+    for index, code in enumerate(rec.specTreatCodes[:4]):
+        dbody.append(_t(f"d{4 + index}", code))
     dbody.append(_t("d8", (dept_code or DEFAULT_DEPT)[:2].zfill(2)))
     dbody.append(_t("d9", visit))
     dbody.append(_t("d11", birth))
@@ -252,8 +275,10 @@ def _render_ddata(
     dbody.append(_t("d14", "4"))
     if copay_code:
         dbody.append(_t("d15", copay_code))
-    dbody.append(_t("d17", "N"))
-    dbody.append(_t("d18", "N"))
+    if rec.referralInMark == "1" and rec.referralInHosp:
+        dbody.append(_t("d16", "1"))
+        dbody.append(_t("d17", rec.referralInHosp[:10]))
+    dbody.append(_t("d18", "Y" if rec.referralOutHosp else "N"))
     if primary:
         dbody.append(_t("d19", primary[:9]))
     for i, code in enumerate(secondaries):
@@ -278,12 +303,19 @@ def _render_ddata(
     dbody.append(_t("d39", total_pts))
     dbody.append(_t("d40", copay_pts))
     dbody.append(_t("d41", apply_pts))
+    waived = int(rec.basicCopayPoints) + int(rec.drugCopayPoints)
+    if copay_code in _EXEMPT_COPAY and waived > 0:
+        dbody.append(_t("d43", waived))
     if rec.patientName:
         dbody.append(_t("d49", rec.patientName[:20]))
+    if rec.referralOutHosp:
+        dbody.append(_t("d55", rec.referralOutHosp[:10]))
     dbody.append(_t("d57", int(rec.basicCopayPoints)))
     dbody.append(_t("d58", int(rec.drugCopayPoints)))
     if len(rec.treatmentId) == 20:
         dbody.append(_t("d60", rec.treatmentId))
+    if len(rec.actualTreatId) == 20 and (rec.icRemark or "")[:1] in {"2", "3", "4"}:
+        dbody.append(_t("d61", rec.actualTreatId))
 
     pdata_blocks = _render_pdata_lines(
         rec,
@@ -383,29 +415,39 @@ def _render_pdata_lines(
             pts = 0
         else:
             kind = "1"
+        lab = str(getattr(med, "delegateLabCode", "") or "").strip()[:10]
         fields: list[tuple[str, Any]] = [
+            ("p2", "4" if lab else None),
             ("p3", kind),
             ("p4", code[:12]),
             ("p8", f"{rate:.2f}"),
-            ("p10", "0" if kind == "G" else (_qty(qty) if kind != "1" else f"{qty:.1f}" if qty else "1.0")),
-            ("p11", _money(0 if kind == "G" else unit)),
+            ("p10", _one_decimal(0 if kind == "G" else qty)),
+            ("p11", None if lab or kind == "G" else _money(unit)),
             ("p12", 0 if kind == "G" else pts),
             ("p13", order),
             ("p17", "4"),
+            ("p24", lab or None),
         ]
         if kind == "1" or unpriced_drug:
             days = int(med.daysSupply or 0)
             dose = med.doseEach
+            has_sig = bool((med.useage or "").strip()) or int(med.daysSupply or 0) > 0
+            if dose is not None and float(dose) > 0:
+                each = f"{float(dose):.2f}"
+            elif qty > 0 and has_sig:
+                each = f"{qty:.2f}"
+            else:
+                each = None
             fields = [
                 ("p1", days if days > 0 else None),
                 ("p2", dispense[:1] or "0"),
                 ("p3", kind),
                 ("p4", code[:12]),
-                ("p5", f"{float(dose):.2f}" if dose is not None and float(dose) > 0 else None),
+                ("p5", each),
                 ("p7", _freq_code(med.useage)),
                 ("p8", "100.00"),
                 ("p9", (med.routeCode or "").strip() or None),
-                ("p10", f"{qty:.1f}" if qty else "1.0"),
+                ("p10", _one_decimal(qty if qty else 1.0)),
                 ("p11", _money(unit)),
                 ("p12", pts),
                 ("p13", order),
@@ -495,9 +537,15 @@ def _money(v: float) -> str:
 
 
 def _qty(v: float) -> str:
-    if abs(v - round(v)) < 1e-9:
-        return str(int(round(v)))
-    return f"{float(v):.1f}"
+    return _one_decimal(v)
+
+
+def _one_decimal(v: float) -> str:
+    """Order quantity: 0 stays 0. Every other value keeps one decimal, including 1.0."""
+    number = float(v)
+    if abs(number) < 1e-9:
+        return "0"
+    return f"{number:.1f}"
 
 
 def _t(name: str, value: Any) -> str:

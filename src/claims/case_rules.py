@@ -1,8 +1,10 @@
 # -*- coding: utf-8 -*-
-"""Case 01/04/09 from the NHI form notes, plus an optional clinic file.
+"""Case 01/04/09.
 
-The shipped config keeps clinic rules off. Treatment codes and extra
-chronic codes do nothing until a clinic sets clinic.enabled to true.
+Seven or more NHI supply days are 04 even when the diagnosis is not on the
+official chronic list. A diagnosis whose master row has a special-treatment
+code is 04 under seven days. Skin incision, cryotherapy, cautery and dressing
+codes in the clinic list are 09 and override a seven-day 04.
 """
 
 from __future__ import annotations
@@ -16,6 +18,7 @@ from pathlib import Path
 _ROOT = Path(__file__).resolve().parents[2]
 _CONFIG_PATH = _ROOT / "config" / "claims_case_rules.json"
 _OFFICIAL_CHRONIC_PATH = _ROOT / "data" / "claims" / "yisheng_chronic_icd10.json"
+_SPECIAL_PATH = _ROOT / "config" / "yisheng_dx_special.json"
 _CASE_RULES_KEY = "clinic_case_rules_v1"
 _ORDER = re.compile(r"^\d{5}[A-Z]$")
 
@@ -45,6 +48,10 @@ class CaseRules:
     core: CoreRules
     clinic: ClinicRules
     official_chronic: frozenset[str]
+    # Diagnosis master rows whose special-treatment code is filled in.
+    # A short course with one of these is still case 04. Empty when the
+    # same ICD-10 is sometimes blank, so eczema (L309) is not in here.
+    special_dx: frozenset[str] = frozenset()
 
 
 def compact_icd(code: str) -> str:
@@ -92,6 +99,15 @@ def _code_set(value: object) -> frozenset[str]:
     return frozenset(compact_icd(item) for item in value if compact_icd(item))
 
 
+def _load_special_dx() -> frozenset[str]:
+    if not _SPECIAL_PATH.is_file():
+        return frozenset()
+    raw = json.loads(_SPECIAL_PATH.read_text(encoding="utf-8"))
+    if not isinstance(raw, list):
+        return frozenset()
+    return _code_set(raw)
+
+
 def _load_official_chronic() -> frozenset[str]:
     if not _OFFICIAL_CHRONIC_PATH.is_file():
         return frozenset()
@@ -106,6 +122,7 @@ def _default_rules() -> CaseRules:
         core=CoreRules(),
         clinic=ClinicRules(),
         official_chronic=_load_official_chronic(),
+        special_dx=_load_special_dx(),
     )
 
 
@@ -129,6 +146,7 @@ def _file_case_rules() -> CaseRules:
         ),
         clinic=_clinic_from_stored(clinic_raw, from_file=True),
         official_chronic=official,
+        special_dx=_load_special_dx(),
     )
 
 
@@ -178,7 +196,7 @@ def _clinic_from_stored(raw: dict, *, from_file: bool) -> ClinicRules:
         extra_chronic_icd10=frozenset(chronic_codes),
         order_codes_to_09=frozenset(order_codes),
         order_reasons=reasons,
-        order_to_09_beaten_by_04=True,
+        order_to_09_beaten_by_04=_as_bool(raw.get("orderTo09BeatenBy04"), False),
         case_09_fixed_consult=False,
         project_drug_floor=_floor_value(raw.get("projectDrugFloor")),
         outside_lab_codes=_lab_codes(raw.get("outsideLabCodes")),
@@ -192,10 +210,26 @@ def load_case_rules() -> CaseRules:
     saved = _shadow_payload()
     if saved is None:
         return base
+    saved_clinic = _clinic_from_stored(saved, from_file=False)
+    reasons = dict(base.clinic.order_reasons)
+    reasons.update(saved_clinic.order_reasons)
+    orders = set(base.clinic.order_codes_to_09) | set(saved_clinic.order_codes_to_09)
+    extras = set(base.clinic.extra_chronic_icd10) | set(saved_clinic.extra_chronic_icd10)
+    clinic = ClinicRules(
+        enabled=bool(orders or extras),
+        extra_chronic_icd10=frozenset(extras),
+        order_codes_to_09=frozenset(orders),
+        order_reasons=reasons,
+        order_to_09_beaten_by_04=saved_clinic.order_to_09_beaten_by_04,
+        case_09_fixed_consult=saved_clinic.case_09_fixed_consult,
+        project_drug_floor=saved_clinic.project_drug_floor or base.clinic.project_drug_floor,
+        outside_lab_codes=saved_clinic.outside_lab_codes or base.clinic.outside_lab_codes,
+    )
     return CaseRules(
         core=base.core,
-        clinic=_clinic_from_stored(saved, from_file=False),
+        clinic=clinic,
         official_chronic=base.official_chronic,
+        special_dx=base.special_dx,
     )
 
 
@@ -217,21 +251,28 @@ def claim_case_rules() -> CaseRules:
         ),
         clinic=base.clinic,
         official_chronic=base.official_chronic,
+        special_dx=base.special_dx,
     )
 
 
 def official_lines(rules: CaseRules) -> list[str]:
     days = rules.core.official_chronic_min_days
     lines = [
-        "\u516c\u544a\u6162\u6027\u75c5\uff0c\u7d66\u85e5\u6eff %d \u5929\uff0c\u6848\u4ef6\u662f 04\u3002" % days,
+        "\u5065\u4fdd\u7d66\u85e5\u6eff %d \u5929\uff0c\u6848\u4ef6\u662f 04\u3002\u75c5\u540d\u4e0d\u5fc5\u5728\u516c\u544a\u6162\u6027\u75c5\u6e05\u55ae\u3002" % days,
     ]
+    if rules.special_dx:
+        lines.append("\u75c5\u540d\u4e3b\u6a94\u6709\u7279\u5b9a\u6cbb\u7642\u4ee3\u865f\uff0c\u4e0d\u6eff\u5929\u6578\u4e5f\u662f 04\u3002")
     if rules.core.acute_plus_chronic_to_09:
         lines.append(
             "\u540c\u4e00\u7b46\u540c\u6642\u6709\u516c\u544a\u6162\u6027\u75c5\u548c\u5176\u4ed6\u75c5\u540d\uff0c\u6848\u4ef6\u662f 09\u3002"
         )
     if rules.core.general_outside_dispense_to_09:
         lines.append("\u4e00\u822c\u6848\u4ef6\u6539\u6210\u4ea4\u4ed8\u8abf\u5291\uff0c\u6848\u4ef6\u662f 09\u3002")
-    lines.append("\u5176\u9918\u662f 01\u3002\u8655\u7f6e\u672c\u8eab\u4e0d\u6703\u6539\u6848\u4ef6\u3002")
+    if rules.clinic.enabled and rules.clinic.order_codes_to_09:
+        lines.append(
+            "\u5207\u958b\u6392\u81bf\u3001\u51b7\u51cd\u3001\u96fb\u71d2\u3001\u63db\u85e5\u9019\u985e\u8655\u7f6e\uff0c\u6848\u4ef6\u662f 09\u3002\u6eff\u5929\u6578\u4e5f\u4e00\u6a23\u3002"
+        )
+    lines.append("\u5176\u9918\u662f 01\u3002")
     return lines
 
 
@@ -361,19 +402,13 @@ def assign_case(
 
     minimum = active.core.official_chronic_min_days
     official, extra, other = _split_diagnoses(diagnosis_codes, active)
+    special = any(_hits(compact_icd(code), active.special_dx) for code in (diagnosis_codes or []))
     if official and other and active.core.acute_plus_chronic_to_09:
         case, reason = "09", "\u540c\u4e00\u6b21\u542b\u516c\u544a\u6162\u6027\u75c5\u8207\u5176\u4ed6\u75c5\u540d"
-    elif (official or extra) and days >= minimum:
-        if official:
-            case, reason = (
-                "04",
-                "\u516c\u544a\u6162\u6027\u75c5\u4e14\u7d66\u85e5\u6eff %d \u5929" % minimum,
-            )
-        else:
-            case, reason = (
-                "04",
-                "\u8a3a\u6240\u6162\u6027\u75c5\u6e05\u55ae\u4e14\u7d66\u85e5\u6eff %d \u5929" % minimum,
-            )
+    elif days >= minimum:
+        case, reason = "04", "\u5065\u4fdd\u7d66\u85e5\u6eff %d \u5929" % minimum
+    elif special:
+        case, reason = "04", "\u75c5\u540d\u4e3b\u6a94\u6709\u7279\u5b9a\u6cbb\u7642\u4ee3\u865f"
     elif official or extra:
         case, reason = (
             "01",

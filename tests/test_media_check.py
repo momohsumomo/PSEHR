@@ -52,6 +52,19 @@ class MediaCheckTests(unittest.TestCase):
         self.assertTrue(any(row["code"] == "birthday" for row in report["blocks"]))
         self.assertTrue(any(row["code"] == "dx-repeat" for row in report["warnings"]))
 
+    def test_external_cause_cannot_be_the_primary_diagnosis(self) -> None:
+        blocked = check_media([
+            _visit(diagnosisCodes=["W260XXA", "S61001A"], diagnoses="W260XXA"),
+        ])
+        self.assertFalse(blocked["canExport"])
+        self.assertTrue(any(row["code"] == "dx-external" for row in blocked["blocks"]))
+
+        warned = check_media([
+            _visit(diagnosisCodes=["S61001A", "W260XXA"], diagnoses="S61001A"),
+        ])
+        self.assertTrue(warned["canExport"])
+        self.assertTrue(any(row["code"] == "dx-external-2" for row in warned["warnings"]))
+
     def test_preventive_primary_warns_without_blocking(self) -> None:
         report = check_media([
             _visit(diagnosisCodes=["Z1289"], diagnoses="Z1289", caseNo="04"),

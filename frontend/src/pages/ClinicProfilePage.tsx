@@ -24,6 +24,7 @@ import {
   type IdCategorySetting,
 } from "@/api/clinicApi";
 import { doctorDisplayName } from "@/lib/doctorName";
+import { RELEASE_RX_CASES } from "@/lib/releaseRx";
 import { CaseClassPanel } from "@/components/clinic/CaseClassPanel";
 import { SciniParamsEditor } from "@/components/clinic/SciniParamsEditor";
 import {
@@ -340,6 +341,24 @@ export function ClinicProfilePage() {
                   type="text"
                   value={profile.dispenseType}
                   onChange={(e) => setProfile({ ...profile, dispenseType: e.target.value })}
+                  className="w-full bg-slate-900 border border-slate-700 rounded-none px-1 py-0.5 text-slate-200 focus:border-amber-400 focus:outline-none"
+                />
+              </div>
+              <div>
+                <label className="block text-slate-400 mb-0.5">代檢機構代號</label>
+                <input
+                  type="text"
+                  value={profile.labInstitutionCode}
+                  onChange={(e) => setProfile({ ...profile, labInstitutionCode: e.target.value })}
+                  className="w-full bg-slate-900 border border-slate-700 rounded-none px-1 py-0.5 text-slate-200 focus:border-amber-400 focus:outline-none"
+                />
+              </div>
+              <div>
+                <label className="block text-slate-400 mb-0.5">代檢機構名稱</label>
+                <input
+                  type="text"
+                  value={profile.labInstitutionName}
+                  onChange={(e) => setProfile({ ...profile, labInstitutionName: e.target.value })}
                   className="w-full bg-slate-900 border border-slate-700 rounded-none px-1 py-0.5 text-slate-200 focus:border-amber-400 focus:outline-none"
                 />
               </div>
@@ -703,6 +722,35 @@ export function ClinicProfilePage() {
                     className="w-full bg-slate-950 border border-slate-700 rounded-none px-3 py-1.5 font-mono text-slate-200"
                   />
                 <p className="text-[10px] text-slate-500 leading-relaxed">開藥時不會用這個數字擋下處方。這不是健保規定的藥價上限，自費也不在這裡計算。</p>
+                </div>
+              </div>
+
+              <div className="p-4 rounded-none bg-slate-900/80 border border-slate-700/80 space-y-3">
+                <h3 className="font-bold text-sky-300 border-b border-slate-800 pb-1.5">{"\u4ea4\u4ed8\u8abf\u5291\u8655\u65b9\u7b8b"}</h3>
+                <p className="text-[11px] leading-relaxed text-slate-400">
+                  {"\u52fe\u4e86\u7684\u6848\u4ef6\uff0c\u5b58\u6a94\u5217\u5370\u7c21\u5f0f\u55ae\u4e4b\u5f8c\u6703\u518d\u958b\u9019\u4e00\u5f35\u3002\u6c92\u52fe\u5c31\u4e0d\u6703\u5370\u3002\u5217\u5370\u8a2d\u5b9a\u88e1\u7684\u4ea4\u4ed8\u8655\u65b9\u7b8b\u8981\u9078\u9019\u53f0\u7684\u5370\u8868\u6a5f\u3002"}
+                </p>
+                <div className="flex flex-wrap gap-x-4 gap-y-1 text-[12px] text-slate-200">
+                  {RELEASE_RX_CASES.map((item) => {
+                    const on = workflow.releaseRxCases.includes(item.code);
+                    return (
+                      <label key={item.code} className="flex items-center gap-1">
+                        <input
+                          type="checkbox"
+                          checked={on}
+                          onChange={() =>
+                            setWorkflow({
+                              ...workflow,
+                              releaseRxCases: on
+                                ? workflow.releaseRxCases.filter((code) => code !== item.code)
+                                : [...workflow.releaseRxCases, item.code],
+                            })
+                          }
+                        />
+                        {item.code} {item.label}
+                      </label>
+                    );
+                  })}
                 </div>
               </div>
 

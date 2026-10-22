@@ -121,7 +121,13 @@ const LINE = "#8D6B52";
 const DASH = "#174E78";
 
 type Region = { readonly id: string; readonly paths: readonly string[]; readonly cx: number; readonly cy: number };
-type Chart = { readonly viewBox: string; readonly regions: readonly Region[] };
+type Chart = {
+  readonly viewBox: string;
+  readonly plate?: string;
+  readonly plateBox?: string;
+  readonly regions: readonly Region[];
+  readonly decor?: readonly string[];
+};
 
 function frame(viewBox: string) {
   const [x, y, w, h] = viewBox.split(" ").map(Number);
@@ -144,7 +150,8 @@ function Figure({
   onToggle: (id: string) => void;
 }) {
   const box = frame(chart.viewBox);
-  const mesh = chart.regions.some((region) => region.paths.length > 40);
+  const plate = frame(chart.plateBox || chart.viewBox);
+  const mesh = !chart.plate && chart.regions.some((region) => region.paths.length > 40);
   const hit = Math.max(box.w, box.h) * (mesh ? 0.012 : 0.028);
   const ink = Math.max(box.w, box.h) * (mesh ? 0.004 : 0.0035);
   const font = Math.max(box.w, box.h) * 0.042;
@@ -172,9 +179,21 @@ function Figure({
   ];
   return (
     <svg viewBox={chart.viewBox} className="h-full w-full touch-manipulation" role="group">
+      {chart.plate ? (
+        <image
+          href={chart.plate}
+          x={plate.x}
+          y={plate.y}
+          width={plate.w}
+          height={plate.h}
+          preserveAspectRatio="none"
+          style={{ pointerEvents: "none" }}
+        />
+      ) : null}
       {chart.regions.map((region) => {
         const on = selected.includes(region.id);
-        const fill = on ? ON : SKIN;
+        const fill = chart.plate ? (on ? "rgba(23,78,120,0.38)" : "transparent") : on ? ON : SKIN;
+        const stroke = chart.plate ? (on ? DASH : "transparent") : mesh ? fill : on ? DASH : LINE;
         return (
           <g
             key={region.id}
@@ -191,7 +210,7 @@ function Figure({
                 d={d}
                 fill={fill}
                 fillRule="evenodd"
-                stroke={mesh ? fill : on ? DASH : LINE}
+                stroke={stroke}
                 strokeWidth={mesh ? ink : on ? ink * 2.2 : ink}
                 strokeDasharray={mesh || !on ? undefined : `${ink * 5} ${ink * 3.5}`}
                 strokeLinejoin="round"

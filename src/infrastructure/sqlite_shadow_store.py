@@ -582,7 +582,9 @@ class SqliteShadowStore(ShadowStore):
 
     def get_staff_list(self) -> list[dict[str, Any]]:
         with self._connect() as conn:
-            rows = conn.execute("SELECT id, name, role, nhi_id, cert_no, pin, status FROM clinic_staff").fetchall()
+            rows = conn.execute(
+                "SELECT id, name, role, nhi_id, cert_no, pin, status, room FROM clinic_staff"
+            ).fetchall()
             return [
                 {
                     "id": r[0],
@@ -591,7 +593,8 @@ class SqliteShadowStore(ShadowStore):
                     "nhiId": r[3],
                     "certNo": r[4],
                     "pin": r[5],
-                    "status": r[6]
+                    "status": r[6],
+                    "room": r[7] or "1",
                 }
                 for r in rows
             ]
@@ -600,15 +603,16 @@ class SqliteShadowStore(ShadowStore):
         with self._connect() as conn:
             conn.execute(
                 """
-                INSERT INTO clinic_staff (id, name, role, nhi_id, cert_no, pin, status)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO clinic_staff (id, name, role, nhi_id, cert_no, pin, status, room)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(id) DO UPDATE SET
                     name = excluded.name,
                     role = excluded.role,
                     nhi_id = excluded.nhi_id,
                     cert_no = excluded.cert_no,
                     pin = excluded.pin,
-                    status = excluded.status
+                    status = excluded.status,
+                    room = excluded.room
                 """,
                 (
                     staff.get("id"),
@@ -617,7 +621,8 @@ class SqliteShadowStore(ShadowStore):
                     staff.get("nhiId"),
                     staff.get("certNo"),
                     staff.get("pin"),
-                    staff.get("status", "在職")
+                    staff.get("status", "在職"),
+                    str(staff.get("room") or "1").strip() or "1",
                 )
             )
 
@@ -2186,6 +2191,7 @@ class SqliteShadowStore(ShadowStore):
                 AND IFNULL(ei.fhir_status, '') != 'cancelled'
               )
             )
+            AND IFNULL(ci.clinical_status, 'active') NOT IN ('entered-in-error', 'inactive')
         """
         params: list[Any] = []
         if patient_id:
@@ -2243,6 +2249,49 @@ class SqliteShadowStore(ShadowStore):
             )
         return out
 
+    def retain_encounter_chart(
+        self,
+        encounter_id: str,
+        *,
+        medication_ids: list[str] | None = None,
+        condition_ids: list[str] | None = None,
+    ) -> None:
+        """Last save wins. Rows left off that save stay stored but drop out of the chart and claims."""
+        eid = (encounter_id or "").split("/")[-1]
+        if not eid:
+            return
+
+        def _keep(ids: list[str] | None) -> list[str]:
+            return [item.split("/")[-1] for item in (ids or []) if item]
+
+        with self._connect() as conn:
+            if medication_ids is not None:
+                keep = _keep(medication_ids)
+                sql = """
+                    UPDATE medication_request_index
+                    SET status = 'cancelled', updated_at = datetime('now')
+                    WHERE encounter_id = ?
+                      AND IFNULL(status, 'active') NOT IN ('cancelled', 'entered-in-error', 'stopped')
+                """
+                params: list[Any] = [eid]
+                if keep:
+                    sql += f" AND resource_id NOT IN ({','.join('?' for _ in keep)})"
+                    params.extend(keep)
+                conn.execute(sql, params)
+            if condition_ids is not None:
+                keep = _keep(condition_ids)
+                sql = """
+                    UPDATE condition_index
+                    SET clinical_status = 'entered-in-error', updated_at = datetime('now')
+                    WHERE encounter_id = ?
+                      AND IFNULL(clinical_status, 'active') NOT IN ('entered-in-error', 'inactive')
+                """
+                params = [eid]
+                if keep:
+                    sql += f" AND resource_id NOT IN ({','.join('?' for _ in keep)})"
+                    params.extend(keep)
+                conn.execute(sql, params)
+
     def list_medication_requests(
         self,
         patient_id: str | None = None,
@@ -2261,6 +2310,7 @@ class SqliteShadowStore(ShadowStore):
                 AND IFNULL(ei.fhir_status, '') != 'cancelled'
               )
             )
+            AND IFNULL(mi.status, 'active') NOT IN ('cancelled', 'entered-in-error', 'stopped')
         """
         params: list[Any] = []
         if patient_id:
@@ -3797,6 +3847,9 @@ def _apply_index_migrations(conn: sqlite3.Connection) -> None:
         )
         """
     )
+    staff_cols = {row[1] for row in conn.execute("PRAGMA table_info(clinic_staff)").fetchall()}
+    if "room" not in staff_cols:
+        conn.execute("ALTER TABLE clinic_staff ADD COLUMN room TEXT NOT NULL DEFAULT '1'")
     staff_count = conn.execute("SELECT COUNT(*) FROM clinic_staff").fetchone()[0]
     if staff_count == 0:
         conn.executemany(

@@ -25,10 +25,12 @@ function icd9Of(row: CatalogDiagnosis): string {
 function SplitList({
   rows,
   activeIcd10,
+  onActivate,
   onPick,
 }: {
   rows: IcdSplit[];
   activeIcd10: string;
+  onActivate: (row: IcdSplit) => void;
   onPick: (row: IcdSplit) => void;
 }) {
   const active = activeIcd10.replace(/\./g, "").trim().toUpperCase();
@@ -50,6 +52,11 @@ function SplitList({
               key={`${row.icd9}-${row.icd10}`}
               className={row.icd10 === active ? "bg-[#FFF2A8]" : "bg-white"}
               onClick={(ev) => {
+                ev.preventDefault();
+                ev.stopPropagation();
+                onActivate(row);
+              }}
+              onDoubleClick={(ev) => {
                 ev.preventDefault();
                 ev.stopPropagation();
                 onPick(row);
@@ -80,6 +87,7 @@ export function IcdShortcutDialog({
   const [armed, setArmed] = useState(false);
   const [pickError, setPickError] = useState("");
   const [fullOpen, setFullOpen] = useState(false);
+  const [splitView, setSplitView] = useState<IcdSplit | null>(null);
   const splitMap = useIcdSplits();
   void field;
   const rows = useMemo(
@@ -88,6 +96,18 @@ export function IcdShortcutDialog({
   );
   const current = rows[index] ?? null;
   const detail = useMemo(() => (current ? splitsFor(splitMap, icd9Of(current)) : []), [current, splitMap]);
+  const view = splitView && current
+    ? {
+        ...current,
+        nameEn: splitView.nameEn,
+        nameZh: splitView.nameZh,
+        text: splitView.nameEn || splitView.nameZh,
+        icd9: splitView.icd9,
+        aCode: splitView.icd9,
+        icd10: splitView.icd10,
+        nhiIcd10: splitView.icd10,
+      }
+    : current;
   useEscLayer([{ open: true, close: onClose }]);
 
   const pick = (row: CatalogDiagnosis) => {
@@ -98,7 +118,12 @@ export function IcdShortcutDialog({
   useEffect(() => {
     setIndex(0);
     setArmed(false);
+    setSplitView(null);
   }, [text]);
+
+  useEffect(() => {
+    setSplitView(null);
+  }, [index]);
 
   useEffect(() => {
     const onKey = (ev: KeyboardEvent) => {
@@ -142,33 +167,33 @@ export function IcdShortcutDialog({
           <div className="space-y-1 overflow-auto border-r border-[#A0A0A0] p-2 text-[12px]">
             <label className="block">
               <span className="mb-0.5 block text-[#000080]">簡稱</span>
-              <input className="w-full border border-[#7F9DB9] bg-white px-1" value={current?.short || ""} readOnly />
+              <input className="w-full border border-[#7F9DB9] bg-white px-1" value={view?.short || ""} readOnly />
             </label>
             <label className="block">
               <span className="mb-0.5 block">名稱（英）</span>
-              <input className="w-full border border-[#7F9DB9] bg-white px-1" value={current?.nameEn || ""} readOnly />
+              <input className="w-full border border-[#7F9DB9] bg-white px-1" value={view?.nameEn || ""} readOnly />
             </label>
             <label className="block">
               <span className="mb-0.5 block">名稱（中）</span>
-              <input className="w-full border border-[#7F9DB9] bg-white px-1" value={current?.nameZh || current?.text || ""} readOnly />
+              <input className="w-full border border-[#7F9DB9] bg-white px-1" value={view?.nameZh || view?.text || ""} readOnly />
             </label>
             <label className="block">
               <span className="mb-0.5 block">ICD-10 名稱</span>
-              <input className="w-full border border-[#7F9DB9] bg-white px-1" value={current?.text || ""} readOnly />
+              <input className="w-full border border-[#7F9DB9] bg-white px-1" value={view?.text || ""} readOnly />
             </label>
             <div className="grid grid-cols-2 gap-1">
               <label>
                 <span className="mb-0.5 block">ICD-9</span>
-                <input className="w-full border border-[#7F9DB9] bg-white px-1 font-mono" value={current ? icd9Of(current) : ""} readOnly />
+                <input className="w-full border border-[#7F9DB9] bg-white px-1 font-mono" value={view ? icd9Of(view) : ""} readOnly />
               </label>
               <label>
                 <span className="mb-0.5 block">A-CODE</span>
-                <input className="w-full border border-[#7F9DB9] bg-white px-1 font-mono" value={current?.aCode || ""} readOnly />
+                <input className="w-full border border-[#7F9DB9] bg-white px-1 font-mono" value={view?.aCode || ""} readOnly />
               </label>
             </div>
             <label className="block">
               <span className="mb-0.5 block">ICD-10</span>
-              <input className="w-full border border-[#7F9DB9] bg-white px-1 font-mono" value={current?.icd10 || ""} readOnly />
+              <input className="w-full border border-[#7F9DB9] bg-white px-1 font-mono" value={view?.icd10 || ""} readOnly />
             </label>
           </div>
           <div className="flex min-h-0 flex-col">
@@ -200,6 +225,13 @@ export function IcdShortcutDialog({
                       onClick={(ev) => {
                         ev.preventDefault();
                         ev.stopPropagation();
+                        setArmed(false);
+                        setIndex(i);
+                        setSplitView(null);
+                      }}
+                      onDoubleClick={(ev) => {
+                        ev.preventDefault();
+                        ev.stopPropagation();
                         pick(row);
                       }}
                     >
@@ -212,7 +244,12 @@ export function IcdShortcutDialog({
                 </tbody>
               </table>
             </div>
-            <SplitList rows={detail} activeIcd10={current?.icd10 || ""} onPick={(row) => pick(splitToDiagnosis(row))} />
+            <SplitList
+              rows={detail}
+              activeIcd10={splitView?.icd10 || ""}
+              onActivate={setSplitView}
+              onPick={(row) => pick(splitToDiagnosis(row))}
+            />
           </div>
         </div>
         <div className="flex justify-end gap-2 border-t border-[#A0A0A0] p-2">
@@ -225,7 +262,14 @@ export function IcdShortcutDialog({
             完整搜尋
           </button>
           {pickError ? <span className="mr-auto self-center text-[12px] text-red-700">{pickError}</span> : null}
-          <button type="button" className="border border-[#003C74] bg-[#C8F7C8] px-3 py-1 text-[12px] font-bold" onClick={() => current && pick(current)}>
+          <button
+            type="button"
+            className="border border-[#003C74] bg-[#C8F7C8] px-3 py-1 text-[12px] font-bold"
+            onClick={() => {
+              if (splitView) pick(splitToDiagnosis(splitView));
+              else if (current) pick(current);
+            }}
+          >
             寫入
           </button>
           <button type="button" className="border border-[#003C74] bg-white px-3 py-1 text-[12px]" onClick={onClose}>
@@ -252,6 +296,7 @@ export function Icd10ConditionDialog({
   const [armed, setArmed] = useState(false);
   const [pickError, setPickError] = useState("");
   const [fullOpen, setFullOpen] = useState(false);
+  const [splitView, setSplitView] = useState<IcdSplit | null>(null);
   const splitMap = useIcdSplits();
   const rows = useMemo(
     () => briefDiagnoses(catalog, text, text.trim() ? 2000 : 800, splitMap),
@@ -263,7 +308,12 @@ export function Icd10ConditionDialog({
   useEffect(() => {
     setIndex(0);
     setArmed(false);
+    setSplitView(null);
   }, [text]);
+
+  useEffect(() => {
+    setSplitView(null);
+  }, [index]);
 
   useEscLayer([{ open: true, close: onClose }]);
 
@@ -342,6 +392,13 @@ export function Icd10ConditionDialog({
                   onClick={(ev) => {
                     ev.preventDefault();
                     ev.stopPropagation();
+                    setArmed(false);
+                    setIndex(i);
+                    setSplitView(null);
+                  }}
+                  onDoubleClick={(ev) => {
+                    ev.preventDefault();
+                    ev.stopPropagation();
                     pick(row);
                   }}
                 >
@@ -355,13 +412,25 @@ export function Icd10ConditionDialog({
             </tbody>
           </table>
         </div>
-        <SplitList rows={detail} activeIcd10={current?.icd10 || ""} onPick={(row) => pick(splitToDiagnosis(row))} />
+        <SplitList
+          rows={detail}
+          activeIcd10={splitView?.icd10 || ""}
+          onActivate={setSplitView}
+          onPick={(row) => pick(splitToDiagnosis(row))}
+        />
         <div className="flex justify-end gap-2 border-t border-[#A0A0A0] p-2">
                     <button type="button" className="mr-auto border border-[#003C74] bg-[#FFF3C4] px-3 py-1 text-[12px]" onClick={() => setFullOpen(true)}>
             完整搜尋
           </button>
           {pickError ? <span className="mr-auto self-center text-[12px] text-red-700">{pickError}</span> : null}
-          <button type="button" className="border border-[#003C74] bg-[#C8F7C8] px-3 py-1 text-[12px] font-bold" onClick={() => current && pick(current)}>
+          <button
+            type="button"
+            className="border border-[#003C74] bg-[#C8F7C8] px-3 py-1 text-[12px] font-bold"
+            onClick={() => {
+              if (splitView) pick(splitToDiagnosis(splitView));
+              else if (current) pick(current);
+            }}
+          >
             確定
           </button>
           <button type="button" className="border border-[#003C74] bg-white px-3 py-1 text-[12px]" onClick={onClose}>

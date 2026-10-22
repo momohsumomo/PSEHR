@@ -1,4 +1,4 @@
-﻿param([switch]$SelfTest)
+param([switch]$SelfTest)
 
 $ErrorActionPreference = "Stop"
 Add-Type @"
@@ -31,10 +31,10 @@ $Codes = @{
   1402 = "醫事人員卡還沒驗過 PIN"
   1410 = "醫事人員卡 PIN 不對"
   1422 = "醫事人員憑證不在有效期，或醫師卡已過期"
-  1500 = "健保卡進入模式一失敗，這個槽沒讀到健保卡"
+  1500 = "健保卡進入模式一失敗。雲端藥歷若顯示 2461500，就是這一個 1500"
   1501 = "健保卡進入模式二失敗，請確認 SAM 已驗證"
   1502 = "健保卡進入模式三失敗"
-  1516 = "請先把醫事人員卡拔掉，再讀健保卡"
+  1516 = "這個槽同時看到兩種卡。一台讀卡機就分開插；兩台就各插各的"
   1600 = "這個讀卡機名稱已經不在"
   1610 = "SAM 檔格式不對"
   1611 = "找不到這個雲端安全模組"
@@ -95,25 +95,54 @@ function Get-CloudSamId {
   return [string]$items[0].samId
 }
 
-function Ensure-Ready([string]$Reader) {
+function Ensure-Sam {
   $samId = Get-CloudSamId
-  if ($Reader) {
-    Invoke-Api -Method POST -Path "/api/settings/v1/PcscReader/Default" -Body @{ readerName = $Reader } | Out-Null
-  }
   $status = Invoke-Api -Method GET -Path "/api/common/v1/Status"
   $restart = -not [bool]$status.status.initialized
   if ([string]$status.status.name -ne $samId) { $restart = $true }
-  if ($Reader -and [string]$status.status.readerName -ne $Reader) { $restart = $true }
   if ($restart -and [bool]$status.status.initialized) {
     Invoke-Api -Method POST -Path "/api/common/v1/Finalize" -Body @{} | Out-Null
   }
   if ($restart) {
     Invoke-Api -Method POST -Path "/api/common/v1/Initial" -Body @{ name = $samId } | Out-Null
+    $status = Invoke-Api -Method GET -Path "/api/common/v1/Status"
   }
-  $status = Invoke-Api -Method GET -Path "/api/common/v1/Status"
   if ([int]$status.status.sam.status -ne 2) {
     Invoke-Api -Method POST -Path "/api/sam/v1/Verification" -Body @{} | Out-Null
     $status = Invoke-Api -Method GET -Path "/api/common/v1/Status"
+  }
+  return $status
+}
+
+function Select-Reader([string]$Reader) {
+  if (-not $Reader) { throw "請先選擇讀卡機。" }
+  $samId = Get-CloudSamId
+  $status = Invoke-Api -Method GET -Path "/api/common/v1/Status"
+  $live = [string]$status.status.readerName
+  if ($live -ne $Reader) {
+    Invoke-Api -Method POST -Path "/api/settings/v1/PcscReader/Default" -Body @{ readerName = $Reader } | Out-Null
+  }
+  $restart = -not [bool]$status.status.initialized
+  if ([string]$status.status.name -ne $samId) { $restart = $true }
+  if ($restart -and [bool]$status.status.initialized) {
+    Invoke-Api -Method POST -Path "/api/common/v1/Finalize" -Body @{} | Out-Null
+  }
+  if ($restart) {
+    Invoke-Api -Method POST -Path "/api/common/v1/Initial" -Body @{ name = $samId } | Out-Null
+    $status = Invoke-Api -Method GET -Path "/api/common/v1/Status"
+    $live = [string]$status.status.readerName
+  }
+  if ([int]$status.status.sam.status -ne 2) {
+    Invoke-Api -Method POST -Path "/api/sam/v1/Verification" -Body @{} | Out-Null
+    $status = Invoke-Api -Method GET -Path "/api/common/v1/Status"
+    $live = [string]$status.status.readerName
+  }
+  if ($live -and $live -ne $Reader) {
+    $until = ""
+    if ([int]$status.status.hpc.status -ge 2 -and $status.status.hpc.expireTime) {
+      try { $until = "醫事人員卡驗證有效到 " + ([datetime]$status.status.hpc.expireTime).ToString("MM/dd HH:mm") + "。" } catch {}
+    }
+    throw "6.0 現在的連線在「$live」。$until這次要的是「$Reader」。已驗證的狀態還在，沒有清掉，所以沒有換過去。"
   }
   return $status
 }
@@ -173,7 +202,7 @@ function New-Button([string]$Text, [int]$X, [int]$Y, [int]$W) {
   return $button
 }
 
-$intro = New-Label "PCSC 就是這台健保讀卡機，不是另一種機器。Windows 把它分成兩個槽：結尾 0 通常插健保卡，結尾 1 通常插醫事人員卡。1101 代表還沒指定要用哪一槽。" 16 12 728 68
+$intro = New-Label "兩個選單只記住哪一台。燈是 6.0 現在的狀態，驗過的會寫有效時間。關掉再開，還在有效時間內就還是綠的。換讀卡機不會把已經驗過的 PIN 清掉。" 16 12 728 68
 $lblSam = New-Label "SAM：尚未讀取" 16 88 728 28
 $lblHpcState = New-Label "醫事人員卡：尚未讀取" 16 118 728 28
 $lblHcState = New-Label "健保卡：尚未讀取" 16 148 728 28
@@ -226,31 +255,44 @@ function Set-StateLabel($Label, [string]$Text, [string]$Kind) {
   if ($Kind -eq "ok") { $Label.ForeColor = [System.Drawing.Color]::DarkGreen }
   elseif ($Kind -eq "wait") { $Label.ForeColor = [System.Drawing.Color]::DarkGoldenrod }
   elseif ($Kind -eq "bad") { $Label.ForeColor = [System.Drawing.Color]::Firebrick }
+  elseif ($Kind -eq "idle") { $Label.ForeColor = [System.Drawing.Color]::DimGray }
   else { $Label.ForeColor = [System.Drawing.Color]::Black }
 }
 
-function Show-Status($Status) {
+function Format-Until($Value) {
+  if (-not $Value) { return "" }
+  try { return "，有效到 " + ([datetime]$Value).ToString("MM/dd HH:mm") } catch { return "" }
+}
+
+function Show-Status($Status, [string]$Side) {
   $sam = [int]$Status.status.sam.status
   $samType = [int]$Status.status.sam.type
   $typeName = switch ($samType) { 1 { "雲端" } 2 { "實體" } default { "" } }
-  $until = ""
-  if ($Status.status.sam.expireTime) {
-    try { $until = "，有效到 " + ([datetime]$Status.status.sam.expireTime).ToString("MM/dd HH:mm") } catch {}
-  }
+  $until = Format-Until $Status.status.sam.expireTime
   if ($sam -eq 2) { Set-StateLabel $lblSam "SAM：已驗證 $typeName$until" "ok" }
   elseif ($sam -eq 1) { Set-StateLabel $lblSam "SAM：已載入，還沒向健保署驗證" "wait" }
   else { Set-StateLabel $lblSam "SAM：還沒連接" "bad" }
+  if ($Side -eq "sam") { return }
 
   $hpc = [int]$Status.status.hpc.status
   $hpcType = switch ([int]$Status.status.hpc.type) { 1 { "醫師卡" } 2 { "醫事人員卡" } 3 { "行動憑證" } default { "" } }
-  if ($hpc -eq 3) { Set-StateLabel $lblHpcState "醫事人員卡：PIN 已驗證 $hpcType" "ok" }
+  $hpcUntil = Format-Until $Status.status.hpc.expireTime
+  if ($hpc -eq 3) { Set-StateLabel $lblHpcState "醫事人員卡：PIN 已驗證 $hpcType$hpcUntil" "ok" }
+  elseif ($hpc -eq 2) { Set-StateLabel $lblHpcState "醫事人員卡：已驗證 $hpcType$hpcUntil" "wait" }
   elseif ($hpc -ge 1) { Set-StateLabel $lblHpcState "醫事人員卡：卡片在，還沒驗完 PIN $hpcType" "wait" }
-  else { Set-StateLabel $lblHpcState "醫事人員卡：這個槽目前沒看到卡" "bad" }
+  else { Set-StateLabel $lblHpcState "醫事人員卡：未置入" "idle" }
 
   $hc = [int]$Status.status.hc.status
-  if ($hc -ge 2) { Set-StateLabel $lblHcState "健保卡：已驗證" "ok" }
-  elseif ($hc -eq 1) { Set-StateLabel $lblHcState "健保卡：卡片在，還沒完成驗證" "wait" }
-  else { Set-StateLabel $lblHcState "健保卡：這個槽目前沒看到卡" "bad" }
+  $hcUntil = Format-Until $Status.status.hc.expireTime
+  if ($hc -ge 3) { Set-StateLabel $lblHcState "健保卡：已完成三卡驗證$hcUntil" "ok" }
+  elseif ($hc -eq 2) { Set-StateLabel $lblHcState "健保卡：已驗證$hcUntil" "ok" }
+  elseif ($hc -eq 1) { Set-StateLabel $lblHcState "健保卡：已偵測，還沒完成驗證" "wait" }
+  else { Set-StateLabel $lblHcState "健保卡：未置入" "idle" }
+}
+
+function Show-Current {
+  $status = Invoke-Api -Method GET -Path "/api/common/v1/Status"
+  Show-Status $status "both"
 }
 
 function Fill-Readers {
@@ -288,8 +330,7 @@ function Run-Action([scriptblock]$Action) {
 $btnRefresh.Add_Click({
   Run-Action {
     Fill-Readers
-    $status = Invoke-Api -Method GET -Path "/api/common/v1/Status"
-    Show-Status $status
+    Show-Current
     Add-Log "已重新整理。"
   }
 })
@@ -318,16 +359,16 @@ $btnImport.Add_Click({
     }
     $added = Invoke-Api -Method POST -Path "/api/settings/v1/CloudSam" -Body $body
     Add-Log ("已匯入 " + $added.sam.hospitalName + "，SAM " + $added.sam.samId)
-    $status = Ensure-Ready ([string]$cboHpc.SelectedItem)
-    Show-Status $status
+    $status = Ensure-Sam
+    Show-Status $status "sam"
   }
 })
 
 $btnSam.Add_Click({
   Run-Action {
-    $status = Ensure-Ready ([string]$cboHpc.SelectedItem)
+    $status = Ensure-Sam
     $basic = Invoke-Api -Method GET -Path "/api/sam/v1/Basic"
-    Show-Status $status
+    Show-Status $status "sam"
     Add-Log ("SAM 已驗證：" + $basic.hospitalName + "（" + $basic.hospitalId + "）")
   }
 })
@@ -336,12 +377,21 @@ $btnHpc.Add_Click({
   Run-Action {
     $pin = $txtPin.Text.Trim()
     if (-not $pin) { throw "請先輸入醫事人員卡 PIN。" }
-    if (-not $cboHpc.SelectedItem) { throw "請先選擇醫事人員卡的槽。" }
-    $status = Ensure-Ready ([string]$cboHpc.SelectedItem)
-    Invoke-Api -Method POST -Path "/api/hpc/v1/Verification/Hpc" -Body @{ pin = $pin } | Out-Null
+    if (-not $cboHpc.SelectedItem) { throw "請先選擇醫事人員卡的讀卡機。只有一台就選跟健保卡同一台。" }
+    $status = Select-Reader ([string]$cboHpc.SelectedItem)
+    try {
+      Invoke-Api -Method POST -Path "/api/hpc/v1/Verification/Hpc" -Body @{ pin = $pin } | Out-Null
+    } catch {
+      if ($_.Exception.Message -match "（1102）") {
+        Set-StateLabel $lblHpcState "醫事人員卡：沒有插卡" "idle"
+        Add-Log "醫事人員卡沒插，可以繼續。"
+        return
+      }
+      throw
+    }
     $basic = Invoke-Api -Method GET -Path "/api/hpc/v1/Basic"
     $status = Invoke-Api -Method GET -Path "/api/common/v1/Status"
-    Show-Status $status
+    Show-Status $status "hpc"
     $txtPin.Clear()
     Add-Log ("醫事人員卡已驗證：" + $basic.cName + "　" + $basic.idNo)
   }
@@ -349,11 +399,20 @@ $btnHpc.Add_Click({
 
 $btnHc.Add_Click({
   Run-Action {
-    if (-not $cboHc.SelectedItem) { throw "請先選擇健保卡的槽。" }
-    $status = Ensure-Ready ([string]$cboHc.SelectedItem)
-    $basic = Invoke-Api -Method GET -Path "/api/hc/v1/Basic"
+    if (-not $cboHc.SelectedItem) { throw "請先選擇健保卡的讀卡機。只有一台就選跟醫事人員卡同一台。" }
+    $status = Select-Reader ([string]$cboHc.SelectedItem)
+    try {
+      $basic = Invoke-Api -Method GET -Path "/api/hc/v1/Basic"
+    } catch {
+      if ($_.Exception.Message -match "（1102）") {
+        Set-StateLabel $lblHcState "健保卡：沒有插卡" "idle"
+        Add-Log "健保卡沒插，可以繼續。"
+        return
+      }
+      throw
+    }
     $status = Invoke-Api -Method GET -Path "/api/common/v1/Status"
-    Show-Status $status
+    Show-Status $status "hc"
     $sex = switch ([string]$basic.sex) { "M" { "男" } "F" { "女" } default { [string]$basic.sex } }
     Add-Log ("健保卡：" + $basic.name + "　" + $basic.idNo + "　" + $basic.birthday + "　" + $sex)
   }
@@ -362,9 +421,8 @@ $btnHc.Add_Click({
 $form.Add_Shown({
   Run-Action {
     Fill-Readers
-    $status = Invoke-Api -Method GET -Path "/api/common/v1/Status"
-    Show-Status $status
-    Add-Log "讀卡機已指定。若醫事人員卡驗證仍失敗，把上面兩個槽對調後再試一次。"
+    Show-Current
+    Add-Log "燈直接看 6.0。驗過的會留到有效時間，關掉再開也還在。"
   }
 })
 

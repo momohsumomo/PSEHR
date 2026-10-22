@@ -50,6 +50,7 @@ class ReferralSlipBody(BaseModel):
     serial: str = ""
     validUntil: str = ""
     status: str = ""
+    openedOn: str = ""
     historyText: str | None = None
     treatText: str | None = None
     sex: str | None = None

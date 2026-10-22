@@ -18,6 +18,7 @@ import {
   registerPatient,
   registerSoap,
   registerObservation,
+  retainEncounterChart,
   updateConditionResource,
   updateMedicationRequest,
   type WorkspaceResponse,
@@ -36,6 +37,7 @@ import type { QueueRegisterForm } from "@/components/clinic/QueueRegisterStrip";
 import type { RegisterEditForm } from "@/components/clinic/RegisterEditDialog";
 import type { IncomingChoice } from "@/components/clinic/ReferralAcceptDialogs";
 import { BAD_CARD_REASON, claimSeqFor } from "@/lib/nocardClaim";
+import { roomNumber } from "@/lib/roomMark";
 import {
   buildConditionIntake,
   buildMedicationIntake,
@@ -267,6 +269,10 @@ function mapRxFromWorkspace(
             : undefined;
     const payMark = (marks.payMark || (meta as { payMark?: string }).payMark || "") as RxLine["payMark"];
     // route filled later from catalog MEDICAL.USE_TYPE / CAST
+    const status = String(
+      (resource as { status?: string }).status || (meta as { status?: string }).status || "active",
+    );
+    if (status === "cancelled" || status === "entered-in-error" || status === "stopped") return null;
     return {
       id: String((resource as { id?: string }).id ?? `rx-${i}`),
       name: String(meta.drugText ?? "\u85e5\u54c1"),
@@ -285,7 +291,7 @@ function mapRxFromWorkspace(
           ? undefined
           : Number(meta.unitPrice),
     };
-  });
+  }).filter((line): line is RxLine => line != null);
 }
 
 function mapWorkspace(ws: WorkspaceResponse) {
@@ -299,16 +305,18 @@ function mapWorkspace(ws: WorkspaceResponse) {
         ? "confirmed"
         : "unconfirmed") as AllergyRow["level"],
   }));
-  const diagnoses: DiagnosisRow[] = ws.diagnoses.map((d) => {
+  const diagnoses: DiagnosisRow[] = ws.diagnoses.flatMap((d) => {
     const meta = d.indexMeta ?? {};
+    const status = String(meta.clinicalStatus || "");
+    if (status === "entered-in-error" || status === "inactive") return [];
     const res = (d.resource as { id?: string }) ?? {};
-    return {
+    return [{
       id: res.id,
       icd10: String(meta.icd10Code ?? ""),
       snomed: meta.snomedCode ? String(meta.snomedCode) : undefined,
       nhiIcd10: meta.nhiIcd10Code ? String(meta.nhiIcd10Code) : undefined,
       text: String(meta.summaryText ?? ""),
-    };
+    }];
   });
   const mapPrevRx = (entries: WorkspaceResponse["previousMedications"]): RxLine[] =>
     mapRxFromWorkspace(entries);
@@ -699,7 +707,7 @@ export function useClinicWorkspace(options?: {
         caseNo: form.caseNo,
         copayCode: form.copayCode,
         dispense: form.dispense,
-        room: form.room,
+        room: roomNumber(form.room),
         shift: form.shift,
         treatmentItem: form.treatmentItem,
         afterCheck: form.afterCheck,
@@ -905,6 +913,17 @@ export function useClinicWorkspace(options?: {
       if (form.encounterId) {
         const patientId = form.patientId?.trim();
         if (!patientId) throw new Error("本筆缺少 patientId，無法存檔此次掛號資料");
+        const prior = queue.find((row) => row.encounterId === form.encounterId);
+        const yuan = (value: string | undefined) => {
+          const text = String(value ?? "").trim();
+          if (!text || text === "\u2014" || text === "-") return 0;
+          const n = Number(text.replace(/[^\d.-]/g, ""));
+          return Number.isFinite(n) ? n : 0;
+        };
+        const burden = String(form.burdenFee || "").trim() ? yuan(form.burdenFee) : yuan(form.copayAmt);
+        const totalFee = String(
+          Math.round(yuan(form.regFee) + burden + yuan(form.deposit) + yuan(prior?.selfPay)),
+        );
         await patchEncounterReg(form.encounterId, {
           patientId,
           patientIdNo: form.idNo.trim(),
@@ -912,7 +931,7 @@ export function useClinicWorkspace(options?: {
           caseNo: payload.caseNo,
           copayCode: payload.copayCode,
           dispense: payload.dispense,
-          room: payload.room,
+          room: roomNumber(payload.room),
           shift: payload.shift,
           treatmentItem: payload.treatmentItem,
           afterCheck: payload.afterCheck,
@@ -937,6 +956,7 @@ export function useClinicWorkspace(options?: {
           drugFee: payload.drugFee,
           materialFee: payload.materialFee,
           burdenFee: payload.burdenFee,
+          totalFee,
           prebook: Boolean(form.prebook),
           queueNumber: form.queueNumber ? Number(form.queueNumber) : undefined,
           visitClock: form.visitClock,
@@ -962,7 +982,7 @@ export function useClinicWorkspace(options?: {
       }
       return created;
     },
-    [apiMode, registerPatientAndEncounter, refreshQueue, ensureAcceptReferralOrder],
+    [apiMode, queue, registerPatientAndEncounter, refreshQueue, ensureAcceptReferralOrder],
   );
 
   const persistCondition = useCallback(
@@ -988,9 +1008,33 @@ export function useClinicWorkspace(options?: {
     [apiMode, selectedEncounterId, patientIdNo, refreshWorkspace],
   );
 
+  const retainQuiet = useCallback(
+    async (encounterId: string, body: { medicationIds?: string[]; conditionIds?: string[] }) => {
+      try {
+        await retainEncounterChart(encounterId, body);
+      } catch {
+        /* The host program may not have this route yet. The row-by-row cancel still runs. */
+      }
+    },
+    [],
+  );
+
   const persistMedications = useCallback(
     async (lines: RxLine[]) => {
-      if (!apiMode || !selectedEncounterId || !lines.length) return;
+      if (!apiMode || !selectedEncounterId) return;
+      const kept = new Set(
+        lines.filter((line) => line.id && !isDraftId(line.id)).map((line) => line.id),
+      );
+      await retainQuiet(selectedEncounterId, { medicationIds: [...kept] });
+      if (patientId) {
+        for (const old of workspaceData?.currentRx ?? []) {
+          if (!old.id || isDraftId(old.id) || kept.has(old.id)) continue;
+          await updateMedicationRequest(old.id, {
+            ...medicationSaveBody(patientId, selectedEncounterId, old),
+            status: "cancelled",
+          });
+        }
+      }
       for (const line of lines) {
         if (!line.nhiCode?.trim()) continue;
         if (!isDraftId(line.id) && line.id && patientId) {
@@ -1002,7 +1046,7 @@ export function useClinicWorkspace(options?: {
       }
       await refreshWorkspace(selectedEncounterId);
     },
-    [apiMode, selectedEncounterId, patientId, patientIdNo, refreshWorkspace],
+    [apiMode, selectedEncounterId, patientId, patientIdNo, refreshWorkspace, retainQuiet, workspaceData?.currentRx],
   );
 
   const persistChiefComplaint = useCallback(
@@ -1103,6 +1147,21 @@ export function useClinicWorkspace(options?: {
       if (chiefComplaint.trim()) {
         await persistChiefComplaint(chiefComplaint, assessment);
       }
+      const keptDx = dxRows.filter((dx) => dx.id && !isDraftId(dx.id)).map((dx) => dx.id as string);
+      await retainQuiet(selectedEncounterId, { conditionIds: keptDx });
+      if (patientId) {
+        for (const old of workspaceData?.diagnoses ?? []) {
+          if (!old.id || isDraftId(old.id) || keptDx.includes(old.id)) continue;
+          await updateConditionResource(old.id, {
+            subject: { reference: `Patient/${patientId}` },
+            encounter: { reference: `Encounter/${selectedEncounterId}` },
+            summaryText: old.text || old.icd10 || "dx",
+            icd10Code: old.icd10 || undefined,
+            nhiIcd10Code: old.nhiIcd10 || old.icd10?.replace(/\./g, "") || undefined,
+            clinicalStatus: { coding: [{ code: "entered-in-error" }] },
+          });
+        }
+      }
       const existingDx = new Set(
         (workspaceData?.diagnoses ?? []).map((d) => `${d.icd10}|${d.text}`),
       );
@@ -1134,6 +1193,7 @@ export function useClinicWorkspace(options?: {
       persistCondition,
       persistMedications,
       refreshWorkspace,
+      retainQuiet,
       workspaceData?.diagnoses,
     ],
   );
@@ -1145,6 +1205,27 @@ export function useClinicWorkspace(options?: {
       const pid = patientId;
       if (visit.chiefComplaint.trim()) {
         await persistChiefComplaint(visit.chiefComplaint, visit.diagnoses[0]?.text, undefined, eid);
+      }
+      const keptMeds = new Set(
+        visit.medications.filter((line) => line.id && !isDraftId(line.id)).map((line) => line.id),
+      );
+      const keptDx = visit.diagnoses.filter((dx) => dx.id && !isDraftId(dx.id)).map((dx) => dx.id as string);
+      await retainQuiet(eid, { medicationIds: [...keptMeds], conditionIds: keptDx });
+      const priorDx =
+        (workspaceData?.historyVisits ?? []).find((row) => row.encounterId === eid)?.diagnoses ??
+        (selectedEncounterId === eid ? workspaceData?.diagnoses ?? [] : []);
+      if (pid) {
+        for (const old of priorDx) {
+          if (!old.id || isDraftId(old.id) || keptDx.includes(old.id)) continue;
+          await updateConditionResource(old.id, {
+            subject: { reference: `Patient/${pid}` },
+            encounter: { reference: `Encounter/${eid}` },
+            summaryText: old.text || old.icd10 || "dx",
+            icd10Code: old.icd10 || undefined,
+            nhiIcd10Code: old.nhiIcd10 || old.icd10?.replace(/\./g, "") || undefined,
+            clinicalStatus: { coding: [{ code: "entered-in-error" }] },
+          });
+        }
       }
       for (const dx of visit.diagnoses) {
         if (!isDraftId(dx.id) && dx.id && pid) {
@@ -1159,6 +1240,18 @@ export function useClinicWorkspace(options?: {
           const body = buildConditionIntake(eid, dx, patientIdNo);
           if (!body.icd10Code && !body.nhiIcd10Code) continue;
           await registerCondition(body);
+        }
+      }
+      const priorMeds =
+        (workspaceData?.historyVisits ?? []).find((row) => row.encounterId === eid)?.medications ??
+        (selectedEncounterId === eid ? workspaceData?.currentRx ?? [] : []);
+      if (pid) {
+        for (const old of priorMeds) {
+          if (!old.id || isDraftId(old.id) || keptMeds.has(old.id)) continue;
+          await updateMedicationRequest(old.id, {
+            ...medicationSaveBody(pid, eid, old),
+            status: "cancelled",
+          });
         }
       }
       for (const line of visit.medications) {
@@ -1178,7 +1271,11 @@ export function useClinicWorkspace(options?: {
       patientIdNo,
       persistChiefComplaint,
       refreshWorkspace,
+      retainQuiet,
       selectedEncounterId,
+      workspaceData?.diagnoses,
+      workspaceData?.historyVisits,
+      workspaceData?.currentRx,
     ],
   );
 

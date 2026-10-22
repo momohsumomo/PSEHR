@@ -1,3 +1,4 @@
+import { ageYearsMonths } from "@/lib/ageLabel";
 import { HIS, HIS_FONT } from "@/lib/hisTheme";
 
 interface PatientHeaderWidgetProps {
@@ -23,7 +24,7 @@ export function PatientHeaderWidget({
     selected?.medicalNo ?? patientResource?.identifier?.[0]?.value ?? "—";
   const bits: Array<{ label?: string; value: string }> = [
     { value: selected?.patientDisplay ?? "—" },
-    { value: selected?.ageSex ?? "" },
+    { value: ageYearsMonths(selected?.age || selected?.ageSex) || "" },
     { label: "病歷", value: medicalNo },
     selected?.queueNumber != null
       ? { label: "序", value: String(selected.queueNumber) }

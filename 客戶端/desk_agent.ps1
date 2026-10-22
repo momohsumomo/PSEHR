@@ -164,6 +164,7 @@ function Ensure-PrintEdge([string]$Edge) {
   Stop-PrintEdge
   if (-not $Edge) { throw "Edge is not installed" }
   $profile = Join-Path $env:LOCALAPPDATA "PSEHR\print-edge"
+  Stop-ProfileEdge $profile
   New-Item -ItemType Directory -Force -Path $profile | Out-Null
   $marker = Join-Path $profile "DevToolsActivePort"
   if (Test-Path -LiteralPath $marker) { Remove-Item -LiteralPath $marker -Force -ErrorAction SilentlyContinue }
@@ -412,6 +413,112 @@ function Find-ClinicHost {
   return ""
 }
 
+function Stop-ProfileEdge([string]$Profile) {
+  for ($n = 0; $n -lt 5; $n++) {
+    $procs = @(Get-ClinicEdge $Profile)
+    if ($procs.Count -eq 0) { break }
+    foreach ($proc in $procs) {
+      try { Stop-Process -Id $proc.ProcessId -Force -ErrorAction SilentlyContinue } catch {}
+    }
+    Start-Sleep -Milliseconds 200
+  }
+  if (@(Get-ClinicEdge $Profile).Count -gt 0) { return }
+  foreach ($name in @("SingletonLock", "SingletonCookie", "SingletonSocket", "lockfile", "DevToolsActivePort")) {
+    $path = Join-Path $Profile $name
+    if (Test-Path -LiteralPath $path) {
+      try { Remove-Item -LiteralPath $path -Force -ErrorAction SilentlyContinue } catch {}
+    }
+  }
+}
+
+function Test-ClinicEdgeVisible([string]$Profile) {
+  foreach ($proc in @(Get-ClinicEdge $Profile)) {
+    try {
+      $p = Get-Process -Id $proc.ProcessId -ErrorAction SilentlyContinue
+      if ($p -and $p.MainWindowHandle -ne 0) { return $true }
+    } catch {}
+  }
+  return $false
+}
+
+function Test-AnyClinicEdgeVisible {
+  foreach ($name in @("edge-app", "edge-register", "edge-intake")) {
+    if (Test-ClinicEdgeVisible (Join-Path $Root $name)) { return $true }
+  }
+  return $false
+}
+
+function Release-CardSession {
+  if (-not (Get-Card6).running) { return }
+  foreach ($path in @("/api/hc/v1/Logout", "/api/hpc/v1/Logout", "/api/common/v1/Finalize")) {
+    try {
+      $req = [System.Net.HttpWebRequest]::Create("https://127.0.0.1:5066" + $path)
+      $req.Method = "POST"
+      $req.Timeout = 1500
+      $req.ContentType = "application/json"
+      $req.Accept = "application/json"
+      $req.ServerCertificateValidationCallback = { $true }
+      $bytes = [Text.Encoding]::UTF8.GetBytes("{}")
+      $req.ContentLength = $bytes.Length
+      $stream = $req.GetRequestStream()
+      $stream.Write($bytes, 0, $bytes.Length)
+      $stream.Close()
+      $resp = $req.GetResponse()
+      $resp.Close()
+    } catch {}
+  }
+}
+
+function Watch-ClinicEdges {
+  if (-not $script:ClinicEdgeSeen) { $script:ClinicEdgeSeen = @{} }
+  if (-not $script:ClinicEdgeGone) { $script:ClinicEdgeGone = @{} }
+  $closed = $false
+  foreach ($name in @("edge-app", "edge-register", "edge-intake")) {
+    $profile = Join-Path $Root $name
+    $procs = @(Get-ClinicEdge $profile)
+    if (Test-ClinicEdgeVisible $profile) {
+      $script:ClinicEdgeSeen[$name] = $true
+      $script:ClinicEdgeGone[$name] = 0
+      continue
+    }
+    if (-not $script:ClinicEdgeSeen[$name]) { continue }
+    if ($procs.Count -eq 0) {
+      $script:ClinicEdgeGone[$name] = 0
+      continue
+    }
+    $young = $false
+    foreach ($proc in $procs) {
+      try {
+        $p = Get-Process -Id $proc.ProcessId -ErrorAction SilentlyContinue
+        if ($p -and $p.StartTime -gt (Get-Date).AddSeconds(-20)) { $young = $true }
+      } catch {}
+    }
+    if ($young) { continue }
+    $gone = 0
+    try { $gone = [int]$script:ClinicEdgeGone[$name] } catch { $gone = 0 }
+    $gone++
+    $script:ClinicEdgeGone[$name] = $gone
+    if ($gone -lt 2) { continue }
+    Stop-ProfileEdge $profile
+    $script:ClinicEdgeSeen[$name] = $false
+    $script:ClinicEdgeGone[$name] = 0
+    $closed = $true
+    Write-Log ("closed " + $name)
+  }
+  if ($closed -and -not (Test-AnyClinicEdgeVisible)) { Release-CardSession }
+}
+
+function Stop-IdlePrintEdge {
+  if (Test-AnyClinicEdgeVisible) { return }
+  $profile = Join-Path $env:LOCALAPPDATA "PSEHR\print-edge"
+  $alive = @(Get-ClinicEdge $profile).Count -gt 0
+  if ($script:PrintEdge -and -not $script:PrintEdge.HasExited) { $alive = $true }
+  if (-not $alive) { return }
+  Stop-PrintEdge
+  Stop-ProfileEdge $profile
+  Write-Log "closed print-edge"
+}
+
 function Open-ClinicEdge {
   param([string]$Page = "", [string]$ProfileName = "edge-app")
   $ip = Find-ClinicHost
@@ -428,22 +535,58 @@ function Open-ClinicEdge {
   if ($edge) {
     $profile = Join-Path $Root $ProfileName
     New-Item -ItemType Directory -Force -Path $profile | Out-Null
-    Stop-ClinicEdge $profile
-    $edgeArgs = "--user-data-dir=`"$profile`" --app=`"$url`" --no-first-run --no-default-browser-check --disable-sync --disable-features=LocalNetworkAccessChecks"
-    Start-Process -FilePath $edge -ArgumentList $edgeArgs
+    if (Show-ClinicEdge $profile) { return }
+    Stop-ProfileEdge $profile
+    if (-not (Test-AnyClinicEdgeVisible)) { Release-CardSession }
+    $edgeArgs = "--user-data-dir=`"$profile`" --app=`"$url`" --no-first-run --no-default-browser-check --disable-sync --disable-extensions --disable-background-mode --disable-component-extensions-with-background-pages --disable-features=LocalNetworkAccessChecks,msEdgeStartupBoost"
+    $psi = New-Object System.Diagnostics.ProcessStartInfo
+    $psi.FileName = $edge
+    $psi.Arguments = $edgeArgs
+    $psi.UseShellExecute = $false
+    [void][System.Diagnostics.Process]::Start($psi)
   } else { Start-Process $url }
 }
 
-function Stop-ClinicEdge([string]$Profile) {
+function Get-ClinicEdge([string]$Profile) {
+  $needle = "$Profile".ToLower()
+  $found = @()
   try {
     $procs = @(Get-CimInstance Win32_Process -Filter "Name = 'msedge.exe'" -ErrorAction SilentlyContinue)
     foreach ($proc in $procs) {
-      if ("$($proc.CommandLine)" -like "*$Profile*") {
-        Stop-Process -Id $proc.ProcessId -Force -ErrorAction SilentlyContinue
-      }
+      $cmd = "$($proc.CommandLine)".ToLower()
+      if ($needle -and $cmd.Contains($needle)) { $found += $proc }
     }
   } catch {}
-  Start-Sleep -Milliseconds 400
+  return $found
+}
+
+function Show-DeskWindow([IntPtr]$Handle) {
+  if (-not ([System.Management.Automation.PSTypeName]"PsehrWindow").Type) {
+    Add-Type @"
+using System;
+using System.Runtime.InteropServices;
+public class PsehrWindow {
+  [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+  [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr hWnd);
+  [DllImport("user32.dll")] public static extern bool BringWindowToTop(IntPtr hWnd);
+}
+"@
+  }
+  [void][PsehrWindow]::ShowWindow($Handle, 9)
+  [void][PsehrWindow]::BringWindowToTop($Handle)
+  [void][PsehrWindow]::SetForegroundWindow($Handle)
+}
+
+function Show-ClinicEdge([string]$Profile) {
+  foreach ($proc in @(Get-ClinicEdge $Profile)) {
+    try {
+      $p = Get-Process -Id $proc.ProcessId -ErrorAction SilentlyContinue
+      if (-not $p -or $p.MainWindowHandle -eq 0) { continue }
+      Show-DeskWindow $p.MainWindowHandle
+      return $true
+    } catch {}
+  }
+  return $false
 }
 
 function Invoke-DeskJson([string]$Url, [string]$Method, [string]$Json) {
@@ -544,10 +687,17 @@ function Request-Release5066 {
 
 function Start-LocalPrinterListener {
   $tcp = $null
-  try {
-    $tcp = New-Object System.Net.Sockets.TcpListener ([System.Net.IPAddress]::Loopback, 5310)
-    $tcp.Start()
-  } catch {
+  for ($try = 0; $try -lt 10; $try++) {
+    try {
+      $tcp = New-Object System.Net.Sockets.TcpListener ([System.Net.IPAddress]::Loopback, 5310)
+      $tcp.Start()
+      break
+    } catch {
+      $tcp = $null
+      Start-Sleep -Milliseconds 300
+    }
+  }
+  if (-not $tcp) {
     Write-Log "printer list already listening"
     return
   }
@@ -798,7 +948,6 @@ function Start-DeskLoop {
   try {
     Start-LocalPrinterListener
     Request-Release5066
-    try { if (Find-Edge) { Ensure-PrintEdge (Find-Edge) } } catch { Write-Log $_.Exception.Message }
     $nextSide = [datetime]::MinValue
     while ($true) {
       try {
@@ -839,6 +988,8 @@ function Start-DeskLoop {
               }
             }
           }
+          try { Watch-ClinicEdges } catch { Write-Log $_.Exception.Message }
+          try { Stop-IdlePrintEdge } catch { Write-Log $_.Exception.Message }
         }
       } catch { Write-Log $_.Exception.Message }
       Start-Sleep -Milliseconds 250
@@ -849,6 +1000,7 @@ function Start-DeskLoop {
 }
 
 function Stop-OldAgent {
+  $ids = @()
   try {
     $procs = @(Get-CimInstance Win32_Process -Filter "Name = 'powershell.exe'" -ErrorAction SilentlyContinue)
     foreach ($proc in $procs) {
@@ -856,10 +1008,14 @@ function Stop-OldAgent {
       $cmd = "$($proc.CommandLine)"
       if ($cmd -like "*-Open*" -or $cmd -like "*-Install*" -or $cmd -like "*-Register*" -or $cmd -like "*-Intake*") { continue }
       if ($cmd -like "*desk_agent.ps1*" -or $cmd -like "*desk_helper.ps1*") {
+        $ids += [int]$proc.ProcessId
         Stop-Process -Id $proc.ProcessId -Force -ErrorAction SilentlyContinue
       }
     }
   } catch {}
+  foreach ($id in $ids) {
+    try { Wait-Process -Id $id -Timeout 3 -ErrorAction SilentlyContinue } catch {}
+  }
 }
 
 if ($Intake) {

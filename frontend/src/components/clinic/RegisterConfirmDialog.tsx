@@ -27,6 +27,8 @@ import { HospitalLookupDialog } from "@/components/clinic/HospitalLookupDialog";
 import { BAD_CARD_REASON } from "@/lib/nocardClaim";
 import { HisFixedClockInput } from "@/components/clinic/HisFixedClockInput";
 import { normalizeClock } from "@/lib/queueOrder";
+import { lastClinicDept, loadClinicSession } from "@/lib/clinicSession";
+import { roomNumber } from "@/lib/roomMark";
 
 type Props = {
   open: boolean;
@@ -245,7 +247,6 @@ export function RegisterConfirmDialog({
   const [weight, setWeight] = useState("0.0");
   const [temperature, setTemperature] = useState("0.0");
   const [specialNote, setSpecialNote] = useState("");
-  const [roomSeq, setRoomSeq] = useState("1");
   const [visitTime, setVisitTime] = useState(() => {
     const n = new Date();
     return `${String(n.getHours()).padStart(2, "0")}:${String(n.getMinutes()).padStart(2, "0")}:${String(n.getSeconds()).padStart(2, "0")}`;
@@ -384,8 +385,8 @@ export function RegisterConfirmDialog({
     if (!form.regFee && form.icException === "selfPay" && defaults.regFeeSelfPay) {
       patch.regFee = defaults.regFeeSelfPay;
     }
-    if (!form.room && defaults.mainDept) {
-      patch.room = defaults.mainDept;
+    if (!form.room || /\u79d1/.test(form.room)) {
+      patch.room = roomNumber(loadClinicSession()?.room || "1");
     }
     if (Object.keys(patch).length) onChange(patch);
 
@@ -685,16 +686,15 @@ export function RegisterConfirmDialog({
                   </select>
                 )}
               </Row>
-              <Row label="診間序號">
-                <input className={inputCls} value={roomSeq} onChange={(e) => setRoomSeq(e.target.value)} />
-              </Row>
-              <Row label="就醫科別">
+              <Row label="診間">
                 <input
                   className={inputCls}
-                  value={form.room}
-                  onChange={(e) => onChange({ room: e.target.value })}
-                  placeholder="11 皮膚科"
+                  value={roomNumber(form.room)}
+                  onChange={(e) => onChange({ room: e.target.value.replace(/\D/g, "") || "1" })}
                 />
+              </Row>
+              <Row label="就醫科別">
+                <input className={inputCls} readOnly value={lastClinicDept()} />
               </Row>
               <Row label="就診序號" accent="green">
                 <input

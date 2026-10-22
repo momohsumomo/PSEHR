@@ -53,6 +53,7 @@ def _ensure(conn) -> None:
 
 def list_slips(kind: str = "") -> list[dict[str, Any]]:
     ensure_yisheng_archive()
+    _fill_missing_reply_dates()
     wanted = kind if kind in {"out", "reply"} else ""
     with get_shadow_store()._connect() as conn:
         _ensure(conn)
@@ -74,6 +75,7 @@ def save_slip(body: dict[str, Any]) -> dict[str, Any]:
         raise ValueError("kind must be out or reply")
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     slip_id = str(body.get("id") or "").strip() or uuid.uuid4().hex
+    opened_on = str(body.get("openedOn") or "")[:10]
     status = str(body.get("status") or "")
     if not status:
         status = "\u8349\u7a3f" if kind == "out" else "\u5f85\u67e5"
@@ -94,11 +96,18 @@ def save_slip(body: dict[str, Any]) -> dict[str, Any]:
         "serial": str(body.get("serial") or ""),
         "valid_until": str(body.get("validUntil") or ""),
         "status": status,
-        "opened_on": str(body.get("openedOn") or "")[:10],
+        "opened_on": opened_on,
         "updated_at": now,
     }
     with get_shadow_store()._connect() as conn:
         _ensure(conn)
+        if not fields["opened_on"]:
+            existing = conn.execute(
+                "SELECT opened_on FROM referral_slip WHERE id=?",
+                (slip_id,),
+            ).fetchone()
+            if existing and existing[0]:
+                fields["opened_on"] = str(existing[0])[:10]
         conn.execute(
             """
             INSERT INTO referral_slip (
@@ -295,6 +304,49 @@ def ensure_yisheng_archive() -> None:
         _import_yisheng_archive()
     _fill_reply_sheets()
     _fill_out_sheets()
+    link_outbound_encounters()
+
+
+def link_outbound_encounters() -> int:
+    """Point each outbound slip at the one visit that day with the same chart number."""
+    with get_shadow_store()._connect() as conn:
+        _ensure(conn)
+        slips = conn.execute(
+            "SELECT id, medical_no, opened_on FROM referral_slip "
+            "WHERE kind = 'out' AND IFNULL(encounter_id, '') = '' "
+            "AND IFNULL(medical_no, '') <> '' AND IFNULL(opened_on, '') <> ''"
+        ).fetchall()
+        linked = 0
+        for slip_id, medical_no, opened_on in slips:
+            chart = str(medical_no or "").strip()
+            day = str(opened_on or "")[:10]
+            bare = chart.lstrip("0") or chart
+            if not chart or len(day) < 10:
+                continue
+            rows = conn.execute(
+                """
+                SELECT ei.resource_id
+                FROM encounter_index ei
+                JOIN patient_index pi ON pi.resource_id = ei.patient_id
+                WHERE substr(ei.encounter_date, 1, 10) = ?
+                  AND (
+                    trim(IFNULL(pi.medical_no, '')) = ?
+                    OR trim(IFNULL(pi.medical_no, '')) = ?
+                    OR ltrim(trim(IFNULL(pi.medical_no, '')), '0') = ?
+                  )
+                """,
+                (day, chart, bare, bare),
+            ).fetchall()
+            ids = {str(row[0]) for row in rows if row[0]}
+            if len(ids) != 1:
+                continue
+            conn.execute(
+                "UPDATE referral_slip SET encounter_id = ? "
+                "WHERE id = ? AND IFNULL(encounter_id, '') = ''",
+                (next(iter(ids)), slip_id),
+            )
+            linked += 1
+        return linked
 
 
 def _iso_day(text: str) -> str:
@@ -413,6 +465,40 @@ def _memo_text(handle, block: int, token: str | None) -> str:
     raw = handle.read(length)
     cleaned = raw.decode("cp950", errors="ignore").replace("\x00", "")
     return cleaned.replace("\r\n", "\n").replace("\r", "\n").strip()
+
+
+def _fill_missing_reply_dates() -> None:
+    """Put the reply day back when a save stored a blank date."""
+    import os
+
+    from scripts.import_yisheng_data import parse_roc_date, read_dbf_records
+
+    with get_shadow_store()._connect() as conn:
+        _ensure(conn)
+        blank = conn.execute(
+            "SELECT id FROM referral_slip WHERE id LIKE 'ys-reply-%' AND IFNULL(opened_on, '') = ''"
+        ).fetchall()
+    if not blank:
+        return
+    path = os.path.join(os.environ.get("YISHENG_DAT", r"Z:\SC\dat"), "REFERETURN.Dat")
+    if not os.path.exists(path):
+        return
+    dates: dict[str, str] = {}
+    for row in read_dbf_records(path):
+        parsed = parse_roc_date(str(row.get("RET_DATE") or "")) or parse_roc_date(str(row.get("UL_DATE") or ""))
+        if not parsed:
+            continue
+        dates["ys-reply-%s" % (row.get("_rec_idx") or "")] = parsed[1]
+    updates = [{"id": row[0], "opened_on": dates.get(row[0]) or ""} for row in blank]
+    updates = [item for item in updates if item["opened_on"]]
+    if not updates:
+        return
+    with get_shadow_store()._connect() as conn:
+        _ensure(conn)
+        conn.executemany(
+            "UPDATE referral_slip SET opened_on=:opened_on WHERE id=:id AND IFNULL(opened_on, '') = ''",
+            updates,
+        )
 
 
 def _fill_reply_sheets() -> None:

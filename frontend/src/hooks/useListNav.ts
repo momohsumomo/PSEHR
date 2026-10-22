@@ -75,6 +75,7 @@ export function useListNav({
     const root = scrollerRef.current;
     if (!root || !active) return;
     const onWheel = (ev: WheelEvent) => {
+      if (ev.ctrlKey || ev.metaKey) return;
       if (length <= 0) return;
       if (Math.abs(ev.deltaX) > Math.abs(ev.deltaY)) {
         root.scrollLeft += ev.deltaX;

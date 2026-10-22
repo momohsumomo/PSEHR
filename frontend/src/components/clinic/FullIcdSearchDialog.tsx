@@ -148,6 +148,12 @@ export function FullIcdSearchDialog({ query, onClose, onPick }: Props) {
                   onClick={(ev) => {
                     ev.preventDefault();
                     ev.stopPropagation();
+                    setArmed(false);
+                    setIndex(i);
+                  }}
+                  onDoubleClick={(ev) => {
+                    ev.preventDefault();
+                    ev.stopPropagation();
                     pick(row);
                   }}
                 >

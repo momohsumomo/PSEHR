@@ -31,6 +31,17 @@ interface DiagnosesWidgetProps {
 type Col = 0 | 1 | 2;
 const COLS: Col[] = [0, 1, 2];
 
+function dropSideRow(prev: Record<string, string>, row: number): Record<string, string> {
+  const next: Record<string, string> = {};
+  for (const [key, value] of Object.entries(prev)) {
+    const [rawRow, rawCol] = key.split(":");
+    const at = Number(rawRow);
+    if (at === row) continue;
+    next[`${at > row ? at - 1 : at}:${rawCol}`] = value;
+  }
+  return next;
+}
+
 function diagnosisKey(row: { nhiIcd10?: string; icd10?: string; text?: string }): string {
   return (row.nhiIcd10 || row.icd10 || row.text || "").trim().toUpperCase();
 }
@@ -70,6 +81,7 @@ export function DiagnosesWidget({
   const [localIdx, setLocalIdx] = useState(0);
   const [focusCol, setFocusCol] = useState<Col>(1);
   const [drafts, setDrafts] = useState<string[]>(() => [""]);
+  const [sideDrafts, setSideDrafts] = useState<Record<string, string>>({});
   const [pickIdx, setPickIdx] = useState(0);
   const [handPicked, setHandPicked] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -135,6 +147,7 @@ export function DiagnosesWidget({
         const next = d.filter((_, i) => i !== di);
         return next.length ? next : [""];
       });
+      setSideDrafts((prev) => dropSideRow(prev, rowIndex));
     }
     setIcd9Open(null);
     setIcd10Open(null);
@@ -157,10 +170,18 @@ export function DiagnosesWidget({
     ? drafts[selectedIdx - displayDiagnoses.length] ?? ""
     : "";
   const coverText = cover && cover.row === selectedIdx ? cover.text : "";
+  const sideQuery = focusCol === 1 ? "" : sideDrafts[`${selectedIdx}:${focusCol}`] || "";
   const hits = useMemo(() => {
-    const q = editingDraft ? draftText : coverText;
+    const q =
+      cover && cover.row === selectedIdx && cover.col !== 1
+        ? cover.text
+        : sideQuery
+          ? sideQuery
+          : editingDraft
+            ? draftText
+            : coverText;
     return q.trim() ? searchDiagnoses(catalog, q, 12) : [];
-  }, [catalog, editingDraft, draftText, coverText]);
+  }, [catalog, cover, coverText, draftText, editingDraft, selectedIdx, sideQuery]);
 
   useEffect(() => {
     if (displayDiagnoses.length >= maxDiagnoses) {
@@ -188,10 +209,10 @@ export function DiagnosesWidget({
     setHandPicked(false);
     const allow =
       hits.length > 0 &&
-      ((editingDraft && typedInRow === selectedIdx && draftText.trim().length > 0) ||
+      ((editingDraft && typedInRow === selectedIdx && (draftText.trim().length > 0 || sideQuery.trim().length > 0)) ||
         coverText.trim().length > 0);
     setMenuOpen(allow);
-  }, [draftText, hits.length, editingDraft, typedInRow, selectedIdx, coverText]);
+  }, [draftText, hits.length, editingDraft, typedInRow, selectedIdx, coverText, sideQuery]);
 
   useEffect(() => {
     // 換列時關掉下拉，等再打字
@@ -246,6 +267,7 @@ export function DiagnosesWidget({
         const next = d.filter((_, i) => i !== di);
         return next.length ? next : [""];
       });
+      setSideDrafts((prev) => dropSideRow(prev, row));
     }
     setMenuOpen(false);
     setCombo(null);
@@ -441,7 +463,9 @@ export function DiagnosesWidget({
       const typed =
         cover && cover.row === row
           ? cover.text
-          : editingDraft
+          : col !== 1 && sideDrafts[`${row}:${col}`]
+            ? sideDrafts[`${row}:${col}`]
+            : editingDraft
             ? draftText
             : row < displayDiagnoses.length
               ? col === 0
@@ -542,9 +566,11 @@ export function DiagnosesWidget({
               const sel = row === selectedIdx;
               const cellBg = sel ? "#E5F6E3" : HIS.dxBg;
               const preview = !isCommitted && draftVal && sel && hits[pickIdx] ? hits[pickIdx] : null;
+              const side9 = sideDrafts[`${row}:0`] || "";
+              const side10 = sideDrafts[`${row}:2`] || "";
               const values = isCommitted
                 ? [icd9For(d), d?.text || "", d?.icd10 || d?.nhiIcd10 || ""]
-                : [preview?.icd9 || preview?.aCode || "", draftVal, preview?.icd10 || ""];
+                : [side9 || preview?.icd9 || preview?.aCode || "", draftVal, side10 || preview?.icd10 || ""];
 
               return (
                 <tr
@@ -598,7 +624,11 @@ export function DiagnosesWidget({
                           setSelectedIdx(row);
                           setFocusCol(col);
                           setMenuOpen(false);
-                          const shown = String(values[col] || "").trim();
+                          const shown = (
+                            cover && cover.row === row && cover.col === col
+                              ? cover.text
+                              : String(values[col] || "")
+                          ).trim();
                           if (col === 2) {
                             setIcd10Open({ row, query: shown });
                             return;
@@ -695,6 +725,7 @@ export function DiagnosesWidget({
                                   const nextRows = prev.filter((_, i) => i !== di);
                                   return nextRows.length ? nextRows : [""];
                                 });
+                                setSideDrafts((prev) => dropSideRow(prev, row));
                                 setSelectedIdx(next);
                               }
                               return;
@@ -723,14 +754,22 @@ export function DiagnosesWidget({
                                 setCover({ row, col, text: v });
                                 return;
                               }
-                              if (!isCommitted) {
-                                const di = row - displayDiagnoses.length;
-                                setDrafts((prev) => {
-                                  const next = [...prev];
-                                  next[di] = v;
-                                  return next;
-                                });
+                              if (!isCommitted && col !== 1) {
+                                setSideDrafts((prev) => ({ ...prev, [`${row}:${col}`]: v }));
+                                return;
                               }
+                              if (isCommitted && d) {
+                                if (col === 0) onChangeDiagnosis?.(row, { ...d, icd9: v });
+                                else if (col === 1) onChangeDiagnosis?.(row, { ...d, text: v });
+                                else onChangeDiagnosis?.(row, { ...d, icd10: v });
+                                return;
+                              }
+                              const di = row - displayDiagnoses.length;
+                              setDrafts((prev) => {
+                                const next = [...prev];
+                                next[di] = v;
+                                return next;
+                              });
                               return;
                             }
                             if (editing) onNav(e, row, col);
@@ -744,6 +783,10 @@ export function DiagnosesWidget({
                               return;
                             }
                             setTypedInRow(row);
+                            if (!isCommitted && col !== 1) {
+                              setSideDrafts((prev) => ({ ...prev, [`${row}:${col}`]: v }));
+                              return;
+                            }
                             if (isCommitted) {
                               if (col === 1) {
                                 onChangeDiagnosis?.(row, { ...d!, text: v });

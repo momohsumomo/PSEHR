@@ -5,6 +5,7 @@ import { readLocalClinicBundle } from "@/lib/clinicProfile";
 import { lastClinicDept } from "@/lib/clinicSession";
 import { openPrintPreview } from "@/lib/printJob";
 import { depositPrintOptions, findPrintSetup, loadPrintSettings, partOn } from "@/lib/printSettings";
+import { openReleaseRxIfWanted } from "@/lib/releaseRx";
 import { buildSimpleSlipHtml, visitCashParts } from "@/lib/simpleSlip";
 import type { DiagnosisRow, QueueEntry, RxLine, RxPayMark } from "@/mocks/clinicMocks";
 
@@ -96,7 +97,7 @@ export async function openSavedVisitReceipt(entry: QueueEntry, visitDate: string
   const clinic = readLocalClinicBundle();
   const setup = findPrintSetup(loadPrintSettings(), "simple");
   const profile = clinic.profile;
-  await openPrintPreview({
+  const sent = await openPrintPreview({
     kind: "receipt",
     layout: "paged",
     setupId: "simple",
@@ -145,5 +146,35 @@ export async function openSavedVisitReceipt(entry: QueueEntry, visitDate: string
       showFeeTable: partOn(setup, "feeTable"),
       showWarning: partOn(setup, "warning"),
     }),
+  });
+  if (!sent.printed) return;
+  await openReleaseRxIfWanted({
+    caseNo: entry.caseNo || "",
+    clinicName: profile.clinicName,
+    clinicCode: profile.clinicCode,
+    address: profile.address,
+    phone: profile.phone,
+    name: entry.patientDisplay || "",
+    idNo: entry.idNo || "",
+    sex: entry.sex || entry.ageSex || "",
+    birthday: entry.birthday || "",
+    medicalNo: entry.medicalNo || "",
+    dept: profile.mainDept || lastClinicDept(),
+    visitDate,
+    cardNo: entry.treatSeq || "",
+    queueNo: entry.queueNumber != null ? String(entry.queueNumber) : "",
+    doctor: entry.doctorName || "",
+    pharmacist: pharmacistName,
+    diagnoses: diagnosesOf(ws).map((row) => ({
+      code: row.icd10 || row.nhiIcd10 || "",
+      text: row.text || "",
+    })),
+    drugs: drugsOf(ws).map((row) => ({
+      name: row.name,
+      sig: row.sig,
+      days: row.days || 0,
+      qty: row.qty == null ? "" : String(row.qty),
+      total: row.totalAmount == null ? "" : String(row.totalAmount),
+    })),
   });
 }

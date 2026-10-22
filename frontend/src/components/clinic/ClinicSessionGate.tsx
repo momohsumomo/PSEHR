@@ -7,6 +7,7 @@ import {
   lastClinicDept,
   type ClinicSession,
 } from "@/lib/clinicSession";
+import { roomLabel, roomNumber } from "@/lib/roomMark";
 
 const DEPT_OPTIONS = ["皮膚科", "家醫科", "內科", "外科", "不分科"];
 
@@ -35,6 +36,8 @@ export function ClinicSessionGate({ initial, preferToday, onConfirm, onCancel }:
   );
   const [dept, setDept] = useState(initial?.dept || lastClinicDept());
   const [pharmacist, setPharmacist] = useState(initial?.pharmacist || "");
+  const [room, setRoom] = useState(roomNumber(initial?.room || "1"));
+  const [rooms, setRooms] = useState<string[]>(["1"]);
   const [staff, setStaff] = useState<ApiStaffRecord[]>([]);
   const [error, setError] = useState<string | null>(null);
 
@@ -44,6 +47,12 @@ export function ClinicSessionGate({ initial, preferToday, onConfirm, onCancel }:
         const list = pharmacistRows(rows);
         setStaff(list);
         setPharmacist((prev) => prev || list[0]?.name || "");
+        const found = new Set<string>(["1"]);
+        for (const row of rows) {
+          if (row.status && row.status !== "\u5728\u8077" && row.status !== "active") continue;
+          found.add(roomNumber(row.room || "1"));
+        }
+        setRooms([...found].sort((a, b) => Number(a) - Number(b)));
       })
       .catch(() => setStaff([]));
   }, []);
@@ -58,20 +67,33 @@ export function ClinicSessionGate({ initial, preferToday, onConfirm, onCancel }:
       setError("請先選藥師。沒有藥師，掛號不會帶預設藥師");
       return;
     }
-    onConfirm({ date, shift, pharmacist: name, dept: dept.trim() || lastClinicDept() });
+    onConfirm({
+      date,
+      shift,
+      pharmacist: name,
+      dept: dept.trim() || lastClinicDept(),
+      room: roomNumber(room),
+    });
   };
 
   useEffect(() => {
     const onKey = (ev: KeyboardEvent) => {
+      if (document.querySelector("[data-roc-date-picker]")) return;
       if (ev.key === "Escape") {
-        if (document.querySelector("[data-roc-date-picker]")) return;
         ev.preventDefault();
         onCancel();
+        return;
+      }
+      if (ev.key === "Enter") {
+        const target = ev.target instanceof HTMLElement ? ev.target : null;
+        if (target?.tagName === "BUTTON" && (target.textContent || "").includes("\u53d6\u6d88")) return;
+        ev.preventDefault();
+        confirm();
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [onCancel]);
+  }, [onCancel, confirm]);
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/45 p-3">
@@ -115,6 +137,20 @@ export function ClinicSessionGate({ initial, preferToday, onConfirm, onCancel }:
               {DEPT_OPTIONS.map((d) => (
                 <option key={d} value={d}>
                   {d}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="flex items-center gap-2">
+            <span className="w-16 shrink-0">診間</span>
+            <select
+              className="flex-1 rounded border border-[#80C080] bg-white px-2 py-1 font-normal"
+              value={roomNumber(room)}
+              onChange={(e) => setRoom(e.target.value)}
+            >
+              {(rooms.includes(roomNumber(room)) ? rooms : [...rooms, roomNumber(room)]).map((n) => (
+                <option key={n} value={n}>
+                  {roomLabel(n)}
                 </option>
               ))}
             </select>

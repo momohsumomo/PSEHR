@@ -35,6 +35,8 @@ import { isoBirthDateToRoc, formatBirthdayRoc, loadClinicRegisterDefaults, type 
 import { isDepositHold } from "@/lib/registerModes";
 import { HIS, HIS_FONT, hisFontStyle } from "@/lib/hisTheme";
 import { findWaitingAppointment, otherShiftAppointmentNote } from "@/lib/appointmentCheckIn";
+import { displayCase } from "@/lib/caseMark";
+import { roomLabel, roomNumber } from "@/lib/roomMark";
 import { clockLabel, compareClinicQueue, normalizeClock, nowClock, planQueueNumber, shiftFromClock, shiftQueueNumbers } from "@/lib/queueOrder";
 import { depositPrintOptions, findPrintSetup, loadPrintSettings } from "@/lib/printSettings";
 import { openDepositSlip, openSavedVisitReceipt } from "@/lib/visitReceiptPrint";
@@ -87,13 +89,13 @@ function regiCell(entry: QueueEntry, key: string): string {
     case "shift":
       return dash(entry.shift || shift);
     case "room":
-      return dash(entry.room);
+      return dash(roomLabel(entry.room));
     case "note":
       return entry.note?.trim() || "";
     case "preVisit":
       return visitListMark(entry, { appointmentWhileWaiting: false });
     case "caseNo":
-      return dash(entry.caseNo);
+      return dash(displayCase(entry.caseNo));
     case "paperCard":
       return entry.paperCard ? "紙" : "";
     case "deptSlot":
@@ -149,7 +151,7 @@ function seedFromEntry(entry: QueueEntry): Partial<RegisterEditForm> {
     doctorId: entry.doctorId || "",
     doctorName: entry.doctorName || "",
     shift: entry.shift || "",
-    room: entry.room || "",
+    room: roomNumber(entry.room),
     treatmentItem: entry.treatmentItem || "01",
     afterCheck: entry.afterCheck === "2" ? "2" : "1",
     icException: (entry.icException as RegisterEditForm["icException"]) || "ic",
@@ -277,6 +279,7 @@ export function RegisterPage() {
   const [pharmacistOpen, setPharmacistOpen] = useState(false);
   const [registerOptionsOpen, setRegisterOptionsOpen] = useState(false);
   const [patientEditOpen, setPatientEditOpen] = useState(false);
+  const [finderPatient, setFinderPatient] = useState<PatientEditSeed | null>(null);
 
   const searchRef = useRef<HTMLInputElement>(null);
   const selected = queue.find((e) => e.encounterId === selectedId) ?? null;
@@ -634,6 +637,7 @@ export function RegisterPage() {
   };
 
   const patientEditSeed = useMemo((): PatientEditSeed | null => {
+    if (finderPatient?.patientId) return finderPatient;
     if (!selected?.patientId) return null;
     return {
       patientId: selected.patientId,
@@ -643,7 +647,7 @@ export function RegisterPage() {
       sex: selected.sex || "",
       medicalNo: selected.medicalNo || "",
     };
-  }, [selected]);
+  }, [finderPatient, selected]);
 
   const runRegisterShortcut = (action: (typeof REGISTER_SHORTCUT_BAR)[number]["action"]) => {
     switch (action) {
@@ -925,7 +929,7 @@ export function RegisterPage() {
     index: queueIndex,
     onIndex: onQueueIndex,
     scrollerRef: queueListRef,
-    wheelRows: 2,
+    wheelRows: 1,
   });
 
   const waiting = filteredQueue.filter((e) => e.queueStatus === "waiting").length;
@@ -1179,7 +1183,7 @@ export function RegisterPage() {
           {careBusy ? "載入中…" : "載入照護線上"}
         </button>
         <span>
-          看診中: {selected?.room || "1診"} {selected?.pharmacist || lastPharmacist() || "—"}
+          看診中: {roomLabel(selected?.room || "1")} {selected?.pharmacist || lastPharmacist() || "—"}
         </span>
         <label className="flex items-center gap-1">
           <span>插號</span>
@@ -1292,7 +1296,10 @@ export function RegisterPage() {
       />
       <PatientEditDialog
         open={patientEditOpen}
-        onClose={() => setPatientEditOpen(false)}
+        onClose={() => {
+          setPatientEditOpen(false);
+          setFinderPatient(null);
+        }}
         seed={patientEditSeed}
         onSaved={() => void refreshQueue()}
       />
@@ -1304,6 +1311,19 @@ export function RegisterPage() {
         onSelect={onPatientPicked}
         allowCreate
         onCreate={(q) => setNewPatientQuery(q)}
+        onEdit={(hit) => {
+          setFinderOpen(false);
+          setFinderPatient({
+            patientId: hit.id,
+            name: hit.name,
+            idNo: hit.idNo,
+            birthday: hit.birthdayRoc,
+            sex: hit.sex,
+            medicalNo: hit.medicalNo,
+            phone: hit.phone,
+          });
+          setPatientEditOpen(true);
+        }}
       />
       <NewPatientDialog
         open={newPatientQuery != null}
@@ -1451,7 +1471,7 @@ export function RegisterPage() {
           生日: formatBirthdayRoc(selected?.birthday || ""),
           看診日: currentDate,
           時段: selected?.shift || "",
-          診間: selected?.room || "",
+          診間: roomLabel(selected?.room || "1"),
           卡號: selected?.hcId || "",
           就醫序號: selected?.treatSeq || "",
           就醫識別碼: selected?.treatmentNumber || "",

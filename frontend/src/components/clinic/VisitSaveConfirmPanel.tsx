@@ -1,10 +1,13 @@
 import { useEffect, useRef, useState } from "react";
+import { fetchStaff, type ApiStaffRecord } from "@/api/clinicApi";
 import { useListNav } from "@/hooks/useListNav";
 import { thisPcPrintsOnSave, thisPcUploadsCloudOnSave } from "@/lib/clinicDevice";
+import { doctorDisplayName } from "@/lib/doctorName";
 import { HIS, HIS_FONT } from "@/lib/hisTheme";
 import { skipsCloudWrite } from "@/lib/queueOrder";
 import type { DiagnosisRow, QueueEntry, RxLine } from "@/mocks/clinicMocks";
 import { formatBirthdayRoc } from "@/lib/patientSearch";
+import { displayCase } from "@/lib/caseMark";
 import { ceilCashTen, selfPayCeiling } from "@/lib/selfPayMoney";
 
 export type VisitSaveDraft = {
@@ -17,6 +20,8 @@ export type VisitSaveDraft = {
   cardNo: string;
   aCode: string;
   doctor: string;
+  doctorId: string;
+  pharmacist: string;
   dept: string;
   dxText: string;
   icd10: string;
@@ -94,7 +99,7 @@ export function buildVisitSaveDraft(args: {
   const selfBasis = selfPayCeiling(args.currentRx);
   const storedSelf = yuanNumber(args.selected?.selfPay);
   return {
-    caseNo: args.selected?.caseNo && args.selected.caseNo !== DASH ? args.selected.caseNo : "01",
+    caseNo: displayCase(args.selected?.caseNo) || "01",
     copayCode:
       args.selected?.copayCode && args.selected.copayCode !== DASH
         ? String(args.selected.copayCode)
@@ -113,6 +118,11 @@ export function buildVisitSaveDraft(args: {
     cardNo: args.selected?.hcId && args.selected.hcId !== DASH ? String(args.selected.hcId) : DASH,
     aCode: DASH,
     doctor: doctorLabel,
+    doctorId: args.doctorId || "",
+    pharmacist:
+      args.selected?.pharmacist && args.selected.pharmacist !== DASH
+        ? String(args.selected.pharmacist)
+        : "",
     dept: "皮膚科",
     dxText: dx0?.text || DASH,
     icd10: dx0?.icd10 || dx0?.nhiIcd10 || DASH,
@@ -167,6 +177,13 @@ type Props = {
   printNote?: string | null;
   onPickWaiting?: (encounterId: string) => void;
 };
+
+function workingStaff(rows: ApiStaffRecord[], kind: "doctor" | "pharmacist"): ApiStaffRecord[] {
+  const role = kind === "pharmacist" ? /\u85e5\u5e2b|pharmacist|pharm/i : /\u9662\u9577|\u91ab\u5e2b|doctor/i;
+  return rows.filter(
+    (row) => role.test(row.role || "") && (row.status === "\u5728\u8077" || row.status === "active" || !row.status),
+  );
+}
 
 function patientIdText(selected: QueueEntry | null): string {
   const raw = String(selected?.idNo || "").trim();
@@ -243,6 +260,20 @@ export function VisitSaveConfirmPanel({
   printNote,
   onPickWaiting,
 }: Props) {
+  const [doctors, setDoctors] = useState<ApiStaffRecord[]>([]);
+  const [pharmacists, setPharmacists] = useState<ApiStaffRecord[]>([]);
+  useEffect(() => {
+    if (!open) return;
+    void fetchStaff()
+      .then((rows) => {
+        setDoctors(workingStaff(rows, "doctor"));
+        setPharmacists(workingStaff(rows, "pharmacist"));
+      })
+      .catch(() => {
+        setDoctors([]);
+        setPharmacists([]);
+      });
+  }, [open]);
   useEffect(() => {
     if (!open) return;
     const onKey = (ev: KeyboardEvent) => {
@@ -317,7 +348,50 @@ export function VisitSaveConfirmPanel({
               <Field label={"\u5929\u6578"} value={draft.rxDays} onChange={(v) => onChange({ rxDays: v })} chars={3} />
               <Field label={"\u5c31\u91ab\u5e8f\u865f"} value={draft.treatSeq} onChange={(v) => onChange({ treatSeq: v })} chars={6} />
               <Field label={"IC\u5361\u865f"} value={draft.cardNo} onChange={(v) => onChange({ cardNo: v })} chars={14} />
-              <Field label={"\u91ab\u5e2b"} value={draft.doctor} onChange={(v) => onChange({ doctor: v })} chars={8} />
+              <label className="inline-flex items-center" style={{ gap: "0.3em" }}>
+                <span>{"\u91ab\u5e2b"}</span>
+                <select
+                  className="border border-[#808080] bg-white px-1"
+                  style={{ height: "1.35em", color: HIS.inputBlue, minWidth: "8ch" }}
+                  value={draft.doctorId}
+                  onChange={(e) => {
+                    const picked = doctors.find((row) => row.id === e.target.value);
+                    onChange({
+                      doctorId: e.target.value,
+                      doctor: picked ? doctorDisplayName(picked.name, picked.id) || picked.name : draft.doctor,
+                    });
+                  }}
+                >
+                  <option value="">{"\u2014"}</option>
+                  {draft.doctorId && !doctors.some((row) => row.id === draft.doctorId) ? (
+                    <option value={draft.doctorId}>{draft.doctor || draft.doctorId}</option>
+                  ) : null}
+                  {doctors.map((row) => (
+                    <option key={row.id} value={row.id}>
+                      {doctorDisplayName(row.name, row.id) || row.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="inline-flex items-center" style={{ gap: "0.3em" }}>
+                <span>{"\u85e5\u5e2b"}</span>
+                <select
+                  className="border border-[#808080] bg-white px-1"
+                  style={{ height: "1.35em", color: HIS.inputBlue, minWidth: "8ch" }}
+                  value={draft.pharmacist}
+                  onChange={(e) => onChange({ pharmacist: e.target.value })}
+                >
+                  <option value="">{"\u8acb\u9078\u64c7"}</option>
+                  {draft.pharmacist && !pharmacists.some((row) => row.name === draft.pharmacist) ? (
+                    <option value={draft.pharmacist}>{draft.pharmacist}</option>
+                  ) : null}
+                  {pharmacists.map((row) => (
+                    <option key={row.id} value={row.name}>
+                      {row.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
               <Field label={"\u79d1\u5225"} value={draft.dept} onChange={(v) => onChange({ dept: v })} chars={6} />
               <Field label={"\u4e3b\u8a3a\u65b7"} value={draft.dxText} onChange={(v) => onChange({ dxText: v })} chars={16} />
               <Field label="ICD" value={draft.icd10} onChange={(v) => onChange({ icd10: v })} chars={8} />

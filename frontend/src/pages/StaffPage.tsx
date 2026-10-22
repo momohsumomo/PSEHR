@@ -258,11 +258,8 @@ export function StaffPage() {
                       <td className="border px-1 py-0.5" style={{ borderColor: "#C0C0C0" }}>
                         —
                       </td>
-                      <td className="border px-1 py-0.5 text-center" style={{ borderColor: "#C0C0C0" }}>
-                        —
-                      </td>
-                      <td className="border px-1 py-0.5" style={{ borderColor: "#C0C0C0" }}>
-                        —
+                      <td className="border px-1 py-0.5 text-center font-mono" style={{ borderColor: "#C0C0C0" }}>
+                        {s.room || "1"}
                       </td>
                       <td className="border px-1 py-0.5 font-mono" style={{ borderColor: "#C0C0C0" }}>
                         . .
@@ -272,6 +269,9 @@ export function StaffPage() {
                       </td>
                       <td className="border px-1 py-0.5 font-mono" style={{ borderColor: "#C0C0C0" }}>
                         {s.certNo || "—"}
+                      </td>
+                      <td className="border px-1 py-0.5" style={{ borderColor: "#C0C0C0" }}>
+                        —
                       </td>
                       <td className="border px-1 py-0.5" style={{ borderColor: "#C0C0C0" }}>
                         —
@@ -324,6 +324,16 @@ export function StaffPage() {
                   className={hisInputClass}
                   value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                />
+              </HisField>
+              <HisField label={"\u8a3a\u9593"}>
+                <input
+                  type="text"
+                  className={`${hisInputClass} font-mono`}
+                  value={formData.room || "1"}
+                  onChange={(e) =>
+                    setFormData({ ...formData, room: e.target.value.replace(/\D/g, "") || "1" })
+                  }
                 />
               </HisField>
               <HisField label={"\u8077\u7a31"}>

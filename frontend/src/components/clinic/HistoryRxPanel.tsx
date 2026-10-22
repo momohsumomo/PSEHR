@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type KeyboardEvent, type MouseEvent as ReactMouseEvent } from "react";
 import { useListNav } from "@/hooks/useListNav";
+import { displayCase } from "@/lib/caseMark";
 import { RxGrid } from "@/components/clinic/RxGrid";
 import type { UiColumnDef } from "@/types/uiConfig";
 import type { DiagnosisRow, HistoryVisit, RxLine } from "@/mocks/clinicMocks";
@@ -161,6 +162,7 @@ export function HistoryRxPanel({
   };
 
   const bodyFs = Math.max(fontSizePx, 14);
+  const visitFs = bodyFs * 0.8;
   const headFs = Math.max(12, bodyFs - 1);
   const dash = "\u2014";
   const [splits, setSplits] = useState(readHistorySplits);
@@ -200,7 +202,7 @@ export function HistoryRxPanel({
       {/* Same stack: visits -> CC -> dx -> rx; slightly larger type */}
       <div className="flex min-h-0 flex-1 flex-col">
         <section
-          className="flex shrink-0 flex-col overflow-hidden border-b border-[#808080] bg-white"
+          className="flex shrink-0 flex-col overflow-hidden bg-white"
           style={{ height: splits.visits }}
         >
           <div ref={visitListRef} tabIndex={0} data-list-scope="" className="min-h-0 flex-1 overflow-auto outline-none">
@@ -209,13 +211,13 @@ export function HistoryRxPanel({
                 {"\u6b64\u75c5\u60a3\u5c1a\u7121\u770b\u8a3a\u8cc7\u6599"}
               </p>
             ) : (
-              <table className="w-full min-w-max text-left" style={{ fontSize: bodyFs }}>
+              <table className="w-full min-w-max text-left" style={{ fontSize: visitFs }}>
                 <thead className="sticky top-0 bg-slate-100 text-slate-600">
                   <tr>
                     {VISIT_COLUMNS.map((col) => (
                       <th
                         key={col.key}
-                        className="whitespace-nowrap border-b px-1 py-0.5 font-semibold"
+                        className="whitespace-nowrap border-b px-1 py-0 font-semibold leading-none"
                       >
                         {col.label}
                       </th>
@@ -236,8 +238,10 @@ export function HistoryRxPanel({
                       onKeyDown={(ev) => onVisitKey(ev, v)}
                     >
                       {VISIT_COLUMNS.map((col) => (
-                        <td key={col.key} className="whitespace-nowrap px-1 py-0.5 leading-snug">
-                          {String(v[col.key] ?? dash)}
+                        <td key={col.key} className="whitespace-nowrap px-1 py-0 leading-none">
+                          {col.key === "caseNo"
+                            ? displayCase(String(v.caseNo ?? "")) || dash
+                            : String(v[col.key] ?? dash)}
                         </td>
                       ))}
                     </tr>
@@ -251,13 +255,13 @@ export function HistoryRxPanel({
           role="separator"
           aria-orientation="horizontal"
           title={"\u62d6\u66f3\u8abf\u6574\u9ad8\u5ea6\uff0c\u96d9\u64ca\u56de\u5fa9\u9810\u8a2d"}
-          className="h-1.5 shrink-0 cursor-row-resize bg-[#6A6A6A] hover:bg-[#0A5AD6]"
+          className="h-px shrink-0 cursor-row-resize bg-black hover:bg-[#0A5AD6]"
           onMouseDown={startSplitDrag("visits", 72, 520)}
           onDoubleClick={() => setSplits(HISTORY_SPLIT_DEFAULT)}
         />
 
         <section
-          className="flex shrink-0 items-stretch overflow-hidden border-b border-[#808080] bg-[#FFF5FA]"
+          className="flex shrink-0 items-stretch overflow-hidden bg-[#FFF5FA]"
           style={{ height: splits.cc }}
         >
           <pre
@@ -280,13 +284,13 @@ export function HistoryRxPanel({
           role="separator"
           aria-orientation="horizontal"
           title={"\u62d6\u66f3\u8abf\u6574\u9ad8\u5ea6\uff0c\u96d9\u64ca\u56de\u5fa9\u9810\u8a2d"}
-          className="h-1.5 shrink-0 cursor-row-resize bg-[#6A6A6A] hover:bg-[#0A5AD6]"
+          className="h-px shrink-0 cursor-row-resize bg-black hover:bg-[#0A5AD6]"
           onMouseDown={startSplitDrag("cc", 22, 280)}
           onDoubleClick={() => setSplits(HISTORY_SPLIT_DEFAULT)}
         />
 
         <section
-          className="flex shrink-0 items-stretch overflow-hidden border-b border-[#808080] bg-[#F0FFF0]"
+          className="flex shrink-0 items-stretch overflow-hidden bg-[#F0FFF0]"
           style={{ height: splits.dx }}
         >
           <ul
@@ -317,12 +321,12 @@ export function HistoryRxPanel({
           role="separator"
           aria-orientation="horizontal"
           title={"\u62d6\u66f3\u8abf\u6574\u9ad8\u5ea6\uff0c\u96d9\u64ca\u56de\u5fa9\u9810\u8a2d"}
-          className="h-1.5 shrink-0 cursor-row-resize bg-[#6A6A6A] hover:bg-[#0A5AD6]"
+          className="h-px shrink-0 cursor-row-resize bg-black hover:bg-[#0A5AD6]"
           onMouseDown={startSplitDrag("dx", 22, 280)}
           onDoubleClick={() => setSplits(HISTORY_SPLIT_DEFAULT)}
         />
 
-        <section className="flex min-h-0 flex-1 flex-col border-t border-[#808080] bg-[#FFFFF0]">
+        <section className="flex min-h-0 flex-1 flex-col bg-[#FFFFF0]">
           <div className="flex shrink-0 justify-end">
             <button
               type="button"

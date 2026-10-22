@@ -13,13 +13,15 @@ type Props = {
   /** 掛號找人：沒有符合就開新建，有符合也留新增按鈕。調閱不開。 */
   allowCreate?: boolean;
   onCreate?: (query: string) => void;
+  /** Opens that patient's master edit. Same result as picking them and pressing F5. */
+  onEdit?: (hit: PatientHit) => void;
 };
 
 /**
  * 醫聖風格共用「找人」視窗。
  * Enter／雙擊＝選定病患（呼叫端決定後續：掛號確認／填病歷條件），不是掛號。
  */
-export function PatientFinderDialog({ open, initialQuery = "", onClose, onSelect, allowCreate, onCreate }: Props) {
+export function PatientFinderDialog({ open, initialQuery = "", onClose, onSelect, allowCreate, onCreate, onEdit }: Props) {
   const [query, setQuery] = useState(initialQuery);
   const [hits, setHits] = useState<PatientHit[]>([]);
   const [selectedIdx, setSelectedIdx] = useState(0);
@@ -248,6 +250,16 @@ export function PatientFinderDialog({ open, initialQuery = "", onClose, onSelect
               onClick={() => onCreate?.(query.trim() || lastSearched)}
             >
               {"\u65b0\u589e\u75c5\u60a3"}
+            </button>
+          ) : null}
+          {onEdit ? (
+            <button
+              type="button"
+              disabled={!hits[selectedIdx]}
+              className="rounded border border-[#004D00] bg-white px-3 py-1 text-xs font-bold text-[#004D00] disabled:opacity-40"
+              onClick={() => hits[selectedIdx] && onEdit(hits[selectedIdx])}
+            >
+              {"\u4fee\u6539\u8cc7\u6599"}
             </button>
           ) : null}
           <button

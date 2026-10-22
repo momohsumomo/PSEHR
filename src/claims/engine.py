@@ -30,6 +30,9 @@ class ClaimMedLine:
     ratePercent: float = 100.0
     # False: case-01 daily-fee drug. Filed as order category 4, price and points 0.
     billable: bool = True
+    # 交／轉／材：交付檢驗。申報醫令 p2=4、p24=代檢機構。
+    payMark: str = ""
+    delegateLabCode: str = ""
 
 
 @dataclass
@@ -77,6 +80,16 @@ class ClaimEncounterRecord:
     medicalNo: str = ""
     # 影子庫病人編號。調閱病歷用這個找人，不拿身分證去當病人編號。
     chartPatientId: str = ""
+    # 補卡：實際就醫識別碼，申報 d61。d60 仍是這次取到的就醫識別碼。
+    # 只有補卡註記 2、3、4 才寫 d61。押金當下讀到的另一組卡號不是補卡。
+    actualTreatId: str = ""
+    icRemark: str = ""
+    # 轉入：d16 註記、d17 原院所。轉出：d18=Y、d55 轉往院所。
+    referralInMark: str = ""
+    referralInHosp: str = ""
+    referralOutHosp: str = ""
+    # 特定治療項目。第一個若是 G8，來自該次掛號；其餘來自病名主檔的 SPECIAL。
+    specTreatCodes: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -353,6 +366,8 @@ def build_claims_summary(
 
     staff_by_id, staff_by_name = _load_staff_maps(store)
     dispense_default = _clinic_dispense_code(store)
+    lab_code = _clinic_lab_code(store)
+    outbound = _outbound_referral_codes(store)
 
     records: list[ClaimEncounterRecord] = []
 
@@ -405,6 +420,7 @@ def build_claims_summary(
             ]
         diag_str = ",".join(str(x) for x in diag_codes if x)
         diag_list = [str(x).strip() for x in diag_codes if x]
+        spec_codes = _spec_treat_codes(str(reg.get("caseNoE1") or ""), diag_list)
 
         doctor_raw = str(reg.get("doctorId") or claim_doctor or "")
         doctor_nhi = _resolve_staff_nhi(doctor_raw, staff_by_id, staff_by_name)
@@ -416,6 +432,15 @@ def build_claims_summary(
         treatment_id = str(reg.get("treatmentNumber") or "").strip()
         if len(treatment_id) != 20:
             treatment_id = ""
+        ic_remark = str(reg.get("icRemark") or "").strip()[:1]
+        actual_treat = str(reg.get("actualTreatId") or "").strip()
+        if ic_remark not in {"2", "3", "4"} or len(actual_treat) != 20 or actual_treat == treatment_id:
+            actual_treat = ""
+        referral_in = str(reg.get("acceptReferral") or "").strip()
+        referral_hosp = "".join(ch for ch in str(reg.get("referralHospId") or "") if ch.isalnum())[:10]
+        if referral_in != "1" or len(referral_hosp) < 8:
+            referral_in = ""
+            referral_hosp = ""
         copay_code = str(reg.get("copayCode") or "")
         copay_pts = 0.0
         if reg.get("copayAmt"):
@@ -487,6 +512,7 @@ def build_claims_summary(
             # p12 is an integer: qty x unit x rate, half-up. The visit total is the sum of those integers.
             filed_pts = 0.0 if clinic_does_not_bill else float(half_up_points(line_pts))
             drug_points += filed_pts
+            delegated = pay_mark in {"\u4ea4", "\u8f49", "\u6750"}
             med_lines.append(
                 ClaimMedLine(
                     medicationRequestId=str(resource.get("id") or meta.get("resourceId") or ""),
@@ -502,6 +528,8 @@ def build_claims_summary(
                     routeCode=""
                     if is_order_code(nhi_code)
                     else _route_from(str(meta.get("useType") or ""), nhi_code, routes),
+                    payMark=pay_mark,
+                    delegateLabCode=lab_code if delegated else "",
                 )
             )
 
@@ -534,6 +562,12 @@ def build_claims_summary(
                 diagnosisCodes=diag_list,
                 treatmentId=treatment_id,
                 drugCopayPoints=drug_copay,
+                actualTreatId=actual_treat,
+                icRemark=ic_remark,
+                referralInMark="1" if referral_in == "1" else "",
+                referralInHosp=referral_hosp,
+                referralOutHosp=outbound.get(encounter_id, ""),
+                specTreatCodes=spec_codes,
             )
         )
 
@@ -823,6 +857,83 @@ def _clinic_dept_code(store: Any) -> str:
         return (digits[:2] or "11").zfill(2)
     except Exception:
         return "11"
+
+
+def _spec_treat_codes(case_no_e1: str, diagnoses: list[str]) -> list[str]:
+    """G8 from the visit first, then each diagnosis master's special code, no repeats."""
+    found: list[str] = []
+    visit_mark = "".join(ch for ch in case_no_e1 if ch.isalnum()).upper()[:2]
+    if visit_mark:
+        found.append(visit_mark)
+    table = _dx_special_map()
+    for code in diagnoses:
+        key = "".join(ch for ch in code.upper() if ch.isalnum())
+        special = table.get(key, "")
+        if special and special not in found:
+            found.append(special)
+        if len(found) >= 4:
+            break
+    return found[:4]
+
+
+@lru_cache(maxsize=1)
+def _dx_special_map() -> dict[str, str]:
+    path = Path(__file__).resolve().parents[2] / "frontend" / "public" / "yisheng_clinic_catalog.json"
+    if not path.is_file():
+        return {}
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    found: dict[str, str] = {}
+    for row in data.get("diagnoses") or []:
+        if not isinstance(row, dict):
+            continue
+        special = "".join(ch for ch in str(row.get("special") or "").upper() if ch.isalnum())[:2]
+        if not special:
+            continue
+        for raw in (row.get("icd10"), row.get("nhiIcd10"), row.get("short")):
+            key = "".join(ch for ch in str(raw or "").upper() if ch.isalnum())
+            if key and key not in found:
+                found[key] = special
+    return found
+
+
+def _clinic_lab_code(store: Any) -> str:
+    try:
+        from src.api.routers.clinic_settings import PROFILE_KEY, DEFAULT_PROFILE
+
+        saved = store.get_json_setting(PROFILE_KEY) or {}
+        profile = (saved.get("profile") if isinstance(saved, dict) else None) or {}
+        if "labInstitutionCode" in profile:
+            raw = str(profile.get("labInstitutionCode") or "")
+        else:
+            raw = str(DEFAULT_PROFILE["profile"]["labInstitutionCode"])
+        return "".join(ch for ch in raw if ch.isalnum())[:10]
+    except Exception:
+        return ""
+
+
+def _outbound_referral_codes(store: Any) -> dict[str, str]:
+    """Encounter id -> destination institution, from the referral desk list."""
+    connect = getattr(store, "_connect", None)
+    if connect is None:
+        return {}
+    found: dict[str, str] = {}
+    try:
+        with connect() as conn:
+            rows = conn.execute(
+                "SELECT encounter_id, dest_code FROM referral_slip "
+                "WHERE kind = 'out' AND IFNULL(encounter_id, '') <> ''"
+            ).fetchall()
+        for row in rows:
+            eid = str(row[0] or "").strip()
+            code = "".join(ch for ch in str(row[1] or "") if ch.isalnum())[:10]
+            if eid and len(code) >= 8:
+                found[eid] = code
+    except Exception:
+        return {}
+    return found
 
 
 def _clinic_dispense_code(store: Any) -> str:

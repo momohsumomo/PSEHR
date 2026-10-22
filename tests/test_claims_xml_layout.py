@@ -79,6 +79,21 @@ class ClaimsXmlLayoutTest(unittest.TestCase):
     def test_unknown_usage_is_not_multiplied(self):
         _test_unknown_usage_is_not_multiplied()
 
+    def test_delegate_lab_writes_institution_and_one_decimal(self):
+        _test_delegate_lab_writes_institution_and_one_decimal()
+
+    def test_plain_order_keeps_one_decimal_without_lab_code(self):
+        _test_plain_order_keeps_one_decimal_without_lab_code()
+
+    def test_makeup_card_and_referral_are_written_only_when_stored(self):
+        _test_makeup_card_and_referral_are_written_only_when_stored()
+
+    def test_spec_treat_codes_follow_the_visit_then_the_diagnosis(self):
+        _test_spec_treat_codes_follow_the_visit_then_the_diagnosis()
+
+    def test_missing_dose_still_writes_two_decimals(self):
+        _test_missing_dose_still_writes_two_decimals()
+
     def test_bid_pc_files_the_package_total_not_the_dose(self):
         dose, total = _billed_quantity(
             raw_qty=2.5,
@@ -265,3 +280,131 @@ def _test_unknown_usage_is_not_multiplied():
     )
     assert dose is None
     assert total == 1
+
+
+def _test_delegate_lab_writes_institution_and_one_decimal():
+    rec = _visit(
+        medications=[
+            ClaimMedLine(
+                medicationRequestId="mr-lab",
+                nhiCode="08011C",
+                drugText="lab",
+                daysSupply=1,
+                quantity=1,
+                unitPrice=0,
+                linePoints=0,
+                priceSource="snapshot",
+                payMark="\u4ea4",
+                delegateLabCode="JY21050018",
+            )
+        ]
+    )
+    xml = render_nhi_outpatient_xml(_summary(rec))
+    assert "<p2>4</p2>" in xml
+    assert "<p3>4</p3>" in xml
+    assert "<p4>08011C</p4>" in xml
+    assert "<p10>1.0</p10>" in xml
+    assert "<p24>JY21050018</p24>" in xml
+    assert "<p11>" not in xml.split("<p4>08011C</p4>", 1)[1].split("</pdata>", 1)[0]
+
+
+def _test_plain_order_keeps_one_decimal_without_lab_code():
+    rec = _visit(
+        medications=[
+            ClaimMedLine(
+                medicationRequestId="mr-2",
+                nhiCode="51020C",
+                drugText="incision",
+                daysSupply=1,
+                quantity=1,
+                unitPrice=50,
+                linePoints=50,
+                priceSource="snapshot",
+            )
+        ]
+    )
+    xml = render_nhi_outpatient_xml(_summary(rec))
+    block = xml.split("<p4>51020C</p4>", 1)[1].split("</pdata>", 1)[0]
+    assert "<p10>1.0</p10>" in block
+    assert "<p24>" not in block
+    assert "<p2>" not in block
+
+
+def _test_makeup_card_and_referral_are_written_only_when_stored():
+    plain = render_nhi_outpatient_xml(_summary(_visit()))
+    assert "<d61>" not in plain
+    deposit_only = render_nhi_outpatient_xml(
+        _summary(
+            _visit(
+                treatmentId="12345678901234567890",
+                actualTreatId="09876543210987654321",
+                icRemark="1",
+            )
+        )
+    )
+    assert "<d60>12345678901234567890</d60>" in deposit_only
+    assert "<d61>" not in deposit_only
+    assert "<d16>" not in plain
+    assert "<d17>" not in plain
+    assert "<d55>" not in plain
+    assert "<d18>N</d18>" in plain
+    marked = render_nhi_outpatient_xml(
+        _summary(
+            _visit(
+                treatmentId="12345678901234567890",
+                actualTreatId="09876543210987654321",
+                icRemark="2",
+                referralInMark="1",
+                referralInHosp="3521013662",
+                referralOutHosp="0123456789",
+                copayCode="004",
+                copayPoints=0,
+                basicCopayPoints=50,
+                drugCopayPoints=20,
+            )
+        )
+    )
+    assert "<d60>12345678901234567890</d60>" in marked
+    assert "<d61>09876543210987654321</d61>" in marked
+    assert "<d16>1</d16>" in marked
+    assert "<d17>3521013662</d17>" in marked
+    assert "<d18>Y</d18>" in marked
+    assert "<d55>0123456789</d55>" in marked
+    assert "<d43>70</d43>" in marked
+    assert marked.index("<d41>") < marked.index("<d43>") < marked.index("<d49>")
+    assert marked.index("<d55>") < marked.index("<d57>")
+    assert marked.index("<d60>") < marked.index("<d61>")
+
+
+def _test_spec_treat_codes_follow_the_visit_then_the_diagnosis():
+    xml = render_nhi_outpatient_xml(
+        _summary(_visit(specTreatCodes=["G8", "29"]))
+    )
+    assert "<d4>G8</d4>" in xml
+    assert "<d5>29</d5>" in xml
+    assert xml.index("<d4>") < xml.index("<d8>")
+    plain = render_nhi_outpatient_xml(_summary(_visit()))
+    assert "<d4>" not in plain
+
+
+def _test_missing_dose_still_writes_two_decimals():
+    rec = _visit(
+        medications=[
+            ClaimMedLine(
+                medicationRequestId="mr-1",
+                nhiCode="AC37344100",
+                drugText="tab",
+                daysSupply=7,
+                quantity=1,
+                unitPrice=2,
+                linePoints=2,
+                priceSource="snapshot",
+                useage="QD",
+                doseEach=None,
+                routeCode="PO",
+            )
+        ]
+    )
+    xml = render_nhi_outpatient_xml(_summary(rec))
+    assert "<p5>1.00</p5>" in xml
+    assert "<p10>1.0</p10>" in xml

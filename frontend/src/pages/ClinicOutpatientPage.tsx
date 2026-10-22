@@ -71,7 +71,11 @@ import {
   applyClinicDrugDisplayNames,
   resolvePackageLines,
 } from "@/utils/catalogRx";
-import { cancelRegister, writeVisitToCard, CardReadError, type CardFaultReport, patchEncounterReg, fetchStaff, replyReferral, saveReferralSlip, claimChartOpen, releaseChartOpen, CHART_IN_USE } from "@/api/clinicApi";
+import { cancelRegister, writeVisitToCard, CardReadError, type CardFaultReport, patchEncounterReg, previewVisitCase, fetchStaff, replyReferral, saveReferralSlip, claimChartOpen, releaseChartOpen, CHART_IN_USE } from "@/api/clinicApi";
+import { displayCase, prescriptionDays, prescriptionOrders, storedCase } from "@/lib/caseMark";
+import { ageYearsMonths } from "@/lib/ageLabel";
+import { roomLabel, roomNumber } from "@/lib/roomMark";
+import { LobbyPage } from "@/pages/LobbyPage";
 import { ReferralReplyDialog, useIncomingReferralAsk } from "@/components/clinic/ReferralAcceptDialogs";
 import { loadLocalDeviceMeta } from "@/lib/clinicDevice";
 import { appendChiefNotes, mapDiagnosisList, readyIcd9, resolveIcd9Row } from "@/lib/icdCrosswalk";
@@ -79,6 +83,8 @@ import { loadClinicRegisterDefaults } from "@/lib/clinicProfile";
 import { isDepositHold } from "@/lib/registerModes";
 import { openPrintPreview } from "@/lib/printJob";
 import { depositPrintOptions, findPrintSetup, loadPrintSettings, partOn } from "@/lib/printSettings";
+import { openReleaseRxIfWanted } from "@/lib/releaseRx";
+import { giveDaysBesideLabs, labSlipLines, openDelegateLabSlip } from "@/lib/delegateLabSlip";
 import { openDepositSlip } from "@/lib/visitReceiptPrint";
 import { VisitPrintDialog } from "@/components/clinic/VisitPrintDialog";
 import { buildSimpleSlipHtml, storedSelfPayText, visitCashParts } from "@/lib/simpleSlip";
@@ -292,6 +298,9 @@ export function ClinicOutpatientPage() {
   const [clinicTab, setClinicTab] = useState<ClinicTab>(seekBoot ? "chart" : "list");
   const [registerOptionsOpen, setRegisterOptionsOpen] = useState(false);
   const [patientEditOpen, setPatientEditOpen] = useState(false);
+  const [finderPatient, setFinderPatient] = useState<PatientEditSeed | null>(null);
+  const [leaveToLobby, setLeaveToLobby] = useState(false);
+  const [liveCase, setLiveCase] = useState<{ encounterId: string; display: string } | null>(null);
   const [certificateOpen, setCertificateOpen] = useState(false);
   const [otherMenuOpen, setOtherMenuOpen] = useState(false);
   const [chartRailTab, setChartRailTab] = useState<ChartRailTab>("waiting");
@@ -379,6 +388,7 @@ export function ClinicOutpatientPage() {
   const leaveBypassRef = useRef(false);
   const afterSaveLeaveRef = useRef<(() => void) | null>(null);
   const printSimpleSlipRef = useRef<() => void>(() => {});
+  const openLabSheetRef = useRef<() => void>(() => {});
   const finishReply = useCallback(() => {
     setReplyAsk(null);
     setReplyError("");
@@ -429,13 +439,15 @@ export function ClinicOutpatientPage() {
   };
 
   const shiftQueue = useMemo(() => {
+    const wantRoom = roomNumber(session?.room || "1");
     return queue.filter((e) => {
+      if (roomNumber(e.room) !== wantRoom) return false;
       if (!session?.shift) return true;
       const sh = entryShift(e);
       if (sh && sh !== session.shift) return false;
       return true;
     });
-  }, [queue, session?.shift]);
+  }, [queue, session?.shift, session?.room]);
 
   const filteredQueue = useMemo(() => {
     return shiftQueue
@@ -457,6 +469,17 @@ export function ClinicOutpatientPage() {
       .slice()
       .sort(compareClinicQueue);
   }, [shiftQueue, queueFilter, queueSearch]);
+
+  const queueForPanel = useMemo(
+    () =>
+      filteredQueue.map((entry) => {
+        const live = liveCase?.encounterId === entry.encounterId ? liveCase.display : "";
+        const shown = live || displayCase(entry.caseNo);
+        if (!shown || shown === entry.caseNo) return entry;
+        return { ...entry, caseNo: shown };
+      }),
+    [filteredQueue, liveCase],
+  );
 
   const preferAfterDeleteRef = useRef<string | null>(null);
 
@@ -927,6 +950,36 @@ export function ClinicOutpatientPage() {
     runAction(() => persistChiefComplaint(ccText, assessment));
   }, [apiMode, ccText, displayDiagnoses, persistChiefComplaint, runAction]);
 
+  useEffect(() => {
+    if (!isChart || !selectedEncounterId) {
+      setLiveCase(null);
+      return;
+    }
+    let stop = false;
+    const timer = window.setTimeout(() => {
+      const rawCase = String(selected?.caseNo || "").trim();
+      const selfPay = rawCase === "9X" || rawCase === "\u81ea" || rawCase === "\u81ea\u8cbb";
+      void previewVisitCase({
+        stored: selfPay ? "9X" : rawCase || "01",
+        days: prescriptionDays(currentRx),
+        dispense: selected?.dispense || "",
+        selfPay,
+        codes: displayDiagnoses.map((row) => row.nhiIcd10 || row.icd10 || "").filter(Boolean),
+        orders: prescriptionOrders(currentRx),
+      })
+        .then((res) => {
+          if (!stop) setLiveCase({ encounterId: selectedEncounterId, display: res.display || res.case });
+        })
+        .catch(() => {
+          if (!stop) setLiveCase(null);
+        });
+    }, 250);
+    return () => {
+      stop = true;
+      window.clearTimeout(timer);
+    };
+  }, [isChart, selectedEncounterId, currentRx, displayDiagnoses, selected?.caseNo, selected?.dispense]);
+
   const openSaveLayer = useCallback(async () => {
     if (!isChart || !selectedEncounterId) {
       setActionError("請先 F4／Enter 進入看診再 F9 存檔");
@@ -963,6 +1016,9 @@ export function ClinicOutpatientPage() {
       doctorId,
       consultFeeDefault: defaults.consultFeeDefault,
     });
+    if (liveCase?.encounterId === selectedEncounterId && liveCase.display) {
+      draft.caseNo = liveCase.display;
+    }
     setSaveDraft(draft);
     setCardNote(null);
     if (selected && showsUploadCircle(selected) && draft.writeCard) {
@@ -970,7 +1026,7 @@ export function ClinicOutpatientPage() {
       return;
     }
     setSaveLayerOpen(true);
-  }, [isChart, selectedEncounterId, selected, displayDiagnoses, currentRx]);
+  }, [isChart, selectedEncounterId, selected, displayDiagnoses, currentRx, liveCase]);
 
   useEffect(() => {
     if (!cloudAgainAsk) return;
@@ -995,7 +1051,8 @@ export function ClinicOutpatientPage() {
     let hisOk = false;
     try {
       if (apiMode) {
-        let doctorId = selected?.doctorId || loadClinicRegisterDefaults().defaultDoctorId || undefined;
+        let doctorId =
+          saveDraft.doctorId || selected?.doctorId || loadClinicRegisterDefaults().defaultDoctorId || undefined;
         if (!doctorId) {
           try {
             const doc = pickClinicDoctor(await fetchStaff());
@@ -1006,12 +1063,15 @@ export function ClinicOutpatientPage() {
         }
         await patchEncounterReg(selectedEncounterId, {
           patientId: selected?.patientId || "",
-          caseNo: saveDraft.caseNo !== "—" ? saveDraft.caseNo : undefined,
+          caseNo: (() => {
+            const stored = storedCase(saveDraft.caseNo);
+            return stored && stored !== "\u2014" ? stored : undefined;
+          })(),
           copayCode: saveDraft.copayCode !== "—" ? saveDraft.copayCode : undefined,
           payType: saveDraft.payType !== "—" ? saveDraft.payType : undefined,
           dispense: saveDraft.dispense !== "—" ? saveDraft.dispense : undefined,
           treatSeq: saveDraft.treatSeq !== "—" ? saveDraft.treatSeq : undefined,
-          pharmacist: selected?.pharmacist,
+          pharmacist: saveDraft.pharmacist || selected?.pharmacist,
           doctorId,
           doctorName: doctorDisplayName(saveDraft.doctor, doctorId) || undefined,
           regFee: saveDraft.regFee !== "—" ? saveDraft.regFee : undefined,
@@ -1127,6 +1187,8 @@ export function ClinicOutpatientPage() {
       }
       if (saveDraft.printRx) {
         printSimpleSlipRef.current();
+      } else {
+        openLabSheetRef.current();
       }
       committedFpRef.current[selectedEncounterId] = visitFingerprint;
       const holdForReply =
@@ -1188,7 +1250,7 @@ export function ClinicOutpatientPage() {
         people,
         session?.pharmacist,
       );
-      return openPrintPreview({
+      const result = await openPrintPreview({
       kind: "receipt",
       layout: "paged",
       setupId: "simple",
@@ -1237,19 +1299,80 @@ export function ClinicOutpatientPage() {
         showWarning: partOn(setup, "warning"),
       }),
       lines: [],
-    });
-    })()
-      .then((result) => {
+      });
         setPrintNote(
           result.printed ? `\u5df2\u9001\u5230 ${result.printer}` : "\u9810\u89bd\u5df2\u95dc\u9589\uff0c\u5c1a\u672a\u9001\u51fa\u3002",
         );
-      })
-      .catch((err: unknown) => {
+        const clinicNow = readLocalClinicBundle().profile;
+        openLabSheetRef.current();
+        if (!result.printed) return;
+        await openReleaseRxIfWanted({
+          caseNo: saveDraft.caseNo,
+          clinicName: clinicNow.clinicName,
+          clinicCode: clinicNow.clinicCode,
+          address: clinicNow.address,
+          phone: clinicNow.phone,
+          name: selected?.patientDisplay || "",
+          idNo: selected?.idNo || selected?.id || "",
+          sex: selected?.sex || selected?.ageSex || "",
+          birthday: selected?.birthday || "",
+          medicalNo: selected?.medicalNo || "",
+          dept: saveDraft.dept || clinicNow.mainDept || "",
+          visitDate: currentDate,
+          cardNo: saveDraft.cardNo,
+          queueNo: selected ? String(selected.queueNumber) : "",
+          doctor: saveDraft.doctor,
+          pharmacist: pharmacistName,
+          diagnoses: displayDiagnoses.map((row) => ({
+            code: row.icd10 || row.nhiIcd10 || "",
+            text: row.text || "",
+          })),
+          drugs: currentRx.map((row) => ({
+            name: row.name,
+            sig: row.sig,
+            days: row.days || 0,
+            qty: row.qty == null ? "" : String(row.qty),
+            total: row.totalAmount == null ? "" : String(row.totalAmount),
+          })),
+        });
+    })().catch((err: unknown) => {
         const msg = err instanceof Error ? err.message : "\u9001\u5230\u5370\u8868\u6a5f\u5931\u6557";
         setPrintNote(msg);
       });
   }, [currentDate, saveDraft, selected, ccText, displayDiagnoses, currentRx, session?.pharmacist]);
   printSimpleSlipRef.current = printVisitReceipt;
+
+  const openLabSheet = useCallback(() => {
+    const lines = labSlipLines(currentRx);
+    if (!lines.length) return;
+    const clinic = readLocalClinicBundle().profile;
+    const dx = displayDiagnoses.map((row) => ({
+      code: row.icd10 || row.nhiIcd10 || "",
+      text: row.text || "",
+    }));
+    void openDelegateLabSlip({
+      caseNo: saveDraft.caseNo,
+      clinicName: clinic.clinicName,
+      clinicCode: clinic.clinicCode,
+      address: clinic.address,
+      phone: clinic.phone,
+      name: selected?.patientDisplay || "",
+      idNo: selected?.idNo || selected?.id || "",
+      sex: selected?.sex || selected?.ageSex || "",
+      birthday: selected?.birthday || "",
+      medicalNo: selected?.medicalNo || "",
+      copayCode: saveDraft.copayCode,
+      dept: saveDraft.dept || clinic.mainDept || "",
+      visitDate: currentDate,
+      cardNo: saveDraft.cardNo,
+      queueNo: selected ? String(selected.queueNumber) : "",
+      doctorId: selected?.doctorId || saveDraft.doctor || "",
+      diagnoses: dx,
+      giveDays: giveDaysBesideLabs(currentRx),
+      lines,
+    });
+  }, [currentDate, currentRx, displayDiagnoses, saveDraft, selected]);
+  openLabSheetRef.current = openLabSheet;
 
   const onF9 = useCallback(() => {
     if (saving || cloudAgainAsk) return;
@@ -1516,6 +1639,10 @@ export function ClinicOutpatientPage() {
       return;
     }
     setClinicTab("list");
+    const idx = filteredQueue.findIndex((row) => row.encounterId === eid);
+    if (idx >= 0 && idx + 1 < filteredQueue.length) {
+      setSelectedEncounterId(filteredQueue[idx + 1].encounterId);
+    }
     requestAnimationFrame(() => queuePanelRef.current?.focus());
     },
   [
@@ -1525,6 +1652,8 @@ export function ClinicOutpatientPage() {
     clearChartOverlays,
     navigate,
     searchParams,
+    filteredQueue,
+    setSelectedEncounterId,
   ]);
 
   const closeChart = useCallback(() => {
@@ -1872,7 +2001,7 @@ export function ClinicOutpatientPage() {
       payType: entry.payType || "4",
       dispense: entry.dispense || "自行調劑",
       shift: entry.shift || emptyRegisterForm().shift,
-      room: entry.room || "",
+      room: roomNumber(entry.room),
       treatmentItem: entry.treatmentItem || "01",
       afterCheck: entry.afterCheck === "2" ? "2" : "1",
       icException: (entry.icException as RegisterEditForm["icException"]) || "ic",
@@ -2134,7 +2263,7 @@ export function ClinicOutpatientPage() {
       { open: lesionOpen, close: () => setLesionOpen(false) },
       { open: registerOptionsOpen, close: () => setRegisterOptionsOpen(false) },
       { open: needsPatientTab, close: () => closeChart() },
-      { open: true, close: () => { gateLeaveRef.current = true; setGateOpen(true); } },
+      { open: true, close: () => { gateLeaveRef.current = true; setLeaveToLobby(true); setGateOpen(true); } },
     ],
     !gateOpen,
   );
@@ -2558,6 +2687,7 @@ export function ClinicOutpatientPage() {
   ).length;
 
   const patientEditSeed = useMemo((): PatientEditSeed | null => {
+    if (finderPatient?.patientId) return finderPatient;
     const entry =
       selected ?? queue.find((q) => q.encounterId === selectedEncounterId) ?? null;
     if (!entry?.patientId) return null;
@@ -2576,7 +2706,7 @@ export function ClinicOutpatientPage() {
       sex: entry.sex || (entry.ageSex?.endsWith("M") ? "M" : "F"),
       medicalNo: entry.medicalNo,
     };
-  }, [selected, queue, selectedEncounterId]);
+  }, [finderPatient, selected, queue, selectedEncounterId]);
 
   const certificateSeed = useMemo(() => {
     const dx = displayDiagnoses
@@ -2631,6 +2761,27 @@ export function ClinicOutpatientPage() {
       drugs={catalog.drugs}
     />
   );
+
+  if (entered && gateOpen && leaveToLobby) {
+    return (
+      <div className="relative h-[calc(100vh-1rem)] overflow-hidden">
+        <LobbyPage />
+        <ClinicSessionGate
+          initial={session}
+          onConfirm={(next) => {
+            gateLeaveRef.current = false;
+            setLeaveToLobby(false);
+            applySession(next, false);
+          }}
+          onCancel={() => {
+            gateLeaveRef.current = false;
+            setLeaveToLobby(false);
+            navigate("/");
+          }}
+        />
+      </div>
+    );
+  }
 
   if (!entered) {
     return (
@@ -2693,13 +2844,13 @@ export function ClinicOutpatientPage() {
       >
         <span>
           {isChart
-            ? `診療作業 — ${selected?.patientDisplay || ""}　年齡 ${selected?.age || "—"}`
+            ? `診療作業 — ${selected?.patientDisplay || ""}　年齡 ${ageYearsMonths(selected?.age || selected?.ageSex) || "—"}`
             : isList
               ? "診療作業 — 掛號清單"
               : `診療作業 — ${CLINIC_MODULE_TABS.find((t) => t.id === clinicTab)?.label || ""}`}
         </span>
         <span className="ml-auto font-normal opacity-90">
-          {currentDate} · {session?.shift || ""} · {session?.pharmacist || "—"}
+          {currentDate} · {session?.shift || ""} · {roomLabel(session?.room || "1")} · {session?.pharmacist || "—"}
         </span>
         <button
           type="button"
@@ -2855,7 +3006,7 @@ export function ClinicOutpatientPage() {
               </div>
             )}
             <EncounterQueuePanel
-              entries={filteredQueue}
+              entries={queueForPanel}
               selectedId={selectedEncounterId}
               onSelect={setSelectedEncounterId}
               onOpen={openChart}
@@ -3038,7 +3189,7 @@ export function ClinicOutpatientPage() {
                 >
                   {selected?.patientDisplay || "—"}
                 </button>
-                <span className="font-mono font-bold">年齡 {selected?.age || "—"}</span>
+                <span className="font-mono font-bold">年齡 {ageYearsMonths(selected?.age || selected?.ageSex) || "—"}</span>
                 <span
                   className={`px-2 py-0 font-extrabold ${allergyBannerClass}`}
                   style={{
@@ -3514,7 +3665,10 @@ export function ClinicOutpatientPage() {
       />
       <PatientEditDialog
         open={patientEditOpen}
-        onClose={() => setPatientEditOpen(false)}
+        onClose={() => {
+          setPatientEditOpen(false);
+          setFinderPatient(null);
+        }}
         seed={patientEditSeed}
         onSaved={() => void refreshQueue()}
       />
@@ -3534,6 +3688,19 @@ export function ClinicOutpatientPage() {
         onSelect={onPatientPickedForRegister}
         allowCreate
         onCreate={(q) => setNewPatientQuery(q)}
+        onEdit={(hit) => {
+          setFinderOpen(false);
+          setFinderPatient({
+            patientId: hit.id,
+            name: hit.name,
+            idNo: hit.idNo,
+            birthday: hit.birthdayRoc,
+            sex: hit.sex,
+            medicalNo: hit.medicalNo,
+            phone: hit.phone,
+          });
+          setPatientEditOpen(true);
+        }}
       />
       <NewPatientDialog
         open={newPatientQuery != null}
@@ -3732,14 +3899,17 @@ export function ClinicOutpatientPage() {
           initial={session}
           onConfirm={(next) => {
             gateLeaveRef.current = false;
+            setLeaveToLobby(false);
             applySession(next, false);
           }}
           onCancel={() => {
             if (gateLeaveRef.current) {
               gateLeaveRef.current = false;
+              setLeaveToLobby(false);
               navigate("/");
               return;
             }
+            setLeaveToLobby(false);
             setGateOpen(false);
           }}
         />

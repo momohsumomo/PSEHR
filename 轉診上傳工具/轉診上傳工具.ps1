@@ -1,6 +1,8 @@
 # Referral upload on a PC that does not run card software 6.0.
 # Reads slips from the clinic host and writes the bureau receipt back.
-# The upload call is NHI_DownloadB. It does not take a patient card or a doctor-card PIN.
+# The upload call is NHI_DownloadB. Authentication is inside that call:
+# the DLL reads the SAM in C:\NHI\SAM\COMX{port+1} and mutually authenticates with IDC.
+# There is no PIN on this screen. A reader DLL is only required for the old component.
 $ErrorActionPreference = "Stop"
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
@@ -65,21 +67,140 @@ function Find-ReaderDll {
 }
 
 function Find-UploadDll {
+  $candidates = @()
   $override = [Environment]::GetEnvironmentVariable("NHI_EIIAPI_DLL")
-  if ($override -and (Test-Path -LiteralPath $override)) { return $override }
-  $path = "Z:\SC\nhi_eiiapi.dll"
-  if (Test-Path -LiteralPath $path) { return $path }
-  return ""
+  if ($override) { $candidates += $override }
+  foreach ($dir in @("Z:\SC\DLL", "Z:\SC", "C:\NHI", $Here)) {
+    $candidates += (Join-Path $dir "cnhi_eiiapi.dll")
+    $candidates += (Join-Path $dir "nhi_eiiapi.dll")
+  }
+  foreach ($path in $candidates) {
+    if (-not $path -or -not (Test-Path -LiteralPath $path)) { continue }
+    $bytes = [IO.File]::ReadAllBytes($path)
+    $text = [Text.Encoding]::ASCII.GetString($bytes)
+    $kind = "legacy"
+    if ($text.Contains("C:\NHI\SAM\COMX")) { $kind = "cloud" }
+    return @{ path = $path; kind = $kind }
+  }
+  return $null
+}
+
+function Get-SamSlot([int]$Port) {
+  $n = $Port + 1
+  if ($n -lt 1) { $n = 1 }
+  return "C:\NHI\SAM\COMX$n"
+}
+
+function Find-SamFile([int]$Port) {
+  $dir = Get-SamSlot $Port
+  if (-not (Test-Path -LiteralPath $dir)) { return "" }
+  $files = @(Get-ChildItem -LiteralPath $dir -File -ErrorAction SilentlyContinue)
+  if ($files.Count -eq 0) { return "" }
+  return [string]$files[0].FullName
+}
+
+function Test-Idc {
+  foreach ($pair in @(@("10.253.253.250", 12500), @("10.253.253.241", 12300))) {
+    $client = New-Object System.Net.Sockets.TcpClient
+    try {
+      $wait = $client.BeginConnect([string]$pair[0], [int]$pair[1], $null, $null)
+      if ($wait.AsyncWaitHandle.WaitOne(800, $false) -and $client.Connected) { return $true }
+    } catch {} finally { $client.Close() }
+  }
+  return $false
+}
+
+function Get-AuthState([int]$Port) {
+  $dll = Find-UploadDll
+  $slot = Get-SamSlot $Port
+  $sam = Find-SamFile $Port
+  $reader = Find-ReaderDll
+  $vpn = Test-Idc
+  $lines = New-Object System.Collections.Generic.List[string]
+  $ready = $true
+  if (-not $dll) {
+    $ready = $false
+    $lines.Add((U @(25214,19981,21040,19978,20659,20803,20214,32,110,104,105,95,101,105,105,97,112,105,46,100,108,108,12290)))
+  } elseif ($dll.kind -eq "cloud") {
+    $lines.Add((U @(36889,25903,26159,38642,31471,23433,20840,27169,32068,35469,35657,12290,30059,38754,27794,26377,32,80,73,78,12290,19978,20659,26178,20803,20214,25343,32,83,65,77,32,36319,20581,20445,32626,32,73,68,67,32,20114,35469,65292,36890,36942,25165,31805,31456,21152,23494,36865,20986,12290)))
+    $lines.Add("SAM $slot")
+    if (-not $sam) {
+      $ready = $false
+      $lines.Add((U @(36889,20491,27133,27794,26377,32,83,65,77,32,27284,65292,27794,26377,36865,20986,12290,35531,25226,26377,25928,30340,32,83,65,77,32,25918,21040,36889,20491,36039,26009,22846,12290)))
+    } else {
+      $lines.Add((U @(83,65,77,32,27284,24050,30475,21040,12290)) + " " + $sam)
+    }
+  } else {
+    $lines.Add((U @(36889,25903,33290,20803,20214,36996,35201,32,82,101,97,100,101,114,46,100,108,108,65292,35469,35657,19968,27171,22312,19978,20659,30070,19979,30001,23433,20840,27169,32068,23436,25104,12290)))
+    if (-not $reader) {
+      $ready = $false
+      $lines.Add((U @(25214,19981,21040,32,82,101,97,100,101,114,46,100,108,108,12290,27794,26377,36865,20986,12290)))
+    }
+  }
+  if (-not $vpn) {
+    $ready = $false
+    $lines.Add((U @(36899,19981,21040,20581,20445,32626,32,73,68,67,12290,35531,20808,25509,19978,37291,30274,32178,65292,35469,35657,25165,26371,36942,12290)))
+  } else {
+    $lines.Add((U @(73,68,67,32,36899,24471,21040,12290)))
+  }
+  if (Test-SixRunning) {
+    $ready = $false
+    $lines.Add((U @(36889,21488,27491,22312,36305,35712,21345,36575,39636,32,54,46,48,12290,36889,20491,24037,20855,19981,33021,22312,36889,21488,19978,20659,12290)))
+  }
+  return @{ ready = $ready; lines = $lines; dll = $dll; reader = $reader; sam = $sam }
+}
+
+function Explain-UploadCode([int]$Code) {
+  $auth = @(5010, 9010, 9012, 9013, 9014, 9015, 9020, 9050, 9051, 9060, 9061, 9062)
+  $net = @(5000, 5028, 8203, 8218, 9003)
+  if ($auth -contains $Code) {
+    return (U @(35469,35657,37679,35492,12290,83,65,77,32,36319,32,73,68,67,32,27794,26377,23565,19978,12290,35531,30906,35469,32,83,65,77,32,25918,22312,23565,25033,30340,27133,65292,32780,19988,37291,30274,32178,26159,36890,30340,12290,65288)) + $Code + (U @(65289))
+  }
+  if ($net -contains $Code) {
+    return (U @(36899,19981,21040,20581,20445,32626,32,73,68,67,12290,35531,20808,25509,19978,37291,30274,32178,65292,35469,35657,25165,26371,36942,12290,65288)) + $Code + (U @(65289))
+  }
+  if ($Code -eq 5005) {
+    return (U @(31805,31456,27794,26377,23436,25104,65288,53,48,48,53,65289,12290,35469,35657,24050,20570,65292,36889,20221,27284,27794,31805,36215,20358,12290))
+  }
+  return (U @(0x4e0a,0x50b3,0x51fd,0x5f0f,0x56de,0x20)) + $Code + (U @(0x3002,0x6a94,0x6848,0x6c92,0x6709,0x4ea4,0x51fa,0x53bb,0x3002))
+}
+
+function Invoke-Json([string]$Base, [string]$Path, [string]$Method, $Body) {
+  $req = [System.Net.HttpWebRequest]::Create(($Base.TrimEnd("/") + $Path))
+  $req.Method = $Method
+  $req.Timeout = 20000
+  $req.ReadWriteTimeout = 20000
+  if ($null -ne $Body) {
+    $json = $Body | ConvertTo-Json -Compress -Depth 6
+    $bytes = [Text.Encoding]::UTF8.GetBytes($json)
+    $req.ContentType = "application/json; charset=utf-8"
+    $req.ContentLength = $bytes.Length
+    $out = $req.GetRequestStream()
+    $out.Write($bytes, 0, $bytes.Length)
+    $out.Close()
+  }
+  $resp = $null
+  try { $resp = $req.GetResponse() }
+  catch [System.Net.WebException] {
+    $resp = $_.Exception.Response
+    if (-not $resp) { throw }
+  }
+  try {
+    $reader = New-Object System.IO.StreamReader($resp.GetResponseStream(), [Text.Encoding]::UTF8)
+    $text = $reader.ReadToEnd()
+  } finally { $resp.Close() }
+  $status = [int]$resp.StatusCode
+  if ($status -ge 400) { throw $text }
+  if (-not $text) { return $null }
+  return $text | ConvertFrom-Json
 }
 
 function Get-Api([string]$Base, [string]$Path) {
-  return Invoke-RestMethod -Uri ($Base.TrimEnd("/") + $Path) -TimeoutSec 20
+  return Invoke-Json $Base $Path "GET" $null
 }
 
 function Post-Api([string]$Base, [string]$Path, $Body) {
-  $json = $Body | ConvertTo-Json -Compress
-  $bytes = [Text.Encoding]::UTF8.GetBytes($json)
-  return Invoke-RestMethod -Uri ($Base.TrimEnd("/") + $Path) -Method POST -Body $bytes -ContentType "application/json; charset=utf-8" -TimeoutSec 20
+  return Invoke-Json $Base $Path "POST" $Body
 }
 
 function Person-Id([string]$Text) {
@@ -240,7 +361,7 @@ function Build-ReplyXml($Slip, [string]$Hosp, [string]$DoctorId, [string]$Clinic
     @("h2", "$($Slip.idNo)".Trim().ToUpper()),
     @("h3", $DoctorId),
     @("h4", $dept),
-    @("h5", (Get-Date).ToString("yyyyMMdd")),
+    @("h5", $(if ("$($Slip.replyDay)".Trim()) { Convert-Ymd "$($Slip.replyDay)" } else { (Get-Date).ToString("yyyyMMdd") })),
     @("h6", $purpose),
     @("h7", $remark),
     @("h8", (Convert-Icd "$($Slip.diagnosis)")),
@@ -312,68 +433,214 @@ $font = New-Object System.Drawing.Font("Microsoft JhengHei UI", 12)
 $form = New-Object System.Windows.Forms.Form
 $form.Text = $Title
 $form.StartPosition = "CenterScreen"
-$form.ClientSize = New-Object System.Drawing.Size(980, 680)
+$form.ClientSize = New-Object System.Drawing.Size(1180, 760)
 $form.Font = $font
+
+function Add-Field($Panel, [string]$Key, [int[]]$Label, [int]$Y, [int]$H) {
+  $lab = New-Object System.Windows.Forms.Label
+  $lab.Text = (U $Label)
+  $lab.Location = New-Object System.Drawing.Point(8, $Y)
+  $lab.Size = New-Object System.Drawing.Size(156, 22)
+  $box = New-Object System.Windows.Forms.TextBox
+  $box.Location = New-Object System.Drawing.Point(168, ($Y - 2))
+  $box.Size = New-Object System.Drawing.Size(560, $H)
+  if ($H -gt 36) {
+    $box.Multiline = $true
+    $box.ScrollBars = "Vertical"
+  }
+  $Panel.Controls.Add($lab)
+  $Panel.Controls.Add($box)
+  return $box
+}
+
+function Set-Slip($Slip, [string]$Name, [string]$Value) {
+  if ($Slip.PSObject.Properties.Name -contains $Name) { $Slip.$Name = $Value }
+  else { $Slip | Add-Member -NotePropertyName $Name -NotePropertyValue $Value -Force }
+}
 
 $lblHost = New-Object System.Windows.Forms.Label
 $lblHost.Text = (U @(0x4e3b,0x6a5f))
-$lblHost.Location = New-Object System.Drawing.Point(16, 16)
+$lblHost.Location = New-Object System.Drawing.Point(12, 14)
 $lblHost.Size = New-Object System.Drawing.Size(48, 28)
 $txtHost = New-Object System.Windows.Forms.TextBox
 $txtHost.Text = $cfg.host
-$txtHost.Location = New-Object System.Drawing.Point(68, 14)
-$txtHost.Size = New-Object System.Drawing.Size(360, 28)
+$txtHost.Location = New-Object System.Drawing.Point(60, 12)
+$txtHost.Size = New-Object System.Drawing.Size(280, 28)
 $lblPort = New-Object System.Windows.Forms.Label
-$lblPort.Text = "COM"
-$lblPort.Location = New-Object System.Drawing.Point(440, 16)
-$lblPort.Size = New-Object System.Drawing.Size(48, 28)
+$lblPort.Text = (U @(0x69fd))
+$lblPort.Location = New-Object System.Drawing.Point(350, 14)
+$lblPort.Size = New-Object System.Drawing.Size(36, 28)
 $txtPort = New-Object System.Windows.Forms.TextBox
 $txtPort.Text = [string]$cfg.port
-$txtPort.Location = New-Object System.Drawing.Point(492, 14)
+$txtPort.Location = New-Object System.Drawing.Point(388, 12)
 $txtPort.Size = New-Object System.Drawing.Size(48, 28)
 $cboKind = New-Object System.Windows.Forms.ComboBox
 $cboKind.DropDownStyle = "DropDownList"
-$cboKind.Location = New-Object System.Drawing.Point(552, 14)
-$cboKind.Size = New-Object System.Drawing.Size(120, 28)
+$cboKind.Location = New-Object System.Drawing.Point(448, 12)
+$cboKind.Size = New-Object System.Drawing.Size(100, 28)
 [void]$cboKind.Items.Add((U @(0x8f49,0x51fa)))
 [void]$cboKind.Items.Add((U @(0x56de,0x8986)))
 $cboKind.SelectedIndex = 0
 $btnLoad = New-Object System.Windows.Forms.Button
 $btnLoad.Text = (U @(0x91cd,0x65b0,0x8b80,0x53d6))
-$btnLoad.Location = New-Object System.Drawing.Point(684, 12)
-$btnLoad.Size = New-Object System.Drawing.Size(120, 32)
-$btnSend = New-Object System.Windows.Forms.Button
-$btnSend.Text = (U @(0x4e0a,0x50b3,0x9078,0x53d6,0x7684,0x9019,0x4e00,0x7b46))
-$btnSend.Location = New-Object System.Drawing.Point(816, 12)
-$btnSend.Size = New-Object System.Drawing.Size(148, 32)
+$btnLoad.Location = New-Object System.Drawing.Point(560, 10)
+$btnLoad.Size = New-Object System.Drawing.Size(110, 32)
 
 $hint = New-Object System.Windows.Forms.Label
-$hint.Text = (U @(0x53ea,0x4e0a,0x50b3,0x3002,0x4e0d,0x4f7f,0x7528,0x8b80,0x5361,0x8edf,0x9ad4,0x20,0x36,0x2e,0x30,0xff0c,0x4e5f,0x4e0d,0x63d2,0x5361,0x3002,0x8f49,0x51fa,0x7a2e,0x985e,0x20,0x31,0x30,0xff0c,0x56de,0x8986,0x7a2e,0x985e,0x20,0x30,0x34,0x3002))
-$hint.Location = New-Object System.Drawing.Point(16, 52)
-$hint.Size = New-Object System.Drawing.Size(940, 28)
+$hint.Text = (U @(35469,35657,30475,32,83,65,77,32,27133,65292,19981,26159,32,80,73,78,12290,23384,27284,23531,22238,20027,27231,12290,36865,20986,25165,36208,36889,21488,30340,32,83,65,77,12290))
+$hint.Location = New-Object System.Drawing.Point(12, 48)
+$hint.Size = New-Object System.Drawing.Size(1140, 24)
+
+$txtFilter = New-Object System.Windows.Forms.TextBox
+$txtFilter.Location = New-Object System.Drawing.Point(12, 78)
+$txtFilter.Size = New-Object System.Drawing.Size(330, 28)
 
 $list = New-Object System.Windows.Forms.ListView
 $list.View = "Details"
 $list.FullRowSelect = $true
 $list.GridLines = $true
-$list.Location = New-Object System.Drawing.Point(16, 88)
-$list.Size = New-Object System.Drawing.Size(948, 380)
-[void]$list.Columns.Add((U @(0x7a2e,0x985e)), 70)
-[void]$list.Columns.Add((U @(0x59d3,0x540d)), 120)
-[void]$list.Columns.Add((U @(0x75c5,0x6b77,0x865f)), 90)
-[void]$list.Columns.Add((U @(0x8f49,0x5165)), 180)
-[void]$list.Columns.Add((U @(0x65e5,0x671f)), 110)
-[void]$list.Columns.Add((U @(0x72c0,0x614b)), 90)
-[void]$list.Columns.Add((U @(0x5e8f,0x865f)), 180)
+$list.HideSelection = $false
+$list.Location = New-Object System.Drawing.Point(12, 112)
+$list.Size = New-Object System.Drawing.Size(330, 470)
+[void]$list.Columns.Add((U @(26085,26399)), 96)
+[void]$list.Columns.Add((U @(22995,21517)), 88)
+[void]$list.Columns.Add((U @(0x75c5,0x6b77,0x865f)), 72)
+[void]$list.Columns.Add((U @(29376,24907)), 64)
+
+$sheet = New-Object System.Windows.Forms.Panel
+$sheet.Location = New-Object System.Drawing.Point(352, 78)
+$sheet.Size = New-Object System.Drawing.Size(812, 504)
+$sheet.BorderStyle = "FixedSingle"
+$sheet.BackColor = [System.Drawing.Color]::White
+
+$title = New-Object System.Windows.Forms.Label
+$title.Font = New-Object System.Drawing.Font("Microsoft JhengHei UI", 14, [System.Drawing.FontStyle]::Bold)
+$title.TextAlign = "MiddleCenter"
+$title.Location = New-Object System.Drawing.Point(8, 6)
+$title.Size = New-Object System.Drawing.Size(790, 28)
+$head = New-Object System.Windows.Forms.Label
+$head.Location = New-Object System.Drawing.Point(12, 36)
+$head.Size = New-Object System.Drawing.Size(790, 22)
+$empty = New-Object System.Windows.Forms.Label
+$empty.Text = (U @(35531,20808,24478,24038,37002,36984,19968,20301,12290))
+$empty.Location = New-Object System.Drawing.Point(16, 80)
+$empty.Size = New-Object System.Drawing.Size(760, 28)
+
+$sheetReply = New-Object System.Windows.Forms.Panel
+$sheetReply.Location = New-Object System.Drawing.Point(8, 62)
+$sheetReply.Size = New-Object System.Drawing.Size(796, 390)
+$sheetReply.AutoScroll = $true
+$sheetReply.Visible = $false
+$sheetOut = New-Object System.Windows.Forms.Panel
+$sheetOut.Location = New-Object System.Drawing.Point(8, 62)
+$sheetOut.Size = New-Object System.Drawing.Size(796, 390)
+$sheetOut.AutoScroll = $true
+$sheetOut.Visible = $false
+
+$lblReplyPurpose = New-Object System.Windows.Forms.Label
+$lblReplyPurpose.Text = (U @(34389,29702,24773,24418))
+$lblReplyPurpose.Location = New-Object System.Drawing.Point(8, 8)
+$lblReplyPurpose.Size = New-Object System.Drawing.Size(156, 22)
+$cboReplyPurpose = New-Object System.Windows.Forms.ComboBox
+$cboReplyPurpose.DropDownStyle = "DropDownList"
+$cboReplyPurpose.Location = New-Object System.Drawing.Point(168, 4)
+$cboReplyPurpose.Size = New-Object System.Drawing.Size(520, 28)
+foreach ($codes in @(
+  @(49,46,32,24050,20104,24613,35386,34389,32622,20006,36681,35386,33267,37291,38498),
+  @(50,46,32,24050,20104,24613,35386,34389,32622,65292,20006,20303,26412,38498,30149,25151,27835,30274,20013),
+  @(51,46,32,24050,23433,25490,20303,26412,38498,30149,25151,27835,30274,20013),
+  @(52,46,32,24050,23433,25490,26412,38498,38272,35386,27835,30274,20013),
+  @(53,46,32,24050,20104,36969,30070,34389,29702,20006,36681,22238,21407,38498,25152),
+  @(54,46,32,20854,20182)
+)) { [void]$cboReplyPurpose.Items.Add((U $codes)) }
+$cboReplyPurpose.SelectedIndex = 3
+$sheetReply.Controls.Add($lblReplyPurpose)
+$sheetReply.Controls.Add($cboReplyPurpose)
+
+$script:Reply = @{}
+$y = 40
+foreach ($field in @(
+  @{ key = "serial"; h = 28; label = @(36681,35386,21934,24207,34399) },
+  @{ key = "replyDay"; h = 28; label = @(22238,24489,26085,26399) },
+  @{ key = "diagnosis"; h = 64; label = @(20027,35386,26039) },
+  @{ key = "drugs"; h = 72; label = @(27835,30274,34277,29289,25110,25163,34899,21517,31281) },
+  @{ key = "aux"; h = 72; label = @(36628,21161,35386,26039,20043,27298,26597,32080,26524) },
+  @{ key = "handoff"; h = 64; label = @(37291,24107,20132,29677,27880,24847,20107,38917) },
+  @{ key = "doctor"; h = 28; label = @(35386,27835,37291,24107) },
+  @{ key = "dept"; h = 28; label = @(31185,21029) }
+)) {
+  $script:Reply[$field.key] = Add-Field $sheetReply $field.key $field.label $y $field.h
+  $y += $field.h + 10
+}
+
+$lblOutPurpose = New-Object System.Windows.Forms.Label
+$lblOutPurpose.Text = (U @(0x8f49,0x8a3a,0x76ee,0x7684))
+$lblOutPurpose.Location = New-Object System.Drawing.Point(8, 8)
+$lblOutPurpose.Size = New-Object System.Drawing.Size(156, 22)
+$cboOutPurpose = New-Object System.Windows.Forms.ComboBox
+$cboOutPurpose.DropDownStyle = "DropDownList"
+$cboOutPurpose.Location = New-Object System.Drawing.Point(168, 4)
+$cboOutPurpose.Size = New-Object System.Drawing.Size(520, 28)
+foreach ($codes in @(
+  @(49,46,32,24613,35386,27835,30274),
+  @(50,46,32,20303,38498,27835,30274),
+  @(51,46,32,38272,35386,27835,30274),
+  @(52,46,32,36914,19968,27493,27298,26597),
+  @(53,46,32,36681,22238,36681,20986,25110,36969,30070,20043,38498,25152,32380,32396),
+  @(54,46,32,20854,20182,30446,30340)
+)) { [void]$cboOutPurpose.Items.Add((U $codes)) }
+$cboOutPurpose.SelectedIndex = 3
+$sheetOut.Controls.Add($lblOutPurpose)
+$sheetOut.Controls.Add($cboOutPurpose)
+
+$script:Out = @{}
+$y = 40
+foreach ($field in @(
+  @{ key = "patientName"; h = 28; label = @(22995,21517) },
+  @{ key = "sex"; h = 28; label = @(24615,21029) },
+  @{ key = "birth"; h = 28; label = @(20986,29983) },
+  @{ key = "idNo"; h = 28; label = @(36523,20998,35657,34399) },
+  @{ key = "contact"; h = 28; label = @(32879,32097,20154) },
+  @{ key = "phone"; h = 28; label = @(32879,32097,38651,35441) },
+  @{ key = "address"; h = 28; label = @(32879,32097,22320,22336) },
+  @{ key = "note"; h = 72; label = @(30149,24773,25688,35201) },
+  @{ key = "allergyText"; h = 56; label = @(34277,29289,36942,25935,21490) },
+  @{ key = "diagnosis"; h = 56; label = @(35386,26039) },
+  @{ key = "historyText"; h = 64; label = @(26368,36817,19968,27425,27298,26597,32080,26524) },
+  @{ key = "treatText"; h = 64; label = @(26368,36817,19968,27425,29992,34277,25110,25163,34899) },
+  @{ key = "doctor"; h = 28; label = @(35386,27835,37291,24107) },
+  @{ key = "dept"; h = 28; label = @(31185,21029) },
+  @{ key = "destHosp"; h = 28; label = @(36681,20837,38498,25152) },
+  @{ key = "destCode"; h = 28; label = @(38498,25152,20195,30908) },
+  @{ key = "destDept"; h = 28; label = @(36681,20837,31185,21029) },
+  @{ key = "destDoctor"; h = 28; label = @(36681,20837,37291,24107) },
+  @{ key = "destAddr"; h = 28; label = @(22320,22336) },
+  @{ key = "destTel"; h = 28; label = @(38651,35441) },
+  @{ key = "validUntil"; h = 28; label = @(26377,25928,26399,38480) },
+  @{ key = "serial"; h = 28; label = @(24207,34399) }
+)) {
+  $script:Out[$field.key] = Add-Field $sheetOut $field.key $field.label $y $field.h
+  $y += $field.h + 8
+}
+
+$btnSave = New-Object System.Windows.Forms.Button
+$btnSave.Text = (U @(23384,27284))
+$btnSave.Location = New-Object System.Drawing.Point(168, 460)
+$btnSave.Size = New-Object System.Drawing.Size(100, 34)
+$btnSend = New-Object System.Windows.Forms.Button
+$btnSend.Text = (U @(36865,20986))
+$btnSend.Location = New-Object System.Drawing.Point(276, 460)
+$btnSend.Size = New-Object System.Drawing.Size(100, 34)
+$sheet.Controls.AddRange(@($title, $head, $empty, $sheetReply, $sheetOut, $btnSave, $btnSend))
 
 $log = New-Object System.Windows.Forms.TextBox
 $log.Multiline = $true
 $log.ScrollBars = "Vertical"
 $log.ReadOnly = $true
-$log.Location = New-Object System.Drawing.Point(16, 480)
-$log.Size = New-Object System.Drawing.Size(948, 180)
+$log.Location = New-Object System.Drawing.Point(12, 592)
+$log.Size = New-Object System.Drawing.Size(1152, 156)
 
-$form.Controls.AddRange(@($lblHost, $txtHost, $lblPort, $txtPort, $cboKind, $btnLoad, $btnSend, $hint, $list, $log))
+$form.Controls.AddRange(@($lblHost, $txtHost, $lblPort, $txtPort, $cboKind, $btnLoad, $hint, $txtFilter, $list, $sheet, $log))
 
 $script:Rows = @()
 $script:Doctors = @()
@@ -387,35 +654,139 @@ function Current-Base {
   return $txtHost.Text.Trim().TrimEnd("/")
 }
 
+function Current-Kind {
+  if ($cboKind.SelectedIndex -eq 1) { return "reply" }
+  return "out"
+}
+
+function Fill-List {
+  $list.Items.Clear()
+  $needle = $txtFilter.Text.Trim()
+  foreach ($row in $script:Rows) {
+    $blob = "$($row.patientName) $($row.medicalNo) $($row.serial) $($row.destHosp)"
+    if ($needle -and $blob.IndexOf($needle, [StringComparison]::OrdinalIgnoreCase) -lt 0) { continue }
+    $item = New-Object System.Windows.Forms.ListViewItem "$($row.openedOn)"
+    [void]$item.SubItems.Add("$($row.patientName)")
+    [void]$item.SubItems.Add("$($row.medicalNo)")
+    [void]$item.SubItems.Add("$($row.status)")
+    $item.Tag = $row
+    [void]$list.Items.Add($item)
+  }
+}
+
+function Show-Slip {
+  if ($list.SelectedItems.Count -lt 1) {
+    $sheetOut.Visible = $false
+    $sheetReply.Visible = $false
+    $empty.Visible = $true
+    $title.Text = ""
+    $head.Text = ""
+    return
+  }
+  $row = $list.SelectedItems[0].Tag
+  $reply = "$($row.kind)" -eq "reply"
+  $empty.Visible = $false
+  $sheetReply.Visible = $reply
+  $sheetOut.Visible = -not $reply
+  $head.Text = "$($row.patientName)  $($row.medicalNo)  $($row.idNo)"
+  $pick = 3
+  $purpose = "$($row.purpose)".Trim()
+  if ($purpose.Length -ge 1 -and $purpose.Substring(0, 1) -match "^[1-6]$") { $pick = [int]$purpose.Substring(0, 1) - 1 }
+  if ($reply) {
+    $title.Text = (U @(25509,21463,37291,38498,35386,30274,25688,35201))
+    foreach ($key in @("serial", "diagnosis", "drugs", "aux", "handoff", "doctor", "dept")) {
+      $script:Reply[$key].Text = "$($row.$key)"
+    }
+    if (-not $script:Reply.drugs.Text.Trim()) { $script:Reply.drugs.Text = "$($row.treatText)" }
+    if (-not $script:Reply.aux.Text.Trim()) { $script:Reply.aux.Text = "$($row.historyText)" }
+    $day = "$($row.openedOn)".Trim()
+    if (-not $day) { $day = (Get-Date).ToString("yyyy-MM-dd") }
+    $script:Reply.replyDay.Text = $day
+    $cboReplyPurpose.SelectedIndex = $pick
+  } else {
+    $title.Text = (U @(20840,27665,20581,24247,20445,38570,12288,38498,40,25152,41,36681,35386,21934))
+    foreach ($key in @($script:Out.Keys)) { $script:Out[$key].Text = "$($row.$key)" }
+    $cboOutPurpose.SelectedIndex = $pick
+  }
+}
+
+function Sync-Slip {
+  if ($list.SelectedItems.Count -lt 1) { return $null }
+  $slip = $list.SelectedItems[0].Tag
+  if ("$($slip.kind)" -eq "reply") {
+    foreach ($key in @("serial", "replyDay", "diagnosis", "drugs", "aux", "handoff", "doctor", "dept")) {
+      Set-Slip $slip $key $script:Reply[$key].Text.Trim()
+    }
+    Set-Slip $slip "purpose" ([string]($cboReplyPurpose.SelectedIndex + 1))
+    Set-Slip $slip "note" $script:Reply.handoff.Text.Trim()
+  } else {
+    foreach ($key in @($script:Out.Keys)) { Set-Slip $slip $key $script:Out[$key].Text.Trim() }
+    Set-Slip $slip "purpose" ([string]($cboOutPurpose.SelectedIndex + 1))
+  }
+  return $slip
+}
+
+function Save-Slip($Slip, [string]$Status) {
+  $body = @{
+    id = "$($Slip.id)"
+    kind = "$($Slip.kind)"
+    encounterId = "$($Slip.encounterId)"
+    patientName = "$($Slip.patientName)"
+    medicalNo = "$($Slip.medicalNo)"
+    idNo = "$($Slip.idNo)"
+    destHosp = "$($Slip.destHosp)"
+    destCode = "$($Slip.destCode)"
+    dept = "$($Slip.dept)"
+    purpose = "$($Slip.purpose)"
+    doctor = "$($Slip.doctor)"
+    diagnosis = "$($Slip.diagnosis)"
+    note = "$($Slip.note)"
+    serial = "$($Slip.serial)"
+    validUntil = "$($Slip.validUntil)"
+    status = $Status
+    openedOn = "$($Slip.openedOn)"
+    historyText = "$($Slip.historyText)"
+    treatText = "$($Slip.treatText)"
+    sex = "$($Slip.sex)"
+    birth = "$($Slip.birth)"
+    phone = "$($Slip.phone)"
+    address = "$($Slip.address)"
+    contact = "$($Slip.contact)"
+    allergyText = "$($Slip.allergyText)"
+    destDept = "$($Slip.destDept)"
+    destDoctor = "$($Slip.destDoctor)"
+    destTel = "$($Slip.destTel)"
+    destAddr = "$($Slip.destAddr)"
+    handoff = "$($Slip.handoff)"
+    drugs = "$($Slip.drugs)"
+    aux = "$($Slip.aux)"
+  }
+  $saved = Post-Api (Current-Base) "/nhi/v1/referral/slips" $body
+  if (-not $saved.ok) { throw "$($saved.reason)" }
+  return $saved
+}
+
+$txtFilter.Add_TextChanged({ Fill-List })
+$list.Add_SelectedIndexChanged({ Show-Slip })
+
 $btnLoad.Add_Click({
   $form.Cursor = [System.Windows.Forms.Cursors]::WaitCursor
   $btnLoad.Enabled = $false
   try {
     $base = Current-Base
-    Save-Config $base ([int]$txtPort.Text)
-    $kind = "out"
-    if ($cboKind.SelectedIndex -eq 1) { $kind = "reply" }
+    $port = 0
+    [void][int]::TryParse($txtPort.Text.Trim(), [ref]$port)
+    Save-Config $base $port
+    $kind = Current-Kind
     $slips = Get-Api $base "/nhi/v1/referral/slips?kind=$kind"
     $docs = Get-Api $base "/nhi/v1/referral/physicians"
     $profile = Get-Api $base "/clinic/settings/profile"
     $script:Rows = @($slips.items)
     $script:Doctors = @($docs.items)
     $script:Profile = $profile.data.profile
-    $list.Items.Clear()
-    foreach ($row in $script:Rows) {
-      $label = (U @(0x8f49,0x51fa))
-      if ("$($row.kind)" -eq "reply") { $label = (U @(0x56de,0x8986)) }
-      $item = New-Object System.Windows.Forms.ListViewItem $label
-      [void]$item.SubItems.Add("$($row.patientName)")
-      [void]$item.SubItems.Add("$($row.medicalNo)")
-      [void]$item.SubItems.Add("$($row.destHosp)")
-      [void]$item.SubItems.Add("$($row.openedOn)")
-      [void]$item.SubItems.Add("$($row.status)")
-      [void]$item.SubItems.Add("$($row.serial)")
-      $item.Tag = $row
-      [void]$list.Items.Add($item)
-    }
-    Add-Log ((U @(0x8b80,0x5230,0x20)) + $script:Rows.Count + (U @(0x20,0x7b46,0x3002)))
+    Fill-List
+    Show-Slip
+    Add-Log ((U @(0x8b80,0x5230,0x20)) + $list.Items.Count + (U @(0x20,0x7b46,0x3002)))
   } catch {
     Add-Log $_.Exception.Message
   } finally {
@@ -424,23 +795,44 @@ $btnLoad.Add_Click({
   }
 })
 
-$btnSend.Add_Click({
-  if ($list.SelectedItems.Count -lt 1) {
+$btnSave.Add_Click({
+  $slip = Sync-Slip
+  if (-not $slip) {
     Add-Log (U @(0x8acb,0x5148,0x9078,0x4e00,0x7b46,0x3002))
     return
   }
-  if (Test-SixRunning) {
-    Add-Log (U @(0x9019,0x53f0,0x6b63,0x5728,0x8dd1,0x8b80,0x5361,0x8edf,0x9ad4,0x20,0x36,0x2e,0x30,0x3002,0x9019,0x500b,0x5de5,0x5177,0x4e0d,0x80fd,0x5728,0x9019,0x53f0,0x4e0a,0x50b3,0x3002))
+  $form.Cursor = [System.Windows.Forms.Cursors]::WaitCursor
+  $btnSave.Enabled = $false
+  try {
+    $status = "$($slip.status)".Trim()
+    if (-not $status) { $status = (U @(24050,23384,27284)) }
+    [void](Save-Slip $slip $status)
+    if ($list.SelectedItems.Count -gt 0) { $list.SelectedItems[0].SubItems[3].Text = $status }
+    Add-Log (U @(24050,23384,27284,65292,27794,26377,36865,20986,12290))
+  } catch {
+    Add-Log $_.Exception.Message
+  } finally {
+    $btnSave.Enabled = $true
+    $form.Cursor = [System.Windows.Forms.Cursors]::Default
+  }
+})
+
+$btnSend.Add_Click({
+  $slip = Sync-Slip
+  if (-not $slip) {
+    Add-Log (U @(0x8acb,0x5148,0x9078,0x4e00,0x7b46,0x3002))
     return
   }
+  $port = 0
+  [void][int]::TryParse($txtPort.Text.Trim(), [ref]$port)
+  $state = Get-AuthState $port
+  foreach ($line in $state.lines) { Add-Log $line }
+  if (-not $state.ready) { return }
   $form.Cursor = [System.Windows.Forms.Cursors]::WaitCursor
   $btnSend.Enabled = $false
   try {
-    $slip = $list.SelectedItems[0].Tag
-    $dll = Find-UploadDll
-    $reader = Find-ReaderDll
-    if (-not $dll) { throw (U @(0x627e,0x4e0d,0x5230,0x4e0a,0x50b3,0x7a0b,0x5f0f,0x20,0x6e,0x68,0x69,0x5f,0x65,0x69,0x69,0x61,0x70,0x69,0x2e,0x64,0x6c,0x6c,0x3002)) }
-    if (-not $reader) { throw (U @(0x627e,0x4e0d,0x5230,0x8b80,0x5361,0x6a5f,0x20,0x52,0x65,0x61,0x64,0x65,0x72,0x2e,0x64,0x6c,0x6c,0x3002,0x6c92,0x6709,0x9001,0x51fa,0x3002)) }
+    $dll = $state.dll.path
+    $reader = "$($state.reader)"
     $profile = $script:Profile
     $hosp = "$($profile.clinicCode)".Trim()
     $phone = "$($profile.phone)".Trim()
@@ -471,6 +863,7 @@ $btnSend.Add_Click({
     if ($missing.Count -gt 0) {
       throw ((U @(0x9084,0x7f3a,0xff1a)) + ($missing -join (U @(0x3001))) + (U @(0x3002,0x6c92,0x6709,0x9001,0x51fa,0x3002)))
     }
+    [void](Save-Slip $slip "$($slip.status)")
     $roc = "{0:000}{1}" -f ((Get-Date).Year - 1911), (Get-Date).ToString("MMdd")
     $stamp = (Get-Date).ToString("HHmmss")
     $name = $prefix + $hosp + "-" + $roc + $stamp.Substring(3) + ".xml"
@@ -479,28 +872,23 @@ $btnSend.Add_Click({
     $file = Join-Path $dir $name
     $enc = [Text.Encoding]::GetEncoding(950)
     [IO.File]::WriteAllBytes($file, $enc.GetBytes($xml))
-    $sent = Invoke-DownloadB $dll $reader $file $typeCode ([int]$txtPort.Text)
+    $sent = Invoke-DownloadB $dll $reader $file $typeCode $port
     if ($null -eq $sent.code) {
       $detail = "$($sent.err)".Trim()
       if ($detail.Length -gt 300) { $detail = $detail.Substring(0, 300) }
       if (-not $detail) { $detail = "exit $($sent.exitCode)" }
       throw $detail
     }
-    if ($sent.code -eq 5010) {
-      throw (U @(0x4e0a,0x50b3,0x51fd,0x5f0f,0x56de,0x20,0x35,0x30,0x31,0x30,0x3002,0x58,0x4d,0x4c,0x20,0x5df2,0x7167,0x6279,0x6b21,0x683c,0x5f0f,0x7d44,0x597d,0x4e26,0x4ea4,0x7d66,0x20,0x4e,0x48,0x49,0x5f,0x44,0x6f,0x77,0x6e,0x6c,0x6f,0x61,0x64,0x42,0xff0c,0x9019,0x6b21,0x6c92,0x6709,0x88ab,0x6536,0x4e0b,0x3002))
-    }
-    if ($sent.code -ne 0) {
-      $why = (U @(0x4e0a,0x50b3,0x51fd,0x5f0f,0x56de,0x20)) + $sent.code + (U @(0x3002,0x6a94,0x6848,0x6c92,0x6709,0x4ea4,0x51fa,0x53bb,0x3002))
-      throw $why
-    }
+    if ($sent.code -ne 0) { throw (Explain-UploadCode ([int]$sent.code)) }
     Post-Api (Current-Base) "/nhi/v1/referral/result" @{
       id = "$($slip.id)"
       localId = "$($sent.localId)"
       nhiId = "$($sent.nhiId)"
       status = $status
     } | Out-Null
+    Set-Slip $slip "status" $status
+    if ($list.SelectedItems.Count -gt 0) { $list.SelectedItems[0].SubItems[3].Text = $status }
     Add-Log ((U @(0x5df2,0x4ea4,0x51fa,0x3002,0x672c,0x5730,0x7de8,0x865f,0x20)) + $sent.localId + (U @(0x3000,0x5065,0x4fdd,0x7de8,0x865f,0x20)) + $sent.nhiId)
-    $list.SelectedItems[0].SubItems[5].Text = $status
   } catch {
     Add-Log $_.Exception.Message
   } finally {
@@ -509,9 +897,12 @@ $btnSend.Add_Click({
   }
 })
 
-if (Test-SixRunning) {
-  Add-Log (U @(0x9019,0x53f0,0x6b63,0x5728,0x8dd1,0x8b80,0x5361,0x8edf,0x9ad4,0x20,0x36,0x2e,0x30,0x3002,0x8acb,0x6539,0x5230,0x6c92,0x6709,0x88dd,0x20,0x36,0x2e,0x30,0x20,0x7684,0x90a3,0x4e00,0x53f0,0x3002))
-  $btnSend.Enabled = $false
-}
+$form.Add_Shown({
+  $port = 0
+  [void][int]::TryParse($txtPort.Text.Trim(), [ref]$port)
+  $state = Get-AuthState $port
+  foreach ($line in $state.lines) { Add-Log $line }
+  if (-not $state.ready) { $btnSend.Enabled = $false }
+})
 
 [void]$form.ShowDialog()

@@ -1,6 +1,7 @@
 /**
  * Chart top patient meta bar (YiSheng chart-head parity).
  */
+import { ageYearsMonths } from "@/lib/ageLabel";
 import { HIS, HIS_FONT } from "@/lib/hisTheme";
 import type { QueueEntry } from "@/mocks/clinicMocks";
 
@@ -31,9 +32,7 @@ function pickBirthday(patient: Record<string, unknown> | null | undefined): stri
 
 function ageLabel(selected: QueueEntry | null): string {
   if (!selected) return "\u2014";
-  if (selected.age) return selected.age;
-  const raw = (selected.ageSex || "").replace(/[MF\u7537\u5973]$/, "");
-  return raw || "\u2014";
+  return ageYearsMonths(selected.age || selected.ageSex) || "\u2014";
 }
 
 function sexLabel(selected: QueueEntry | null): string {

@@ -16,6 +16,9 @@ import {
 } from "@/mocks/clinicMocks";
 import { HIS, HIS_FONT, HIS_QUEUE_COL_WIDTHS } from "@/lib/hisTheme";
 import { FIRST_VISIT_NAME, isFirstVisit, visitListMark } from "@/lib/visitListMark";
+import { ageYearsMonths } from "@/lib/ageLabel";
+import { displayCase } from "@/lib/caseMark";
+import { roomLabel } from "@/lib/roomMark";
 import { clockLabel, compareClinicQueue, showsUploadCircle } from "@/lib/queueOrder";
 
 const COSMETIC_ROW = "#F7C6DC";
@@ -103,7 +106,7 @@ function queueCellValue(entry: QueueEntry, key: string): string {
       : entry.sex === "F" || entry.ageSex.endsWith("F")
         ? "\u5973"
         : "";
-  const ageLabel = entry.age ?? entry.ageSex.replace(/[MF]$/, "");
+  const ageLabel = ageYearsMonths(entry.age || entry.ageSex);
   const empty = (v: unknown) => {
     const s = String(v ?? "").trim();
     return s.length && s !== "—" ? s : dash;
@@ -126,12 +129,14 @@ function queueCellValue(entry: QueueEntry, key: string): string {
       return empty(entry.diseaseName);
     case "shift":
       return empty(shift);
+    case "room":
+      return empty(roomLabel(entry.room));
     case "note":
       return empty(entry.note);
     case "preVisit":
       return visitListMark(entry) || dash;
     case "caseNo":
-      return empty(entry.caseNo);
+      return empty(displayCase(entry.caseNo));
     case "reasonText":
       return empty(entry.reasonText);
     case "weight":
@@ -274,10 +279,11 @@ export function EncounterQueuePanel({
     const root = scrollerRef.current;
     if (!root) return;
     const onWheel = (ev: WheelEvent) => {
+      if (ev.ctrlKey || ev.metaKey) return;
       if (!sortedEntries.length) return;
       ev.preventDefault();
       const current = sortedEntries.findIndex((e) => e.encounterId === selectedId);
-      const step = ev.deltaY > 0 ? 2 : ev.deltaY < 0 ? -2 : 0;
+      const step = ev.deltaY > 0 ? 1 : ev.deltaY < 0 ? -1 : 0;
       if (!step) return;
       const next =
         current < 0
@@ -488,7 +494,7 @@ export function EncounterQueuePanel({
                   />
                   <div className="min-w-0 flex-1">
                     <div className="truncate font-semibold text-slate-900">{e.patientDisplay}</div>
-                    <div className="text-[10px] text-slate-500">{e.ageSex}</div>
+                    <div className="text-[10px] text-slate-500">{ageYearsMonths(e.age || e.ageSex)}</div>
                     <div className="line-clamp-2 text-xs text-slate-500">{e.reasonText}</div>
                   </div>
                 </div>

@@ -100,6 +100,8 @@ DEFAULT_PROFILE: dict[str, Any] = {
         "controlCertNo": "",
         "mainDept": "11 \u76ae\u819a\u79d1",
         "dispenseType": "0 \u81ea\u884c\u8abf\u5291",
+        "labInstitutionCode": "JY21050018",
+        "labInstitutionName": "\u8c50\u751f\u91ab\u4e8b\u6aa2\u9a57\u6240",
         "phone": "06-2882555",
         "zipCode": "701",
         "address": "\u53f0\u5357\u5e02\u6771\u5340\u5d07\u660e\u8def153-1\u865f",

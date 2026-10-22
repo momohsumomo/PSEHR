@@ -610,6 +610,16 @@ export async function registerMedication(body: Record<string, unknown>): Promise
   });
 }
 
+export async function retainEncounterChart(
+  encounterId: string,
+  body: { medicationIds?: string[]; conditionIds?: string[] },
+): Promise<void> {
+  await request(`/fhir/Encounter/${encodeURIComponent(encounterId)}/retain-chart`, {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
 export async function updateMedicationRequest(
   medicationId: string,
   body: Record<string, unknown>,
@@ -1095,6 +1105,25 @@ export async function registerEncounter(
   });
 }
 
+export async function previewVisitCase(query: {
+  stored?: string;
+  days?: number;
+  dispense?: string;
+  selfPay?: boolean;
+  codes?: string[];
+  orders?: string[];
+}): Promise<{ case: string; display: string; reason: string }> {
+  const params = new URLSearchParams();
+  params.set("stored", query.stored || "01");
+  params.set("days", String(query.days || 0));
+  params.set("dispense", query.dispense || "");
+  params.set("self_pay", query.selfPay ? "true" : "false");
+  params.set("live", "true");
+  params.set("codes", (query.codes || []).filter(Boolean).join(","));
+  params.set("orders", (query.orders || []).filter(Boolean).join(","));
+  return request(`/claims/case?${params.toString()}`);
+}
+
 export async function patchEncounterReg(
   encounterId: string,
   body: EncounterRegisterBody,
@@ -1524,6 +1553,8 @@ export type ApiStaffRecord = {
   certNo?: string;
   pin: string;
   status?: string;
+  /** 診間號碼，1 是 1 診。 */
+  room?: string;
 };
 
 export async function fetchStaff(): Promise<ApiStaffRecord[]> {

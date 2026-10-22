@@ -33,6 +33,8 @@ _MSG_A3 = "\u4e3b\u75c5\u540d\u4f46\u672a\u639b A3 \u6216 B9 \u6848\u4ef6"
 _MSG_DAYS = "\u7d66\u85e5\u8d85\u904e 31 \u5929"
 _MSG_REPEAT = "\u75c5\u540d\u91cd\u8907"
 _MSG_SAME_DAY = "\u540c\u65e5\u7533\u8acb\u4e8c\u7b46"
+_MSG_EXT_PRIMARY = "\u4e3b\u8a3a\u65b7\u4e0d\u80fd\u653e\u5916\u56e0\u78bc\uff0c\u8acb\u6539\u653e\u53d7\u50b7\u90e8\u4f4d\uff0c\u5916\u56e0\u78bc\u62ff\u6389"
+_MSG_EXT_SECOND = "\u6b21\u8a3a\u65b7\u6709\u5916\u56e0\u78bc\u3002\u9580\u8a3a\u7533\u5831\u6c92\u6709\u7368\u7acb\u5916\u56e0\u6b04\uff0c\u9019\u78bc\u6703\u9032\u6b21\u8a3a\u65b7\u3002\u53ea\u7559\u53d7\u50b7\u90e8\u4f4d\u5373\u53ef"
 
 
 def _drug_line(code: str) -> bool:
@@ -55,6 +57,12 @@ def _day_gap(left: str, right: str) -> int:
     except ValueError:
         return 9999
     return abs((a - b).days)
+
+
+def _external_cause(code: str) -> bool:
+    """ICD-10-CM external cause. Outpatient d19 cannot hold one."""
+    text = (code or "").replace(".", "").strip().upper()
+    return len(text) >= 3 and text[0] in {"V", "W", "X", "Y"}
 
 
 def _primary(rec: ClaimEncounterRecord) -> str:
@@ -115,6 +123,10 @@ def check_media(records: list[ClaimEncounterRecord], settings: Any = None) -> di
             warns.append({**base, "code": "dx-dup", "message": _MSG_DX_DUP})
 
         primary = _primary(rec)
+        if _external_cause(primary):
+            blocks.append({**base, "code": "dx-external", "message": _MSG_EXT_PRIMARY})
+        elif any(_external_cause(code) for code in codes[1:]):
+            warns.append({**base, "code": "dx-external-2", "message": _MSG_EXT_SECOND})
         if primary.startswith(("Z0", "Z1")) and (rec.caseNo or "") not in _PREVENTIVE_CASE:
             warns.append({**base, "code": "a3", "message": _MSG_A3})
         if int(rec.daysSupply or 0) > 31:

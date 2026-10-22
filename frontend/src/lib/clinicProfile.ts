@@ -39,6 +39,9 @@ export type ClinicProfileFields = {
   controlCertNo: string;
   mainDept: string;
   dispenseType: string;
+  /** Delegated-lab institution. Claim order field p24. */
+  labInstitutionCode: string;
+  labInstitutionName: string;
   phone: string;
   zipCode: string;
   address: string;
@@ -65,6 +68,8 @@ export type ClinicWorkflow = {
   afternoonTo: string;
   eveningFrom: string;
   eveningTo: string;
+  /** Case codes that also print a released prescription. Empty means none. */
+  releaseRxCases: string[];
 };
 
 /** ???????E?? Frame.Set??Sc.ini?F??????H API clinic_profile_v1 ???? */
@@ -95,6 +100,8 @@ export const DEFAULT_PROFILE: ClinicProfileFields = {
   controlCertNo: "",
   mainDept: "11 \u76ae\u819a\u79d1",
   dispenseType: "0 \u81ea\u884c\u8abf\u5291",
+  labInstitutionCode: "JY21050018",
+  labInstitutionName: "\u8c50\u751f\u91ab\u4e8b\u6aa2\u9a57\u6240",
   phone: "06-2882555",
   zipCode: "701",
   address: "\u53f0\u5357\u5e02\u6771\u5340\u5d07\u660e\u8def153-1\u865f",
@@ -121,6 +128,7 @@ export const DEFAULT_WORKFLOW: ClinicWorkflow = {
   afternoonTo: "18:00",
   eveningFrom: "18:00",
   eveningTo: "21:00",
+  releaseRxCases: [],
 };
 
 function clockOr(value: string | undefined, fallback: string): string {
@@ -137,7 +145,21 @@ function normalizeWorkflow(raw: Partial<ClinicWorkflow> | undefined): ClinicWork
   workflow.afternoonTo = clockOr(raw?.afternoonTo, eveningFrom);
   workflow.eveningFrom = eveningFrom;
   workflow.eveningTo = clockOr(raw?.eveningTo, DEFAULT_WORKFLOW.eveningTo);
+  workflow.releaseRxCases = normalizeReleaseRxCases(raw?.releaseRxCases);
   return workflow;
+}
+
+function normalizeReleaseRxCases(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  const seen = new Set<string>();
+  const codes: string[] = [];
+  for (const item of value) {
+    const code = String(item || "").trim().toUpperCase();
+    if (!code || seen.has(code)) continue;
+    seen.add(code);
+    codes.push(code);
+  }
+  return codes;
 }
 
 function normalizeFees(raw: Partial<ClinicFees> | undefined): ClinicFees {

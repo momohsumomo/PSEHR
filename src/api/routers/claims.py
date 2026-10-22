@@ -10,6 +10,7 @@ from fastapi.responses import Response
 
 from src.app.bootstrap import get_shadow_store
 from src.claims import build_claims_summary, render_claims_xml
+from src.claims.case_rules import assign_case, claim_case_rules
 from src.claims.media_check import check_media
 from src.claims.engine import clinic_dept_code, clinic_dispense_code
 from src.claims.xml_export_nhi import (
@@ -35,6 +36,39 @@ def _institution_code() -> str:
     if code:
         return code
     return str(DEFAULT_PROFILE["profile"]["clinicCode"])
+
+
+@router.get("/case")
+def preview_visit_case(
+    stored: str = Query("01"),
+    days: int = Query(0),
+    dispense: str = Query(""),
+    self_pay: bool = Query(False),
+    codes: str = Query(""),
+    orders: str = Query(""),
+    live: bool = Query(False),
+) -> dict[str, Any]:
+    """Same 01/04/09/9X choice the monthly file uses, for the chart while prescribing.
+
+    live=1 lets 01/04/09 follow the drugs on this visit. 08/02/A3 and self-pay stay put.
+    The monthly file does not call this, so a case already saved as 04 is still kept there.
+    """
+    diagnosis_codes = [part.strip() for part in codes.split(",") if part.strip()]
+    order_codes = [part.strip() for part in orders.split(",") if part.strip()]
+    stored_for_rule = stored
+    if live and stored.strip().upper() in {"01", "04", "09"}:
+        stored_for_rule = "01"
+    case, reason = assign_case(
+        stored=stored_for_rule,
+        days=max(0, days),
+        dispense=dispense,
+        diagnosis_codes=diagnosis_codes,
+        order_codes=order_codes,
+        self_pay=self_pay,
+        rules=claim_case_rules(),
+    )
+    display = "\u81ea" if case == "9X" else case
+    return {"case": case, "display": display, "reason": reason}
 
 
 @router.get("/statistics")
@@ -73,9 +107,10 @@ def preview_claims(
     data["totalSheet"] = nhi_total_sheet(summary, institution_code=inst, submit_type=submit_type)
     data["exportFormatDefault"] = "nhi"
     data["exportNote"] = (
-        "案件預設走健保填表說明：公告慢性病且給藥滿天數為 04，"
-        "同一筆同時有公告慢性病與其他病名為 09，一般案件交付調劑為 09，其餘為 01。"
-        "處置改 09 與自訂慢性病碼在院所資料的案件分類，預設沒有例外。"
+        "健保給藥滿 7 天就是 04，病名不必在公告慢性病清單。"
+        "病名主檔有特定治療代號，不滿 7 天也是 04。"
+        "切開排膿、冷凍、電燒、換藥這類處置是 09，滿天數也一樣。"
+        "這間診所沒有把急慢性病名混在一起改成 09。交付調劑的一般案件仍是 09。"
         "不改病名、不補藥點。上傳仍由人上健保 VPN。"
     )
     return data

@@ -59,6 +59,7 @@ REG_STRING_KEYS = (
     "icUploadDate",
     "icCaseNo",
     "icRemark",
+    "caseNoE1",
     "actualTreatWhen",
     "actualTreatId",
     "icUploadFee",

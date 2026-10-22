@@ -27,16 +27,19 @@ def _rules(**clinic_kwargs: object) -> CaseRules:
 
 
 class OfficialCaseTests(unittest.TestCase):
-    def test_shipped_config_keeps_clinic_off(self) -> None:
+    def test_shipped_config_marks_skin_orders_09(self) -> None:
         rules = file_case_rules()
-        self.assertFalse(rules.clinic.enabled)
-        self.assertEqual(rules.clinic.order_codes_to_09, frozenset())
+        self.assertTrue(rules.clinic.enabled)
+        self.assertIn("51020C", rules.clinic.order_codes_to_09)
+        self.assertFalse(rules.clinic.order_to_09_beaten_by_04)
         self.assertEqual(rules.clinic.extra_chronic_icd10, frozenset())
         self.assertEqual(rules.core.official_chronic_min_days, 7)
         self.assertTrue(rules.core.acute_plus_chronic_to_09)
         self.assertTrue(rules.core.general_outside_dispense_to_09)
         self.assertFalse(rules.clinic.case_09_fixed_consult)
         self.assertIn("E119", rules.official_chronic)
+        self.assertIn("B3783", rules.special_dx)
+        self.assertNotIn("L309", rules.special_dx)
 
     def test_deposit_case_is_not_claimed(self) -> None:
         case, _reason = assign_case(
@@ -49,7 +52,7 @@ class OfficialCaseTests(unittest.TestCase):
         )
         self.assertEqual(case, "9X")
 
-    def test_long_course_without_official_chronic_stays_01(self) -> None:
+    def test_long_course_without_official_chronic_is_04(self) -> None:
         case, _reason = assign_case(
             stored="01",
             days=14,
@@ -58,9 +61,45 @@ class OfficialCaseTests(unittest.TestCase):
             order_codes=[],
             self_pay=False,
         )
-        self.assertEqual(case, "01")
+        self.assertEqual(case, "04")
 
-    def test_treatment_alone_stays_01(self) -> None:
+    def test_eczema_seven_days_is_04(self) -> None:
+        case, _reason = assign_case(
+            stored="01",
+            days=7,
+            dispense="0",
+            diagnosis_codes=["L309"],
+            order_codes=[],
+            self_pay=False,
+            rules=file_case_rules(),
+        )
+        self.assertEqual(case, "04")
+
+    def test_special_short_course_is_04(self) -> None:
+        case, _reason = assign_case(
+            stored="01",
+            days=3,
+            dispense="0",
+            diagnosis_codes=["B3783"],
+            order_codes=[],
+            self_pay=False,
+            rules=file_case_rules(),
+        )
+        self.assertEqual(case, "04")
+
+    def test_incision_overrides_seven_day_04(self) -> None:
+        case, _reason = assign_case(
+            stored="01",
+            days=7,
+            dispense="0",
+            diagnosis_codes=["L309"],
+            order_codes=["51020C"],
+            self_pay=False,
+            rules=file_case_rules(),
+        )
+        self.assertEqual(case, "09")
+
+    def test_skin_order_is_09(self) -> None:
         case, _reason = assign_case(
             stored="01",
             days=3,
@@ -70,7 +109,7 @@ class OfficialCaseTests(unittest.TestCase):
             self_pay=False,
             rules=file_case_rules(),
         )
-        self.assertEqual(case, "01")
+        self.assertEqual(case, "09")
 
     def test_official_chronic_full_days_is_04(self) -> None:
         case, _reason = assign_case(
@@ -88,7 +127,7 @@ class OfficialCaseTests(unittest.TestCase):
             stored="01",
             days=3,
             dispense="0",
-            diagnosis_codes=["E119"],
+            diagnosis_codes=["C73"],
             order_codes=[],
             self_pay=False,
         )
@@ -136,6 +175,19 @@ class ClinicOverrideTests(unittest.TestCase):
             days=14,
             dispense="0",
             diagnosis_codes=["L700"],
+            order_codes=["51022C"],
+            self_pay=False,
+            rules=rules,
+        )
+        self.assertEqual(case, "04")
+
+    def test_disabled_order_on_short_course_stays_01(self) -> None:
+        rules = _rules(enabled=False, orders=("51022C",))
+        case, _reason = assign_case(
+            stored="01",
+            days=3,
+            dispense="0",
+            diagnosis_codes=["L309"],
             order_codes=["51022C"],
             self_pay=False,
             rules=rules,

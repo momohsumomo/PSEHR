@@ -45,12 +45,21 @@ function hasCjk(value: string): boolean {
   return /[\u3400-\u9fff]/.test(value);
 }
 
+/** "wound finger" matches "open wound of finger". Order does not matter. */
+export function textHasAllWords(text: string, query: string): boolean {
+  const hay = (text || "").toLowerCase();
+  const words = query.toLowerCase().split(/\s+/).filter((word) => word.length >= 2);
+  if (!hay || words.length < 2) return false;
+  return words.every((word) => hay.includes(word));
+}
+
 function fieldScore(value: string | undefined, query: string): number {
   const text = (value || "").trim().toLowerCase();
   if (!text || !query) return 0;
   if (text === query) return 300;
   if (text.startsWith(query)) return 160;
   if (text.includes(query)) return 40;
+  if (textHasAllWords(text, query)) return 30;
   return 0;
 }
 

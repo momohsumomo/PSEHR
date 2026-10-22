@@ -421,7 +421,7 @@ def main() -> int:
         "KEYWORD", "TIMESNO", "O_DATE", "R_DATE", "STATUS", "SLOT", "SERNO", "TIME",
         "CASENO", "PARTPAYNO", "KEYMONEY", "PARTPAYMO", "REGISTER", "SELF_PRICE",
         "RECEIPTS", "ARREARAGE", "DISCARD", "DISDRUG", "DRUG_PRICE", "TREA_PRICE",
-        "ICNO", "DIAGNOSE", "FORESPEAK", "D_END", "DOCTOR", "PHARMACY", "REMARK",
+        "ICNO", "DIAGNOSE", "FORESPEAK", "D_END", "DOCTOR", "PHARMACY", "REMARK", "CASENOE1",
     )
     visits: list[dict] = []
     preview: set[str] = set()
@@ -506,6 +506,7 @@ def main() -> int:
             "pharmacist": pharmacist or None,
             "treatSeq": seq or None,
             "noteMark": _clean(row["REMARK"])[:40] or None,
+            "caseNoE1": "".join(ch for ch in _clean(row.get("CASENOE1")) if ch.isalnum())[:2] or None,
         }
         fee_cols = (
             _fee(row["KEYMONEY"]), _fee(row["PARTPAYMO"]), _fee(row["DISCARD"]), _fee(row["DISDRUG"]),
@@ -774,6 +775,15 @@ def main() -> int:
                 ic_filled += 1
         conn.commit()
     print("ic blanks filled", ic_filled)
+
+    from scripts.backfill_ic_upload_fields import fill_mortgage_actual_treat
+
+    mortgage_filled = fill_mortgage_actual_treat(conn, dat)
+    print("makeup card ids filled", mortgage_filled)
+    from scripts.backfill_ic_upload_fields import fill_case_no_e1
+
+    e1_filled = fill_case_no_e1(conn, dat)
+    print("family-doctor marks filled", e1_filled)
 
     refund_on = {}
     for row in _iter_fields(dat / "ACOUNT.Dat", ("KEYWORDS", "R_DATE", "TYPE", "MONEY")):

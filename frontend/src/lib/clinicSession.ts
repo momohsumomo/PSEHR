@@ -8,6 +8,8 @@ export type ClinicSession = {
   shift: "上午" | "下午" | "晚上";
   /** 進門選定；清單不顯示科別欄 */
   dept: string;
+  /** 診間號碼。1 是 1 診。 */
+  room: string;
 };
 
 const KEY = "wundadi.clinicSession";
@@ -85,7 +87,7 @@ export function saveLastClinicDept(dept: string) {
 }
 
 export function emptyClinicSession(): ClinicSession {
-  return { date: todayIso(), pharmacist: "", shift: defaultShift(), dept: lastClinicDept() };
+  return { date: todayIso(), pharmacist: "", shift: defaultShift(), dept: lastClinicDept(), room: "1" };
 }
 
 export function loadClinicSession(): ClinicSession | null {
@@ -99,6 +101,7 @@ export function loadClinicSession(): ClinicSession | null {
       pharmacist: parsed.pharmacist,
       shift: parsed.shift === "下午" || parsed.shift === "晚上" ? parsed.shift : "上午",
       dept: (parsed.dept || lastClinicDept()).trim() || "皮膚科",
+      room: String(parsed.room || "1").replace(/\D/g, "") || "1",
     };
   } catch {
     return null;
