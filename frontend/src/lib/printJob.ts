@@ -143,12 +143,14 @@ function buildPrintHtml(
   .slip-page:last-child{break-after:auto;page-break-after:auto;}`
     : "";
   const minSide = Math.min(widthMm, heightMm);
-  const fitScale =
-    (lockOnePage || paged) && insetMm > 0 && minSide > insetMm * 2 + 8
-      ? (1 - (2 * insetMm) / minSide).toFixed(4)
-      : "";
-  const fitCss = fitScale
-    ? `.slip-page{transform:scale(${fitScale});transform-origin:center center;}`
+  const canInset =
+    (lockOnePage || paged) &&
+    insetMm > 0 &&
+    minSide > insetMm * 2 + 8 &&
+    pageW.endsWith("mm") &&
+    pageH.endsWith("mm");
+  const fitCss = canInset
+    ? `.slip-page{box-sizing:border-box !important;width:calc(${pageW} - ${insetMm * 2}mm) !important;height:calc(${pageH} - ${insetMm * 2}mm) !important;margin:${insetMm}mm !important;}`
     : "";
   return `<!doctype html><html style="color-scheme:only light;background:#fff;color:#000;forced-color-adjust:none"><head><meta charset="utf-8"/>
 <meta name="color-scheme" content="only light"/>
