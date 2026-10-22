@@ -100,6 +100,23 @@ function payable(regFee: string, burden: string, deposit: string, selfPay: strin
   return String(Math.round(sum));
 }
 
+function feeText(value: unknown): string {
+  const s = String(value ?? "").trim();
+  if (!s || s === "\u2014" || s === "-") return "";
+  return s;
+}
+
+/** Cash parts stored on the visit. Zero is a real amount. */
+export function visitCashParts(
+  entry: { regFee?: string; copayAmt?: string; burdenFee?: string; deposit?: string } | null | undefined,
+): { regFee: string; burden: string; deposit: string } {
+  return {
+    regFee: feeText(entry?.regFee),
+    burden: feeText(entry?.copayAmt) || feeText(entry?.burdenFee),
+    deposit: feeText(entry?.deposit),
+  };
+}
+
 function paginate<T>(rows: T[]): T[][] {
   if (rows.length === 0) return [[]];
   const pages: T[][] = [];
@@ -184,7 +201,7 @@ function feeTable(input: SimpleSlipInput, due: string, selfText: string, fontPx:
     ["\u8a3a\u7642\u8cbb\u7528", "\u2014"],
     ["\u6aa2\u9a57\u8cbb\u7528", show(input.materialFee)],
     ["\u85e5\u4e8b\u8cbb\u7528", "\u2014"],
-    ["\u5408\u8a08", added([input.regFee, input.burden, selfText])],
+    ["\u5408\u8a08", added([input.regFee, input.burden, input.deposit, selfText])],
     ["\u8ca0\u64d4\u5408\u8a08", show(input.burden)],
     ["\u7533\u8acb\u8cbb\u7528", "\u2014"],
     ["\u639b\u865f\u8cbb\u7528", show(input.regFee)],

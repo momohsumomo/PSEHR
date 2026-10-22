@@ -4,7 +4,7 @@ import { readLocalClinicBundle } from "@/lib/clinicProfile";
 import { lastClinicDept } from "@/lib/clinicSession";
 import { openPrintPreview } from "@/lib/printJob";
 import { depositPrintOptions, findPrintSetup, loadPrintSettings, partOn } from "@/lib/printSettings";
-import { buildSimpleSlipHtml } from "@/lib/simpleSlip";
+import { buildSimpleSlipHtml, visitCashParts } from "@/lib/simpleSlip";
 import type { DiagnosisRow, QueueEntry, RxLine, RxPayMark } from "@/mocks/clinicMocks";
 
 export function openDepositSlip(entry: QueueEntry, visitDate: string): void {
@@ -112,9 +112,9 @@ export async function openSavedVisitReceipt(entry: QueueEntry, visitDate: string
       drugs: drugsOf(ws),
       room: entry.room || "",
       queueNo: entry.queueNumber != null ? String(entry.queueNumber) : "",
-      deposit: entry.deposit || "",
-      regFee: entry.regFee || "",
-      burden: entry.copayAmt || entry.burdenFee || "",
+      deposit: visitCashParts(entry).deposit,
+      regFee: visitCashParts(entry).regFee,
+      burden: visitCashParts(entry).burden,
       selfPay: entry.selfPay || "",
       clinicName: profile.clinicName,
       address: profile.address,

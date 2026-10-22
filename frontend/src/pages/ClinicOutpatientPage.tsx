@@ -81,7 +81,7 @@ import { openPrintPreview } from "@/lib/printJob";
 import { depositPrintOptions, findPrintSetup, loadPrintSettings, partOn } from "@/lib/printSettings";
 import { openDepositSlip } from "@/lib/visitReceiptPrint";
 import { VisitPrintDialog } from "@/components/clinic/VisitPrintDialog";
-import { buildSimpleSlipHtml } from "@/lib/simpleSlip";
+import { buildSimpleSlipHtml, visitCashParts } from "@/lib/simpleSlip";
 import { buildDepositSlipHtml } from "@/lib/clinicPrintDocs";
 import { doctorDisplayName, pickClinicDoctor } from "@/lib/doctorName";
 import { openNhiCloudRx } from "@/lib/nhiCloud";
@@ -1174,6 +1174,7 @@ export function ClinicOutpatientPage() {
     const clinic = readLocalClinicBundle();
     const setup = findPrintSetup(loadPrintSettings(), "simple");
     const profile = clinic.profile;
+    const cash = visitCashParts(selected);
     setPrintNote("\u5df2\u958b\u555f\u9810\u89bd\u3002\u78ba\u5b9a\u5f8c\u518d\u6309\u9810\u89bd\u4e0a\u7684\u5217\u5370\u3002");
     void openPrintPreview({
       kind: "receipt",
@@ -1198,9 +1199,9 @@ export function ClinicOutpatientPage() {
         drugs: currentRx,
         room: selected?.room || "",
         queueNo: selected ? String(selected.queueNumber) : "",
-        deposit: selected?.deposit || "",
-        regFee: saveDraft.regFee,
-        burden: saveDraft.burden,
+        deposit: cash.deposit,
+        regFee: cash.regFee || saveDraft.regFee,
+        burden: cash.burden || saveDraft.burden,
         selfPay: saveDraft.selfPay || selected?.selfPay || "",
         clinicName: profile.clinicName,
         address: profile.address,
