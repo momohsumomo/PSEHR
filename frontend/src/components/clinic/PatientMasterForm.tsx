@@ -203,7 +203,7 @@ export function PatientMasterForm({
 
   return (
     <div
-      className={`flex h-full min-h-0 flex-col overflow-hidden p-1 ${className}`}
+      className={`flex h-full min-h-0 flex-col overflow-y-auto p-1 ${className}`}
       style={{ fontFamily: HIS_FONT, background: HIS.patientFace, fontSize: 16 }}
     >
       <datalist id="patient-master-id-categories">
@@ -217,7 +217,7 @@ export function PatientMasterForm({
         ))}
       </datalist>
 
-      <div className="min-h-0 flex-1 overflow-auto">
+      <div>
       {/* pat-idblock */}
       <div
         className="mb-1 shrink-0 border p-1"
@@ -386,8 +386,8 @@ export function PatientMasterForm({
 
       {/* pat-3col：照護｜健保/押金｜病史 */}
       <div
-        className="grid min-h-0 flex-1 gap-1 overflow-auto"
-        style={{ gridTemplateColumns: "1.05fr 0.95fr 0.9fr", minHeight: 220 }}
+        className="grid gap-1"
+        style={{ gridTemplateColumns: "1.05fr 0.95fr 0.9fr" }}
       >
         <div className="border p-1" style={{ borderColor: "#608060", background: HIS.patientFace }}>
           <Row>
@@ -444,7 +444,10 @@ export function PatientMasterForm({
           </div>
         </div>
 
-        <div className="border p-1" style={{ borderColor: "#608060", background: HIS.patientFace }}>
+        <div
+          className="border p-1 [&_input]:!h-6 [&_select]:!h-6 [&>div]:!mb-0"
+          style={{ borderColor: "#608060", background: HIS.patientFace }}
+        >
           <Row>
             <span style={lab}>健保身份</span>
             <input
@@ -595,7 +598,7 @@ export function PatientMasterForm({
         </div>
 
         <div
-          className="flex min-h-[200px] flex-col border p-1"
+          className="flex min-h-0 flex-col border p-1"
           style={{ borderColor: "#608060", background: HIS.patientFace }}
         >
           <Row>
@@ -610,7 +613,7 @@ export function PatientMasterForm({
           <fieldset className="mt-1 flex min-h-0 flex-1 flex-col border border-[#808080] p-1">
             <legend className="px-1 font-bold">病史記載</legend>
             <textarea
-              className="min-h-[120px] w-full flex-1 border-0 bg-white p-1"
+              className="min-h-[4.5rem] w-full flex-1 border-0 bg-white p-1"
               style={{ fontFamily: HIS_FONT, fontSize: 16, resize: "none" }}
               readOnly={ro}
               value={value.medicalHistory}

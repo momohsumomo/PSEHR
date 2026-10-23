@@ -70,8 +70,8 @@ function parseAddress(full: string): Parts {
   empty.lane = take(/^(\d+)\u5df7/);
   empty.alley = take(/^(\d+)\u5f04/);
   empty.no = take(/^(\d+)\u865f/);
-  empty.zhi = take(/^\u4e4b(\d+)/);
   empty.floor = take(/^(\d+)\u6a13/);
+  empty.zhi = take(/^\u4e4b(\d+)/);
   empty.note = tail;
   return empty;
 }
@@ -84,8 +84,8 @@ function compose(p: Parts): string {
     p.lane ? `${p.lane}\u5df7` : "",
     p.alley ? `${p.alley}\u5f04` : "",
     p.no ? `${p.no}\u865f` : "",
-    p.zhi ? `\u4e4b${p.zhi}` : "",
     p.floor ? `${p.floor}\u6a13` : "",
+    p.zhi ? `\u4e4b${p.zhi}` : "",
     p.note,
   ].join("");
 }

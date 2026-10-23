@@ -139,12 +139,13 @@ export function PatientEditDialog({ open, onClose, seed, onSaved }: Props) {
         {loading ? (
           <p className="p-4 text-sm text-[#004D00]">{LOADING}</p>
         ) : (
-          <div className="min-h-0 flex-1 overflow-hidden">
+          <div className="min-h-0 flex-1 overflow-y-auto" style={{ maxHeight: "calc(96vh - 6.5rem)" }}>
             <PatientMasterForm
               value={form}
               onChange={setForm}
               readOnly={false}
               showSpeak={false}
+              className="!h-auto"
               idCategoryOptions={idCategories}
             />
           </div>
