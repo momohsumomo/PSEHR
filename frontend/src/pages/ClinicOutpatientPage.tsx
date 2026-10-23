@@ -100,7 +100,7 @@ import {
   type VisitSaveDraft,
 } from "@/components/clinic/VisitSaveConfirmPanel";
 import { HIS, HIS_FONT, hisFontStyle } from "@/lib/hisTheme";
-import { findWaitingAppointment, otherShiftAppointmentNote } from "@/lib/appointmentCheckIn";
+import { findCardCheckIn, findWaitingAppointment, otherShiftAppointmentNote } from "@/lib/appointmentCheckIn";
 import { compareClinicQueue, normalizeClock, nowClock, planQueueNumber, shiftQueueNumbers, showsUploadCircle, skipsCloudWrite } from "@/lib/queueOrder";
 import { AppointmentCheckInDialog, InsertNumberDialog } from "@/components/clinic/InsertNumberDialog";
 import { useEscLayer } from "@/hooks/useEscLayer";
@@ -314,6 +314,7 @@ export function ClinicOutpatientPage() {
   const [printNote, setPrintNote] = useState<string | null>(null);
   /** 掛號前確認存檔（F2 找人／F9 讀卡），F3 修改已掛的也開這一頁 */
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [priceBlankFees, setPriceBlankFees] = useState(false);
   const [insertAsk, setInsertAsk] = useState<{
     gap: number;
     tail: number;
@@ -323,6 +324,7 @@ export function ClinicOutpatientPage() {
     encounterId: string;
     queueNumber: string;
     visitClock: string;
+    fromCard: boolean;
     seed: Partial<RegisterEditForm>;
   } | null>(null);
   const [confirmForm, setConfirmForm] = useState<RegisterEditForm>(() => emptyRegisterForm());
@@ -1746,13 +1748,16 @@ export function ClinicOutpatientPage() {
       patientName: res.validation?.patientName || prev.patientName,
       cardId: res.validation?.cardId ?? prev.cardId,
       icException: "ic",
+      deposit: "",
+      noCardReason: "",
+      prebook: false,
       pharmacist: prev.pharmacist || session?.pharmacist || lastPharmacist(),
     }));
     if (res.cardBridgeNote) setSeqNote(res.cardBridgeNote);
   }, [apiMode, readCardRegisterPatient, session]);
 
   const openConfirmFromSeed = useCallback(
-    (seed: Partial<RegisterEditForm>) => {
+    (seed: Partial<RegisterEditForm>, fillBlankFees = false) => {
       setConfirmError(null);
       setSeqNote(null);
       setCardDiagnose(null);
@@ -1761,6 +1766,7 @@ export function ClinicOutpatientPage() {
       if (!seed.encounterId && session?.shift) next.shift = session.shift;
       if (!seed.visitClock) next.visitClock = nowClock();
       setRegisterOptionsOpen(false);
+      setPriceBlankFees(fillBlankFees);
       setConfirmForm(next);
       setConfirmOpen(true);
     },
@@ -1782,6 +1788,7 @@ export function ClinicOutpatientPage() {
     (
       row: { encounterId: string; queueNumber?: number; slotTime?: string },
       seed: Partial<RegisterEditForm>,
+      fromCard = false,
     ) => {
       setRegisterOptionsOpen(false);
       setFinderOpen(false);
@@ -1789,10 +1796,12 @@ export function ClinicOutpatientPage() {
         encounterId: row.encounterId,
         queueNumber: row.queueNumber != null ? String(row.queueNumber) : "",
         visitClock: row.slotTime || seed.visitClock || "",
+        fromCard,
         seed: {
           ...seed,
           prebook: false,
           payType: seed.payType === "prebook" ? "4" : seed.payType || "4",
+          ...(fromCard ? { icException: "ic" as const, deposit: "", noCardReason: "" } : {}),
         },
       });
     },
@@ -1831,21 +1840,27 @@ export function ClinicOutpatientPage() {
           cardId: res.validation?.cardId,
         };
         if (res.cardBridgeNote) setSeqNote(res.cardBridgeNote);
-        const booked = findWaitingAppointment(
+        const booked = findCardCheckIn(
           queue,
-          { idNo: seed.idNo },
+          { idNo: seed.idNo, patientId: seed.patientId },
           shift,
           entryShift,
         );
         if (booked) {
-          beginCheckIn(booked, {
-            ...seed,
-            icException: "ic",
-            prebook: false,
-            payType: "4",
-            queueNumber: booked.queueNumber != null ? String(booked.queueNumber) : "",
-            visitClock: booked.slotTime || seed.visitClock,
-          });
+          beginCheckIn(
+            booked,
+            {
+              ...seed,
+              icException: "ic",
+              deposit: "",
+              noCardReason: "",
+              prebook: false,
+              payType: "4",
+              queueNumber: booked.queueNumber != null ? String(booked.queueNumber) : "",
+              visitClock: booked.slotTime || seed.visitClock,
+            },
+            true,
+          );
           return;
         }
         const otherNote = otherShiftAppointmentNote(
@@ -3683,7 +3698,8 @@ export function ClinicOutpatientPage() {
             visitClock: cur.visitClock || cur.seed.visitClock,
             prebook: false,
             payType: "4",
-          });
+            ...(cur.fromCard ? { icException: "ic" as const, deposit: "", noCardReason: "" } : {}),
+          }, true);
         }}
         onNo={() => setCheckInAsk(null)}
       />
@@ -3702,6 +3718,7 @@ export function ClinicOutpatientPage() {
         error={confirmError}
         diagnose={cardDiagnose}
         form={confirmForm}
+        priceBlankFees={priceBlankFees}
         onChange={(patch) => setConfirmForm((prev) => ({ ...prev, ...patch }))}
         onClose={() => {
           setConfirmOpen(false);

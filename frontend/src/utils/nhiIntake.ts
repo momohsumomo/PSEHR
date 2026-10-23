@@ -15,7 +15,7 @@ function sigForSave(line: RxLine): string {
 
 const ICD10_RE = /^[A-Z]\d{2}(\.\d{1,4})?$/i;
 const NHI_ICD_RE = /^[A-Z0-9]{3,10}$/i;
-const NHI_MED_RE = /^[A-Z0-9]{4,16}$/i;
+const NHI_MED_RE = /^[A-Z0-9]{1,16}$/i;
 const RXNORM_RE = /^\d{1,10}$/;
 
 export function extractPatientIdNo(
@@ -57,12 +57,14 @@ export function buildConditionIntake(
   return body;
 }
 
-/** 健保碼優先。沒有健保碼時，用畫面上的快碼（例如 HQH10）。 */
+/** NHI code first. Otherwise the shortcut on the line, including a two-letter alias such as PP. */
 export function lineSaveCode(line: RxLine): string {
   const nhi = (line.nhiCode || "").trim().toUpperCase();
-  if (nhi) return nhi;
-  const alias = (line.shortName || line.name || "").trim().toUpperCase();
-  return NHI_MED_RE.test(alias) ? alias : "";
+  if (NHI_MED_RE.test(nhi)) return nhi;
+  const alias = (line.shortName || "").trim().toUpperCase();
+  if (NHI_MED_RE.test(alias)) return alias;
+  const compact = alias.replace(/[^A-Z0-9]/g, "");
+  return NHI_MED_RE.test(compact) ? compact : "";
 }
 
 export function buildMedicationIntake(

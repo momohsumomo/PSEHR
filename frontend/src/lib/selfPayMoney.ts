@@ -17,20 +17,10 @@ function markOf(row: RxLine): string {
   return (row.payMark || (row.selfPay ? "\u81ea" : "")).trim();
 }
 
-/**
- * Cash lines are marked 自 or 材.
- * A bracket memo counts only when the master drug is itself self-pay.
- * Doxycycline carries a bracket but is still an NHI drug.
- */
-function counted(row: RxLine, drugs: CatalogDrug[]): boolean {
-  const mark = markOf(row);
-  if (mark === "\u81ea" || mark === "\u6750") return true;
+/** Cash is added only when the line note contains [ or @. A self-pay mark alone does not. */
+function counted(row: RxLine): boolean {
   const memo = (row.memo || "").trim();
-  if (!memo.includes("[") && !memo.includes("@")) return false;
-  const hit = drugs.length ? pickDrugForLine(row, drugs) : undefined;
-  if (!hit) return true;
-  const catalogMark = String(hit.payMark || "");
-  return Boolean(hit.selfPay) || catalogMark === "\u81ea" || catalogMark === "\u6750";
+  return memo.includes("[") || memo.includes("@");
 }
 
 function cashPrice(row: RxLine, drugs: CatalogDrug[]): number | null {
@@ -71,7 +61,7 @@ export function rawSelfPay(
   usages?: CatalogUsage[],
 ): number {
   return rows.reduce((sum, row) => {
-    if (!counted(row, drugs)) return sum;
+    if (!counted(row)) return sum;
     const price = cashPrice(row, drugs);
     if (price == null) return sum;
     const billed = billedDrugQty(row, usages);

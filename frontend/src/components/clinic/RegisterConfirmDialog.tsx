@@ -21,6 +21,7 @@ import { formatBirthdayRoc } from "@/lib/patientSearch";
 import { readLocalClinicBundle } from "@/lib/clinicProfile";
 import { loadClinicRegisterDefaults, mapApiPatientToHit } from "@/lib/patientSearch";
 import { canonicalIdCategory, matchIdCategory } from "@/lib/idCategory";
+import { visitNeedsFeeSchedule } from "@/lib/visitFees";
 import { NHI_NOCARD_REASONS, needsNhiNoCardReason } from "@/lib/registerModes";
 import { IdCategoryTableDialog } from "@/components/clinic/IdCategoryTableDialog";
 import { HospitalLookupDialog } from "@/components/clinic/HospitalLookupDialog";
@@ -45,6 +46,8 @@ type Props = {
   onReadCard?: () => Promise<void>;
   /** 目前這個頁面的時段。新掛號固定掛在這裡，不跟時鐘改。 */
   lockedShift?: string;
+  /** Check-in only. Blank or zero reg and copay take the normal schedule. */
+  priceBlankFees?: boolean;
 };
 
 type HistRow = {
@@ -131,6 +134,21 @@ function identityFeePatch(
     note: `\u8eab\u5206 ${id || "\u2014"}\u3000\u639b\u8cbb\u512a\u5f85 ${discount}\u3000\u5be6\u6536\u639b\u865f ${reg}\u3000\u90e8\u5206\u8ca0\u64d4 ${COPAY_FIXED}${waiveNote}${depositNote}`,
     patch,
   };
+}
+
+function pricedVisitPatch(
+  base: Partial<RegisterEditForm>,
+  aged: { regFee: string; copayAmt: string; copayDiscAmt: string },
+  selfPay: boolean,
+  feesOnly: boolean,
+): Partial<RegisterEditForm> {
+  const fees: Partial<RegisterEditForm> = {
+    regFee: aged.regFee,
+    copayAmt: aged.copayAmt,
+    copayDiscAmt: aged.copayDiscAmt,
+    ...(selfPay ? { copayCode: "" } : {}),
+  };
+  return feesOnly ? fees : { ...base, ...fees };
 }
 
 /** Identity deposit is the amount for a deposit hold. A card visit stores none. */
@@ -232,6 +250,7 @@ export function RegisterConfirmDialog({
   onConfirm,
   onReadCard,
   lockedShift,
+  priceBlankFees = false,
 }: Props) {
   const [pharmacists, setPharmacists] = useState<ApiStaffRecord[]>([]);
   const [doctors, setDoctors] = useState<ApiStaffRecord[]>([]);
@@ -257,6 +276,14 @@ export function RegisterConfirmDialog({
   const nhiQuoteRef = useRef<{ note: string; patch: Partial<RegisterEditForm> } | null>(null);
   const selfPayLive = useRef(false);
   const feeEpoch = useRef(0);
+  const depositTouched = useRef(false);
+  const depositLive = useRef(form.deposit);
+  depositLive.current = form.deposit;
+  const exceptionLive = useRef(form.icException);
+  exceptionLive.current = form.icException;
+  const dialogOpen = useRef(false);
+  if (open && !dialogOpen.current) depositTouched.current = false;
+  dialogOpen.current = open;
   const studentRef = useRef<boolean | null>(null);
   const personDiscRef = useRef("");
   const [askStudent, setAskStudent] = useState(false);
@@ -330,9 +357,10 @@ export function RegisterConfirmDialog({
     const copay = selfPayForm
       ? 0
       : Math.max(0, (Number(form.copayAmt) || 0) - (Number(form.copayDiscAmt) || 0));
-    const sum = reg + copay;
+    const deposit = selfPayForm ? 0 : Math.max(0, Number(form.deposit) || 0);
+    const sum = reg + copay + deposit;
     return sum > 0 ? String(sum) : "0";
-  }, [form.regFee, form.copayAmt, form.copayDiscAmt, selfPayForm]);
+  }, [form.regFee, form.copayAmt, form.copayDiscAmt, form.deposit, selfPayForm]);
 
   useEffect(() => {
     if (!open) return;
@@ -441,9 +469,10 @@ export function RegisterConfirmDialog({
             const cats = await fetchIdCategorySettings();
             const hit = matchIdCategory(cats, cat);
             if (hit || shown) {
-              const applied = feesForVisit(form.icException, shown || cat, hit, defaults.regFeeOutpatient, personDisc);
+              const applied = feesForVisit(exceptionLive.current, shown || cat, hit, defaults.regFeeOutpatient, personDisc);
+              if (depositTouched.current) applied.patch.deposit = depositLive.current;
               nhiQuoteRef.current = applied;
-              if (!form.encounterId && feeEpoch.current === epoch) {
+              if (visitNeedsFeeSchedule(form.encounterId, priceBlankFees, form.regFee, form.copayAmt) && feeEpoch.current === epoch) {
                 const selfPay = selfPayLive.current;
                 const base = selfPay
                   ? { ...applied.patch, regFee: defaults.regFeeSelfPay || applied.patch.regFee, copayAmt: "0", copayDiscAmt: "0" }
@@ -454,13 +483,7 @@ export function RegisterConfirmDialog({
                     ? [`\u8eab\u5206 ${shown || "\u2014"}\u3000\u639b\u865f\u8cbb ${aged.regFee}`, aged.note].filter(Boolean).join("\u3000")
                     : [applied.note, aged.note].filter(Boolean).join("\u3000"),
                 );
-                onChange({
-                  ...base,
-                  regFee: aged.regFee,
-                  copayAmt: aged.copayAmt,
-                  copayDiscAmt: aged.copayDiscAmt,
-                  ...(selfPay ? { copayCode: "" } : {}),
-                });
+                onChange(pricedVisitPatch(base, aged, selfPay, Boolean(form.encounterId)));
               }
             } else {
               setIdFeeNote("此身分類別尚未對到優惠表，請按身份類別旁的 … 設定");
@@ -471,7 +494,7 @@ export function RegisterConfirmDialog({
         } else {
           const plain = identityFeePatch("", undefined, defaults.regFeeOutpatient, false, personDiscRef.current);
           nhiQuoteRef.current = plain;
-          if (!form.encounterId && feeEpoch.current === epoch) {
+          if (visitNeedsFeeSchedule(form.encounterId, priceBlankFees, form.regFee, form.copayAmt) && feeEpoch.current === epoch) {
             const selfPay = selfPayLive.current;
             const base = selfPay
               ? { ...plain.patch, regFee: defaults.regFeeSelfPay || plain.patch.regFee, copayAmt: "0", copayDiscAmt: "0" }
@@ -482,13 +505,7 @@ export function RegisterConfirmDialog({
                 ? [`\u8eab\u5206 \u2014\u3000\u639b\u865f\u8cbb ${aged.regFee}`, aged.note].filter(Boolean).join("\u3000")
                 : aged.note,
             );
-            onChange({
-              ...base,
-              regFee: aged.regFee,
-              copayAmt: aged.copayAmt,
-              copayDiscAmt: aged.copayDiscAmt,
-              ...(selfPay ? { copayCode: "" } : {}),
-            });
+            onChange(pricedVisitPatch(base, aged, selfPay, Boolean(form.encounterId)));
           }
         }
         try {
@@ -562,7 +579,7 @@ export function RegisterConfirmDialog({
     return () => {
       cancelled = true;
     };
-  }, [open, form.patientId]);
+  }, [open, form.patientId, priceBlankFees]);
 
   useEffect(() => {
     if (!open) return;
@@ -784,7 +801,10 @@ export function RegisterConfirmDialog({
                 <input
                   className={inputCls}
                   value={form.deposit}
-                  onChange={(e) => onChange({ deposit: e.target.value })}
+                  onChange={(e) => {
+                    depositTouched.current = true;
+                    onChange({ deposit: e.target.value.replace(/[^\d]/g, "") });
+                  }}
                 />
               </Row>
               <Row label="就醫類別">
@@ -839,8 +859,15 @@ export function RegisterConfirmDialog({
                       next.payType = "4";
                       next.prebook = false;
                       next.deposit = "";
-                    } else if (form.payType === "4") {
-                      next.payType = "";
+                      depositTouched.current = false;
+                    } else {
+                      if (form.payType === "4") next.payType = "";
+                      if (icException === "ic") {
+                        next.deposit = "";
+                        depositTouched.current = false;
+                      } else if (icException === "deposit" && !String(form.deposit || "").trim()) {
+                        next.deposit = loadClinicRegisterDefaults().depositAmount;
+                      }
                     }
                     onChange(withFee(next));
                   }}
@@ -1100,7 +1127,8 @@ export function RegisterConfirmDialog({
                 setIdFeeNote("此身分類別尚未對到優惠表，請按身份類別旁的 … 設定");
                 return;
               }
-              const applied = feesForVisit(form.icException, idCategory, hit, defaults.regFeeOutpatient, personDiscRef.current);
+              const applied = feesForVisit(exceptionLive.current, idCategory, hit, defaults.regFeeOutpatient, personDiscRef.current);
+              if (depositTouched.current) applied.patch.deposit = depositLive.current;
               nhiQuoteRef.current = applied;
               const selfPay = selfPayLive.current;
               const base = selfPay

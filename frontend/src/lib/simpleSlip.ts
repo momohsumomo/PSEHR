@@ -63,6 +63,15 @@ function esc(s: string): string {
     .replace(/"/g, "&quot;");
 }
 
+/** Patient copy keeps both ends and covers the middle. A123456789 becomes A12****789. */
+export function maskIdNo(value: string): string {
+  const text = String(value ?? "").trim();
+  if (!text || text === "\u2014" || text === "-") return text;
+  if (text.length <= 2) return "*".repeat(text.length);
+  if (text.length <= 6) return `${text.slice(0, 1)}${"*".repeat(text.length - 2)}${text.slice(-1)}`;
+  return `${text.slice(0, 3)}${"*".repeat(text.length - 6)}${text.slice(-3)}`;
+}
+
 function show(v: string | number | undefined | null): string {
   const s = String(v ?? "").trim();
   if (!s || s === "\u2014" || s === "-") return "\u2014";
@@ -188,13 +197,14 @@ function rightTable(rows: RxLine[], fontPx: number): string {
       .map((row) => {
         const qty = esc(row.qty == null ? "\u2014" : String(row.qty));
         const total = esc(show(row.totalAmount));
+        const site = esc((row.bodySite || "").trim());
         const clip = "display:block;overflow:hidden;white-space:nowrap;max-height:1.15em;";
         const cell = "overflow:hidden;vertical-align:top;height:1.15em;";
-        return `<tr><td style="${cell}"><div style="${clip}">${esc(show(row.name))}</div></td><td style="${cell}width:2.6em;text-align:right;">${qty}</td><td style="${cell}width:3.4em;text-align:right;">${total}</td></tr>`;
+        return `<tr><td style="${cell}"><div style="${clip}">${esc(show(row.name))}</div></td><td style="${cell}width:2.6em;text-align:right;">${qty}</td><td style="${cell}width:3.4em;text-align:right;">${total}</td><td style="${cell}width:22%;"><div style="${clip}">${site}</div></td></tr>`;
       })
-      .join("") || `<tr><td colspan="3">\u2014</td></tr>`;
+      .join("") || `<tr><td colspan="4">\u2014</td></tr>`;
   return `<table style="width:100%;border-collapse:collapse;table-layout:fixed;font-size:${fontPx}px;line-height:1.15;">
-    <tr><td style="overflow:hidden;height:1.15em;white-space:nowrap;">\u85e5\u54c1\u540d\u7a31</td><td style="width:2.6em;text-align:right;overflow:hidden;height:1.15em;white-space:nowrap;">\u6578\u91cf</td><td style="width:3.4em;text-align:right;overflow:hidden;height:1.15em;white-space:nowrap;">\u7e3d\u91cf</td></tr>
+    <tr><td style="overflow:hidden;height:1.15em;white-space:nowrap;">\u85e5\u54c1\u540d\u7a31</td><td style="width:2.6em;text-align:right;overflow:hidden;height:1.15em;white-space:nowrap;">\u6578\u91cf</td><td style="width:3.4em;text-align:right;overflow:hidden;height:1.15em;white-space:nowrap;">\u7e3d\u91cf</td><td style="width:22%;overflow:hidden;height:1.15em;white-space:nowrap;">\u90e8\u4f4d</td></tr>
     ${body}
   </table>`;
 }
@@ -291,7 +301,8 @@ function pageHtml(
   const title = esc((input.receiptTitle || "").trim() || "\u85e5\u55ae\u5167\u5bb9\u8207\u9580\u8a3a\u8cbb\u7528\u660e\u7d30");
   const addressBit = hide("address") ? "" : ` (${esc(show(input.address))})`;
   const phoneBit = hide("phone") ? "" : `\u3000\u96fb\u8a71:${esc(show(input.phone))}`;
-  const rightId = hide("idno") ? "" : `\u3000\u8eab\u5206\u8b49:${esc(show(input.idNo))}`;
+  const rightShown = show(input.idNo);
+  const rightId = hide("idno") ? "" : `\u3000\u8eab\u5206\u8b49:${esc(rightShown === "\u2014" ? rightShown : maskIdNo(rightShown))}`;
   const rightHead =
     pageIndex === 0
       ? `<div style="text-align:center;font-weight:bold;${glow("title")}">${title}</div>

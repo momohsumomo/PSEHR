@@ -11,6 +11,10 @@ export type WaitingAppointment = {
   shift?: string;
   queueNumber?: number;
   slotTime?: string;
+  icException?: string;
+  deposit?: string;
+  note?: string;
+  treatSeq?: string;
 };
 
 /** Stored shift, or the clock on the row. Blank means we will not guess. */
@@ -65,6 +69,45 @@ export function findWaitingAppointment<T extends WaitingAppointment>(
   return (
     waitingHits(queue, who).find((row) => (shiftOf ? shiftOf(row) : appointmentShift(row)) === shift) ??
     null
+  );
+}
+
+function heldDeposit(row: WaitingAppointment): boolean {
+  if (row.queueStatus !== "waiting" || !row.encounterId) return false;
+  if ((row.treatSeq || "").trim()) return false;
+  const ex = (row.icException || "").trim();
+  if (ex === "selfPay") return false;
+  if (ex === "deposit") return true;
+  if ((row.note || "").trim() === "\u62bc") return true;
+  const amount = Number(String(row.deposit || "").replace(/[^\d.-]/g, ""));
+  return Number.isFinite(amount) && amount > 0;
+}
+
+/**
+ * Card check-in takes the same-shift appointment, or a deposit hold still
+ * waiting for a card. The card turns that row into a normal visit.
+ */
+export function findCardCheckIn<T extends WaitingAppointment>(
+  queue: T[],
+  who: { patientId?: string; idNo?: string },
+  shift?: string,
+  shiftOf?: (row: T) => string,
+): T | null {
+  const booked = findWaitingAppointment(queue, who, shift, shiftOf);
+  if (booked) return booked;
+  if (!shift) return null;
+  const pid = idTail(who.patientId);
+  const idNo = normIdNo(who.idNo);
+  if (!pid && !idNo) return null;
+  return (
+    queue.find((row) => {
+      if (row.prebook) return false;
+      if ((shiftOf ? shiftOf(row) : appointmentShift(row)) !== shift) return false;
+      const samePid = Boolean(pid) && idTail(row.patientId) === pid;
+      const sameId = Boolean(idNo) && normIdNo(row.idNo) === idNo;
+      if (!samePid && !sameId) return false;
+      return heldDeposit(row);
+    }) ?? null
   );
 }
 

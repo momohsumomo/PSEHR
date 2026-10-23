@@ -89,12 +89,17 @@ function stripFatDosage(sig: string | undefined): string {
   return m ? m[1].trim() : s;
 }
 
-/** 沒有健保碼的診所藥，用快碼當存檔代號。HQH10 這種自費藥才不會存完就消失。 */
-function aliasWhenNoNhi(drug: CatalogDrug): string {
-  const nhi = String(drug.nhiCode || "").trim();
-  if (nhi) return nhi;
+const CLINIC_CODE = /^[A-Z0-9]{1,16}$/;
+
+/** Code stored on the chart. A short alias such as PP, or the drug number when the alias has punctuation or Chinese. */
+function clinicSaveCode(drug: CatalogDrug): string {
+  const nhi = String(drug.nhiCode || "").trim().toUpperCase();
+  if (CLINIC_CODE.test(nhi)) return nhi;
   const alias = String(drug.alias || drug.shortName || "").trim().toUpperCase();
-  return /^[A-Z0-9]{4,16}$/.test(alias) ? alias : "";
+  if (CLINIC_CODE.test(alias)) return alias;
+  const no = String(drug.drugNo || "").replace(/[\x00-\x1f]/g, "").trim().toUpperCase();
+  if (CLINIC_CODE.test(no)) return no;
+  return "";
 }
 
 export function catalogDrugToRxLine(drug: CatalogDrug, usages?: CatalogUsage[]): RxLine {
@@ -106,7 +111,7 @@ export function catalogDrugToRxLine(drug: CatalogDrug, usages?: CatalogUsage[]):
     sig: (drug.sig || "").trim(),
     days: Number(drug.days) > 0 ? Number(drug.days) : 0,
     qty: Number(drug.qty) > 0 ? Number(drug.qty) : undefined,
-    nhiCode: aliasWhenNoNhi(drug),
+    nhiCode: clinicSaveCode(drug),
     unitPrice: Number.isFinite(price) && price > 0 ? price : undefined,
     route: drug.route,
     unit: (drug.unit || "").trim(),

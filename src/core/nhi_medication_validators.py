@@ -8,7 +8,8 @@ from pydantic import BaseModel, Field, field_validator
 
 from src.core.nhi_validators import NhiValidationError, validate_taiwan_id_no_format
 
-_NHI_MED_PATTERN = re.compile(r"^[A-Z0-9]{4,16}$", re.I)
+# Clinic shortcuts are often shorter than an NHI code (PP, HQH). Self-pay items still need a code or the line is dropped.
+_NHI_MED_PATTERN = re.compile(r"^[A-Z0-9]{1,16}$", re.I)
 _RXNORM_PATTERN = re.compile(r"^\d{1,10}$")
 
 

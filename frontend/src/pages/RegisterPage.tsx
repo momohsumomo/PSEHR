@@ -34,7 +34,7 @@ import { registerHubAction } from "@/lib/registerHubActions";
 import { isoBirthDateToRoc, formatBirthdayRoc, loadClinicRegisterDefaults, type PatientHit } from "@/lib/patientSearch";
 import { isDepositHold } from "@/lib/registerModes";
 import { HIS, HIS_FONT, hisFontStyle } from "@/lib/hisTheme";
-import { findWaitingAppointment, otherShiftAppointmentNote } from "@/lib/appointmentCheckIn";
+import { findCardCheckIn, findWaitingAppointment, otherShiftAppointmentNote } from "@/lib/appointmentCheckIn";
 import { displayCase } from "@/lib/caseMark";
 import { roomLabel, roomNumber } from "@/lib/roomMark";
 import { clockLabel, compareClinicQueue, normalizeClock, nowClock, planQueueNumber, shiftFromClock, shiftQueueNumbers } from "@/lib/queueOrder";
@@ -236,6 +236,7 @@ export function RegisterPage() {
     encounterId: string;
     queueNumber: string;
     visitClock: string;
+    fromCard: boolean;
     seed: Partial<RegisterEditForm>;
   } | null>(null);
   const [depositAsk, setDepositAsk] = useState<{
@@ -259,6 +260,7 @@ export function RegisterPage() {
 
   /** 掛號前確認存檔 */
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [priceBlankFees, setPriceBlankFees] = useState(false);
   const [confirmForm, setConfirmForm] = useState<RegisterEditForm>(emptyRegisterForm());
   const [confirmError, setConfirmError] = useState<string | null>(null);
   const [cardDiagnose, setCardDiagnose] = useState<CardFaultReport | null>(null);
@@ -323,7 +325,7 @@ export function RegisterPage() {
     }
   };
 
-  const openConfirmFromSeed = useCallback((seed: Partial<RegisterEditForm>) => {
+  const openConfirmFromSeed = useCallback((seed: Partial<RegisterEditForm>, fillBlankFees = false) => {
     setConfirmError(null);
     setSeqNote(null);
     setCardDiagnose(null);
@@ -332,6 +334,7 @@ export function RegisterPage() {
     if (!seed.encounterId) next.shift = regShift;
     if (!seed.visitClock) next.visitClock = nowClock();
     setRegisterOptionsOpen(false);
+    setPriceBlankFees(fillBlankFees);
     setConfirmForm(next);
     setConfirmOpen(true);
   }, [regShift]);
@@ -349,6 +352,7 @@ export function RegisterPage() {
     (
       row: { encounterId: string; queueNumber?: number; slotTime?: string },
       seed: Partial<RegisterEditForm>,
+      fromCard = false,
     ) => {
       setRegisterOptionsOpen(false);
       setFinderOpen(false);
@@ -356,10 +360,12 @@ export function RegisterPage() {
         encounterId: row.encounterId,
         queueNumber: row.queueNumber != null ? String(row.queueNumber) : "",
         visitClock: row.slotTime || seed.visitClock || "",
+        fromCard,
         seed: {
           ...seed,
           prebook: false,
           payType: seed.payType === "prebook" ? "4" : seed.payType || "4",
+          ...(fromCard ? { icException: "ic" as const, deposit: "", noCardReason: "" } : {}),
         },
       });
     },
@@ -401,17 +407,29 @@ export function RegisterPage() {
         icException: "ic",
       };
       if (res.cardBridgeNote) setSeqNote(res.cardBridgeNote);
-      const booked = findWaitingAppointment(queue, { idNo: seed.idNo }, regShift);
+      const booked = findCardCheckIn(queue, { idNo: seed.idNo, patientId: seed.patientId }, regShift);
       if (booked) {
-        beginCheckIn(booked, {
-          ...seedFromEntry(booked),
-          ...seed,
-          icException: "ic",
-          prebook: false,
-          payType: "4",
-          queueNumber: booked.queueNumber != null ? String(booked.queueNumber) : "",
-          visitClock: booked.slotTime || seed.visitClock,
-        });
+        beginCheckIn(
+          booked,
+          {
+            ...seedFromEntry(booked),
+            patientId: seed.patientId,
+            idNo: seed.idNo,
+            birthday: seed.birthday,
+            sex: seed.sex,
+            patientName: seed.patientName,
+            cardId: seed.cardId,
+            pharmacist: seed.pharmacist,
+            icException: "ic",
+            deposit: "",
+            noCardReason: "",
+            prebook: false,
+            payType: "4",
+            queueNumber: booked.queueNumber != null ? String(booked.queueNumber) : "",
+            visitClock: booked.slotTime || seed.visitClock,
+          },
+          true,
+        );
         return;
       }
       const otherNote = otherShiftAppointmentNote(queue, { idNo: seed.idNo }, regShift);
@@ -550,14 +568,19 @@ export function RegisterPage() {
     setFinderOpen(false);
     const booked = findWaitingAppointment(queue, { patientId: hit.id, idNo: hit.idNo }, regShift);
     if (booked) {
-      const depositSeed = seedFromPatientHit(hit);
       beginCheckIn(booked, {
         ...seedFromEntry(booked),
-        ...depositSeed,
+        patientId: hit.id,
+        idNo: hit.idNo,
+        birthday: hit.birthdayRoc || isoBirthDateToRoc(hit.birthDateIso),
+        sex: hit.sex || "F",
+        patientName: hit.name,
         icException: "deposit",
         noCardReason: "",
+        deposit: loadClinicRegisterDefaults().depositAmount,
         prebook: false,
         payType: "4",
+        pharmacist: lastPharmacist(),
         queueNumber: booked.queueNumber != null ? String(booked.queueNumber) : "",
         visitClock: booked.slotTime || "",
       });
@@ -1351,7 +1374,8 @@ export function RegisterPage() {
             visitClock: cur.visitClock || cur.seed.visitClock,
             prebook: false,
             shift: regShift,
-          });
+            ...(cur.fromCard ? { icException: "ic" as const, deposit: "", noCardReason: "" } : {}),
+          }, true);
         }}
         onNo={() => setCheckInAsk(null)}
       />
@@ -1371,6 +1395,7 @@ export function RegisterPage() {
         error={confirmError}
         diagnose={cardDiagnose}
         form={confirmForm}
+        priceBlankFees={priceBlankFees}
         onChange={(patch) => setConfirmForm((prev) => ({ ...prev, ...patch }))}
         onClose={() => {
           setConfirmOpen(false);
@@ -1392,6 +1417,9 @@ export function RegisterPage() {
               patientName: res.validation?.patientName || prev.patientName,
               cardId: res.validation?.cardId ?? prev.cardId,
               icException: "ic",
+              deposit: "",
+              noCardReason: "",
+              prebook: false,
             }));
             if (res.cardBridgeNote) setSeqNote(res.cardBridgeNote);
           } catch (e) {
