@@ -20,7 +20,7 @@ import { applyAgeFees, ageYearsFromRoc, policyFromFees } from "@/lib/ageFee";
 import { formatBirthdayRoc } from "@/lib/patientSearch";
 import { readLocalClinicBundle } from "@/lib/clinicProfile";
 import { loadClinicRegisterDefaults, mapApiPatientToHit } from "@/lib/patientSearch";
-import { cardIdentityBenefit } from "@/lib/cardIdentity";
+import { applyVisitIdentity, visitCopayBenefit, visitIdentityChoice } from "@/lib/cardIdentity";
 import { canonicalIdCategory, matchIdCategory } from "@/lib/idCategory";
 import { visitNeedsFeeSchedule } from "@/lib/visitFees";
 import { NHI_NOCARD_REASONS, needsNhiNoCardReason } from "@/lib/registerModes";
@@ -169,21 +169,26 @@ function withCardIdentity(
   patch: Partial<RegisterEditForm>,
   mark: string | undefined,
   selfPay: boolean,
+  copayCode?: string,
 ): Partial<RegisterEditForm> {
-  const card = cardIdentityBenefit(mark);
+  const card = visitCopayBenefit(mark, copayCode);
   if (!card || selfPay) return patch;
   const next: Partial<RegisterEditForm> = { ...patch };
   if (card.waiveBasic) {
     const gross = String(next.copayAmt ?? "0");
-    next.copayDiscAmt = gross === "0" ? "0" : gross;
+    if (gross !== "0") {
+      next.copayDiscAmt = gross;
+      next.copayAmt = "0";
+    }
   }
   if (card.copayCode) next.copayCode = card.copayCode;
   return next;
 }
 
-function cardIdentityNote(mark: string | undefined): string {
-  const card = cardIdentityBenefit(mark);
-  return card ? `\u5065\u4fdd\u5361 ${card.label}` : "";
+function cardIdentityNote(mark: string | undefined, copayCode?: string): string {
+  const card = visitCopayBenefit(mark, copayCode);
+  if (!card) return "";
+  return card.mark ? `\u5065\u4fdd\u5361 ${card.label}` : card.label;
 }
 
 function shiftCode(shift: string): string {
@@ -500,7 +505,7 @@ export function RegisterConfirmDialog({
                   ? { ...applied.patch, regFee: defaults.regFeeSelfPay || applied.patch.regFee, copayAmt: "0", copayDiscAmt: "0" }
                   : applied.patch;
                 const aged = paintAge(base, studentRef.current, selfPay);
-                const cardNote = cardIdentityNote(form.cardIdentity);
+                const cardNote = cardIdentityNote(form.cardIdentity, form.copayCode);
                 setIdFeeNote(
                   [
                     selfPay
@@ -510,23 +515,24 @@ export function RegisterConfirmDialog({
                     cardNote,
                   ].filter(Boolean).join("\u3000"),
                 );
-                onChange(withCardIdentity(pricedVisitPatch(base, aged, selfPay, Boolean(form.encounterId)), form.cardIdentity, selfPay));
+                onChange(withCardIdentity(pricedVisitPatch(base, aged, selfPay, Boolean(form.encounterId)), form.cardIdentity, selfPay, form.copayCode));
               } else if (
-                cardIdentityBenefit(form.cardIdentity)?.waiveBasic &&
+                visitCopayBenefit(form.cardIdentity, form.copayCode)?.waiveBasic &&
                 !selfPayLive.current &&
                 feeEpoch.current === epoch
               ) {
-                const cardNote = cardIdentityNote(form.cardIdentity);
+                const cardNote = cardIdentityNote(form.cardIdentity, form.copayCode);
                 setIdFeeNote([applied.note, cardNote].filter(Boolean).join("\u3000"));
                 onChange(
                   withCardIdentity(
                     { copayAmt: form.copayAmt || COPAY_FIXED, copayDiscAmt: form.copayDiscAmt },
                     form.cardIdentity,
                     false,
+                    form.copayCode,
                   ),
                 );
-              } else if (cardIdentityNote(form.cardIdentity)) {
-                setIdFeeNote([applied.note, cardIdentityNote(form.cardIdentity)].filter(Boolean).join("\u3000"));
+              } else if (cardIdentityNote(form.cardIdentity, form.copayCode)) {
+                setIdFeeNote([applied.note, cardIdentityNote(form.cardIdentity, form.copayCode)].filter(Boolean).join("\u3000"));
               }
             } else {
               setIdFeeNote("此身分類別尚未對到優惠表，請按身份類別旁的 … 設定");
@@ -543,7 +549,7 @@ export function RegisterConfirmDialog({
               ? { ...plain.patch, regFee: defaults.regFeeSelfPay || plain.patch.regFee, copayAmt: "0", copayDiscAmt: "0" }
               : plain.patch;
             const aged = paintAge(base, studentRef.current, selfPay);
-            const cardNote = cardIdentityNote(form.cardIdentity);
+            const cardNote = cardIdentityNote(form.cardIdentity, form.copayCode);
             setIdFeeNote(
               [
                 selfPay ? `\u8eab\u5206 \u2014\u3000\u639b\u865f\u8cbb ${aged.regFee}` : "",
@@ -551,22 +557,23 @@ export function RegisterConfirmDialog({
                 cardNote,
               ].filter(Boolean).join("\u3000"),
             );
-            onChange(withCardIdentity(pricedVisitPatch(base, aged, selfPay, Boolean(form.encounterId)), form.cardIdentity, selfPay));
+            onChange(withCardIdentity(pricedVisitPatch(base, aged, selfPay, Boolean(form.encounterId)), form.cardIdentity, selfPay, form.copayCode));
           } else if (
-            cardIdentityBenefit(form.cardIdentity)?.waiveBasic &&
+            visitCopayBenefit(form.cardIdentity, form.copayCode)?.waiveBasic &&
             !selfPayLive.current &&
             feeEpoch.current === epoch
           ) {
-            setIdFeeNote(cardIdentityNote(form.cardIdentity));
+            setIdFeeNote(cardIdentityNote(form.cardIdentity, form.copayCode));
             onChange(
               withCardIdentity(
                 { copayAmt: form.copayAmt || COPAY_FIXED, copayDiscAmt: form.copayDiscAmt },
                 form.cardIdentity,
                 false,
+                form.copayCode,
               ),
             );
-          } else if (cardIdentityNote(form.cardIdentity)) {
-            setIdFeeNote(cardIdentityNote(form.cardIdentity));
+          } else if (cardIdentityNote(form.cardIdentity, form.copayCode)) {
+            setIdFeeNote(cardIdentityNote(form.cardIdentity, form.copayCode));
           }
         }
         try {
@@ -781,6 +788,20 @@ export function RegisterConfirmDialog({
                   placeholder="空白＝存檔後自動取號"
                   onChange={(e) => onChange({ queueNumber: e.target.value.replace(/\D/g, "") })}
                 />
+              </Row>
+              <Row label="本次身分">
+                <select
+                  className={pickedCls}
+                  value={visitIdentityChoice(form.cardIdentity, form.copayCode)}
+                  onChange={(e) => onChange(applyVisitIdentity(e.target.value, form))}
+                >
+                  <option value="">一般</option>
+                  <option value="1">福保</option>
+                  <option value="2">榮民</option>
+                  <option value="4">中低收入</option>
+                  <option value="8">災民</option>
+                  <option value="001">重大傷病</option>
+                </select>
               </Row>
               <Row label="案件代號">
                 <select
@@ -1212,6 +1233,7 @@ export function RegisterConfirmDialog({
                   },
                   form.cardIdentity,
                   selfPay,
+                  form.copayCode,
                 ),
               );
             });
