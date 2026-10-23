@@ -7,6 +7,7 @@ import { HisWinTitle } from "@/components/clinic/HisPageFrame";
 import { HIS, HIS_FONT } from "@/lib/hisTheme";
 import { HisFixedClockInput } from "@/components/clinic/HisFixedClockInput";
 import { RocBirthdayInput } from "@/components/clinic/RocBirthdayInput";
+import { applyVisitIdentity, visitIdentityChoice } from "@/lib/cardIdentity";
 import { pharmacistDisplayName } from "@/lib/doctorName";
 import { NHI_NOCARD_REASONS, needsNhiNoCardReason } from "@/lib/registerModes";
 
@@ -411,6 +412,23 @@ export function RegisterEditDialog({
                     <option value="09">09 {"\u5176\u4ed6"}</option>
                   </select>
                 </Field>
+                <Field label={"\u672c\u6b21\u8eab\u5206"}>
+                  <select
+                    className={`${inputCls} bg-[#b6f5b6] font-bold`}
+                    value={visitIdentityChoice(form.cardIdentity, form.copayCode)}
+                    onChange={(e) => onChange(applyVisitIdentity(e.target.value, form))}
+                  >
+                    <option value="">{ "\u4e00\u822c" }</option>
+                    <option value="1">{ "\u798f\u4fdd" }</option>
+                    <option value="2">{ "\u69ae\u6c11" }</option>
+                    <option value="4">{ "\u4e2d\u4f4e\u6536\u5165" }</option>
+                    <option value="8">{ "\u707d\u6c11" }</option>
+                    <option value="001">{ "\u91cd\u5927\u50b7\u75c5" }</option>
+                  </select>
+                </Field>
+                <p className="text-[10px] leading-snug text-[#404040]">
+                  {"\u9019\u6b21\u639b\u8658\u7684\u8eab\u5206\uff0c\u4e0d\u6539\u75c5\u60a3\u4e3b\u6a94\u3002\u798f\u4fdd 003\u3001\u69ae\u6c11 004\u3001\u91cd\u5927\u50b7\u75c5 001 \u5beb\u9032\u90e8\u5206\u8ca0\u64d4\u4ee3\u865f\uff0c\u75c5\u4eba\u9019\u6b21\u4e0d\u6536\uff0c\u9ede\u6578\u7533\u5831\u5411\u5065\u4fdd\u5c40\u8acb\u3002"}
+                </p>
                 <Field label={"\u90e8\u4efd\u8ca0\u64d4"}>
                   <input className={`${inputCls} font-mono`} placeholder={"\u4ee3\u865f"} value={form.copayCode} onChange={(e) => onChange({ copayCode: e.target.value })} />
                 </Field>

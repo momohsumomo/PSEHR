@@ -98,6 +98,49 @@ def _visit_clock(row: dict[str, Any]) -> str:
     return ""
 
 
+def _mobile_number(row: dict[str, Any]) -> str:
+    """Care Online splits a mobile into a 4-digit prefix and a 6-digit tail."""
+    area = re.sub(r"\D", "", str(row.get("MobilePhoneNumberAreaCode") or ""))
+    number = re.sub(r"\D", "", str(row.get("MobilePhoneNumber") or ""))
+    if area and number and not number.startswith(area):
+        return area + number
+    return number or area
+
+
+def _write_mobile(repo: Any, patient_id: str, mobile: str) -> None:
+    """Fill a missing mobile. A stored tail of the same number is replaced. A different number stays."""
+    full = re.sub(r"\D", "", mobile or "")
+    if len(full) < 10 or not patient_id:
+        return
+    current = repo.read_resource("Patient", patient_id)
+    if not isinstance(current, dict):
+        return
+    telecom = [item for item in (current.get("telecom") or []) if isinstance(item, dict)]
+    tail = full[-6:]
+
+    def digits(value: object) -> str:
+        return re.sub(r"\D", "", str(value or ""))
+
+    for tel in telecom:
+        if tel.get("system") != "phone":
+            continue
+        have = digits(tel.get("value"))
+        if have == full or (len(have) >= 10 and have.endswith(tail)):
+            return
+    replaced = False
+    for tel in telecom:
+        if tel.get("system") != "phone" or tel.get("use") != "mobile":
+            continue
+        have = digits(tel.get("value"))
+        if not have or have == tail or full.endswith(have):
+            tel["value"] = full
+            replaced = True
+            break
+    if not replaced:
+        telecom.append({"system": "phone", "value": full, "use": "mobile"})
+    repo.update_resource("Patient", patient_id, {**current, "telecom": telecom})
+
+
 def _shift(raw: str) -> str:
     text = (raw or "").strip()
     if "\u665a" in text:
@@ -148,6 +191,7 @@ def import_care_bookings(visiting_date: str) -> dict[str, Any]:
     errors: list[str] = []
 
     for row in bookings:
+        mobile = _mobile_number(row)
         id_no = str(row.get("IDNo") or "").strip().upper()
         name = f"{row.get('LastName') or ''}{row.get('FirstName') or ''}".strip()
         label = name or id_no or "(no name)"
@@ -181,6 +225,11 @@ def import_care_bookings(visiting_date: str) -> dict[str, Any]:
                 ).fetchone()
             if birth_row and str(birth_row["birth_date"] or "").strip():
                 birthday_kept += 1
+            if mobile:
+                try:
+                    _write_mobile(repo, matched.patient_id, mobile)
+                except Exception:
+                    errors.append(f"{label}：手機沒寫進原病歷")
             if taken:
                 skipped += 1
                 continue
@@ -197,6 +246,11 @@ def import_care_bookings(visiting_date: str) -> dict[str, Any]:
                     """,
                     (matched.patient_id, day),
                 ).fetchone()
+            if mobile:
+                try:
+                    _write_mobile(repo, matched.patient_id, mobile)
+                except Exception:
+                    errors.append(f"{label}：手機沒寫進原病歷")
             if taken:
                 skipped += 1
                 continue
@@ -245,9 +299,8 @@ def import_care_bookings(visiting_date: str) -> dict[str, Any]:
                 link_note = checksum_note
             payload = nhi_intake_to_fhir_patient(intake)
             _set_identity_d(payload)
-            phone = str(row.get("MobilePhoneNumber") or "").strip()
-            if phone:
-                payload["telecom"] = [{"system": "phone", "value": phone, "use": "mobile"}]
+            if mobile:
+                payload["telecom"] = [{"system": "phone", "value": mobile, "use": "mobile"}]
             address = " ".join(
                 x
                 for x in (

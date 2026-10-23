@@ -214,6 +214,12 @@ function rightTable(rows: RxLine[], fontPx: number): string {
   </table>`;
 }
 
+function drugFeeShown(raw: string): string {
+  const n = asNumber(raw);
+  if (n == null || n <= 0) return show(raw);
+  return String(ceilCashTen(n));
+}
+
 function added(values: string[]): string {
   const nums = values.map(asNumber).filter((n): n is number => n != null);
   if (!nums.length) return "\u2014";
@@ -227,7 +233,7 @@ function feeTable(input: SimpleSlipInput, due: string, selfText: string, fontPx:
     ["\u85e5\u8cbb\u8ca0\u64d4", show(input.drugCopay)],
     ["\u6aa2\u9a57\u8ca0\u64d4", "\u2014"],
     ["\u8a3a\u5bdf\u8cbb\u7528", show(input.consultFee)],
-    ["\u85e5\u54c1\u8cbb\u7528", show(input.drugFee)],
+    ["\u85e5\u54c1\u8cbb\u7528", drugFeeShown(input.drugFee)],
     ["\u8a3a\u7642\u8cbb\u7528", "\u2014"],
     ["\u6aa2\u9a57\u8cbb\u7528", show(input.materialFee)],
     ["\u85e5\u4e8b\u8cbb\u7528", "\u2014"],

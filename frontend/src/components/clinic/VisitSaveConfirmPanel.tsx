@@ -8,7 +8,7 @@ import { skipsCloudWrite } from "@/lib/queueOrder";
 import type { DiagnosisRow, QueueEntry, RxLine } from "@/mocks/clinicMocks";
 import { formatBirthdayRoc } from "@/lib/patientSearch";
 import { displayCase } from "@/lib/caseMark";
-import { cardIdentityBenefit } from "@/lib/cardIdentity";
+import { visitCopayBenefit } from "@/lib/cardIdentity";
 import { basicCopayYuan, nhiDrugPoints, visitCopayParts } from "@/lib/drugCopay";
 import { chargedSelfPay, selfPayCeiling } from "@/lib/selfPayMoney";
 import type { CatalogDrug } from "@/types/clinicCatalog";
@@ -103,7 +103,7 @@ export function buildVisitSaveDraft(args: {
       : "自行調劑";
   const storedCopay = yuanOrNull(args.selected?.copayAmt);
   const storedBurden = yuanOrNull(args.selected?.burdenFee);
-  const card = cardIdentityBenefit(args.selected?.cardIdentity);
+  const card = visitCopayBenefit(args.selected?.cardIdentity, args.selected?.copayCode);
   const exempt =
     storedCopay === 0 ||
     (storedCopay == null && storedBurden === 0) ||
@@ -129,14 +129,8 @@ export function buildVisitSaveDraft(args: {
     args.doctor?.trim() ||
     (args.selected as { doctorName?: string } | null)?.doctorName ||
     DASH;
-  const storedSelf = yuanNumber(args.selected?.selfPay);
   const selfBasis = selfPayCeiling(args.currentRx, args.drugs || [], args.usages);
-  const selfCharged = chargedSelfPay(
-    args.currentRx,
-    storedSelf,
-    args.drugs || [],
-    args.usages,
-  );
+  const selfCharged = chargedSelfPay(args.currentRx, args.drugs || [], args.usages);
   return {
     caseNo: caseShown || "01",
     copayCode:

@@ -13,10 +13,6 @@ export function ceilCashTen(n: number): number {
   return Math.ceil(tens - 1e-9) * 10;
 }
 
-function markOf(row: RxLine): string {
-  return (row.payMark || (row.selfPay ? "\u81ea" : "")).trim();
-}
-
 /** Cash is added only when the line note contains [ or @. A self-pay mark alone does not. */
 function counted(row: RxLine): boolean {
   const memo = (row.memo || "").trim();
@@ -35,19 +31,6 @@ function cashPrice(row: RxLine, drugs: CatalogDrug[]): number | null {
 function enteredQty(row: RxLine): number {
   const qty = Number(row.qty);
   return Number.isFinite(qty) && qty > 0 ? qty : 1;
-}
-
-/** Old screen math: NHI unit price times the dose, not the billed total. */
-function legacyRaw(rows: RxLine[]): number {
-  return rows.reduce((sum, row) => {
-    const mark = markOf(row);
-    const memo = (row.memo || "").trim();
-    const cash = mark === "\u81ea" || mark === "\u6750" || memo.includes("[") || memo.includes("@");
-    if (!cash) return sum;
-    const price = Number(row.unitPrice);
-    if (!Number.isFinite(price) || price === 0) return sum;
-    return sum + price * enteredQty(row);
-  }, 0);
 }
 
 /**
@@ -78,27 +61,11 @@ export function selfPayCeiling(
   return ceilCashTen(rawSelfPay(rows, drugs, usages));
 }
 
-/**
- * The amount to charge. A hand-edited number is kept.
- * A stored number that is still the old dose times NHI price is replaced.
- */
+/** Amount to charge from the prescription open on this save. */
 export function chargedSelfPay(
   rows: RxLine[],
-  stored: number | null,
   drugs: CatalogDrug[] = [],
   usages?: CatalogUsage[],
 ): number {
-  const raw = rawSelfPay(rows, drugs, usages);
-  const ceiled = ceilCashTen(raw);
-  if (stored == null || !Number.isFinite(stored) || stored <= 0) return ceiled;
-  const old = legacyRaw(rows);
-  const oldCeil = ceilCashTen(old);
-  const unmodified =
-    Math.abs(stored - raw) < 0.05 ||
-    Math.abs(stored - ceiled) < 0.05 ||
-    Math.abs(stored - old) < 0.05 ||
-    Math.abs(stored - oldCeil) < 0.05 ||
-    Math.abs(stored - Math.round(old)) < 0.05;
-  if (unmodified) return ceiled;
-  return ceilCashTen(stored);
+  return selfPayCeiling(rows, drugs, usages);
 }

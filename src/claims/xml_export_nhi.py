@@ -16,6 +16,7 @@ DEFAULT_CONSULT_FEE_CODE = "00101C"
 _VIRTUAL_ORDER = re.compile(r"^(R00[1-8]|S00[1-4])$")
 # 免部分負擔代號。d40 記 0，d43 記原本應收的基本＋藥品部分負擔。
 _EXEMPT_COPAY = {
+    "001",
     "003",
     "004",
     "005",

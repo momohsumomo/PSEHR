@@ -3,6 +3,7 @@ import {
   fetchIdCategorySettings,
   fetchPatient,
   fetchPatients,
+  fetchPatientVisits,
   fetchQueueForDate,
   fetchSameDayEncounters,
   fetchSeqNext,
@@ -38,7 +39,7 @@ function nowClock(): string {
   return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
 }
 
-type Mode = "home" | "kind" | "id" | "pick" | "done";
+type Mode = "home" | "kind" | "id" | "pick" | "notice" | "done";
 type WalkKind = "deposit" | "selfPay";
 
 function readableClinicName(): string {
@@ -69,6 +70,7 @@ export function SelfRegisterKioskPage() {
   const [number, setNumber] = useState("");
   const [who, setWho] = useState("");
   const [clinicName, setClinicName] = useState(readableClinicName);
+  const [waitLabel, setWaitLabel] = useState("");
 
   const resetHome = () => {
     setMode("home");
@@ -100,6 +102,31 @@ export function SelfRegisterKioskPage() {
   }, []);
 
   useEffect(() => {
+    let gone = false;
+    const load = async () => {
+      try {
+        const day = todayIso();
+        const board = await fetchQueueForDate(day);
+        if (gone || board.resolvedDate !== day) return;
+        const waiting = (board.entry || []).filter((row) => {
+          const meta = row.queueMeta;
+          return meta.queueStatus === "waiting" && !meta.prebook;
+        }).length;
+        const high = Math.ceil(waiting * 1.3);
+        setWaitLabel(`\u5019\u8a3a\u4eba\u6578 ${waiting}~${high}\u4eba`);
+      } catch {
+        if (!gone) setWaitLabel("");
+      }
+    };
+    void load();
+    const timer = window.setInterval(() => void load(), 20000);
+    return () => {
+      gone = true;
+      window.clearInterval(timer);
+    };
+  }, [mode]);
+
+  useEffect(() => {
     if (mode !== "done") return;
     const t = window.setTimeout(resetHome, 8000);
     return () => window.clearTimeout(t);
@@ -110,6 +137,10 @@ export function SelfRegisterKioskPage() {
       if (ev.key === "Escape") {
         ev.preventDefault();
         if (busy) return;
+        if (mode === "notice") {
+          setMode("done");
+          return;
+        }
         if (mode === "home" || mode === "done") resetHome();
         else if (mode === "pick") setMode("id");
         else if (mode === "id") setMode("kind");
@@ -187,11 +218,20 @@ export function SelfRegisterKioskPage() {
     };
   };
 
-  const showDone = (name: string, queueNumber: string, text: string) => {
+  const showDone = (name: string, queueNumber: string, text: string, firstVisit = false) => {
     setWho(maskName(name));
     setNumber(queueNumber);
     setNote(text);
-    setMode("done");
+    setMode(firstVisit ? "notice" : "done");
+  };
+
+  const isFirstClinicVisit = async (patientId: string): Promise<boolean> => {
+    try {
+      const prior = await fetchPatientVisits(patientId, 1, { light: true });
+      return (prior.entry || []).length === 0;
+    } catch {
+      return false;
+    }
   };
 
   const alreadyToday = async (patientId: string, name: string) => {
@@ -233,6 +273,7 @@ export function SelfRegisterKioskPage() {
     const board = await fetchQueueForDate(day);
     const rows = (board.resolvedDate === day ? board.entry : []).map((row) => row.queueMeta);
     const queueNumber = takeSmallestQueueNumber(shiftQueueNumbers(rows, shift));
+    const firstVisit = await isFirstClinicVisit(args.patientId);
     const saved = await registerEncounter({
       patientId: args.patientId,
       queueNumber,
@@ -261,7 +302,7 @@ export function SelfRegisterKioskPage() {
       deposit: priced.deposit,
       dispense: defaults.dispenseType || undefined,
     });
-    showDone(args.name, String(saved.queueNumber), "\u639b\u865f\u5b8c\u6210\uff0c\u8acb\u56de\u5ea7\u5019\u8a3a");
+    showDone(args.name, String(saved.queueNumber), "\u639b\u865f\u5b8c\u6210\uff0c\u8acb\u56de\u5ea7\u5019\u8a3a", firstVisit);
   };
 
   const finishCard = async (card: PatientRegisterResponse) => {
@@ -376,11 +417,15 @@ export function SelfRegisterKioskPage() {
         <h1 className="mt-1 text-xl font-medium tracking-[0.22em] text-[#3d7a96]">{"\u81ea\u52a9\u639b\u865f"}</h1>
         <div className="mx-auto mt-3 h-1 w-16 rounded-full bg-[#c4a36a]" />
       </header>
-      {note && mode !== "done" ? (
+      {note && mode !== "done" && mode !== "notice" ? (
         <div className="mx-6 mt-4 rounded-2xl bg-[#f8e4e4] px-4 py-3 text-center text-xl font-bold text-[#8a3030]">{note}</div>
       ) : null}
       {mode === "home" ? (
-        <div className="flex min-h-0 flex-1 gap-6 p-6">
+        <div className="flex min-h-0 flex-1 flex-col gap-4 p-6">
+          <div className="shrink-0 rounded-2xl bg-white/85 px-6 py-4 text-center text-3xl font-bold text-[#0f4c6e] shadow">
+            {waitLabel || "\u5019\u8a3a\u4eba\u6578 \u2014"}
+          </div>
+          <div className="flex min-h-0 flex-1 gap-6">
           <button type="button" disabled={busy} className={`${card} bg-[#1A6FB5] text-white`} onClick={() => { setNote(""); setMode("kind"); }}>
             <span className="mb-5 h-1.5 w-14 rounded-full bg-[#d6ebf8]" />
             <span className="text-5xl font-bold">{"\u7121\u5065\u4fdd\u5361\u639b\u865f"}</span>
@@ -393,6 +438,7 @@ export function SelfRegisterKioskPage() {
               {busy ? "\u8b80\u5361\u4e2d" : "\u8acb\u63d2\u5361\u518d\u6309"}
             </span>
           </button>
+          </div>
         </div>
       ) : null}
       {mode === "kind" ? (
@@ -486,6 +532,22 @@ export function SelfRegisterKioskPage() {
           <button type="button" className="h-14 rounded-2xl bg-white text-xl font-semibold text-[#31586e] shadow" onClick={() => setMode("id")}>
             {"\u56de\u4e0a\u4e00\u9801"}
           </button>
+        </div>
+      ) : null}
+      {mode === "notice" ? (
+        <div className="flex flex-1 flex-col items-center justify-center p-8 text-center">
+          <div className="max-w-3xl rounded-[2rem] bg-white px-12 py-12 shadow-[0_16px_36px_rgba(18,42,58,.12)]">
+            <p className="text-4xl font-bold leading-snug text-[#16324a]">
+              {"\u521d\u8a3a\u75c5\u60a3\uff0c\u639b\u5b8c\u865f\u5f8c\u8acb\u81f3\u6ac3\u53f0\u586b\u5beb\u521d\u8a3a\u55ae"}
+            </p>
+            <button
+              type="button"
+              className="mt-10 h-20 min-w-64 rounded-2xl bg-[#0f4c6e] px-8 text-3xl font-bold text-white"
+              onClick={() => setMode("done")}
+            >
+              {"\u6211\u77e5\u9053\u4e86"}
+            </button>
+          </div>
         </div>
       ) : null}
       {mode === "done" ? (
