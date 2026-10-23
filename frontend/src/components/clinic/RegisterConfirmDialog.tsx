@@ -20,6 +20,7 @@ import { applyAgeFees, ageYearsFromRoc, policyFromFees } from "@/lib/ageFee";
 import { formatBirthdayRoc } from "@/lib/patientSearch";
 import { readLocalClinicBundle } from "@/lib/clinicProfile";
 import { loadClinicRegisterDefaults, mapApiPatientToHit } from "@/lib/patientSearch";
+import { cardIdentityBenefit } from "@/lib/cardIdentity";
 import { canonicalIdCategory, matchIdCategory } from "@/lib/idCategory";
 import { visitNeedsFeeSchedule } from "@/lib/visitFees";
 import { NHI_NOCARD_REASONS, needsNhiNoCardReason } from "@/lib/registerModes";
@@ -162,6 +163,27 @@ function feesForVisit(
   const applied = identityFeePatch(code, hit, clinicReg, icException === "deposit", personDisc);
   if (!icException || icException === "ic") applied.patch.deposit = "";
   return applied;
+}
+
+function withCardIdentity(
+  patch: Partial<RegisterEditForm>,
+  mark: string | undefined,
+  selfPay: boolean,
+): Partial<RegisterEditForm> {
+  const card = cardIdentityBenefit(mark);
+  if (!card || selfPay) return patch;
+  const next: Partial<RegisterEditForm> = { ...patch };
+  if (card.waiveBasic) {
+    const gross = String(next.copayAmt ?? "0");
+    next.copayDiscAmt = gross === "0" ? "0" : gross;
+  }
+  if (card.copayCode) next.copayCode = card.copayCode;
+  return next;
+}
+
+function cardIdentityNote(mark: string | undefined): string {
+  const card = cardIdentityBenefit(mark);
+  return card ? `\u5065\u4fdd\u5361 ${card.label}` : "";
 }
 
 function shiftCode(shift: string): string {
@@ -478,12 +500,33 @@ export function RegisterConfirmDialog({
                   ? { ...applied.patch, regFee: defaults.regFeeSelfPay || applied.patch.regFee, copayAmt: "0", copayDiscAmt: "0" }
                   : applied.patch;
                 const aged = paintAge(base, studentRef.current, selfPay);
+                const cardNote = cardIdentityNote(form.cardIdentity);
                 setIdFeeNote(
-                  selfPay
-                    ? [`\u8eab\u5206 ${shown || "\u2014"}\u3000\u639b\u865f\u8cbb ${aged.regFee}`, aged.note].filter(Boolean).join("\u3000")
-                    : [applied.note, aged.note].filter(Boolean).join("\u3000"),
+                  [
+                    selfPay
+                      ? `\u8eab\u5206 ${shown || "\u2014"}\u3000\u639b\u865f\u8cbb ${aged.regFee}`
+                      : applied.note,
+                    aged.note,
+                    cardNote,
+                  ].filter(Boolean).join("\u3000"),
                 );
-                onChange(pricedVisitPatch(base, aged, selfPay, Boolean(form.encounterId)));
+                onChange(withCardIdentity(pricedVisitPatch(base, aged, selfPay, Boolean(form.encounterId)), form.cardIdentity, selfPay));
+              } else if (
+                cardIdentityBenefit(form.cardIdentity)?.waiveBasic &&
+                !selfPayLive.current &&
+                feeEpoch.current === epoch
+              ) {
+                const cardNote = cardIdentityNote(form.cardIdentity);
+                setIdFeeNote([applied.note, cardNote].filter(Boolean).join("\u3000"));
+                onChange(
+                  withCardIdentity(
+                    { copayAmt: form.copayAmt || COPAY_FIXED, copayDiscAmt: form.copayDiscAmt },
+                    form.cardIdentity,
+                    false,
+                  ),
+                );
+              } else if (cardIdentityNote(form.cardIdentity)) {
+                setIdFeeNote([applied.note, cardIdentityNote(form.cardIdentity)].filter(Boolean).join("\u3000"));
               }
             } else {
               setIdFeeNote("此身分類別尚未對到優惠表，請按身份類別旁的 … 設定");
@@ -500,12 +543,30 @@ export function RegisterConfirmDialog({
               ? { ...plain.patch, regFee: defaults.regFeeSelfPay || plain.patch.regFee, copayAmt: "0", copayDiscAmt: "0" }
               : plain.patch;
             const aged = paintAge(base, studentRef.current, selfPay);
+            const cardNote = cardIdentityNote(form.cardIdentity);
             setIdFeeNote(
-              selfPay
-                ? [`\u8eab\u5206 \u2014\u3000\u639b\u865f\u8cbb ${aged.regFee}`, aged.note].filter(Boolean).join("\u3000")
-                : aged.note,
+              [
+                selfPay ? `\u8eab\u5206 \u2014\u3000\u639b\u865f\u8cbb ${aged.regFee}` : "",
+                aged.note,
+                cardNote,
+              ].filter(Boolean).join("\u3000"),
             );
-            onChange(pricedVisitPatch(base, aged, selfPay, Boolean(form.encounterId)));
+            onChange(withCardIdentity(pricedVisitPatch(base, aged, selfPay, Boolean(form.encounterId)), form.cardIdentity, selfPay));
+          } else if (
+            cardIdentityBenefit(form.cardIdentity)?.waiveBasic &&
+            !selfPayLive.current &&
+            feeEpoch.current === epoch
+          ) {
+            setIdFeeNote(cardIdentityNote(form.cardIdentity));
+            onChange(
+              withCardIdentity(
+                { copayAmt: form.copayAmt || COPAY_FIXED, copayDiscAmt: form.copayDiscAmt },
+                form.cardIdentity,
+                false,
+              ),
+            );
+          } else if (cardIdentityNote(form.cardIdentity)) {
+            setIdFeeNote(cardIdentityNote(form.cardIdentity));
           }
         }
         try {
@@ -579,7 +640,7 @@ export function RegisterConfirmDialog({
     return () => {
       cancelled = true;
     };
-  }, [open, form.patientId, priceBlankFees]);
+  }, [open, form.patientId, form.cardIdentity, priceBlankFees]);
 
   useEffect(() => {
     if (!open) return;
@@ -1140,13 +1201,19 @@ export function RegisterConfirmDialog({
                   ? [`\u8eab\u5206 ${idCategory || "\u2014"}\u3000\u639b\u865f\u8cbb ${aged.regFee}`, aged.note].filter(Boolean).join("\u3000")
                   : [applied.note, aged.note].filter(Boolean).join("\u3000"),
               );
-              onChange({
-                ...base,
-                regFee: aged.regFee,
-                copayAmt: aged.copayAmt,
-                copayDiscAmt: aged.copayDiscAmt,
-                ...(selfPay ? { copayCode: "" } : {}),
-              });
+              onChange(
+                withCardIdentity(
+                  {
+                    ...base,
+                    regFee: aged.regFee,
+                    copayAmt: aged.copayAmt,
+                    copayDiscAmt: aged.copayDiscAmt,
+                    ...(selfPay ? { copayCode: "" } : {}),
+                  },
+                  form.cardIdentity,
+                  selfPay,
+                ),
+              );
             });
           }}
         />

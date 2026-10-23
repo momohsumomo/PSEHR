@@ -163,6 +163,7 @@ function seedFromEntry(entry: QueueEntry): Partial<RegisterEditForm> {
     queueNumber: entry.queueNumber != null ? String(entry.queueNumber) : "",
     visitClock: entry.slotTime || "",
     cardId: entry.hcId || "",
+    cardIdentity: entry.cardIdentity || "",
     regFee: entry.regFee || "",
     copayAmt: entry.copayAmt || "",
     deposit: entry.deposit || "",
@@ -404,6 +405,7 @@ export function RegisterPage() {
         sex: res.validation?.sex ?? next.sex,
         patientName: res.validation?.patientName || next.patientName,
         cardId: res.validation?.cardId ?? next.cardId,
+        cardIdentity: res.validation?.identityStatus || "",
         icException: "ic",
       };
       if (res.cardBridgeNote) setSeqNote(res.cardBridgeNote);
@@ -419,6 +421,7 @@ export function RegisterPage() {
             sex: seed.sex,
             patientName: seed.patientName,
             cardId: seed.cardId,
+            cardIdentity: seed.cardIdentity,
             pharmacist: seed.pharmacist,
             icException: "ic",
             deposit: "",
@@ -1416,6 +1419,7 @@ export function RegisterPage() {
               sex: res.validation?.sex ?? prev.sex,
               patientName: res.validation?.patientName || prev.patientName,
               cardId: res.validation?.cardId ?? prev.cardId,
+              cardIdentity: res.validation?.identityStatus || prev.cardIdentity || "",
               icException: "ic",
               deposit: "",
               noCardReason: "",

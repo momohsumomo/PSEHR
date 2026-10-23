@@ -85,6 +85,7 @@ export function buildMedicationIntake(
     daysSupply: line.days > 0 ? line.days : 1,
     quantity: (line.qty ?? 0) > 0 ? Number(line.qty) : 1,
     bodySite: line.bodySite?.trim() || "",
+    tradeName: (line.tradeName || "").trim(),
     payMark: line.payMark || "",
     memo: line.memo || "",
   };
@@ -111,6 +112,7 @@ export function medicationSaveBody(
     nhiCode: lineSaveCode(line) || line.nhiCode,
     dosageInstruction: [{ text: sigForSave(line) }],
     bodySite: line.bodySite || "",
+    tradeName: line.tradeName || "",
     payMark: line.payMark || "",
     memo: line.memo || "",
     daysSupply: line.days > 0 ? line.days : 1,

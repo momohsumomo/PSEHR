@@ -443,13 +443,25 @@ def build_claims_summary(
             referral_hosp = ""
         copay_code = str(reg.get("copayCode") or "")
         copay_pts = 0.0
-        if reg.get("copayAmt"):
+        drug_copay = 0
+        if "drugCopay" in reg:
             try:
-                copay_pts = float(str(reg["copayAmt"]).replace(",", ""))
+                basic_paid = int(round(float(str(reg.get("copayAmt") or "0").replace(",", ""))))
             except Exception:
-                copay_pts = 0.0
-        paid_copay = int(round(copay_pts))
-        drug_copay = paid_copay - 50 if paid_copay > 50 else 0
+                basic_paid = 0
+            try:
+                drug_copay = int(round(float(str(reg.get("drugCopay") or "0").replace(",", ""))))
+            except Exception:
+                drug_copay = 0
+            copay_pts = float(basic_paid + drug_copay)
+        else:
+            if reg.get("copayAmt"):
+                try:
+                    copay_pts = float(str(reg["copayAmt"]).replace(",", ""))
+                except Exception:
+                    copay_pts = 0.0
+            paid_copay = int(round(copay_pts))
+            drug_copay = paid_copay - 50 if paid_copay > 50 else 0
         dispense = str(reg.get("dispense") or dispense_default or "")
         # 申報就醫日用掛號看診日。醫聖 O_DATE 有時是慢箋原處方日，和這次看診日不同。
         visit_day = str(enc_date or date_month)[:10]

@@ -365,22 +365,34 @@ def _compose(
     missing_fee = not fee
     if missing_fee:
         fee = str(int(line_points))
-    copay = _money(reg.get("icCopay")) or _money(fee_copay) or _money(reg.get("copayAmt")) or "0"
-    try:
-        copay_total = int(copay or 0)
-    except ValueError:
-        copay_total = 0
-    # 格式 2.0：M45 是部分負擔合計，M53 是基本部分負擔，M54 是藥品部分負擔。
-    # 西醫基層基本部分負擔是 50。免部分負擔時合計為 0，基本與藥品都是 0。
-    if copay_total <= 0:
-        basic_copay = 0
-        drug_copay = 0
-    elif copay_total < 50:
-        basic_copay = 0
-        drug_copay = copay_total
+    # M45 is the sum. M53 is the basic copay. M54 is the drug copay.
+    # A stored drugCopay is that amount by itself. Older rows keep the previous split.
+    if "drugCopay" in reg:
+        try:
+            basic_copay = int(_money(reg.get("copayAmt")) or _money(fee_copay) or "0")
+        except ValueError:
+            basic_copay = 0
+        try:
+            drug_copay = int(_money(reg.get("drugCopay")) or "0")
+        except ValueError:
+            drug_copay = 0
+        copay_total = basic_copay + drug_copay
+        copay = str(copay_total)
     else:
-        basic_copay = 50
-        drug_copay = copay_total - 50
+        copay = _money(reg.get("icCopay")) or _money(fee_copay) or _money(reg.get("copayAmt")) or "0"
+        try:
+            copay_total = int(copay or 0)
+        except ValueError:
+            copay_total = 0
+        if copay_total <= 0:
+            basic_copay = 0
+            drug_copay = 0
+        elif copay_total < 50:
+            basic_copay = 0
+            drug_copay = copay_total
+        else:
+            basic_copay = 50
+            drug_copay = copay_total - 50
     codes = _dx(store, encounter_id)
     card_again = remark in {"2", "3", "4"}
     mb1: dict[str, str] = {

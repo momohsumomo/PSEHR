@@ -734,6 +734,8 @@ def patch_encounter_reg(encounter_id: str, body: NhiEncounterIntake) -> dict[str
             "drugFee": body.drugFee,
             "materialFee": body.materialFee,
             "burdenFee": body.burdenFee,
+            "drugCopay": body.drugCopay,
+            "cardIdentity": body.cardIdentity,
             "totalFee": body.totalFee,
             "selfPay": body.selfPay,
             "referralSeq": body.referralSeq,
@@ -1056,6 +1058,7 @@ def card_read_and_register(
         "validation": {
             **face,
             "cardId": card.profile.get("cardId") or "",
+            "identityStatus": card.profile.get("identityStatus") or "",
         },
         "nhiStickers": stickers,
         "resource": resource,

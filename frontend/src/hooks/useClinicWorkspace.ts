@@ -149,6 +149,8 @@ function mapApiQueue(entries: ApiQueueEntry[]): QueueEntry[] {
     deposit: e.queueMeta.deposit,
     regFee: e.queueMeta.regFee,
     copayAmt: e.queueMeta.copayAmt,
+    drugCopay: e.queueMeta.drugCopay,
+    cardIdentity: e.queueMeta.cardIdentity,
     hcId: e.queueMeta.hcId,
     afterCheck: e.queueMeta.afterCheck,
     treatmentItem: e.queueMeta.treatmentItem,
@@ -206,18 +208,21 @@ function extractRxMarks(resource: Record<string, unknown>): {
   payMark: string;
   memo: string;
   bodySite: string;
+  tradeName: string;
 } {
   let payMark = "";
   let memo = "";
   let bodySite = "";
+  let tradeName = "";
   const exts = (resource.extension as Array<Record<string, unknown>> | undefined) || [];
   for (const ext of exts) {
     const url = String(ext.url || "");
     if (url.endsWith("/payMark")) payMark = String(ext.valueString || "");
     if (url.endsWith("/memoMark")) memo = String(ext.valueString || "");
     if (url.endsWith("/bodySite")) bodySite = String(ext.valueString || "");
+    if (url.endsWith("/tradeName")) tradeName = String(ext.valueString || "");
   }
-  return { payMark, memo, bodySite };
+  return { payMark, memo, bodySite, tradeName };
 }
 
 function mapHistoryVisitEntry(v: NonNullable<WorkspaceResponse["historyVisits"]>[number]): HistoryVisit {
@@ -301,6 +306,7 @@ function mapRxFromWorkspace(
       payMark: payMark || "",
       memo: marks.memo || String((meta as { memo?: string }).memo || ""),
       bodySite: marks.bodySite || "",
+      tradeName: marks.tradeName || "",
       unitPrice:
         meta.unitPrice === null || meta.unitPrice === undefined
           ? undefined
@@ -675,6 +681,7 @@ export function useClinicWorkspace(options?: {
         samId?: string;
         treatDateTime?: string;
         cardId?: string;
+        cardIdentity?: string;
         patientId?: string;
         icException?: string;
         noCardReason?: string;
@@ -747,6 +754,7 @@ export function useClinicWorkspace(options?: {
         drugFee: form.drugFee,
         materialFee: form.materialFee,
         burdenFee: form.burdenFee,
+        cardIdentity: form.cardIdentity,
         prebook: form.prebook,
         confirmDuplicate: form.confirmDuplicate,
         queueNumber: form.queueNumber ? Number(form.queueNumber) : undefined,
@@ -971,6 +979,7 @@ export function useClinicWorkspace(options?: {
           drugFee: payload.drugFee,
           materialFee: payload.materialFee,
           burdenFee: payload.burdenFee,
+          cardIdentity: form.cardIdentity,
           totalFee,
           prebook: Boolean(form.prebook),
           queueNumber: form.queueNumber ? Number(form.queueNumber) : undefined,

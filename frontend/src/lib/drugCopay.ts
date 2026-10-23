@@ -104,24 +104,22 @@ export function basicCopayYuan(storedCopay: number | null, storedBurden: number 
 }
 
 /**
- * Amount the patient pays as copay.
- * Self-pay and a registration that already waived copay stay at 0.
- * Outside dispense: the pharmacy collects the drug copay, so only the basic remains.
- * In-house dispense: basic plus drug copay.
+ * The two cash copays, each on its own.
+ * basic is the registration copay. drug is only the drug copay.
+ * Nothing here is derived by subtracting one stored total from the other.
  */
-export function visitBurdenYuan(args: {
+export function visitCopayParts(args: {
   selfPay: boolean;
   exempt: boolean;
   outsideDispense: boolean;
+  waiveDrug: boolean;
   basic: number;
   lines: RxLine[];
   drugs: CatalogDrug[];
   usages?: CatalogUsage[];
-}): number {
-  if (args.selfPay || args.exempt) return 0;
-  const points = args.outsideDispense
-    ? 0
-    : nhiDrugPoints(args.lines, args.drugs, args.usages);
+}): { basic: number; drug: number } {
+  if (args.selfPay || args.exempt) return { basic: 0, drug: 0 };
   const basic = Number.isFinite(args.basic) && args.basic > 0 ? args.basic : 0;
-  return basic + drugCopayFromPoints(points);
+  if (args.outsideDispense || args.waiveDrug) return { basic, drug: 0 };
+  return { basic, drug: drugCopayFromPoints(nhiDrugPoints(args.lines, args.drugs, args.usages)) };
 }

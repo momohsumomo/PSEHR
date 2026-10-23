@@ -46,6 +46,8 @@ class NhiEncounterIntake(BaseModel):
     drugFee: str | None = Field(None, max_length=12)
     materialFee: str | None = Field(None, max_length=12)
     burdenFee: str | None = Field(None, max_length=12)
+    drugCopay: str | None = Field(None, max_length=12)
+    cardIdentity: str | None = Field(None, max_length=1)
     totalFee: str | None = Field(None, max_length=12)
     selfPay: str | None = Field(None, max_length=12)
     referralSeq: str | None = Field(None, max_length=20)

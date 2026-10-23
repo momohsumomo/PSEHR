@@ -162,6 +162,8 @@ export type ApiQueueEntry = {
     treatmentItem?: string;
     regFee?: string;
     copayAmt?: string;
+    drugCopay?: string;
+    cardIdentity?: string;
     deposit?: string;
     consultFee?: string;
     drugFee?: string;
@@ -685,6 +687,7 @@ export type PatientRegisterResponse = {
     sex?: string;
     patientName?: string;
     cardId?: string;
+    identityStatus?: string;
   };
   cardBridgeNote?: string | null;
   consoleReachable?: boolean;
@@ -731,6 +734,8 @@ export type EncounterRegisterBody = {
   acceptReferral?: string;
   materialFee?: string;
   burdenFee?: string;
+  drugCopay?: string;
+  cardIdentity?: string;
   prebook?: boolean;
   confirmDuplicate?: boolean;
   /** 只有雲端／寫卡成功才送 true；省略表示不改既有勾圈 */

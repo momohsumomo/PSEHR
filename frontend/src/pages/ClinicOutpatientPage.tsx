@@ -1084,10 +1084,11 @@ export function ClinicOutpatientPage() {
           consultFee: saveDraft.consultFee !== "—" ? saveDraft.consultFee : undefined,
           burdenFee: saveDraft.burden !== "—" ? saveDraft.burden : undefined,
           copayAmt: saveDraft.burden !== "—" ? saveDraft.burden : undefined,
+          drugCopay: saveDraft.drugCopay !== "—" ? saveDraft.drugCopay : undefined,
           selfPay: saveDraft.selfPay !== "—" ? saveDraft.selfPay : undefined,
           totalFee: String(
             Math.round(
-              [saveDraft.regFee, saveDraft.burden, selected?.deposit, saveDraft.selfPay].reduce((sum, part) => {
+              [saveDraft.regFee, saveDraft.burden, saveDraft.drugCopay, selected?.deposit, saveDraft.selfPay].reduce((sum, part) => {
                 if (!part || part === "—" || part === "-") return sum;
                 const n = Number(part.replace(/[^\d.-]/g, ""));
                 return sum + (Number.isFinite(n) ? n : 0);
@@ -1279,7 +1280,8 @@ export function ClinicOutpatientPage() {
         queueNo: selected ? String(selected.queueNumber) : "",
         deposit: cash.deposit,
         regFee: cash.regFee || saveDraft.regFee,
-        burden: cash.burden || saveDraft.burden,
+        burden: saveDraft.burden !== "\u2014" ? saveDraft.burden : cash.burden,
+        drugCopay: saveDraft.drugCopay !== "\u2014" ? saveDraft.drugCopay : cash.drugCopay,
         selfPay: storedSelfPayText(selected?.selfPay, saveDraft.selfPay),
         clinicName: profile.clinicName,
         address: profile.address,
@@ -1747,6 +1749,7 @@ export function ClinicOutpatientPage() {
       sex: res.validation?.sex ?? prev.sex,
       patientName: res.validation?.patientName || prev.patientName,
       cardId: res.validation?.cardId ?? prev.cardId,
+      cardIdentity: res.validation?.identityStatus || prev.cardIdentity || "",
       icException: "ic",
       deposit: "",
       noCardReason: "",
@@ -1838,6 +1841,7 @@ export function ClinicOutpatientPage() {
           sex: res.validation?.sex,
           patientName: res.validation?.patientName,
           cardId: res.validation?.cardId,
+          cardIdentity: res.validation?.identityStatus || "",
         };
         if (res.cardBridgeNote) setSeqNote(res.cardBridgeNote);
         const booked = findCardCheckIn(
@@ -2040,6 +2044,7 @@ export function ClinicOutpatientPage() {
       queueNumber: entry.queueNumber != null ? String(entry.queueNumber) : "",
       visitClock: entry.slotTime || "",
       cardId: entry.hcId || "",
+      cardIdentity: entry.cardIdentity || "",
       regFee: entry.regFee || "",
       copayAmt: entry.copayAmt || "",
       deposit: entry.deposit || "",

@@ -120,12 +120,16 @@ def map_hc_basic(data: dict[str, Any]) -> dict[str, str] | None:
     name = inner.get("name") or inner.get("patientName")
     if not id_no or not birthday or not sex:
         return None
+    mark = str(inner.get("identityStatus") if inner.get("identityStatus") not in (None, "") else inner.get("insurerId") or "").strip()
+    if mark not in {"1", "2", "3", "4", "8"}:
+        mark = ""
     return {
         "idNo": id_no.upper(),
         "birthday": birthday,
         "sex": sex.upper()[:1],
         "patientName": str(name).strip() if name else "",
         "cardId": str(inner.get("cardId") or inner.get("cardSn") or "").strip(),
+        "identityStatus": mark,
     }
 
 

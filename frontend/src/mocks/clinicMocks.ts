@@ -43,6 +43,10 @@ export interface QueueEntry {
   treatmentItem?: string;
   regFee?: string;
   copayAmt?: string;
+  /** 藥品部分負擔。沒有這個欄位的舊資料，部分負擔仍是當初存的數字。 */
+  drugCopay?: string;
+  /** 健保卡保險對象身分註記。1 福保、2 榮民、4 中低收入、8 災民。 */
+  cardIdentity?: string;
   deposit?: string;
   consultFee?: string;
   drugFee?: string;
@@ -172,6 +176,8 @@ export interface RxLine {
   totalAmount?: string;
   /** 部位 */
   bodySite?: string;
+  /** 商品名稱。左側收據用 name（自定名稱）。 */
+  tradeName?: string;
   /** 標 */
   tag?: string;
 }

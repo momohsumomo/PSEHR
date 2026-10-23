@@ -47,6 +47,8 @@ export type RegisterEditForm = {
   treatDateTime: string;
   securitySign?: string;
   cardId: string;
+  /** 健保卡身分註記。1 福保、2 榮民、4 中低收入、8 災民。 */
+  cardIdentity?: string;
   regFee: string;
   copayAmt: string;
   /** 部分負擔優待。實收＝部分負擔－這個數字。 */
@@ -109,6 +111,7 @@ export function emptyRegisterForm(): RegisterEditForm {
     treatmentNumber: "",
     treatDateTime: "",
     cardId: "",
+    cardIdentity: "",
     regFee: "",
     copayAmt: "",
     copayDiscAmt: "0",

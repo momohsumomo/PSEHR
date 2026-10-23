@@ -36,6 +36,8 @@ REG_STRING_KEYS = (
     "drugFee",
     "materialFee",
     "burdenFee",
+    "drugCopay",
+    "cardIdentity",
     "totalFee",
     "selfPay",
     "cardDisc",

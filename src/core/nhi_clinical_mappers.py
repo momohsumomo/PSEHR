@@ -141,6 +141,10 @@ def nhi_medication_to_fhir(
         extensions.append(
             {"url": f"{BILLING_EXT_BASE}/bodySite", "valueString": intake.bodySite.strip()}
         )
+    if getattr(intake, "tradeName", None) is not None:
+        extensions.append(
+            {"url": f"{BILLING_EXT_BASE}/tradeName", "valueString": str(intake.tradeName).strip()}
+        )
     if intake.payMark is not None:
         extensions.append({"url": PAY_MARK_EXT, "valueString": intake.payMark.strip()})
     if intake.memo is not None:
@@ -198,6 +202,8 @@ def nhi_encounter_to_fhir(intake: NhiEncounterIntake) -> dict[str, Any]:
             "drugFee": intake.drugFee,
             "materialFee": intake.materialFee,
             "burdenFee": intake.burdenFee,
+            "drugCopay": intake.drugCopay,
+            "cardIdentity": intake.cardIdentity,
             "totalFee": getattr(intake, "totalFee", None),
             "selfPay": intake.selfPay,
             "referralSeq": intake.referralSeq,

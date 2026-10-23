@@ -12,6 +12,7 @@ import {
 } from "@/api/clinicApi";
 import { ageYearsFromRoc, applyAgeFees, policyFromFees } from "@/lib/ageFee";
 import { loadClinicBundle, loadClinicRegisterDefaults, readLocalClinicBundle } from "@/lib/clinicProfile";
+import { cardIdentityBenefit } from "@/lib/cardIdentity";
 import { identityVisitFees, matchIdCategory } from "@/lib/idCategory";
 import { lastPharmacist, shiftForClock } from "@/lib/clinicSession";
 import { mapApiPatientToHit, type PatientHit } from "@/lib/patientSearch";
@@ -132,7 +133,12 @@ export function SelfRegisterKioskPage() {
     return () => window.removeEventListener("keydown", onKey);
   }, [mode, busy, digits]);
 
-  const priceVisit = async (patientId: string, birthdayRoc: string, kind: "ic" | WalkKind) => {
+  const priceVisit = async (
+    patientId: string,
+    birthdayRoc: string,
+    kind: "ic" | WalkKind,
+    identityStatus?: string,
+  ) => {
     const defaults = loadClinicRegisterDefaults();
     const selfPay = kind === "selfPay";
     let hit: { reg_fee?: number; copay?: number; deposit?: number } | undefined;
@@ -168,11 +174,16 @@ export function SelfRegisterKioskPage() {
       student: false,
       policy: policyFromFees(readLocalClinicBundle().fees),
     });
-    const copayNet = Math.max(0, Number(aged.copayAmt) - Number(aged.copayDiscAmt));
+    const card = cardIdentityBenefit(identityStatus);
+    const copayNet = card?.waiveBasic || selfPay
+      ? 0
+      : Math.max(0, Number(aged.copayAmt) - Number(aged.copayDiscAmt));
     return {
       regFee: aged.regFee,
-      copayAmt: selfPay ? "0" : String(copayNet),
+      copayAmt: String(copayNet),
       deposit: base.deposit,
+      copayCode: selfPay ? "" : card?.copayCode || "",
+      cardIdentity: card?.mark || "",
     };
   };
 
@@ -206,6 +217,7 @@ export function SelfRegisterKioskPage() {
     birthdayRoc: string;
     kind: "ic" | WalkKind;
     cardId?: string;
+    identityStatus?: string;
     treatSeq?: string;
     treatmentNumber?: string;
     treatDateTime?: string;
@@ -215,7 +227,7 @@ export function SelfRegisterKioskPage() {
     if (await alreadyToday(args.patientId, args.name)) return;
     const defaults = loadClinicRegisterDefaults();
     const selfPay = args.kind === "selfPay";
-    const priced = await priceVisit(args.patientId, args.birthdayRoc, args.kind);
+    const priced = await priceVisit(args.patientId, args.birthdayRoc, args.kind, args.identityStatus);
     const day = todayIso();
     const shift = shiftForClock();
     const board = await fetchQueueForDate(day);
@@ -244,6 +256,8 @@ export function SelfRegisterKioskPage() {
       visitClock: nowClock(),
       regFee: priced.regFee,
       copayAmt: priced.copayAmt,
+      copayCode: priced.copayCode || undefined,
+      cardIdentity: priced.cardIdentity || undefined,
       deposit: priced.deposit,
       dispense: defaults.dispenseType || undefined,
     });
@@ -267,6 +281,7 @@ export function SelfRegisterKioskPage() {
       name: card.validation?.patientName || "",
       birthdayRoc: card.validation?.birthdayRoc || "",
       kind: "ic",
+      identityStatus: card.validation?.identityStatus || "",
       cardId: seq.hcId || card.validation?.cardId,
       treatSeq: seq.sequenceNumber || undefined,
       treatmentNumber: seq.treatmentNumber || undefined,

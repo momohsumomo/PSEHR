@@ -8,7 +8,8 @@ import { skipsCloudWrite } from "@/lib/queueOrder";
 import type { DiagnosisRow, QueueEntry, RxLine } from "@/mocks/clinicMocks";
 import { formatBirthdayRoc } from "@/lib/patientSearch";
 import { displayCase } from "@/lib/caseMark";
-import { basicCopayYuan, nhiDrugPoints, visitBurdenYuan } from "@/lib/drugCopay";
+import { cardIdentityBenefit } from "@/lib/cardIdentity";
+import { basicCopayYuan, nhiDrugPoints, visitCopayParts } from "@/lib/drugCopay";
 import { chargedSelfPay, selfPayCeiling } from "@/lib/selfPayMoney";
 import type { CatalogDrug } from "@/types/clinicCatalog";
 import type { CatalogUsage } from "@/utils/rxTotal";
@@ -33,6 +34,8 @@ export type VisitSaveDraft = {
   materialFee: string;
   consultFee: string;
   burden: string;
+  /** Drug copay only. The basic copay stays in burden. */
+  drugCopay: string;
   /** Ceiled sum of self-pay drugs and procedures. Shown in parentheses. */
   selfPayBasis: string;
   /** Amount actually charged. Starts as the ceiling and can be typed over. */
@@ -100,23 +103,28 @@ export function buildVisitSaveDraft(args: {
       : "自行調劑";
   const storedCopay = yuanOrNull(args.selected?.copayAmt);
   const storedBurden = yuanOrNull(args.selected?.burdenFee);
-  const exempt = storedCopay === 0 || (storedCopay == null && storedBurden === 0);
-  const burden = args.selected
-    ? String(
-        visitBurdenYuan({
-          selfPay:
-            caseShown === "\u81ea" ||
-            args.selected.payType === "\u81ea\u8cbb" ||
-            args.selected.icException === "selfPay",
-          exempt,
-          outsideDispense: dispense.includes("\u4ea4\u4ed8"),
-          basic: basicCopayYuan(storedCopay, storedBurden),
-          lines: args.currentRx,
-          drugs: args.drugs || [],
-          usages: args.usages,
-        }),
-      )
-    : DASH;
+  const card = cardIdentityBenefit(args.selected?.cardIdentity);
+  const exempt =
+    storedCopay === 0 ||
+    (storedCopay == null && storedBurden === 0) ||
+    Boolean(card?.waiveBasic);
+  const parts = args.selected
+    ? visitCopayParts({
+        selfPay:
+          caseShown === "\u81ea" ||
+          args.selected.payType === "\u81ea\u8cbb" ||
+          args.selected.icException === "selfPay",
+        exempt,
+        outsideDispense: dispense.includes("\u4ea4\u4ed8"),
+        waiveDrug: Boolean(card?.waiveDrug),
+        basic: basicCopayYuan(storedCopay, storedBurden),
+        lines: args.currentRx,
+        drugs: args.drugs || [],
+        usages: args.usages,
+      })
+    : null;
+  const burden = parts ? String(parts.basic) : DASH;
+  const drugCopay = parts ? String(parts.drug) : DASH;
   const doctorLabel =
     args.doctor?.trim() ||
     (args.selected as { doctorName?: string } | null)?.doctorName ||
@@ -166,6 +174,7 @@ export function buildVisitSaveDraft(args: {
         : DASH,
     consultFee: consult,
     burden,
+    drugCopay,
     selfPayBasis: String(selfBasis),
     selfPay: String(selfCharged),
     orderCode: DASH,
@@ -332,7 +341,11 @@ export function VisitSaveConfirmPanel({
   const charged = yuanNumber(draft.selfPay) ?? 0;
   const deposit = yuanNumber(selected?.deposit) ?? 0;
   const total =
-    (yuanNumber(draft.regFee) ?? 0) + (yuanNumber(draft.burden) ?? 0) + deposit + charged;
+    (yuanNumber(draft.regFee) ?? 0) +
+    (yuanNumber(draft.burden) ?? 0) +
+    (yuanNumber(draft.drugCopay) ?? 0) +
+    deposit +
+    charged;
   const head = "mb-0.5 border-b border-[#808080] pb-0.5 font-bold leading-tight";
   const zone = "border border-[#808080] bg-white px-1.5 py-1";
   const row = "flex flex-wrap items-center gap-x-3 gap-y-0.5";
@@ -431,6 +444,7 @@ export function VisitSaveConfirmPanel({
               <Field label={"\u6750\u6599"} value={draft.materialFee} readOnly chars={5} />
               <Field label={"\u8a3a\u5bdf"} value={draft.consultFee} readOnly chars={5} />
               <Field label={"\u90e8\u5206\u8ca0\u64d4"} value={draft.burden} readOnly chars={5} />
+              <Field label={"\u85e5\u90e8"} value={draft.drugCopay} readOnly chars={5} />
               <Field label={"\u62bc\u91d1"} value={dash(selected?.deposit)} readOnly chars={5} />
               <Field label={"\u81ea\u8cbb"} value={draft.selfPay} onChange={(v) => onChange({ selfPay: v })} chars={6} highlight big />
               <span className="inline-flex items-center font-bold" style={{ gap: "0.3em", fontSize: "1.5em" }}>

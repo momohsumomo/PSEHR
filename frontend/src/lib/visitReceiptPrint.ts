@@ -1,4 +1,4 @@
-import { fetchStaff, fetchWorkspace, type WorkspaceResponse } from "@/api/clinicApi";
+import { fetchCatalogOverrides, fetchStaff, fetchWorkspace, type WorkspaceResponse } from "@/api/clinicApi";
 import { pharmacistDisplayName } from "@/lib/doctorName";
 import { buildDepositSlipHtml } from "@/lib/clinicPrintDocs";
 import { readLocalClinicBundle } from "@/lib/clinicProfile";
@@ -7,6 +7,8 @@ import { openPrintPreview } from "@/lib/printJob";
 import { depositPrintOptions, findPrintSetup, loadPrintSettings, partOn } from "@/lib/printSettings";
 import { openReleaseRxIfWanted } from "@/lib/releaseRx";
 import { buildSimpleSlipHtml, visitCashParts } from "@/lib/simpleSlip";
+import type { CatalogDrug } from "@/types/clinicCatalog";
+import { applyClinicDrugDisplayNames } from "@/utils/catalogRx";
 import type { DiagnosisRow, QueueEntry, RxLine, RxPayMark } from "@/mocks/clinicMocks";
 
 export function openDepositSlip(entry: QueueEntry, visitDate: string): void {
@@ -44,18 +46,20 @@ function diagnosesOf(ws: WorkspaceResponse): DiagnosisRow[] {
   });
 }
 
-function marksOf(resource: Record<string, unknown>): { payMark: string; memo: string; bodySite: string } {
+function marksOf(resource: Record<string, unknown>): { payMark: string; memo: string; bodySite: string; tradeName: string } {
   const exts = (resource.extension as Array<Record<string, unknown>> | undefined) || [];
   let payMark = "";
   let memo = "";
   let bodySite = "";
+  let tradeName = "";
   for (const ext of exts) {
     const url = String(ext.url || "");
     if (url.endsWith("/payMark")) payMark = String(ext.valueString || "");
     if (url.endsWith("/memoMark")) memo = String(ext.valueString || "");
     if (url.endsWith("/bodySite")) bodySite = String(ext.valueString || "");
+    if (url.endsWith("/tradeName")) tradeName = String(ext.valueString || "");
   }
-  return { payMark, memo, bodySite };
+  return { payMark, memo, bodySite, tradeName };
 }
 
 function drugsOf(ws: WorkspaceResponse): RxLine[] {
@@ -79,9 +83,40 @@ function drugsOf(ws: WorkspaceResponse): RxLine[] {
       selfPay: mark === "\u81ea" || mark === "\u6750",
       memo: marks.memo || String((meta as { memo?: string }).memo || ""),
       bodySite: marks.bodySite,
+      tradeName: marks.tradeName,
       unitPrice: meta.unitPrice == null ? undefined : Number(meta.unitPrice),
     };
   });
+}
+
+async function namedDrugs(lines: RxLine[]): Promise<RxLine[]> {
+  try {
+    const res = await fetch("/yisheng_clinic_catalog.json");
+    if (!res.ok) return lines;
+    const raw = (await res.json()) as { drugs?: CatalogDrug[] };
+    const drugs = (raw.drugs || []).map((drug) => ({
+      ...drug,
+      customName: (drug.customName || "").trim() || drug.shortName || "",
+      name: drug.name || drug.customName || "",
+      alias: (drug.alias || drug.shortName || "").trim(),
+    }));
+    try {
+      const extra = await fetchCatalogOverrides();
+      for (const row of extra.data?.drugs || []) {
+        const key = String(row.drugNo || row.alias || "").trim();
+        if (!key) continue;
+        const idx = drugs.findIndex(
+          (drug) => String(drug.drugNo || "").trim() === key || String(drug.alias || "").trim() === key,
+        );
+        if (idx >= 0) drugs[idx] = { ...drugs[idx], ...row } as CatalogDrug;
+      }
+    } catch {
+      // The file names still apply when the override list is unreachable.
+    }
+    return applyClinicDrugDisplayNames(lines, drugs);
+  } catch {
+    return lines;
+  }
 }
 
 /** Saved visit, same dual receipt as the chart print. */
@@ -118,12 +153,13 @@ export async function openSavedVisitReceipt(entry: QueueEntry, visitDate: string
       pharmacist: pharmacistName,
       chief: ws.chiefComplaint || entry.reasonText || "",
       diagnoses: diagnosesOf(ws),
-      drugs: drugsOf(ws),
+      drugs: await namedDrugs(drugsOf(ws)),
       room: entry.room || "",
       queueNo: entry.queueNumber != null ? String(entry.queueNumber) : "",
       deposit: visitCashParts(entry).deposit,
       regFee: visitCashParts(entry).regFee,
       burden: visitCashParts(entry).burden,
+      drugCopay: visitCashParts(entry).drugCopay,
       selfPay: entry.selfPay || "",
       clinicName: profile.clinicName,
       address: profile.address,

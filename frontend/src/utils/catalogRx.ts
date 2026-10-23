@@ -9,8 +9,7 @@ export function lineSelfPayPrice(line: RxLine, drugs: CatalogDrug[]): number | n
 }
 
 function preferIndexed(rows: CatalogDrug[]): CatalogDrug | undefined {
-  if (!rows.length) return undefined;
-  return rows.find((row) => row.clinicIndex === true) || rows[0];
+  return rows.find((row) => row.clinicIndex === true);
 }
 
 export function pickDrugForLine(line: RxLine, drugs: CatalogDrug[]): CatalogDrug | undefined {
@@ -35,16 +34,15 @@ export function pickDrugForLine(line: RxLine, drugs: CatalogDrug[]): CatalogDrug
   }
   const nhi = String(line.nhiCode || "").trim().toUpperCase();
   if (!nhi) return undefined;
-  const sameNhi = drugs.filter((d) => String(d.nhiCode || "").trim().toUpperCase() === nhi);
-  const indexed = sameNhi.filter((d) => d.clinicIndex === true);
-  const pool = indexed.length ? indexed : sameNhi;
-  if (pool.length === 1) return pool[0];
-  if (pool.length > 1 && name) {
-    const contains = pool.find((d) => d.customName.includes(name) || name.includes(d.customName));
+  const indexed = drugs.filter(
+    (d) => d.clinicIndex === true && String(d.nhiCode || "").trim().toUpperCase() === nhi,
+  );
+  if (indexed.length === 1) return indexed[0];
+  if (indexed.length > 1 && name) {
+    const contains = indexed.find((d) => d.customName.includes(name) || name.includes(d.customName));
     if (contains) return contains;
-    return undefined;
   }
-  return pool[0];
+  return undefined;
 }
 
 /** Map history/import drug names to clinic MEDICAL.MAKING (display only) */
@@ -60,6 +58,7 @@ export function applyClinicDrugDisplayNames(
       ? {
           ...line,
           name: hit.customName || line.name,
+          tradeName: (hit.name || "").trim() || line.tradeName,
           shortName: hit.alias || hit.shortName || line.shortName,
           unit: (hit.unit || line.unit || "").trim(),
           route: (hit.route as RxLine["route"]) || line.route,
@@ -107,6 +106,7 @@ export function catalogDrugToRxLine(drug: CatalogDrug, usages?: CatalogUsage[]):
   const line: RxLine = {
     id: `rx-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
     name: drug.customName,
+    tradeName: (drug.name || "").trim(),
     shortName: drug.alias || drug.shortName,
     sig: (drug.sig || "").trim(),
     days: Number(drug.days) > 0 ? Number(drug.days) : 0,

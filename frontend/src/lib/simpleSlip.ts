@@ -22,6 +22,8 @@ export type SimpleSlipInput = {
   deposit: string;
   regFee: string;
   burden: string;
+  /** Drug copay. Empty means this visit has no separate amount stored. */
+  drugCopay?: string;
   selfPay: string;
   clinicName: string;
   address: string;
@@ -107,8 +109,8 @@ function resolvedSelfPay(input: SimpleSlipInput): string {
   return String(amount);
 }
 
-function payable(regFee: string, burden: string, deposit: string, selfPay: string): string {
-  const parts = [regFee, burden, deposit, selfPay].map(asNumber);
+function payable(regFee: string, burden: string, deposit: string, selfPay: string, drugCopay = ""): string {
+  const parts = [regFee, burden, drugCopay, deposit, selfPay].map(asNumber);
   if (parts.every((n) => n == null)) return "\u2014";
   const sum = parts.reduce((s, n) => s + (n ?? 0), 0);
   return String(Math.round(sum));
@@ -133,12 +135,13 @@ export function storedSelfPayText(...values: unknown[]): string {
 
 /** Cash parts stored on the visit. Zero is a real amount. */
 export function visitCashParts(
-  entry: { regFee?: string; copayAmt?: string; burdenFee?: string; deposit?: string } | null | undefined,
-): { regFee: string; burden: string; deposit: string } {
+  entry: { regFee?: string; copayAmt?: string; burdenFee?: string; deposit?: string; drugCopay?: string } | null | undefined,
+): { regFee: string; burden: string; deposit: string; drugCopay: string } {
   return {
     regFee: feeText(entry?.regFee),
     burden: feeText(entry?.copayAmt) || feeText(entry?.burdenFee),
     deposit: feeText(entry?.deposit),
+    drugCopay: entry && "drugCopay" in entry ? feeText(entry.drugCopay) : "",
   };
 }
 
@@ -200,7 +203,8 @@ function rightTable(rows: RxLine[], fontPx: number): string {
         const site = esc((row.bodySite || "").trim());
         const clip = "display:block;overflow:hidden;white-space:nowrap;max-height:1.15em;";
         const cell = "overflow:hidden;vertical-align:top;height:1.15em;";
-        return `<tr><td style="${cell}"><div style="${clip}">${esc(show(row.name))}</div></td><td style="${cell}width:2.6em;text-align:right;">${qty}</td><td style="${cell}width:3.4em;text-align:right;">${total}</td><td style="${cell}width:22%;"><div style="${clip}">${site}</div></td></tr>`;
+        const trade = (row.tradeName || "").trim();
+        return `<tr><td style="${cell}"><div style="${clip}">${esc(trade ? show(trade) : "\u2014")}</div></td><td style="${cell}width:2.6em;text-align:right;">${qty}</td><td style="${cell}width:3.4em;text-align:right;">${total}</td><td style="${cell}width:22%;"><div style="${clip}">${site}</div></td></tr>`;
       })
       .join("") || `<tr><td colspan="4">\u2014</td></tr>`;
   return `<table style="width:100%;border-collapse:collapse;table-layout:fixed;font-size:${fontPx}px;line-height:1.15;">
@@ -219,15 +223,15 @@ function feeTable(input: SimpleSlipInput, due: string, selfText: string, fontPx:
   const cell = `width:25%;padding:0 1px;vertical-align:top;font-size:${fontPx}px;line-height:1.15;`;
   const items: Array<[string, string]> = [
     ["\u57fa\u672c\u8ca0\u64d4", show(input.burden)],
-    ["\u85e5\u8cbb\u8ca0\u64d4", "\u2014"],
+    ["\u85e5\u8cbb\u8ca0\u64d4", show(input.drugCopay)],
     ["\u6aa2\u9a57\u8ca0\u64d4", "\u2014"],
     ["\u8a3a\u5bdf\u8cbb\u7528", show(input.consultFee)],
     ["\u85e5\u54c1\u8cbb\u7528", show(input.drugFee)],
     ["\u8a3a\u7642\u8cbb\u7528", "\u2014"],
     ["\u6aa2\u9a57\u8cbb\u7528", show(input.materialFee)],
     ["\u85e5\u4e8b\u8cbb\u7528", "\u2014"],
-    ["\u5408\u8a08", added([input.regFee, input.burden, input.deposit, selfText])],
-    ["\u8ca0\u64d4\u5408\u8a08", show(input.burden)],
+    ["\u5408\u8a08", added([input.regFee, input.burden, input.drugCopay || "", input.deposit, selfText])],
+    ["\u8ca0\u64d4\u5408\u8a08", added([input.burden, input.drugCopay || ""])],
     ["\u7533\u8acb\u8cbb\u7528", "\u2014"],
     ["\u639b\u865f\u8cbb\u7528", show(input.regFee)],
     ["\u62bc\u91d1\u8cbb\u7528", show(input.deposit)],
@@ -293,7 +297,7 @@ function pageHtml(
   const selfBit = hide("self") ? "" : `\u81ea\u8cbb:${esc(show(selfText))}`;
   const leftMoney = last && showMoney
     ? `<div style="flex:0 0 auto;${glow("due")}">
-        <div>\u8a3a\u9593:${esc(show(input.room))}\u3000\u554f\u8a3a\u865f:${esc(show(input.queueNo))}\u3000\u85e5\u90e8:\u2014\u3000\u6aa2\u9a57\u90e8:\u2014</div>
+        <div>\u8a3a\u9593:${esc(show(input.room))}\u3000\u554f\u8a3a\u865f:${esc(show(input.queueNo))}\u3000\u85e5\u90e8:${esc(show(input.drugCopay))}\u3000\u6aa2\u9a57\u90e8:\u2014</div>
         <div>${depositBit}\u639b\u865f\u8cbb:${esc(show(input.regFee))}\u3000\u90e8\u4efd\u8ca0\u64d4:${esc(show(input.burden))}\u3000${selfBit}</div>
         ${showDue ? `<div style="${glow("due")}">\u61c9\u6536:${esc(due)}</div>` : ""}
       </div>`
@@ -337,7 +341,7 @@ function pageHtml(
 /** Left order slip and right receipt. Extra drug lines continue on the next sheet. */
 export function buildSimpleSlipHtml(input: SimpleSlipInput): string {
   const selfText = resolvedSelfPay(input);
-  const due = payable(input.regFee, input.burden, input.deposit, selfText);
+  const due = payable(input.regFee, input.burden, input.deposit, selfText, input.drugCopay || "");
   const pages = paginate(input.drugs);
   return pages
     .map((rows, index) => pageHtml(input, rows, index, index === pages.length - 1, due, selfText))
