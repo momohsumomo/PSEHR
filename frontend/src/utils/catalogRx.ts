@@ -64,6 +64,8 @@ export function applyClinicDrugDisplayNames(
           route: (hit.route as RxLine["route"]) || line.route,
           cast: (hit.cast || "").trim() || line.cast,
           typeName: (hit.typeName || "").trim() || line.typeName,
+          indication: (hit.adapt || "").trim() || line.indication,
+          caution: (hit.warning || "").trim() || line.caution,
           sig:
             line.sig && line.sig !== "\u2014" && !looksLikeFatDosage(line.sig)
               ? line.sig

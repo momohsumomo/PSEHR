@@ -287,6 +287,27 @@ function feeTable(input: SimpleSlipInput, due: string, selfText: string, fontPx:
   return `<table style="width:100%;border-collapse:collapse;border-top:1px solid #222;">${html}</table>`;
 }
 
+function warningBody(input: SimpleSlipInput): string {
+  const lines: string[] = [];
+  for (const row of input.drugs) {
+    const name = (row.name || row.tradeName || "").trim();
+    const adapt = (row.indication || "").trim();
+    const caution = (row.caution || "").trim();
+    if (!adapt && !caution) continue;
+    const bits: string[] = [];
+    if (name) bits.push(name);
+    const adaptLabel = "\u4f5c\u7528\u6216\u9069\u61c9\u75c7\uff1a";
+    const cautionLabel = "\u8b66\u8a9e\u6216\u526f\u4f5c\u7528\uff1a";
+    if (adapt) bits.push(adaptLabel + adapt);
+    if (caution) bits.push(cautionLabel + caution);
+    lines.push(bits.join("\u3000"));
+  }
+  const foot = (input.footer || "").trim();
+  if (foot) lines.push(foot);
+  if (!lines.length) lines.push("\u672c\u7b46\u85e5\u54c1\u4e3b\u6a94\u672a\u8a18\u8f09\u4f5c\u7528\u3001\u9069\u61c9\u75c7\u6216\u8b66\u8a9e");
+  return lines.map((line) => esc(line)).join("<br/>");
+}
+
 function pageHtml(
   input: SimpleSlipInput,
   rows: RxLine[],
@@ -327,7 +348,7 @@ function pageHtml(
   const leftHead =
     pageIndex === 0
       ? `<div style="${glow("chart")}${glow("idno")}${glow("birthday")}">${who}(${esc(show(input.sex))})${idPart}${birth}</div>
-      <div>&lt;${esc(show(input.visitDate))}&gt;\u79d1\u5225:${esc(show(input.dept))}\u6848\u4ef6:${esc(show(input.caseNo))}\u5361\u865f:${esc(show(input.cardNo))}</div>
+      <div>&lt;${esc(show(input.visitDate))}&gt;\u79d1\u5225:${esc(show(input.dept))}\u6848\u4ef6:${esc(show(input.caseNo))}\u5361\u865f:${esc(show(input.queueNo))}</div>
       <div style="${glow("doctor")}${glow("pharmacist")}">${whoLine}</div>
       <div style="border:${showChief ? "1px solid #000" : "0"};min-height:12px;margin-top:1px;padding:1px;${glow("chief")}">${showChief ? esc(show(markChiefBreaks(input.chief))) : ""}</div>
       <div style="${glow("dx")}">${showDx ? dx || "\u2014" : ""}</div>`
@@ -357,7 +378,7 @@ function pageHtml(
       : `<div>${esc(show(input.name))}\u3000${esc(show(input.visitDate))}\u3000\u7e8c${pageIndex + 1}</div>`;
   const rightTail = last && (showWarn || showFees)
     ? `<div style="flex:0 0 auto;font-size:${font}px;line-height:1.2;">
-        ${showWarn ? `<div style="${glow("warning")}">\uff0a\u8b66\u8a9e\u8207\u5efa\u8b70\u6a19\u793a\u9805\u76ee\uff0a</div><div>${esc(show(input.footer))}</div>` : ""}
+        ${showWarn ? `<div style="${glow("warning")}">\uff0a\u8b66\u8a9e\u8207\u5efa\u8b70\u6a19\u793a\u9805\u76ee\uff0a</div><div>${warningBody(input)}</div>` : ""}
         ${showFees ? `<div style="${glow("fees")}">${feeTable(input, due, selfText, font)}</div>` : ""}
       </div>`
     : "";

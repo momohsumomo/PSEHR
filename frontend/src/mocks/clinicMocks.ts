@@ -183,6 +183,10 @@ export interface RxLine {
   typeName?: string;
   /** 標。看診時勾選，雙擊部位會寫進每一個有勾的列。不寫進申報。 */
   tag?: string;
+  /** 藥品主檔適應症。列印警語時用。 */
+  indication?: string;
+  /** 藥品主檔警語。列印警語時用。 */
+  caution?: string;
 }
 
 export interface LesionMedia {

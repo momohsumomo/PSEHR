@@ -555,6 +555,23 @@ export function EmrLookupPage() {
     navigate(`/clinic?${params.toString()}`);
   };
 
+  useEffect(() => {
+    if (!resultOpen || finderOpen) return;
+    const onKey = (ev: KeyboardEvent) => {
+      if (ev.key !== "Enter" || ev.altKey || ev.ctrlKey || ev.metaKey || ev.shiftKey) return;
+      const el = ev.target as HTMLElement | null;
+      const tag = el?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || tag === "BUTTON" || el?.isContentEditable) {
+        return;
+      }
+      if (!selected?.resource?.id) return;
+      ev.preventDefault();
+      enterChart();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [resultOpen, finderOpen, selected, dateFrom, dateTo, queriedFrom, queriedTo, shift, room, patientId, patientKey, patientLabel, ccText, dxText, drugText, opts.sameDay, opts.hasImage, txFeeFrom, txFeeTo, drugFeeFrom, drugFeeTo, rows, status, sortKey, navigate]);
+
   const qm = selected?.queueMeta;
   const visitIso = String(qm?.encounterDate || detail?.visitDate || "");
   const dxList = detail?.diagnoses ?? [];

@@ -238,7 +238,18 @@ function simplePages(
     chief: "\u76ae\u819a\u7662\u4e09\u5929",
     diagnoses: [{ icd10: "L30.9", text: "\u76ae\u819a\u708e" }],
     drugs: [
-      { id: "1", name: "\u6b62\u75db\u85e5 500mg", sig: "TID", days: 3, qty: 3, nhiCode: "", route: "oral", totalAmount: "9" },
+      {
+        id: "1",
+        name: "\u6b62\u75db\u85e5 500mg",
+        sig: "TID",
+        days: 3,
+        qty: 3,
+        nhiCode: "",
+        route: "oral",
+        totalAmount: "9",
+        indication: "\u7de9\u89e3\u75bc\u75db",
+        caution: "\u559d\u9152\u4e0d\u5f97\u4f75\u7528",
+      },
       {
         id: "2",
         name: "\u5916\u7528\u85e5\u818f",
