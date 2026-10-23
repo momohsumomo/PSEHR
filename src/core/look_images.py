@@ -232,6 +232,40 @@ def _drop_leaf_cache() -> None:
     _leaf_cache = None
 
 
+def iter_chart_photos(root: Path | None = None):
+    """Files named like 1031700A.JPG. Does not read or write the database."""
+    base = root if root is not None else look_root()
+    if not base.is_dir():
+        return
+    _drop_leaf_cache()
+    base_resolved = base.resolve()
+    for folder, _mtime in _leaf_folders(base):
+        try:
+            iterator = os.scandir(folder)
+        except OSError:
+            continue
+        with iterator:
+            for entry in iterator:
+                try:
+                    if entry.is_dir(follow_symlinks=False):
+                        continue
+                    match = _NAME.match(entry.name)
+                    if not match or match.group(3).lower() not in _IMAGE_EXT:
+                        continue
+                    st = entry.stat(follow_symlinks=False)
+                    rel = Path(entry.path).resolve().relative_to(base_resolved).as_posix()
+                except (OSError, ValueError):
+                    continue
+                modified = datetime.fromtimestamp(st.st_mtime).date().isoformat()
+                yield {
+                    "rel": rel,
+                    "name": entry.name,
+                    "chart": match.group(1),
+                    "modified": modified,
+                    "size": int(st.st_size),
+                }
+
+
 def removed_root() -> Path:
     """Photos taken out of an album. Not shown in LOOK. Can be put back by hand."""
     return Path(__file__).resolve().parents[2] / "data" / "look-removed"

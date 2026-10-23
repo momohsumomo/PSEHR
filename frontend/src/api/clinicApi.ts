@@ -1274,6 +1274,17 @@ export type PatientPhotoIndex = {
 
 export type LookFolderFile = { rel: string; name: string; medicalNo: string; modified?: string };
 
+export async function syncLookNames(): Promise<{
+  ok: boolean;
+  reachable: boolean;
+  root: string;
+  scanned: number;
+  added: number;
+  known: number;
+}> {
+  return request("/fhir/Media/look-sync", { method: "POST" });
+}
+
 export async function fetchLookFolder(medicalNo: string): Promise<{
   root: string;
   reachable: boolean;

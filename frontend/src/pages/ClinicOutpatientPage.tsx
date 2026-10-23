@@ -72,6 +72,7 @@ import {
   resolvePackageLines,
 } from "@/utils/catalogRx";
 import { cancelRegister, writeVisitToCard, CardReadError, type CardFaultReport, patchEncounterReg, previewVisitCase, fetchStaff, saveReferralSlip, claimChartOpen, releaseChartOpen, CHART_IN_USE } from "@/api/clinicApi";
+import { dropChartDraft } from "@/lib/chartDraft";
 import { displayCase, prescriptionDays, prescriptionOrders, storedCase } from "@/lib/caseMark";
 import { ageYearsMonths } from "@/lib/ageLabel";
 import { roomLabel, roomNumber } from "@/lib/roomMark";
@@ -250,6 +251,7 @@ export function ClinicOutpatientPage() {
     persistVisit,
     persistHistoryVisit,
     refreshQueue,
+    forgetPatientHistory,
     readCardRegisterPatient,
     submitRegisterEdit,
     ensureAcceptReferralOrder,
@@ -1553,8 +1555,10 @@ export function ClinicOutpatientPage() {
     [queue, setSelectedEncounterId, visitDrafts, selectedEncounterId],
   );
 
+  const retiredDraftsRef = useRef(new Set<string>());
   const holdUnsavedChart = useCallback(
     (eid: string) => {
+      if (retiredDraftsRef.current.has(eid)) return;
       const entry = queue.find((e) => e.encounterId === eid);
       const saved =
         entry?.queueStatus === "finished" ||
@@ -2760,13 +2764,19 @@ export function ClinicOutpatientPage() {
     setDeleteBusy(true);
     setDeleteError(null);
     try {
-      const res = await cancelRegister({ encounterId: selectedEncounterId, mode });
-      const idx = filteredQueue.findIndex((row) => row.encounterId === selectedEncounterId);
+      const dropped = selectedEncounterId;
+      const droppedPatient = queue.find((row) => row.encounterId === dropped)?.patientId;
+      retiredDraftsRef.current.add(dropped);
+      dropChartDraft(dropped);
+      ccDirtyRef.current = false;
+      chartDirtyRef.current = false;
+      forgetPatientHistory(droppedPatient);
+      const res = await cancelRegister({ encounterId: dropped, mode });
+      const idx = filteredQueue.findIndex((row) => row.encounterId === dropped);
       const neighbor = idx >= 0 ? filteredQueue[idx + 1] || filteredQueue[idx - 1] || null : null;
       preferAfterDeleteRef.current = neighbor?.encounterId ?? "";
       await refreshQueue();
       if (res.localCancelled) {
-        const dropped = selectedEncounterId;
         setVisitDrafts((prev) => {
           if (!prev[dropped]) return prev;
           const next = { ...prev };

@@ -1186,6 +1186,78 @@ class SqliteShadowStore(ShadowStore):
                 found.add(digits[:6].zfill(6))
         return found
 
+    def note_look_files(self) -> dict[str, Any]:
+        """Remember photo filenames that are already in the image folder.
+
+        Does not copy image bytes and does not delete a name or a file.
+        """
+        from src.core.look_images import iter_chart_photos, look_root
+
+        root = look_root()
+        if not root.is_dir():
+            return {
+                "ok": False,
+                "reachable": False,
+                "root": str(root),
+                "scanned": 0,
+                "added": 0,
+                "known": 0,
+            }
+        added = 0
+        scanned = 0
+        with self._connect() as conn:
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS look_file (
+                    rel         TEXT PRIMARY KEY,
+                    chart_no    TEXT NOT NULL,
+                    file_name   TEXT NOT NULL,
+                    modified    TEXT,
+                    size_bytes  INTEGER,
+                    noted_at    TEXT NOT NULL DEFAULT (datetime('now'))
+                )
+                """
+            )
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_look_file_chart ON look_file(chart_no)"
+            )
+            known = {str(row[0]) for row in conn.execute("SELECT rel FROM look_file")}
+            pending: list[tuple[Any, ...]] = []
+
+            def flush() -> None:
+                nonlocal added
+                if not pending:
+                    return
+                conn.executemany(
+                    """
+                    INSERT OR IGNORE INTO look_file
+                        (rel, chart_no, file_name, modified, size_bytes)
+                    VALUES (?, ?, ?, ?, ?)
+                    """,
+                    pending,
+                )
+                added += len(pending)
+                pending.clear()
+
+            for item in iter_chart_photos(root):
+                scanned += 1
+                rel = item["rel"]
+                if rel in known:
+                    continue
+                known.add(rel)
+                pending.append((rel, item["chart"], item["name"], item["modified"], item["size"]))
+                if len(pending) >= 400:
+                    flush()
+            flush()
+        return {
+            "ok": True,
+            "reachable": True,
+            "root": str(root),
+            "scanned": scanned,
+            "added": added,
+            "known": scanned - added,
+        }
+
     def list_encounters_for_date(
         self,
         encounter_date: str,
@@ -3852,6 +3924,19 @@ def _apply_index_migrations(conn: sqlite3.Connection) -> None:
     conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_media_encounter ON media_index(encounter_id)"
     )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS look_file (
+            rel         TEXT PRIMARY KEY,
+            chart_no    TEXT NOT NULL,
+            file_name   TEXT NOT NULL,
+            modified    TEXT,
+            size_bytes  INTEGER,
+            noted_at    TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+        """
+    )
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_look_file_chart ON look_file(chart_no)")
 
     # Migrate resource_cache to add created_at
     cache_cols = {row[1] for row in conn.execute("PRAGMA table_info(resource_cache)").fetchall()}

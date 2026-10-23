@@ -34,6 +34,12 @@ def list_media(
     }
 
 
+@router.post("/Media/look-sync")
+def sync_look_names() -> dict[str, Any]:
+    """Add filenames that are on disk and not yet stored. Never deletes."""
+    return _store().note_look_files()
+
+
 @router.get("/Media/look-folder")
 def list_look_folder(medicalNo: str = Query("")) -> dict[str, Any]:
     from src.core.look_images import list_look_files, look_root

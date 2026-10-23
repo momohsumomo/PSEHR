@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { ClaimsPickDialog } from "@/components/clinic/ClaimsPickDialog";
 import { IcDailyUploadDialog } from "@/components/clinic/IcDailyUploadDialog";
 import { API_ENABLED, SANDBOX_ID } from "@/config/sandbox";
-import { request, prefetchPatientRoster } from "@/api/clinicApi";
+import { request, prefetchPatientRoster, syncLookNames } from "@/api/clinicApi";
 import { AppUpdateDialog } from "@/components/clinic/AppUpdateDialog";
 import { CardConsoleDebugButton } from "@/components/clinic/CardConsoleDebugButton";
 import { DeskStatusLamps } from "@/components/clinic/DeskStatusLamps";
@@ -38,6 +38,7 @@ export function LobbyPage() {
   const [claimsOpen, setClaimsOpen] = useState(false);
   const [uploadOpen, setUploadOpen] = useState(false);
   const [updateOpen, setUpdateOpen] = useState(false);
+  const [lookBusy, setLookBusy] = useState(false);
   const [searchParams, setSearchParams] = useSearchParams();
   const clinicLine = useMemo(() => clinicCaption(), []);
 
@@ -133,6 +134,7 @@ export function LobbyPage() {
     {
       label: "工具",
       subItems: [
+        { label: "\u5c0d\u9f4a\u7167\u7247\u6a94\u540d", path: "look-sync" },
         { label: "影像管理", path: "/img-manager" },
         { label: "載入當日照護線上", path: "/register?care=today" },
         { label: "電子轉診", path: "/referral" },
@@ -162,6 +164,29 @@ export function LobbyPage() {
 
   const openModule = (path: string) => {
     setActiveMenu(null);
+    if (path === "look-sync") {
+      if (lookBusy) return;
+      setLookBusy(true);
+      void syncLookNames()
+        .then((res) => {
+          if (!res.reachable) {
+            window.alert("\u76f8\u7247\u8cc7\u6599\u593e\u8b80\u4e0d\u5230\uff0c\u6a94\u540d\u6c92\u6709\u88dc\u3002");
+            return;
+          }
+          window.alert(
+            "\u5c0d\u9f4a\u5b8c\u6210\u3002\u9019\u6b21\u88dc\u9032 " +
+              String(res.added) +
+              " \u7b46\u6a94\u540d\uff0c\u5716\u5eab\u88e1\u5171 " +
+              String(res.scanned) +
+              " \u7b46\u3002\u6c92\u6709\u522a\u7167\u7247\uff0c\u4e5f\u6c92\u6709\u628a\u5716\u6a94\u672c\u9ad4\u5beb\u9032\u75c5\u6b77\u3002",
+          );
+        })
+        .catch((err: unknown) => {
+          window.alert(err instanceof Error ? err.message : "\u5c0d\u9f4a\u7167\u7247\u5931\u6557");
+        })
+        .finally(() => setLookBusy(false));
+      return;
+    }
     if (path === "/claims") {
       setClaimsOpen(true);
       return;

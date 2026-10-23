@@ -52,6 +52,34 @@ class LookImageNameTests(unittest.TestCase):
             finally:
                 os.environ.pop("WUNDADI_LOOK_DIR", None)
 
+    def test_note_look_files_adds_missing_names_only(self) -> None:
+        from src.infrastructure.sqlite_shadow_store import SqliteShadowStore
+
+        with tempfile.TemporaryDirectory() as tmp:
+            os.environ["WUNDADI_LOOK_DIR"] = tmp
+            try:
+                write_look_image("101190", b"one", ".JPG")
+                store = SqliteShadowStore(Path(tmp) / "t.db")
+                first = store.note_look_files()
+                self.assertTrue(first["ok"])
+                self.assertEqual(first["added"], 1)
+                self.assertEqual(first["scanned"], 1)
+                folder = Path(tmp) / "10" / "11" / "90"
+                (folder / "1011900B.JPG").write_bytes(b"dropped")
+                (folder / "notes.txt").write_text("no", encoding="ascii")
+                second = store.note_look_files()
+                self.assertEqual(second["added"], 1)
+                self.assertEqual(second["scanned"], 2)
+                third = store.note_look_files()
+                self.assertEqual(third["added"], 0)
+                self.assertEqual(third["known"], 2)
+                held = getattr(store._local, "conn", None)
+                if held is not None:
+                    held.close()
+                    store._local.conn = None
+            finally:
+                os.environ.pop("WUNDADI_LOOK_DIR", None)
+
 
 if __name__ == "__main__":
     unittest.main()

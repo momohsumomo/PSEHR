@@ -2,6 +2,7 @@ import { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useClinicWorkspace } from "@/hooks/useClinicWorkspace";
 import { cancelRegister, CardReadError, fetchStaff, importCareOnline, type CardFaultReport } from "@/api/clinicApi";
+import { dropChartDraft } from "@/lib/chartDraft";
 import { pharmacistDisplayName, type ClinicStaffLike } from "@/lib/doctorName";
 import { IcCardInfoDialog } from "@/components/clinic/IcCardInfoDialog";
 import { ChangePharmacistDialog } from "@/components/clinic/ChangePharmacistDialog";
@@ -1457,6 +1458,7 @@ export function RegisterPage() {
           setDeleteBusy(true);
           setDeleteError(null);
           try {
+            dropChartDraft(selectedId);
             const res = await cancelRegister({ encounterId: selectedId, mode });
             const rows = displayQueueRef.current;
             const idx = rows.findIndex((row) => row.encounterId === selectedId);

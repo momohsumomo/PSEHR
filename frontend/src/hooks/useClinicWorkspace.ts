@@ -427,6 +427,7 @@ export function useClinicWorkspace(options?: {
   const [workspaceData, setWorkspaceData] = useState<ReturnType<typeof mapWorkspace> | null>(
     null,
   );
+  const [workspaceFor, setWorkspaceFor] = useState("");
   // 病人歷史 light 清單快取（醫聖式：選過／預載的病人幾乎瞬開）
   const historyCacheRef = useRef(new Map<string, HistoryVisit[]>());
   const readyQueue = useRef<{ date: string; res: Awaited<ReturnType<typeof fetchQueueForDate>> } | null>(null);
@@ -534,21 +535,26 @@ export function useClinicWorkspace(options?: {
   useEffect(() => {
     if (!loadWorkspace) {
       setWorkspaceData(null);
+      setWorkspaceFor("");
       return;
     }
     if (!apiMode || !selectedEncounterId) {
       setWorkspaceData(null);
+      setWorkspaceFor("");
       return;
     }
+    const requestedId = selectedEncounterId;
     setWorkspaceData(null);
+    setWorkspaceFor("");
     let cancelled = false;
     const gen = ++wsGen.current;
     (async () => {
       try {
         // 1) 當次看診先到（history_limit=0）
-        const ws = await fetchWorkspace(selectedEncounterId, { historyLimit: 0 });
+        const ws = await fetchWorkspace(requestedId, { historyLimit: 0 });
         if (cancelled || gen !== wsGen.current) return;
         const mapped = mapWorkspace(ws);
+        setWorkspaceFor(requestedId);
         const pid = String(ws.patientId || "").split("/").pop() || "";
         const cached = pid ? historyCacheRef.current.get(pid) : undefined;
         setWorkspaceData({
@@ -562,7 +568,7 @@ export function useClinicWorkspace(options?: {
         try {
           const hist = await fetchPatientVisits(pid, 200, {
             light: true,
-            excludeEncounterId: selectedEncounterId,
+            excludeEncounterId: requestedId,
           });
           if (cancelled || gen !== wsGen.current) return;
           const visits = mapHistoryVisitsLight(hist.entry || []);
@@ -584,41 +590,43 @@ export function useClinicWorkspace(options?: {
 
   const selected = queue.find((q) => q.encounterId === selectedEncounterId) ?? null;
   const patientId = selected?.patientId ?? "";
+  const workspaceLive =
+    apiMode && workspaceFor && workspaceFor === (selectedEncounterId || "") ? workspaceData : null;
 
   const allergies = apiMode
-    ? (workspaceData?.allergies ?? [])
+    ? (workspaceLive?.allergies ?? [])
     : patientId
       ? (mockAllergiesByPatient[patientId] ?? [])
       : [];
   const diagnoses = apiMode
-    ? (workspaceData?.diagnoses ?? [])
+    ? (workspaceLive?.diagnoses ?? [])
     : selectedEncounterId
       ? (mockConditionsByEncounter[selectedEncounterId] ?? [])
       : [];
   const prevRx = apiMode
-    ? (workspaceData?.prevRx ?? [])
+    ? (workspaceLive?.prevRx ?? [])
     : patientId
       ? (mockPrevRxByPatient[patientId] ?? [])
       : [];
   const historyVisits = apiMode
-    ? (workspaceData?.historyVisits ?? [])
+    ? (workspaceLive?.historyVisits ?? [])
     : mockHistoryVisitsFor(patientId, selectedEncounterId);
   const currentRx = apiMode
-    ? (workspaceData?.currentRx ?? [])
+    ? (workspaceLive?.currentRx ?? [])
     : selectedEncounterId
       ? undefined
       : [];
   const patientResource = apiMode
-    ? (workspaceData?.patientResource ?? null)
+    ? (workspaceLive?.patientResource ?? null)
     : patientId
       ? (mockPatients[patientId] ?? null)
       : null;
   const encounterResource = apiMode
-    ? (workspaceData?.encounterResource ?? null)
+    ? (workspaceLive?.encounterResource ?? null)
     : selectedEncounterId
       ? (mockEncounters[selectedEncounterId] ?? null)
       : null;
-  const ccFromWs = workspaceData?.cc;
+  const ccFromWs = workspaceLive?.cc;
   const patientIdNo = extractPatientIdNo(patientResource);
 
   const refreshWorkspace = useCallback(async (encounterId?: string) => {
@@ -628,6 +636,7 @@ export function useClinicWorkspace(options?: {
     const ws = await fetchWorkspace(eid, { historyLimit: 0 });
     if (gen !== wsGen.current) return;
     const mapped = mapWorkspace(ws);
+    setWorkspaceFor(eid);
     setWorkspaceData((prev) => ({
       ...mapped,
       historyVisits: prev?.historyVisits?.length ? prev.historyVisits : mapped.historyVisits,
@@ -1051,7 +1060,7 @@ export function useClinicWorkspace(options?: {
       );
       await retainQuiet(selectedEncounterId, { medicationIds: [...kept] });
       if (patientId) {
-        for (const old of workspaceData?.currentRx ?? []) {
+        for (const old of workspaceLive?.currentRx ?? []) {
           if (!old.id || isDraftId(old.id) || kept.has(old.id)) continue;
           await updateMedicationRequest(old.id, {
             ...medicationSaveBody(patientId, selectedEncounterId, old),
@@ -1070,7 +1079,7 @@ export function useClinicWorkspace(options?: {
       }
       await refreshWorkspace(selectedEncounterId);
     },
-    [apiMode, selectedEncounterId, patientId, patientIdNo, refreshWorkspace, retainQuiet, workspaceData?.currentRx],
+    [apiMode, selectedEncounterId, patientId, patientIdNo, refreshWorkspace, retainQuiet, workspaceLive?.currentRx],
   );
 
   const persistChiefComplaint = useCallback(
@@ -1174,7 +1183,7 @@ export function useClinicWorkspace(options?: {
       const keptDx = dxRows.filter((dx) => dx.id && !isDraftId(dx.id)).map((dx) => dx.id as string);
       await retainQuiet(selectedEncounterId, { conditionIds: keptDx });
       if (patientId) {
-        for (const old of workspaceData?.diagnoses ?? []) {
+        for (const old of workspaceLive?.diagnoses ?? []) {
           if (!old.id || isDraftId(old.id) || keptDx.includes(old.id)) continue;
           await updateConditionResource(old.id, {
             subject: { reference: `Patient/${patientId}` },
@@ -1187,7 +1196,7 @@ export function useClinicWorkspace(options?: {
         }
       }
       const existingDx = new Set(
-        (workspaceData?.diagnoses ?? []).map((d) => `${d.icd10}|${d.text}`),
+        (workspaceLive?.diagnoses ?? []).map((d) => `${d.icd10}|${d.text}`),
       );
       for (const dx of dxRows) {
         const key = `${dx.icd10}|${dx.text}`;
@@ -1218,7 +1227,7 @@ export function useClinicWorkspace(options?: {
       persistMedications,
       refreshWorkspace,
       retainQuiet,
-      workspaceData?.diagnoses,
+      workspaceLive?.diagnoses,
     ],
   );
 
@@ -1236,8 +1245,8 @@ export function useClinicWorkspace(options?: {
       const keptDx = visit.diagnoses.filter((dx) => dx.id && !isDraftId(dx.id)).map((dx) => dx.id as string);
       await retainQuiet(eid, { medicationIds: [...keptMeds], conditionIds: keptDx });
       const priorDx =
-        (workspaceData?.historyVisits ?? []).find((row) => row.encounterId === eid)?.diagnoses ??
-        (selectedEncounterId === eid ? workspaceData?.diagnoses ?? [] : []);
+        (workspaceLive?.historyVisits ?? []).find((row) => row.encounterId === eid)?.diagnoses ??
+        (selectedEncounterId === eid ? workspaceLive?.diagnoses ?? [] : []);
       if (pid) {
         for (const old of priorDx) {
           if (!old.id || isDraftId(old.id) || keptDx.includes(old.id)) continue;
@@ -1267,8 +1276,8 @@ export function useClinicWorkspace(options?: {
         }
       }
       const priorMeds =
-        (workspaceData?.historyVisits ?? []).find((row) => row.encounterId === eid)?.medications ??
-        (selectedEncounterId === eid ? workspaceData?.currentRx ?? [] : []);
+        (workspaceLive?.historyVisits ?? []).find((row) => row.encounterId === eid)?.medications ??
+        (selectedEncounterId === eid ? workspaceLive?.currentRx ?? [] : []);
       if (pid) {
         for (const old of priorMeds) {
           if (!old.id || isDraftId(old.id) || keptMeds.has(old.id)) continue;
@@ -1297,9 +1306,9 @@ export function useClinicWorkspace(options?: {
       refreshWorkspace,
       retainQuiet,
       selectedEncounterId,
-      workspaceData?.diagnoses,
-      workspaceData?.historyVisits,
-      workspaceData?.currentRx,
+      workspaceLive?.diagnoses,
+      workspaceLive?.historyVisits,
+      workspaceLive?.currentRx,
     ],
   );
 
@@ -1423,12 +1432,17 @@ export function useClinicWorkspace(options?: {
     patientResource,
     encounterResource,
     ccFromWs,
-    vitalsFromWs: workspaceData?.vitals ?? EMPTY_WS_VITALS,
+    vitalsFromWs: workspaceLive?.vitals ?? EMPTY_WS_VITALS,
     lesionMedia: apiMode
-      ? (workspaceData?.lesionMedia ?? [])
+      ? (workspaceLive?.lesionMedia ?? [])
       : patientId
         ? (mockMediaByPatient[patientId] ?? [])
         : [],
+    forgetPatientHistory: (patientId?: string) => {
+      const pid = (patientId || "").split("/").pop() || "";
+      if (!pid) historyCacheRef.current.clear();
+      else historyCacheRef.current.delete(pid);
+    },
     clinicalProfile: patientId ? getPatientClinicalProfile(patientId) : null,
     emptyCurrentRx,
     cloneRxLines,
