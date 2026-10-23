@@ -3,6 +3,7 @@
  */
 import { ageYearsMonths } from "@/lib/ageLabel";
 import { HIS, HIS_FONT } from "@/lib/hisTheme";
+import { ARREARS_NAME_COLOR, owesPatient } from "@/lib/patientArrears";
 import type { QueueEntry } from "@/mocks/clinicMocks";
 
 type Props = {
@@ -48,17 +49,17 @@ export function ChartPatientHead({ selected, patientResource, visitDate }: Props
   const medicalNo = selected?.medicalNo || "\u2014";
   const name = selected?.patientDisplay || "\u2014";
   const sex = sexLabel(selected);
-  const bits = [
-    `\u75c5\u6b77 ${medicalNo}`,
-    `${name}${sex ? ` (${sex})` : ""}`,
-    `\u751f\u65e5 ${pickBirthday(patientResource)}`,
-    `\u5e74\u9f61 ${ageLabel(selected)}`,
-    `ID ${pickIdNo(patientResource, selected?.idNo)}`,
-    `\u770b\u8a3a\u65e5 ${visitDate}`,
-    selected?.queueNumber != null ? `\u5e8f\u865f ${selected.queueNumber}` : null,
-    selected?.caseNo ? `\u6848 ${selected.caseNo}` : null,
-    selected?.cardWritten ? "\u5361 \u2713" : null,
-  ].filter(Boolean) as string[];
+  const bits: Array<{ key: string; text: string; owe?: boolean }> = [
+    { key: "chart", text: `\u75c5\u6b77 ${medicalNo}` },
+    { key: "name", text: `${name}${sex ? ` (${sex})` : ""}`, owe: owesPatient(selected?.patientArrearage) },
+    { key: "birth", text: `\u751f\u65e5 ${pickBirthday(patientResource)}` },
+    { key: "age", text: `\u5e74\u9f61 ${ageLabel(selected)}` },
+    { key: "id", text: `ID ${pickIdNo(patientResource, selected?.idNo)}` },
+    { key: "date", text: `\u770b\u8a3a\u65e5 ${visitDate}` },
+    selected?.queueNumber != null ? { key: "seq", text: `\u5e8f\u865f ${selected.queueNumber}` } : null,
+    selected?.caseNo ? { key: "case", text: `\u6848 ${selected.caseNo}` } : null,
+    selected?.cardWritten ? { key: "card", text: "\u5361 \u2713" } : null,
+  ].filter((bit): bit is { key: string; text: string; owe?: boolean } => Boolean(bit));
 
   return (
     <div
@@ -71,8 +72,10 @@ export function ChartPatientHead({ selected, patientResource, visitDate }: Props
         minHeight: 16,
       }}
     >
-      {bits.map((b) => (
-        <span key={b}>{b}</span>
+      {bits.map((bit) => (
+        <span key={bit.key} style={bit.owe ? { color: ARREARS_NAME_COLOR, fontWeight: 700 } : undefined}>
+          {bit.text}
+        </span>
       ))}
     </div>
   );

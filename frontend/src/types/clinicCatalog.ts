@@ -61,8 +61,10 @@ export type CatalogDrug = {
   typeSort?: number | null;
   indexFlag?: string;
   warning?: string;
-  /** MEDICAL.ADAPT 適應症及備註（長文） */
+  /** MEDICAL.ADAPT 適應症及備註（長文）。藥單不印這欄。 */
   adapt?: string;
+  /** 印在藥單上的短句。空白的藥不印。 */
+  patientRemind?: string;
 };
 
 export type CatalogDiagnosis = {
@@ -81,6 +83,9 @@ export type CatalogDiagnosis = {
   special?: string;
   /** DIAGNOSE.INDEX：Y 才進看診選單 */
   enabled?: string;
+  /** External cause kept with a legal principal. Not a catalog column. */
+  causeIcd10?: string;
+  causeText?: string;
 };
 
 export type CatalogPackageLine = {

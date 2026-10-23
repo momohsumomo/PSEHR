@@ -16,6 +16,8 @@ type Props = {
   onClose: () => void;
   onPick: (row: CatalogDiagnosis, query?: string) => void | string;
   onBrowseChapters?: () => void;
+  /** Row 0 is the claim principal. External-cause codes are not offered alone. */
+  primary?: boolean;
 };
 
 function icd9Of(row: CatalogDiagnosis): string {
@@ -81,6 +83,7 @@ export function IcdShortcutDialog({
   onClose,
   onPick,
   onBrowseChapters,
+  primary = false,
 }: Props) {
   const [text, setText] = useState(query);
   const [index, setIndex] = useState(0);
@@ -278,7 +281,7 @@ export function IcdShortcutDialog({
         </div>
       </div>
       {fullOpen ? (
-        <FullIcdSearchDialog query={text} onClose={() => setFullOpen(false)} onPick={onPick} />
+        <FullIcdSearchDialog query={text} primary={primary} onClose={() => setFullOpen(false)} onPick={onPick} />
       ) : null}
     </div>,
     document.body,
@@ -290,6 +293,7 @@ export function Icd10ConditionDialog({
   query,
   onClose,
   onPick,
+  primary = false,
 }: Omit<Props, "field" | "onBrowseChapters">) {
   const [text, setText] = useState(query);
   const [index, setIndex] = useState(0);
@@ -439,7 +443,7 @@ export function Icd10ConditionDialog({
         </div>
       </div>
       {fullOpen ? (
-        <FullIcdSearchDialog query={text} onClose={() => setFullOpen(false)} onPick={onPick} />
+        <FullIcdSearchDialog query={text} primary={primary} onClose={() => setFullOpen(false)} onPick={onPick} />
       ) : null}
     </div>,
     document.body,

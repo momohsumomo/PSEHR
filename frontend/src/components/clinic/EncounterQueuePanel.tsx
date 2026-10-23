@@ -17,6 +17,7 @@ import {
 import { HIS, HIS_FONT, HIS_QUEUE_COL_WIDTHS } from "@/lib/hisTheme";
 import { FIRST_VISIT_BG, isFirstVisit, visitListMark } from "@/lib/visitListMark";
 import { ageYearsMonths } from "@/lib/ageLabel";
+import { ARREARS_NAME_COLOR, owesPatient } from "@/lib/patientArrears";
 import { displayCase } from "@/lib/caseMark";
 import { roomLabel } from "@/lib/roomMark";
 import { clockLabel, compareClinicQueue, showsUploadCircle } from "@/lib/queueOrder";
@@ -439,7 +440,12 @@ export function EncounterQueuePanel({
                         fontWeight: isPrimary ? 700 : 400,
                         background:
                           col.key === "patientDisplay" && isFirstVisit(e.regCc) ? FIRST_VISIT_BG : undefined,
-                        color: col.key === "preVisit" && visitListMark(e) ? "#800080" : undefined,
+                        color:
+                          col.key === "patientDisplay" && owesPatient(e.patientArrearage)
+                            ? ARREARS_NAME_COLOR
+                            : col.key === "preVisit" && visitListMark(e)
+                              ? "#800080"
+                              : undefined,
                       }}
                       title={
                         col.key === "doneMark" ? undefined : queueCellValue(e, col.key)
@@ -496,7 +502,12 @@ export function EncounterQueuePanel({
                     }}
                   />
                   <div className="min-w-0 flex-1">
-                    <div className="truncate font-semibold text-slate-900">{e.patientDisplay}</div>
+                    <div
+                      className="truncate font-semibold text-slate-900"
+                      style={owesPatient(e.patientArrearage) ? { color: ARREARS_NAME_COLOR } : undefined}
+                    >
+                      {e.patientDisplay}
+                    </div>
                     <div className="text-[10px] text-slate-500">{ageYearsMonths(e.age || e.ageSex)}</div>
                     <div className="line-clamp-2 text-xs text-slate-500">{e.reasonText}</div>
                   </div>

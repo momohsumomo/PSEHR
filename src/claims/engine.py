@@ -418,6 +418,9 @@ def build_claims_summary(
                 for c in conditions
                 if (c.get("indexMeta") or {}).get("nhiIcd10Code")
             ]
+        from src.core.dx_principal import arrange_codes
+
+        diag_codes = arrange_codes(diag_codes)
         diag_str = ",".join(str(x) for x in diag_codes if x)
         diag_list = [str(x).strip() for x in diag_codes if x]
         spec_codes = _spec_treat_codes(str(reg.get("caseNoE1") or ""), diag_list)

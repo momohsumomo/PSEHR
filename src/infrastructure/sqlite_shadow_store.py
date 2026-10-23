@@ -1428,6 +1428,7 @@ class SqliteShadowStore(ShadowStore):
                     "kind": "",
                     "idCategory": "",
                     "idNo": "",
+                    "arrearage": "",
                 }
                 reason_text = patient_clinic.get("memo") or ""
                 if not patient_id_no:
@@ -4313,7 +4314,7 @@ def _terminology_stickers_from_cache(
 
 def _clinic_fields_from_payload(raw: str | dict[str, Any]) -> dict[str, str]:
     """從 Patient JSON 抽出主檔備註／押金／身份／身分證。"""
-    out = {"memo": "", "keymoney": "", "kind": "", "idCategory": "", "idNo": ""}
+    out = {"memo": "", "keymoney": "", "kind": "", "idCategory": "", "idNo": "", "arrearage": ""}
     try:
         pp = json.loads(raw) if isinstance(raw, str) else raw
         if not isinstance(pp, dict):
@@ -4354,6 +4355,8 @@ def _clinic_fields_from_payload(raw: str | dict[str, Any]) -> dict[str, str]:
                     out["kind"] = val
                 elif key == "idCategory":
                     out["idCategory"] = val
+                elif key == "arrearage":
+                    out["arrearage"] = val
             break
     except Exception:
         return out
@@ -4362,7 +4365,7 @@ def _clinic_fields_from_payload(raw: str | dict[str, Any]) -> dict[str, str]:
 
 def _load_patient_clinic_fields(conn: sqlite3.Connection, patient_id: str) -> dict[str, str]:
     """從 Patient 資源抽出主檔備註／押金／身份／身分證（供掛號清單 fallback）。"""
-    empty = {"memo": "", "keymoney": "", "kind": "", "idCategory": "", "idNo": ""}
+    empty = {"memo": "", "keymoney": "", "kind": "", "idCategory": "", "idNo": "", "arrearage": ""}
     if not patient_id:
         return empty
     try:
@@ -4393,6 +4396,7 @@ def _apply_patient_fallbacks_to_queue_meta(
         queue_meta["idCategory"] = patient_clinic["idCategory"]
     if patient_clinic.get("kind") and not queue_meta.get("kind"):
         queue_meta["kind"] = patient_clinic["kind"]
+    queue_meta["patientArrearage"] = str(patient_clinic.get("arrearage") or "").strip()
 
 
 def _patient_index_fields(payload: dict[str, Any]) -> dict[str, str | None]:

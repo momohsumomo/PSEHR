@@ -247,8 +247,7 @@ function simplePages(
         nhiCode: "",
         route: "oral",
         totalAmount: "9",
-        indication: "\u7de9\u89e3\u75bc\u75db",
-        caution: "\u559d\u9152\u4e0d\u5f97\u4f75\u7528",
+        patientRemind: "\u98ef\u5f8c\u914d\u6c34",
       },
       {
         id: "2",

@@ -49,14 +49,14 @@ const inputCls =
 const labelBlue = "font-bold";
 
 const labelStyle: CSSProperties = {
-  fontSize: HIS.fs.secondary * 2,
+  fontSize: HIS.fs.secondary * 1.6,
   color: HIS.labelText,
   fontFamily: HIS_FONT,
 };
 
 const inputStyle: CSSProperties = {
-  fontSize: HIS.fs.body * 2,
-  height: HIS.row.formField * 2,
+  fontSize: HIS.fs.body * 1.6,
+  height: HIS.row.formField * 1.6,
   fontFamily: HIS_FONT,
 };
 
@@ -105,7 +105,7 @@ function YesNo({
   onChange: (v: boolean) => void;
 }) {
   return (
-    <span className="ml-auto flex items-center gap-2" style={{ fontSize: HIS.fs.body * 2, fontFamily: HIS_FONT }}>
+    <span className="ml-auto flex items-center gap-2" style={{ fontSize: HIS.fs.body * 1.6, fontFamily: HIS_FONT }}>
       <span className={labelBlue} style={labelStyle}>{"=> 選擇是否統計"}</span>
       <label className="flex items-center gap-0.5">
         <input type="radio" checked={value} onChange={() => onChange(true)} />
@@ -372,11 +372,11 @@ export function BillingPage() {
   return (
     <div
       className="flex h-screen flex-col overflow-hidden text-black"
-      style={{ background: "#808080", fontFamily: HIS_FONT, fontSize: HIS.fs.body * 2 }}
+      style={{ background: "#808080", fontFamily: HIS_FONT, fontSize: HIS.fs.body * 1.6 }}
     >
       {/* 模擬蓋在大廳上的統計對話框 */}
       <div
-        className="mx-auto my-2 flex min-h-0 w-[min(920px,98vw)] flex-1 flex-col overflow-hidden border-2"
+        className="mx-auto my-2 flex min-h-0 w-[min(1600px,98vw)] flex-1 flex-col overflow-hidden border-2"
         style={{
           borderColor: "#404040",
           background: chrome,
@@ -420,7 +420,7 @@ export function BillingPage() {
             ))}
           </div>
 
-          <div className="flex flex-nowrap items-center gap-2 overflow-x-auto">
+          <div className="flex flex-wrap items-center gap-2">
             <span className={labelBlue} style={labelStyle}>開始</span>
             <HisRocDateField className="shrink-0" value={dateStart} onChange={onDateStart} />
             <span className={labelBlue} style={labelStyle}>結束</span>
@@ -467,7 +467,7 @@ export function BillingPage() {
               <button
                 type="button"
                 className="border px-2 py-0.5 font-bold"
-                style={{ borderColor: border, background: chrome, fontSize: HIS.fs.secondary * 2 }}
+                style={{ borderColor: border, background: chrome, fontSize: HIS.fs.secondary * 1.6 }}
                 onClick={() => setStatus("病名列出清單：請先在條件填關鍵字（殼）。")}
               >
                 列出清單
@@ -549,7 +549,7 @@ export function BillingPage() {
                     className={`flex items-center gap-1 ${labelBlue}`}
                     style={{
                       ...labelStyle,
-                      fontSize: emphasize ? HIS.fs.body * 2 : HIS.fs.secondary * 2,
+                      fontSize: emphasize ? HIS.fs.body * 1.6 : HIS.fs.secondary * 1.6,
                       fontWeight: emphasize ? 700 : 600,
                     }}
                   >
@@ -572,7 +572,7 @@ export function BillingPage() {
                 <button
                   type="button"
                   className="border px-2 py-0.5 font-bold"
-                  style={{ borderColor: border, background: "#E8E8E8", fontSize: HIS.fs.secondary * 2 }}
+                  style={{ borderColor: border, background: "#E8E8E8", fontSize: HIS.fs.secondary * 1.6 }}
                   onClick={() => setStatus("當日就診明細：請用現金統計＋明細預覽。")}
                 >
                   當日就診明細
@@ -596,7 +596,7 @@ export function BillingPage() {
                 <button
                   type="button"
                   className="border px-2 py-0.5 font-bold"
-                  style={{ borderColor: border, background: chrome, fontSize: HIS.fs.secondary * 2 }}
+                  style={{ borderColor: border, background: chrome, fontSize: HIS.fs.secondary * 1.6 }}
                   onClick={() => setStatus("列出清單（殼）。")}
                 >
                   列出清單
@@ -658,7 +658,7 @@ export function BillingPage() {
         {/* E. 底列 */}
         <div
           className="flex shrink-0 items-center gap-2 border-t px-2 py-0.5"
-          style={{ borderColor: HIS.chromeBorder, background: HIS.chrome, fontSize: HIS.fs.secondary * 2 }}
+          style={{ borderColor: HIS.chromeBorder, background: HIS.chrome, fontSize: HIS.fs.secondary * 1.6 }}
         >
           <span className="min-w-0 flex-1 truncate">
             {status}

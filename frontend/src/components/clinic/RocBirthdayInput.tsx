@@ -7,10 +7,19 @@ type Props = {
   readOnly?: boolean;
   className?: string;
   style?: CSSProperties;
+  /** Empty string keeps a blank field blank. Birthday still shows the example. */
+  placeholder?: string;
 };
 
-/** Shows 82.01.17. The stored value stays the 7-digit form. */
-export function RocBirthdayInput({ value, onChange, readOnly, className, style }: Props) {
+/** Stored value stays the 7-digit form. Blank stays blank. */
+export function RocBirthdayInput({
+  value,
+  onChange,
+  readOnly,
+  className,
+  style,
+  placeholder = "82.01.17",
+}: Props) {
   const [focused, setFocused] = useState(false);
   const [draft, setDraft] = useState("");
   const shown = focused ? draft : formatBirthdayRoc(value);
@@ -20,7 +29,7 @@ export function RocBirthdayInput({ value, onChange, readOnly, className, style }
       style={style}
       className={className}
       maxLength={10}
-      placeholder="82.01.17"
+      placeholder={placeholder}
       value={shown}
       readOnly={readOnly}
       onFocus={() => {

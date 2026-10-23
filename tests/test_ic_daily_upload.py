@@ -2,6 +2,17 @@
 from src.claims.ic_daily_upload import render_ic_daily_xml
 
 
+def test_daily_fee_is_first_band_per_person_minus_copay():
+    from src.claims.ic_daily_upload import daily_medical_fee
+    from src.claims.yisheng_rules import flat_consult_points
+
+    assert flat_consult_points("0800101", "2026-10-23") == 397
+    assert flat_consult_points("0400101", "2026-10-23") == 424
+    assert flat_consult_points("1140101", "2026-10-23") == 484
+    assert daily_medical_fee(397, 0, 0, 50) == 347
+    assert daily_medical_fee(397, 55, 39, 50) == 441
+
+
 def test_daily_xml_is_format_2_and_omits_empty_signature():
     xml = render_ic_daily_xml(
         [
@@ -246,6 +257,7 @@ def test_w_sequence_uploads_as_normal_and_keeps_sam_and_card():
         routes={},
         **common,
     )
+    assert rec["mb1"]["M44"] == "397"
     assert bad_rec["h01"] == "B"
     assert "M01" not in bad_rec["mb1"]
     assert "M02" not in bad_rec["mb1"]

@@ -12,6 +12,7 @@ import {
   patchEncounterReg,
   type ReferralSlipHit,
   readCardAndRegister,
+  arrangeDiagnosisRows,
   registerCondition,
   registerEncounter,
   registerMedication,
@@ -97,6 +98,7 @@ function queueStamp(date: string, rows: QueueEntry[]): string {
         row.regCc,
         row.prebook ? 1 : 0,
         row.referredOut ? 1 : 0,
+        row.patientArrearage || "",
       ].join("|"),
     )
     .join("\n");
@@ -174,6 +176,7 @@ function mapApiQueue(entries: ApiQueueEntry[]): QueueEntry[] {
     birthday: e.queueMeta.birthday,
     idNo: e.queueMeta.hcIdNo || e.queueMeta.idNo || "",
     sequenceNo: e.queueMeta.queueNumber,
+    patientArrearage: e.queueMeta.patientArrearage || "",
   }));
 }
 
@@ -1171,6 +1174,7 @@ export function useClinicWorkspace(options?: {
   const persistVisit = useCallback(
     async (chiefComplaint: string, dxRows: DiagnosisRow[], rxLines: RxLine[]) => {
       if (!apiMode || !selectedEncounterId) return;
+      dxRows = await arrangeDiagnosisRows(dxRows);
       const assessment = dxRows[0]?.text;
       if (chiefComplaint.trim()) {
         await persistChiefComplaint(chiefComplaint, assessment);
@@ -1193,7 +1197,7 @@ export function useClinicWorkspace(options?: {
       const existingDx = new Set(
         (workspaceLive?.diagnoses ?? []).map((d) => `${d.icd10}|${d.text}`),
       );
-      for (const dx of dxRows) {
+      for (const dx of [...dxRows].reverse()) {
         const key = `${dx.icd10}|${dx.text}`;
         if (!isDraftId(dx.id) && dx.id && patientId) {
           await updateConditionResource(dx.id, {
@@ -1231,13 +1235,14 @@ export function useClinicWorkspace(options?: {
       if (!apiMode) return;
       const eid = visit.encounterId;
       const pid = patientId;
+      const diagnoses = await arrangeDiagnosisRows(visit.diagnoses);
       if (visit.chiefComplaint.trim()) {
-        await persistChiefComplaint(visit.chiefComplaint, visit.diagnoses[0]?.text, undefined, eid);
+        await persistChiefComplaint(visit.chiefComplaint, diagnoses[0]?.text, undefined, eid);
       }
       const keptMeds = new Set(
         visit.medications.filter((line) => line.id && !isDraftId(line.id)).map((line) => line.id),
       );
-      const keptDx = visit.diagnoses.filter((dx) => dx.id && !isDraftId(dx.id)).map((dx) => dx.id as string);
+      const keptDx = diagnoses.filter((dx) => dx.id && !isDraftId(dx.id)).map((dx) => dx.id as string);
       await retainQuiet(eid, { medicationIds: [...keptMeds], conditionIds: keptDx });
       const priorDx =
         (workspaceLive?.historyVisits ?? []).find((row) => row.encounterId === eid)?.diagnoses ??
@@ -1255,7 +1260,7 @@ export function useClinicWorkspace(options?: {
           });
         }
       }
-      for (const dx of visit.diagnoses) {
+      for (const dx of [...diagnoses].reverse()) {
         if (!isDraftId(dx.id) && dx.id && pid) {
           await updateConditionResource(dx.id!, {
             subject: { reference: `Patient/${pid}` },

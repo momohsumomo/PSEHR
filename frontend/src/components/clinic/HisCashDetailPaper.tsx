@@ -44,9 +44,9 @@ const COLS = [
 
 const NUM = new Set(["押金", "部額", "藥優", "掛費", "已收", "欠款", "雜費", "還款", "還單"]);
 
-/** 字是原來的兩倍，紙張仍是掛號簿橫式。一頁約 5 人。最後一頁留合計與人次，最多 3 列。 */
-const ROWS_PER_PAGE = 5;
-const LAST_PAGE_MAX = 3;
+/** 字是原來的兩倍，紙張高度是原來的三倍。一頁約 16 人。最後一頁留合計與人次，最多 10 列。 */
+const ROWS_PER_PAGE = 16;
+const LAST_PAGE_MAX = 10;
 
 type Money = {
   deposit: number;

@@ -14,7 +14,7 @@ from src.claims.engine import (
     _load_staff_maps,
     _resolve_staff_nhi,
 )
-from src.claims.yisheng_rules import half_up_points, is_order_code
+from src.claims.yisheng_rules import flat_consult_points, half_up_points, is_order_code, pharmacy_for
 from src.core.encounter_extensions import extract_reg_meta
 
 # 6.0 normal sequences are W001-W999. Other letter codes are abnormal uploads.
@@ -75,6 +75,12 @@ def _icd(code: str) -> str:
 def _qty(value: float) -> str:
     scaled = int(float(value) * 10 + 0.5)
     return f"{scaled / 10:.1f}"
+
+
+def daily_medical_fee(consult: int, line_points: int, pharmacy: int, copay: int) -> int:
+    """當次門診醫療費用. Consult and pharmacy are calculated here, not stored on the visit."""
+    total = int(consult) + int(line_points) + int(pharmacy) - int(copay)
+    return total if total > 0 else 0
 
 
 def _money(value: Any) -> str:
@@ -361,10 +367,6 @@ def _compose(
     else:
         m23 = "0"
         m20 = str(oral_days or drug_days or 0)
-    fee = _money(reg.get("icUploadFee"))
-    missing_fee = not fee
-    if missing_fee:
-        fee = str(int(line_points))
     # M45 is the sum. M53 is the basic copay. M54 is the drug copay.
     # A stored drugCopay is that amount by itself. Older rows keep the previous split.
     if "drugCopay" in reg:
@@ -393,6 +395,15 @@ def _compose(
         else:
             basic_copay = 50
             drug_copay = copay_total - 50
+    _pharm_code, pharm_pts = pharmacy_for(drug_days, dispense)
+    fee = str(
+        daily_medical_fee(
+            flat_consult_points(birthday, iso_day),
+            int(line_points),
+            int(pharm_pts),
+            copay_total,
+        )
+    )
     codes = _dx(store, encounter_id)
     card_again = remark in {"2", "3", "4"}
     mb1: dict[str, str] = {
@@ -435,10 +446,7 @@ def _compose(
         mb1["M25"] = "1"
     for idx, code in enumerate(codes[1:6], start=36):
         mb1[f"M{idx}"] = code
-    note = ""
-    if missing_fee:
-        note = "\u6709\u4e00\u7b46\u6c92\u6709\u91ab\u8056\u7576\u6b21\u4e0a\u50b3\u8cbb\u7528\uff0cM44 \u6539\u7528\u85e5\u54c1\u8207\u8655\u7f6e\u9ede\u6578\uff0c\u4e0d\u542b\u8a3a\u5bdf\u8cbb"
-    return {"h01": "B" if abnormal else "A", "mb1": mb1, "orders": orders}, note
+    return {"h01": "B" if abnormal else "A", "mb1": mb1, "orders": orders}, ""
 
 
 def _dx(store: Any, encounter_id: str) -> list[str]:

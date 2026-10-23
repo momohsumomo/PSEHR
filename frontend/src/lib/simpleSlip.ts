@@ -287,24 +287,14 @@ function feeTable(input: SimpleSlipInput, due: string, selfText: string, fontPx:
   return `<table style="width:100%;border-collapse:collapse;border-top:1px solid #222;">${html}</table>`;
 }
 
-function warningBody(input: SimpleSlipInput): string {
+function reminderBody(input: SimpleSlipInput): string {
   const lines: string[] = [];
   for (const row of input.drugs) {
+    const text = (row.patientRemind || "").trim();
+    if (!text) continue;
     const name = (row.name || row.tradeName || "").trim();
-    const adapt = (row.indication || "").trim();
-    const caution = (row.caution || "").trim();
-    if (!adapt && !caution) continue;
-    const bits: string[] = [];
-    if (name) bits.push(name);
-    const adaptLabel = "\u4f5c\u7528\u6216\u9069\u61c9\u75c7\uff1a";
-    const cautionLabel = "\u8b66\u8a9e\u6216\u526f\u4f5c\u7528\uff1a";
-    if (adapt) bits.push(adaptLabel + adapt);
-    if (caution) bits.push(cautionLabel + caution);
-    lines.push(bits.join("\u3000"));
+    lines.push(name ? `${name}\u3000${text}` : text);
   }
-  const foot = (input.footer || "").trim();
-  if (foot) lines.push(foot);
-  if (!lines.length) lines.push("\u672c\u7b46\u85e5\u54c1\u4e3b\u6a94\u672a\u8a18\u8f09\u4f5c\u7528\u3001\u9069\u61c9\u75c7\u6216\u8b66\u8a9e");
   return lines.map((line) => esc(line)).join("<br/>");
 }
 
@@ -376,9 +366,17 @@ function pageHtml(
       <div>\u5c31\u8a3a\u65e5\u671f:${esc(show(input.visitDate))}\u3000\u8abf\u5291\u65e5:${esc(show(input.dispenseDate))}</div>
       <div style="${glow("pharmacist")}">\u85e5\u5c40\u5730\u9ede:${esc(show(input.pharmacy))}${hide("pharmacist") ? "" : `\u3000\u8abf\u5291\u8005:${esc(show(input.pharmacist))}`}</div>`
       : `<div>${esc(show(input.name))}\u3000${esc(show(input.visitDate))}\u3000\u7e8c${pageIndex + 1}</div>`;
-  const rightTail = last && (showWarn || showFees)
+  const remind = showWarn ? reminderBody(input) : "";
+  const foot = showWarn ? (input.footer || "").trim() : "";
+  const warnBlock =
+    remind || foot
+      ? `<div style="${glow("warning")}">${
+          remind ? `<div>\uff0a\u63d0\u9192\u75c5\u60a3\uff0a</div><div>${remind}</div>` : ""
+        }${foot ? `<div>${esc(foot)}</div>` : ""}</div>`
+      : "";
+  const rightTail = last && (warnBlock || showFees)
     ? `<div style="flex:0 0 auto;font-size:${font}px;line-height:1.2;">
-        ${showWarn ? `<div style="${glow("warning")}">\uff0a\u8b66\u8a9e\u8207\u5efa\u8b70\u6a19\u793a\u9805\u76ee\uff0a</div><div>${warningBody(input)}</div>` : ""}
+        ${warnBlock}
         ${showFees ? `<div style="${glow("fees")}">${feeTable(input, due, selfText, font)}</div>` : ""}
       </div>`
     : "";

@@ -37,6 +37,7 @@ from src.core.nhi_soap_fhir_mapper import (
 )
 from src.api.routers.encounter import _attach_queue_meta
 from src.core.encounter_queue import fhir_status_from_queue
+from src.core.dx_principal import arrange_rows
 from src.core.icd_crosswalk import browse_codes, browse_headings, map_code, search_codes, search_icd10_book
 from src.core.nhi_card_bridge import (
     CardReadResult,
@@ -838,14 +839,29 @@ def crosswalk_diagnosis(body: NhiIcdCrosswalkIn) -> dict[str, Any]:
     return map_code(body.code, body.text).as_dict()
 
 
+class NhiDxArrangeIn(BaseModel):
+    rows: list[dict] = []
+
+
+@router.post("/v1/diagnosis/arrange", summary="Move a code that cannot be the principal behind a billable injury code")
+def arrange_diagnosis(body: NhiDxArrangeIn) -> dict[str, Any]:
+    return {"rows": arrange_rows(body.rows)}
+
+
 @router.get("/v1/diagnosis/search", summary="Find a diagnosis by Chinese, English, ICD-9, or ICD-10")
-def search_diagnosis(q: str = Query("", max_length=40)) -> dict[str, Any]:
-    return {"hits": search_codes(q)}
+def search_diagnosis(
+    q: str = Query("", max_length=40),
+    primary: bool = Query(False),
+) -> dict[str, Any]:
+    return {"hits": search_codes(q, primary=primary)}
 
 
 @router.get("/v1/diagnosis/book", summary="Search the full ICD-10-CM book, outside the clinic short list")
-def diagnosis_book(q: str = Query("", max_length=40)) -> dict[str, Any]:
-    return {"hits": search_icd10_book(q)}
+def diagnosis_book(
+    q: str = Query("", max_length=40),
+    primary: bool = Query(False),
+) -> dict[str, Any]:
+    return {"hits": search_icd10_book(q, primary=primary)}
 
 
 @router.get("/v1/diagnosis/browse", summary="ICD-9 chapter groups or the codes under one group")

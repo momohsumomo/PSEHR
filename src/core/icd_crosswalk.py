@@ -556,7 +556,7 @@ def _resolve_icd9(code: str, text: str | None) -> Crosswalk:
     return _finish(c, found, "kept", score <= 0, text)
 
 
-def search_codes(query: str, limit: int = 25) -> list[dict]:
+def search_codes(query: str, limit: int = 25, primary: bool = False) -> list[dict]:
     """Find ICD-9 / ICD-10 by Chinese name, English title, or code.
 
     A combination ICD-9 keeps every required ICD-10 in ``secondary`` so the
@@ -654,6 +654,18 @@ def search_codes(query: str, limit: int = 25) -> list[dict]:
         )
         if len(out) >= limit:
             break
+    if primary:
+        from src.core.dx_principal import hide_from_primary_list, primary_suggestions
+
+        suggested = primary_suggestions(query)
+        seen_primary = {bare(str(row.get("nhiIcd10") or "")) for row in suggested}
+        kept = [
+            row
+            for row in out
+            if not hide_from_primary_list(str(row.get("nhiIcd10") or row.get("icd10") or ""))
+            and bare(str(row.get("nhiIcd10") or "")) not in seen_primary
+        ]
+        return (suggested + kept)[:limit]
     return out
 
 
@@ -669,7 +681,7 @@ def _icd10_rows(data: _Tables) -> list[tuple[str, str]]:
     return rows
 
 
-def search_icd10_book(query: str, limit: int = 80) -> list[dict]:
+def search_icd10_book(query: str, limit: int = 80, primary: bool = False) -> list[dict]:
     """Billable ICD-10-CM, including codes the clinic list does not use.
 
     A code prefix such as W26 stays on that code. An English word such as
@@ -745,6 +757,29 @@ def search_icd10_book(query: str, limit: int = 80) -> list[dict]:
         )
         if len(out) >= limit:
             break
+    if primary:
+        from src.core.dx_principal import hide_from_primary_list, primary_suggestions
+
+        suggested = []
+        for row in primary_suggestions(query):
+            suggested.append(
+                {
+                    "icd10": row["icd10"],
+                    "nhiIcd10": row["nhiIcd10"],
+                    "nameEn": row["nameEn"],
+                    "nameZh": row["nameZh"],
+                    "icd9": "",
+                    "secondary": row["secondary"],
+                }
+            )
+        seen_primary = {bare(str(row.get("nhiIcd10") or "")) for row in suggested}
+        kept = [
+            row
+            for row in out
+            if not hide_from_primary_list(str(row.get("nhiIcd10") or ""))
+            and bare(str(row.get("nhiIcd10") or "")) not in seen_primary
+        ]
+        return (suggested + kept)[:limit]
     return out
 
 

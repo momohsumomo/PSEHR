@@ -75,6 +75,7 @@ import { cancelRegister, writeVisitToCard, CardReadError, type CardFaultReport, 
 import { dropChartDraft } from "@/lib/chartDraft";
 import { displayCase, prescriptionDays, prescriptionOrders, storedCase } from "@/lib/caseMark";
 import { ageYearsMonths } from "@/lib/ageLabel";
+import { ARREARS_NAME_COLOR, owesPatient } from "@/lib/patientArrears";
 import { roomLabel, roomNumber } from "@/lib/roomMark";
 import { LobbyPage } from "@/pages/LobbyPage";
 import { ReferralReplyDialog, useIncomingReferralAsk } from "@/components/clinic/ReferralAcceptDialogs";
@@ -3317,6 +3318,7 @@ export function ClinicOutpatientPage() {
                 <button
                   type="button"
                   className="border border-[#808080] bg-[#FFFF80] px-2 py-0 font-bold"
+                  style={owesPatient(selected?.patientArrearage) ? { color: ARREARS_NAME_COLOR } : undefined}
                   onClick={() => openNhiCloudRx()}
                   title="開啟健保雲端藥歷"
                 >

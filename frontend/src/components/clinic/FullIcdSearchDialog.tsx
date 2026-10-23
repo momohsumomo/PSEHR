@@ -7,6 +7,7 @@ import { HIS_FONT } from "@/lib/hisTheme";
 
 type Props = {
   query: string;
+  primary?: boolean;
   onClose: () => void;
   onPick: (row: CatalogDiagnosis, query?: string) => void | string;
 };
@@ -19,19 +20,22 @@ function showCode(code: string): string {
 
 function toCatalog(hit: Icd10BookHit): CatalogDiagnosis {
   const code = (hit.nhiIcd10 || hit.icd10 || "").replace(/\./g, "").toUpperCase();
+  const cause = hit.secondary?.[0];
   return {
     icd10: code,
     nhiIcd10: code,
-    text: hit.nameEn || hit.nameZh || hit.icd10,
+    text: hit.nameZh || hit.nameEn || hit.icd10,
     nameEn: hit.nameEn || "",
     nameZh: hit.nameZh || "",
     icd9: hit.icd9 || "",
     aCode: hit.icd9 || "",
     snomed: "",
+    causeIcd10: cause?.nhiIcd10 || cause?.icd10 || "",
+    causeText: cause?.title || "",
   };
 }
 
-export function FullIcdSearchDialog({ query, onClose, onPick }: Props) {
+export function FullIcdSearchDialog({ query, primary = false, onClose, onPick }: Props) {
   const [text, setText] = useState(query);
   const [rows, setRows] = useState<Icd10BookHit[]>([]);
   const [index, setIndex] = useState(0);
@@ -57,7 +61,7 @@ export function FullIcdSearchDialog({ query, onClose, onPick }: Props) {
     let cancel = false;
     setNote("\u641c\u5c0b\u4e2d\u2026");
     const timer = window.setTimeout(() => {
-      searchIcd10Book(q)
+      searchIcd10Book(q, primary)
         .then((hits) => {
           if (cancel) return;
           setRows(hits);
@@ -71,7 +75,7 @@ export function FullIcdSearchDialog({ query, onClose, onPick }: Props) {
       cancel = true;
       window.clearTimeout(timer);
     };
-  }, [text]);
+  }, [primary, text]);
 
   const pick = (hit: Icd10BookHit) => {
     const msg = onPick(toCatalog(hit), text);

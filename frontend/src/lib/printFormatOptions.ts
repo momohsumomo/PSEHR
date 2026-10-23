@@ -147,11 +147,15 @@ export function fieldGuide(row: SciniRow): FieldGuide {
   const storedFlag = flagState(row.value || "") !== null;
   if (yesNo || /Y\/N|N\/Y/i.test(entry) || (entry.includes("\u662f\u5426") && (!(row.value || "").trim() || storedFlag))) {
     const fallback = preset || (PRINT_ON_BY_DEFAULT.has(entry) ? "Y" : "N");
+    const remindHint =
+      entry === SIMPLE_PART_ENTRY.warning
+        ? "\u5370\u85e5\u54c1\u4e3b\u6a94\u7684\u63d0\u9192\u75c5\u60a3\u5167\u5bb9\u3002\u7a7a\u767d\u7684\u85e5\u4e0d\u5370\u3002"
+        : "";
     return {
       kind: "check",
       options: [],
       fallback,
-      hint: fallback === "Y" ? "\u9810\u8a2d\uff1a\u8981\u5370" : "\u9810\u8a2d\uff1a\u4e0d\u5370",
+      hint: remindHint || (fallback === "Y" ? "\u9810\u8a2d\uff1a\u8981\u5370" : "\u9810\u8a2d\uff1a\u4e0d\u5370"),
     };
   }
   if (named.length >= 2) {

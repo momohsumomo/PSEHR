@@ -182,6 +182,8 @@ export type ApiQueueEntry = {
     cardDisc?: string;
     drugDisc?: string;
     arrears?: string;
+    /** Patient-master debt. Not the visit fee arrears above. */
+    patientArrearage?: string;
     treatFee?: string;
     note?: string;
     noteMark?: string;
@@ -587,13 +589,28 @@ export async function fetchDiagnosisCodes(prefix: string): Promise<{ icd9: strin
   return res.codes || [];
 }
 
-export async function searchDiagnosisCodes(query: string): Promise<DiagnosisSearchHit[]> {
+export async function searchDiagnosisCodes(query: string, primary = false): Promise<DiagnosisSearchHit[]> {
   const q = query.trim();
   if (!q) return [];
+  const flag = primary ? "&primary=true" : "";
   const res = await request<{ hits: DiagnosisSearchHit[] }>(
-    `/nhi/v1/diagnosis/search?q=${encodeURIComponent(q)}`,
+    `/nhi/v1/diagnosis/search?q=${encodeURIComponent(q)}${flag}`,
   );
   return res.hits || [];
+}
+
+export async function arrangeDiagnosisRows<T extends { icd10?: string; nhiIcd10?: string; text?: string; icd9?: string; id?: string }>(
+  rows: T[],
+): Promise<T[]> {
+  try {
+    const res = await request<{ rows: T[] }>("/nhi/v1/diagnosis/arrange", {
+      method: "POST",
+      body: JSON.stringify({ rows }),
+    });
+    return res.rows?.length ? res.rows : rows;
+  } catch {
+    return rows;
+  }
 }
 
 export interface Icd10BookHit {
@@ -602,13 +619,15 @@ export interface Icd10BookHit {
   nameEn: string;
   nameZh: string;
   icd9: string;
+  secondary?: { icd10: string; nhiIcd10: string; title: string }[];
 }
 
-export async function searchIcd10Book(query: string): Promise<Icd10BookHit[]> {
+export async function searchIcd10Book(query: string, primary = false): Promise<Icd10BookHit[]> {
   const q = query.trim();
   if (!q || (q.length < 2 && !/[\u4e00-\u9fff]/.test(q))) return [];
+  const flag = primary ? "&primary=true" : "";
   const res = await request<{ hits: Icd10BookHit[] }>(
-    `/nhi/v1/diagnosis/book?q=${encodeURIComponent(q)}`,
+    `/nhi/v1/diagnosis/book?q=${encodeURIComponent(q)}${flag}`,
   );
   return res.hits || [];
 }

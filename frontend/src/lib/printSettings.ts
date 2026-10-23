@@ -76,7 +76,7 @@ export const DEFAULT_PRINT_SETUPS: PrintSetup[] = [
       { id: "leftMoney", label: "\u5de6\u908a\u91d1\u984d", on: true },
       { id: "due", label: "\u61c9\u6536", on: true },
       { id: "feeTable", label: "\u53f3\u908a\u8cbb\u7528\u660e\u7d30", on: true },
-      { id: "warning", label: "\u8b66\u8a9e", on: true },
+      { id: "warning", label: "\u63d0\u9192\u75c5\u60a3\u5167\u5bb9", on: true },
     ],
   },
   {
@@ -169,7 +169,7 @@ export const SIMPLE_PRINT_PARTS: PrintPart[] = [
   { id: "leftMoney", label: "\u5de6\u908a\u91d1\u984d", on: true },
   { id: "due", label: "\u61c9\u6536", on: true },
   { id: "feeTable", label: "\u53f3\u908a\u8cbb\u7528\u660e\u7d30", on: true },
-  { id: "warning", label: "\u8b66\u8a9e", on: true },
+  { id: "warning", label: "\u63d0\u9192\u75c5\u60a3\u5167\u5bb9", on: true },
 ];
 
 export type PrintSettings = {
@@ -209,7 +209,7 @@ export const DEFAULT_PRINT_SETTINGS: PrintSettings = {
 export const PAPER_OPTIONS: { value: PrintPaperSize; label: string }[] = [
   { value: "thermal_small", label: "小張熱感（藥袋）" },
   { value: "order_dual", label: "ORDER／收據左右雙欄（114×101.6mm）" },
-  { value: "register_book", label: "掛號簿橫式（297×165mm）" },
+  { value: "register_book", label: "掛號簿橫式（297×495mm）" },
   { value: "A6", label: "A6" },
   { value: "A5", label: "A5" },
   { value: "A4", label: "A4 直向" },
@@ -260,7 +260,7 @@ export function paperCssSize(paper: PrintPaperSize): string {
     case "order_dual":
       return "114mm 101.6mm";
     case "register_book":
-      return "297mm 165mm";
+      return "297mm 495mm";
     case "thermal_small":
     default:
       return "80mm 200mm";

@@ -191,6 +191,31 @@ def consult_at(
     return code, pts, pts, 100.0
 
 
+def flat_consult_points(birthday_roc: str, on_iso: str) -> int:
+    """One amount per person for the daily upload total.
+
+    The monthly ladder (which code after the reasonable-volume cap) stays on
+    the monthly file. Here everyone gets the first band for that date, with
+    the under-4 and 75+ amounts.
+    """
+    digits = "".join(ch for ch in (birthday_roc or "") if ch.isdigit())
+    iso_birth = ""
+    if len(digits) >= 7:
+        try:
+            iso_birth = f"{int(digits[:3]) + 1911:04d}-{int(digits[3:5]):02d}-{int(digits[5:7]):02d}"
+        except ValueError:
+            iso_birth = ""
+    age = age_years(iso_birth, (on_iso or "")[:10]) if iso_birth else None
+    _cap, bands = consult_schedule(on_iso)
+    points = int(bands[0][1]) if bands else 397
+    if age is None:
+        return points
+    band = _age_band(age)
+    if band is not None and (age < 6 or age >= 75):
+        return int(band[1])
+    return points
+
+
 def consult_for(
     case: str,
     *,

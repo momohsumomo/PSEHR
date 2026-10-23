@@ -55,6 +55,7 @@ type DrugForm = {
   totalQty: string;
   basePoint: string;
   bagCc: string;
+  patientRemind: string;
   maxMonth: string;
   expiry: string;
   warnDate: string;
@@ -108,6 +109,7 @@ const emptyForm = (): DrugForm => ({
   totalQty: "",
   basePoint: "",
   bagCc: "",
+  patientRemind: "",
   maxMonth: "",
   expiry: "",
   warnDate: "",
@@ -224,6 +226,7 @@ export function DrugCatalogPage() {
       totalQty: textNum(d.totalQty),
       basePoint: textNum(d.basePoint),
       bagCc: d.warning || "",
+      patientRemind: d.patientRemind || "",
     });
   };
 
@@ -307,6 +310,7 @@ export function DrugCatalogPage() {
         clinicIndex: form.indexFlag.toUpperCase() === "Y",
         warning: form.bagCc,
         adapt: form.adapt,
+        patientRemind: form.patientRemind.trim(),
       });
       setSelectedCode(drugNo);
       setNotice("\u85e5\u54c1\u5df2\u5b58\u5165\u9662\u6240\u76ee\u9304\u8986\u5beb\uff08\u5f71\u5b50\u5eab\uff09\u3002");
@@ -510,6 +514,14 @@ export function DrugCatalogPage() {
           </HisField>
           <HisField label="藥帶主訴" wide>
             <textarea rows={2} className={hisTextareaClass} value={form.bagCc} onChange={(e) => setForm({ ...form, bagCc: e.target.value })} />
+          </HisField>
+          <HisField label="提醒病患內容" wide>
+            <input
+              className={hisInputClass}
+              maxLength={20}
+              value={form.patientRemind}
+              onChange={(e) => setForm({ ...form, patientRemind: e.target.value })}
+            />
           </HisField>
         </div>
         </div>

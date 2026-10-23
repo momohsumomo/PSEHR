@@ -92,5 +92,29 @@ class IcdCrosswalkTests(unittest.TestCase):
         self.assertIn("W260XXA", knife_zh)
 
 
+class PrincipalDiagnosisTests(unittest.TestCase):
+    def test_knife_search_leads_with_a_billable_wound(self):
+        from src.core.dx_principal import arrange_rows
+        from src.core.icd_crosswalk import search_codes
+
+        hits = search_codes("knife", primary=True)
+        self.assertTrue(hits)
+        first = hits[0]
+        self.assertTrue(first["nhiIcd10"].startswith("S61"))
+        self.assertEqual(first["secondary"][0]["nhiIcd10"], "W260XXA")
+        self.assertTrue(all(not row["nhiIcd10"].startswith(("V", "W", "X", "Y")) for row in hits))
+        names = [row["name"] for row in hits[:3]]
+        self.assertIn("\u524d\u81c2", names[1])
+        self.assertIn("\u672a\u660e\u793a", names[2])
+
+        arranged = arrange_rows([{"icd10": "W26.0XXA", "nhiIcd10": "W260XXA", "text": "\u5200\u50b7", "id": "old"}])
+        self.assertEqual(arranged[0]["nhiIcd10"], "T1490")
+        self.assertEqual(arranged[0]["text"], "\u5200\u50b7")
+        self.assertEqual(arranged[0]["id"], "")
+        self.assertEqual(arranged[1]["nhiIcd10"], "W260XXA")
+        self.assertEqual(arranged[1]["text"], "\u5200\u50b7")
+        self.assertEqual(arranged[1]["id"], "old")
+
+
 if __name__ == "__main__":
     unittest.main()

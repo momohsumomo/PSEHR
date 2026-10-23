@@ -546,6 +546,7 @@ export function PatientMasterForm({
             <RocBirthdayInput
               style={{ ...inpBase(ro), width: 140 }}
               className="font-mono"
+              placeholder=""
               value={value.familyCareDate}
               readOnly={ro}
               onChange={(familyCareDate) => set("familyCareDate", familyCareDate)}

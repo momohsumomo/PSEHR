@@ -52,9 +52,19 @@ type Props = {
   initialQuery?: string;
   /** ICD-9 already resolved to two or more ICD-10 codes. */
   preset?: { note: string; items: DxChoice[] } | null;
+  /** The principal row. A knife or fall search then offers a billable injury plus the cause. */
+  primary?: boolean;
   onClose: () => void;
   onCommit: (rows: DxChoice[], note: string) => void;
 };
+
+function causePair(hit: Hit): boolean {
+  if (hit.choices.length < 2) return false;
+  return hit.choices.slice(1).every((item) => {
+    const code = (item.nhiIcd10 || item.icd10 || "").replace(/\./g, "").toUpperCase();
+    return code.startsWith("V") || code.startsWith("W") || code.startsWith("X") || code.startsWith("Y");
+  });
+}
 
 const T = {
   title: "\u627e\u75c5\u540d",
@@ -169,6 +179,7 @@ export function DiagnosisFinder({
   catalog,
   initialQuery = "",
   preset = null,
+  primary = false,
   onClose,
   onCommit,
 }: Props) {
@@ -265,7 +276,7 @@ export function DiagnosisFinder({
     let cancelled = false;
     setLoading(true);
     const timer = window.setTimeout(() => {
-      void searchDiagnosisCodes(q)
+      void searchDiagnosisCodes(q, primary)
         .then((rows) => {
           if (!cancelled) setRemote(rows.map(fromServer));
         })
@@ -280,7 +291,7 @@ export function DiagnosisFinder({
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [open, preset, query]);
+  }, [open, preset, primary, query]);
 
   useEffect(() => {
     setIndex(0);
@@ -418,7 +429,7 @@ export function DiagnosisFinder({
     const chosen = pickedRows(list, checked);
     if (!chosen.rows.length) {
       if (!hit?.choices[0]) return;
-      onCommit([hit.choices[0]], hit.note);
+      onCommit(causePair(hit) ? hit.choices : [hit.choices[0]], hit.note);
       return;
     }
     onCommit(chosen.rows, chosen.note);
@@ -582,7 +593,9 @@ export function DiagnosisFinder({
                       setIndex(row);
                       void (async () => {
                         const next = await resolveHit(hit);
-                        if (next.choices.length === 1) onCommit([next.choices[0]], next.note);
+                        if (next.choices.length === 1 || causePair(next)) {
+                          onCommit(causePair(next) ? next.choices : [next.choices[0]], next.note);
+                        }
                       })();
                     }}
                   >

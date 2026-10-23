@@ -11,6 +11,8 @@ export interface QueueEntry {
   queueNumber: number;
   queueStatus: QueueStatus;
   patientDisplay: string;
+  /** 病人主檔欠款。有數字且不是 0，診療作業姓名用紅色。 */
+  patientArrearage?: string;
   ageSex: string;
   hasAllergyAlert: boolean;
   /** 護理／自助預診已完成 → 掛號列 💬 */
@@ -183,10 +185,12 @@ export interface RxLine {
   typeName?: string;
   /** 標。看診時勾選，雙擊部位會寫進每一個有勾的列。不寫進申報。 */
   tag?: string;
-  /** 藥品主檔適應症。列印警語時用。 */
+  /** 藥品主檔適應症。藥單不印。 */
   indication?: string;
-  /** 藥品主檔警語。列印警語時用。 */
+  /** 藥品主檔藥帶主訴。藥單不印。 */
   caution?: string;
+  /** 藥品主檔提醒病患內容。簡式勾了才印，空白跳過。 */
+  patientRemind?: string;
 }
 
 export interface LesionMedia {

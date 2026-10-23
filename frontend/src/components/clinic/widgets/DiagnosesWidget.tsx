@@ -149,6 +149,13 @@ export function DiagnosesWidget({
       });
       setSideDrafts((prev) => dropSideRow(prev, rowIndex));
     }
+    if (rowIndex === 0 && (hit.causeIcd10 || "").trim()) {
+      addDiagnosis({
+        icd10: hit.causeIcd10 || "",
+        nhiIcd10: (hit.causeIcd10 || "").replace(/\./g, ""),
+        text: hit.causeText || hit.causeIcd10 || "",
+      });
+    }
     setIcd9Open(null);
     setIcd10Open(null);
     setEditingKey(null);
@@ -180,7 +187,12 @@ export function DiagnosesWidget({
           : editingDraft
             ? draftText
             : coverText;
-    return q.trim() ? searchDiagnoses(catalog, q, 12) : [];
+    const found = q.trim() ? searchDiagnoses(catalog, q, 12) : [];
+    if (selectedIdx !== 0) return found;
+    return found.filter((row) => {
+      const code = (row.nhiIcd10 || row.icd10 || "").replace(/\./g, "").toUpperCase();
+      return Boolean(code) && !"VWXY".includes(code[0]);
+    });
   }, [catalog, cover, coverText, draftText, editingDraft, selectedIdx, sideQuery]);
 
   useEffect(() => {
@@ -867,6 +879,7 @@ export function DiagnosesWidget({
           catalog={catalog}
           field={icd9Open.field}
           query={icd9Open.query}
+          primary={icd9Open.row === 0}
           onClose={() => setIcd9Open(null)}
           onPick={(hit, query) => writeCatalog(icd9Open.row, hit, query)}
           onBrowseChapters={() => {
@@ -880,6 +893,7 @@ export function DiagnosesWidget({
         <Icd10ConditionDialog
           catalog={catalog}
           query={icd10Open.query}
+          primary={icd10Open.row === 0}
           onClose={() => setIcd10Open(null)}
           onPick={(hit, query) => writeCatalog(icd10Open.row, hit, query)}
         />
@@ -887,6 +901,7 @@ export function DiagnosesWidget({
       <DiagnosisFinder
         open={combo != null || finder != null}
         catalog={catalog}
+        primary={(combo?.row ?? finder?.row ?? selectedIdx) === 0}
         initialQuery={finder?.query || ""}
         preset={combo ? { note: combo.note, items: combo.items } : null}
         onClose={() => {

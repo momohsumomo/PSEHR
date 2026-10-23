@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { fetchPatientFamily, type FamilyMember } from "@/api/clinicApi";
 import { HIS_FONT } from "@/lib/hisTheme";
+import { ARREARS_NAME_COLOR, owesPatient } from "@/lib/patientArrears";
 
 export type WaitingQueueRow = {
   encounterId: string;
@@ -15,6 +16,7 @@ export type WaitingQueueRow = {
   hcId?: string;
   cardNo?: string;
   idNo?: string;
+  patientArrearage?: string;
 };
 
 interface OutpatientSidebarQueueProps {
@@ -129,7 +131,12 @@ export function OutpatientSidebarQueue({
                   <span className="w-8 shrink-0 font-mono tabular-nums">
                     {String(e.queueNumber ?? "\u2014").padStart(3, "0")}
                   </span>
-                  <span className="min-w-0 flex-1 truncate">{e.patientDisplay || "\u2014"}</span>
+                  <span
+                    className="min-w-0 flex-1 truncate"
+                    style={owesPatient(e.patientArrearage) ? { color: ARREARS_NAME_COLOR } : undefined}
+                  >
+                    {e.patientDisplay || "\u2014"}
+                  </span>
                   <span className="w-10 shrink-0 truncate text-[10px] opacity-90">{sexAge(e)}</span>
                   <span className="w-8 shrink-0 font-mono text-[10px] opacity-80">{cardTail(e)}</span>
                 </button>

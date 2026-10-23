@@ -81,17 +81,16 @@ export const HIS_PAPER_PROFILES: Record<HisPaperId, HisPaperProfile> = {
     defaultZoom: 100,
   },
   /**
-   * 掛號簿／現金帳-總表：橫式寬報表（對醫聖預覽截圖，約 16:9）。
-   * 非 A4；高度略短於 A4 橫向以貼近實際內容比例。
+   * 掛號簿／現金帳：寬 297mm。高度是原本 165mm 的三倍，給兩倍字用。
    */
   register_book: {
     id: "register_book",
     label: "掛號簿橫式",
     widthMm: 297,
-    heightMm: 165,
+    heightMm: 495,
     padXMm: 8,
     padYMm: 6,
-    pageCss: "297mm 165mm",
+    pageCss: "297mm 495mm",
     defaultZoom: 90,
   },
   slip: {
