@@ -57,14 +57,22 @@ export function buildConditionIntake(
   return body;
 }
 
+/** 健保碼優先。沒有健保碼時，用畫面上的快碼（例如 HQH10）。 */
+export function lineSaveCode(line: RxLine): string {
+  const nhi = (line.nhiCode || "").trim().toUpperCase();
+  if (nhi) return nhi;
+  const alias = (line.shortName || line.name || "").trim().toUpperCase();
+  return NHI_MED_RE.test(alias) ? alias : "";
+}
+
 export function buildMedicationIntake(
   encounterId: string,
   line: RxLine,
   patientIdNo?: string,
 ): Record<string, string | number | undefined> {
-  const nhiCode = line.nhiCode.trim().toUpperCase();
+  const nhiCode = lineSaveCode(line);
   if (!NHI_MED_RE.test(nhiCode)) {
-    throw new Error(`健保碼格式無效：${line.nhiCode}`);
+    throw new Error(`健保碼格式無效：${line.nhiCode || line.shortName || ""}`);
   }
   void patientIdNo;
   const body: Record<string, string | number | undefined> = {
@@ -78,6 +86,8 @@ export function buildMedicationIntake(
     payMark: line.payMark || "",
     memo: line.memo || "",
   };
+  const price = Number(line.unitPrice);
+  if (Number.isFinite(price) && price > 0) body.unitPrice = price;
   if (line.rxnorm && RXNORM_RE.test(line.rxnorm)) {
     body.rxnormCode = line.rxnorm;
   }
@@ -96,7 +106,7 @@ export function medicationSaveBody(
     subject: { reference: `Patient/${patientId}` },
     encounter: { reference: `Encounter/${encounterId}` },
     drugText: line.name,
-    nhiCode: line.nhiCode,
+    nhiCode: lineSaveCode(line) || line.nhiCode,
     dosageInstruction: [{ text: sigForSave(line) }],
     bodySite: line.bodySite || "",
     payMark: line.payMark || "",

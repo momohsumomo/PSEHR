@@ -8,7 +8,10 @@ import { skipsCloudWrite } from "@/lib/queueOrder";
 import type { DiagnosisRow, QueueEntry, RxLine } from "@/mocks/clinicMocks";
 import { formatBirthdayRoc } from "@/lib/patientSearch";
 import { displayCase } from "@/lib/caseMark";
-import { ceilCashTen, selfPayCeiling } from "@/lib/selfPayMoney";
+import { basicCopayYuan, nhiDrugPoints, visitBurdenYuan } from "@/lib/drugCopay";
+import { chargedSelfPay, selfPayCeiling } from "@/lib/selfPayMoney";
+import type { CatalogDrug } from "@/types/clinicCatalog";
+import type { CatalogUsage } from "@/utils/rxTotal";
 
 export type VisitSaveDraft = {
   caseNo: string;
@@ -64,6 +67,13 @@ function dash(v: unknown): string {
   return s.length ? s : DASH;
 }
 
+function yuanOrNull(raw: string | undefined): number | null {
+  const text = String(raw ?? "").trim();
+  if (!text || text === DASH || text === "-") return null;
+  const n = Number(text.replace(/,/g, ""));
+  return Number.isFinite(n) ? n : null;
+}
+
 export function buildVisitSaveDraft(args: {
   selected: QueueEntry | null;
   diagnoses: DiagnosisRow[];
@@ -71,35 +81,56 @@ export function buildVisitSaveDraft(args: {
   doctor?: string;
   doctorId?: string;
   consultFeeDefault?: string;
+  drugs?: CatalogDrug[];
+  usages?: CatalogUsage[];
 }): VisitSaveDraft {
   const dx0 = args.diagnoses[0];
   const days = args.currentRx.reduce((m, r) => Math.max(m, r.days || 0), 0);
-  const drugSum = args.currentRx.reduce((s, r) => {
-    const up = typeof r.unitPrice === "number" ? r.unitPrice : Number(r.unitPrice);
-    const qty = typeof r.qty === "number" ? r.qty : Number(r.qty) || 1;
-    if (!Number.isFinite(up)) return s;
-    return s + up * qty;
-  }, 0);
+  const drugPoints = nhiDrugPoints(args.currentRx, args.drugs || [], args.usages);
   const regFee =
     args.selected?.regFee && args.selected.regFee !== DASH ? String(args.selected.regFee) : DASH;
   const consult =
     args.selected?.consultFee && args.selected.consultFee !== DASH
       ? String(args.selected.consultFee)
       : args.consultFeeDefault || DASH;
-  const burden =
-    args.selected?.burdenFee && args.selected.burdenFee !== DASH
-      ? String(args.selected.burdenFee)
-      : args.selected?.copayAmt && args.selected.copayAmt !== DASH
-        ? String(args.selected.copayAmt)
-        : DASH;
+  const caseShown = displayCase(args.selected?.caseNo);
+  const dispense =
+    args.selected?.dispense && args.selected.dispense !== DASH
+      ? String(args.selected.dispense)
+      : "自行調劑";
+  const storedCopay = yuanOrNull(args.selected?.copayAmt);
+  const storedBurden = yuanOrNull(args.selected?.burdenFee);
+  const exempt = storedCopay === 0 || (storedCopay == null && storedBurden === 0);
+  const burden = args.selected
+    ? String(
+        visitBurdenYuan({
+          selfPay:
+            caseShown === "\u81ea" ||
+            args.selected.payType === "\u81ea\u8cbb" ||
+            args.selected.icException === "selfPay",
+          exempt,
+          outsideDispense: dispense.includes("\u4ea4\u4ed8"),
+          basic: basicCopayYuan(storedCopay, storedBurden),
+          lines: args.currentRx,
+          drugs: args.drugs || [],
+          usages: args.usages,
+        }),
+      )
+    : DASH;
   const doctorLabel =
     args.doctor?.trim() ||
     (args.selected as { doctorName?: string } | null)?.doctorName ||
     DASH;
-  const selfBasis = selfPayCeiling(args.currentRx);
   const storedSelf = yuanNumber(args.selected?.selfPay);
+  const selfBasis = selfPayCeiling(args.currentRx, args.drugs || [], args.usages);
+  const selfCharged = chargedSelfPay(
+    args.currentRx,
+    storedSelf,
+    args.drugs || [],
+    args.usages,
+  );
   return {
-    caseNo: displayCase(args.selected?.caseNo) || "01",
+    caseNo: caseShown || "01",
     copayCode:
       args.selected?.copayCode && args.selected.copayCode !== DASH
         ? String(args.selected.copayCode)
@@ -108,10 +139,7 @@ export function buildVisitSaveDraft(args: {
       args.selected?.payType && args.selected.payType !== DASH
         ? String(args.selected.payType)
         : "4",
-    dispense:
-      args.selected?.dispense && args.selected.dispense !== DASH
-        ? String(args.selected.dispense)
-        : "自行調劑",
+    dispense,
     rxDays: days > 0 ? String(days) : DASH,
     treatSeq:
       args.selected?.treatSeq && args.selected.treatSeq !== DASH ? args.selected.treatSeq : DASH,
@@ -127,12 +155,11 @@ export function buildVisitSaveDraft(args: {
     dxText: dx0?.text || DASH,
     icd10: dx0?.icd10 || dx0?.nhiIcd10 || DASH,
     regFee,
-    drugFee:
-      args.selected?.drugFee && args.selected.drugFee !== DASH
+    drugFee: args.currentRx.length
+      ? String(drugPoints)
+      : args.selected?.drugFee && args.selected.drugFee !== DASH
         ? String(args.selected.drugFee)
-        : drugSum > 0
-          ? String(Math.round(drugSum * 100) / 100)
-          : DASH,
+        : DASH,
     materialFee:
       args.selected?.materialFee && args.selected.materialFee !== DASH
         ? String(args.selected.materialFee)
@@ -140,8 +167,7 @@ export function buildVisitSaveDraft(args: {
     consultFee: consult,
     burden,
     selfPayBasis: String(selfBasis),
-    selfPay:
-      storedSelf != null && storedSelf > 0 ? String(ceilCashTen(storedSelf)) : String(selfBasis),
+    selfPay: String(selfCharged),
     orderCode: DASH,
     orderStaff: "",
     orderTime: "",

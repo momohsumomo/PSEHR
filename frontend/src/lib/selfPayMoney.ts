@@ -1,4 +1,8 @@
 import type { RxLine } from "@/mocks/clinicMocks";
+import type { CatalogDrug } from "@/types/clinicCatalog";
+import { billedDrugQty } from "@/lib/drugCopay";
+import { pickDrugForLine } from "@/utils/catalogRx";
+import type { CatalogUsage } from "@/utils/rxTotal";
 
 /** Cash self-pay rounds up to the next 10 yuan. 808 becomes 810. 810 stays 810. */
 export function ceilCashTen(n: number): number {
@@ -9,38 +13,102 @@ export function ceilCashTen(n: number): number {
   return Math.ceil(tens - 1e-9) * 10;
 }
 
-function counted(row: RxLine): boolean {
-  const mark = (row.payMark || (row.selfPay ? "\u81ea" : "")).trim();
-  const memo = (row.memo || "").trim();
-  return mark === "\u81ea" || mark === "\u6750" || memo.includes("[") || memo.includes("@");
+function markOf(row: RxLine): string {
+  return (row.payMark || (row.selfPay ? "\u81ea" : "")).trim();
 }
 
-/** Unrounded sum of self-pay drugs and procedures. */
-export function rawSelfPay(rows: RxLine[]): number {
+/**
+ * Cash lines are marked 自 or 材.
+ * A bracket memo counts only when the master drug is itself self-pay.
+ * Doxycycline carries a bracket but is still an NHI drug.
+ */
+function counted(row: RxLine, drugs: CatalogDrug[]): boolean {
+  const mark = markOf(row);
+  if (mark === "\u81ea" || mark === "\u6750") return true;
+  const memo = (row.memo || "").trim();
+  if (!memo.includes("[") && !memo.includes("@")) return false;
+  const hit = drugs.length ? pickDrugForLine(row, drugs) : undefined;
+  if (!hit) return true;
+  const catalogMark = String(hit.payMark || "");
+  return Boolean(hit.selfPay) || catalogMark === "\u81ea" || catalogMark === "\u6750";
+}
+
+function cashPrice(row: RxLine, drugs: CatalogDrug[]): number | null {
+  const hit = drugs.length ? pickDrugForLine(row, drugs) : undefined;
+  const self = Number(hit?.selfPayPrice);
+  if (Number.isFinite(self) && self > 0) return self;
+  const direct = Number(row.unitPrice);
+  if (Number.isFinite(direct) && direct > 0) return direct;
+  return null;
+}
+
+function enteredQty(row: RxLine): number {
+  const qty = Number(row.qty);
+  return Number.isFinite(qty) && qty > 0 ? qty : 1;
+}
+
+/** Old screen math: NHI unit price times the dose, not the billed total. */
+function legacyRaw(rows: RxLine[]): number {
   return rows.reduce((sum, row) => {
-    if (!counted(row)) return sum;
+    const mark = markOf(row);
+    const memo = (row.memo || "").trim();
+    const cash = mark === "\u81ea" || mark === "\u6750" || memo.includes("[") || memo.includes("@");
+    if (!cash) return sum;
     const price = Number(row.unitPrice);
     if (!Number.isFinite(price) || price === 0) return sum;
-    const qty = Number(row.qty);
-    const q = Number.isFinite(qty) && qty > 0 ? qty : 1;
-    return sum + price * q;
+    return sum + price * enteredQty(row);
   }, 0);
 }
 
-export function selfPayCeiling(rows: RxLine[]): number {
-  return ceilCashTen(rawSelfPay(rows));
+/**
+ * Unrounded sum of self-pay lines.
+ * Price is the master self-pay price. Quantity is the billed total.
+ * Add every line first. Do not round each line to 10.
+ */
+export function rawSelfPay(
+  rows: RxLine[],
+  drugs: CatalogDrug[] = [],
+  usages?: CatalogUsage[],
+): number {
+  return rows.reduce((sum, row) => {
+    if (!counted(row, drugs)) return sum;
+    const price = cashPrice(row, drugs);
+    if (price == null) return sum;
+    const billed = billedDrugQty(row, usages);
+    const qty = billed > 0 ? billed : enteredQty(row);
+    return sum + price * qty;
+  }, 0);
+}
+
+export function selfPayCeiling(
+  rows: RxLine[],
+  drugs: CatalogDrug[] = [],
+  usages?: CatalogUsage[],
+): number {
+  return ceilCashTen(rawSelfPay(rows, drugs, usages));
 }
 
 /**
  * The amount to charge. A hand-edited number is kept.
- * A stored number that is still the unmodified line sum is replaced by the ceiling.
+ * A stored number that is still the old dose times NHI price is replaced.
  */
-export function chargedSelfPay(rows: RxLine[], stored: number | null): number {
-  const raw = rawSelfPay(rows);
+export function chargedSelfPay(
+  rows: RxLine[],
+  stored: number | null,
+  drugs: CatalogDrug[] = [],
+  usages?: CatalogUsage[],
+): number {
+  const raw = rawSelfPay(rows, drugs, usages);
   const ceiled = ceilCashTen(raw);
   if (stored == null || !Number.isFinite(stored) || stored <= 0) return ceiled;
+  const old = legacyRaw(rows);
+  const oldCeil = ceilCashTen(old);
   const unmodified =
-    Math.abs(stored - raw) < 0.001 || Math.abs(stored - Math.round(raw)) < 0.001;
+    Math.abs(stored - raw) < 0.05 ||
+    Math.abs(stored - ceiled) < 0.05 ||
+    Math.abs(stored - old) < 0.05 ||
+    Math.abs(stored - oldCeil) < 0.05 ||
+    Math.abs(stored - Math.round(old)) < 0.05;
   if (unmodified) return ceiled;
-  return stored;
+  return ceilCashTen(stored);
 }

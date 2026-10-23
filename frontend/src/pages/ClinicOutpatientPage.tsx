@@ -1015,6 +1015,8 @@ export function ClinicOutpatientPage() {
       doctor: doctorLabel,
       doctorId,
       consultFeeDefault: defaults.consultFeeDefault,
+      drugs: catalog.drugs,
+      usages: catalog.usages,
     });
     if (liveCase?.encounterId === selectedEncounterId && liveCase.display) {
       draft.caseNo = liveCase.display;
@@ -1026,7 +1028,7 @@ export function ClinicOutpatientPage() {
       return;
     }
     setSaveLayerOpen(true);
-  }, [isChart, selectedEncounterId, selected, displayDiagnoses, currentRx, liveCase]);
+  }, [isChart, selectedEncounterId, selected, displayDiagnoses, currentRx, liveCase, catalog.drugs, catalog.usages]);
 
   useEffect(() => {
     if (!cloudAgainAsk) return;

@@ -188,18 +188,13 @@ function rightTable(rows: RxLine[], fontPx: number): string {
       .map((row) => {
         const qty = esc(row.qty == null ? "\u2014" : String(row.qty));
         const total = esc(show(row.totalAmount));
-        const use = esc(
-          [show(row.sig), row.days ? row.days + "\u5929" : "", (row.bodySite || "").trim()]
-            .filter((x) => x && x !== "\u2014")
-            .join(" "),
-        );
         const clip = "display:block;overflow:hidden;white-space:nowrap;max-height:1.15em;";
         const cell = "overflow:hidden;vertical-align:top;height:1.15em;";
-        return `<tr><td style="${cell}"><div style="${clip}">${esc(show(row.name))}</div></td><td style="${cell}width:2.6em;text-align:right;">${qty}</td><td style="${cell}width:3.4em;text-align:right;">${total}</td><td style="${cell}width:38%;"><div style="${clip}">${use || "\u2014"}</div></td></tr>`;
+        return `<tr><td style="${cell}"><div style="${clip}">${esc(show(row.name))}</div></td><td style="${cell}width:2.6em;text-align:right;">${qty}</td><td style="${cell}width:3.4em;text-align:right;">${total}</td></tr>`;
       })
-      .join("") || `<tr><td colspan="4">\u2014</td></tr>`;
+      .join("") || `<tr><td colspan="3">\u2014</td></tr>`;
   return `<table style="width:100%;border-collapse:collapse;table-layout:fixed;font-size:${fontPx}px;line-height:1.15;">
-    <tr><td style="overflow:hidden;height:1.15em;white-space:nowrap;">\u85e5\u54c1\u540d\u7a31</td><td style="width:2.6em;text-align:right;overflow:hidden;height:1.15em;white-space:nowrap;">\u6578\u91cf</td><td style="width:3.4em;text-align:right;overflow:hidden;height:1.15em;white-space:nowrap;">\u7e3d\u91cf</td><td style="width:38%;overflow:hidden;height:1.15em;white-space:nowrap;">\u670d\u7528\u65b9\u6cd5</td></tr>
+    <tr><td style="overflow:hidden;height:1.15em;white-space:nowrap;">\u85e5\u54c1\u540d\u7a31</td><td style="width:2.6em;text-align:right;overflow:hidden;height:1.15em;white-space:nowrap;">\u6578\u91cf</td><td style="width:3.4em;text-align:right;overflow:hidden;height:1.15em;white-space:nowrap;">\u7e3d\u91cf</td></tr>
     ${body}
   </table>`;
 }

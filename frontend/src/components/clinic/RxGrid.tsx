@@ -344,6 +344,7 @@ export function RxGrid({
   const [editCell, setEditCell] = useState<{ id: string; key: string } | null>(null);
   const [focusCol, setFocusCol] = useState("name");
   const [qtyDraft, setQtyDraft] = useState("");
+  const [qtyMenuText, setQtyMenuText] = useState("");
   const [coverOn, setCoverOn] = useState(false);
   const [coverText, setCoverText] = useState("");
   const editOrigin = useRef<RxLine | null>(null);
@@ -424,6 +425,7 @@ export function RxGrid({
     ev.stopPropagation();
     if (readonly || !onChangeLine) return;
     onSelectIndex?.(rowIdx);
+    if (kind === "qty") setQtyMenuText("");
     setMenu({ kind, lineId, rowIdx, x: ev.clientX, y: ev.clientY });
   };
 
@@ -912,11 +914,14 @@ export function RxGrid({
                               return;
                             }
                             if (coverOn) {
+                              if (col.key === "qty" && coverText.trim() && coverText.trim() !== ".") {
+                                commitQtyEdit(line, coverText);
+                              }
                               cancelCover();
                               return;
                             }
                             if (col.key === "qty") {
-                              qtyCancelRef.current = true;
+                              commitQtyEdit(line, qtyDraft);
                               setEditCell((cur) =>
                                 cur?.id === line.id && cur.key === "qty" ? null : cur,
                               );
@@ -1140,18 +1145,46 @@ export function RxGrid({
                           </li>
                         )))
                       : menu.kind === "qty"
-                        ? qtyPicks.map((q) => (
-                            <li key={q}>
-                              <button
-                                type="button"
-                                role="menuitem"
-                                className="flex w-full px-3 py-0.5 text-left font-mono hover:bg-[#316AC5] hover:text-white"
-                                onClick={() => applyField({ qty: q })}
-                              >
-                                {q.toFixed(2)}
-                              </button>
-                            </li>
-                          ))
+                        ? [
+                            <li key="qty-free" className="px-1 py-0.5">
+                              <input
+                                autoFocus
+                                inputMode="decimal"
+                                className="w-full border border-[#808080] bg-white px-1 font-mono text-black"
+                                placeholder={"\u4efb\u610f\u6578\u91cf"}
+                                value={qtyMenuText}
+                                onChange={(e) => {
+                                  const v = e.target.value;
+                                  if (v === "" || /^\d*\.?\d*$/.test(v)) setQtyMenuText(v);
+                                }}
+                                onKeyDown={(e) => {
+                                  e.stopPropagation();
+                                  if (e.key === "Escape") {
+                                    setMenu(null);
+                                    return;
+                                  }
+                                  if (e.key !== "Enter") return;
+                                  e.preventDefault();
+                                  const raw = qtyMenuText.trim();
+                                  if (raw === "" || raw === ".") return;
+                                  const n = Number(raw);
+                                  if (Number.isFinite(n) && n >= 0) applyField({ qty: n });
+                                }}
+                              />
+                            </li>,
+                            ...qtyPicks.map((q) => (
+                              <li key={q}>
+                                <button
+                                  type="button"
+                                  role="menuitem"
+                                  className="flex w-full px-3 py-0.5 text-left font-mono hover:bg-[#316AC5] hover:text-white"
+                                  onClick={() => applyField({ qty: q })}
+                                >
+                                  {q.toFixed(2)}
+                                </button>
+                              </li>
+                            )),
+                          ]
                         : menu.kind === "route"
                           ? routeList.map((r) => (
                               <li key={r}>

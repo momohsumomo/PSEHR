@@ -13,7 +13,7 @@ function preferIndexed(rows: CatalogDrug[]): CatalogDrug | undefined {
   return rows.find((row) => row.clinicIndex === true) || rows[0];
 }
 
-function pickDrugForLine(line: RxLine, drugs: CatalogDrug[]): CatalogDrug | undefined {
+export function pickDrugForLine(line: RxLine, drugs: CatalogDrug[]): CatalogDrug | undefined {
   const alias = String(line.shortName || "").trim().toUpperCase();
   if (alias) {
     const byAlias = preferIndexed(
@@ -89,7 +89,16 @@ function stripFatDosage(sig: string | undefined): string {
   return m ? m[1].trim() : s;
 }
 
+/** 沒有健保碼的診所藥，用快碼當存檔代號。HQH10 這種自費藥才不會存完就消失。 */
+function aliasWhenNoNhi(drug: CatalogDrug): string {
+  const nhi = String(drug.nhiCode || "").trim();
+  if (nhi) return nhi;
+  const alias = String(drug.alias || drug.shortName || "").trim().toUpperCase();
+  return /^[A-Z0-9]{4,16}$/.test(alias) ? alias : "";
+}
+
 export function catalogDrugToRxLine(drug: CatalogDrug, usages?: CatalogUsage[]): RxLine {
+  const price = Number(drug.unitPrice);
   const line: RxLine = {
     id: `rx-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
     name: drug.customName,
@@ -97,7 +106,8 @@ export function catalogDrugToRxLine(drug: CatalogDrug, usages?: CatalogUsage[]):
     sig: (drug.sig || "").trim(),
     days: Number(drug.days) > 0 ? Number(drug.days) : 0,
     qty: Number(drug.qty) > 0 ? Number(drug.qty) : undefined,
-    nhiCode: drug.nhiCode,
+    nhiCode: aliasWhenNoNhi(drug),
+    unitPrice: Number.isFinite(price) && price > 0 ? price : undefined,
     route: drug.route,
     unit: (drug.unit || "").trim(),
     selfPay: drug.payMark === "\u81ea" || drug.selfPay,

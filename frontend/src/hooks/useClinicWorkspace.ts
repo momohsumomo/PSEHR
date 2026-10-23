@@ -44,6 +44,7 @@ import {
   buildSoapIntake,
   medicationSaveBody,
   extractPatientIdNo,
+  lineSaveCode,
 } from "@/utils/nhiIntake";
 import {
   cloneRxLines,
@@ -1050,7 +1051,7 @@ export function useClinicWorkspace(options?: {
         }
       }
       for (const line of lines) {
-        if (!line.nhiCode?.trim()) continue;
+        if (!lineSaveCode(line)) continue;
         if (!isDraftId(line.id) && line.id && patientId) {
           await updateMedicationRequest(line.id, medicationSaveBody(patientId, selectedEncounterId, line));
           continue;
