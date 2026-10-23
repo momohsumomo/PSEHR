@@ -18,13 +18,9 @@ function selfMark(row: RxLine): boolean {
   return mark === "\u81ea";
 }
 
-/**
- * Cash total needs both marks: pay mark 自 and a [ note.
- * [ alone is not charged. @ still means claim and also charge.
- */
+/** Cash total needs both marks: pay mark 自 and a [ note. [ alone is not charged. */
 function counted(row: RxLine): boolean {
   const memo = (row.memo || "").trim();
-  if (memo.includes("@")) return true;
   return selfMark(row) && memo.includes("[");
 }
 
