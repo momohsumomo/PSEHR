@@ -8,24 +8,27 @@ class IcdCrosswalkTests(unittest.TestCase):
         got = map_code("707.13")
         self.assertEqual(got.icd10, "L97.309")
         self.assertEqual(got.nhi_icd10, "L97309")
-        self.assertIn("707.13", got.chief_note)
+        self.assertNotIn("707.13", got.chief_note)
         self.assertIn("\u672a\u8a18\u5de6\u53f3", got.chief_note)
         self.assertIn("\u672a\u8a18\u6df1\u5ea6", got.chief_note)
+        self.assertNotIn("\u672a\u518d\u7d30\u5206", got.chief_note)
         self.assertNotIn("L97.2", got.icd10)
 
     def test_contact_dermatitis_stays_unspecified_cause(self):
         got = map_code("692.9")
         self.assertEqual(got.icd10, "L25.9")
         self.assertNotIn(got.icd10[:4], ("L23.", "L24."))
-        self.assertIn("692.9", got.chief_note)
+        self.assertNotIn("692.9", got.chief_note)
         self.assertIn("\u672a\u5206\u904e\u654f\u6216\u523a\u6fc0", got.chief_note)
+        self.assertNotIn("\u672a\u518d\u7d30\u5206", got.chief_note)
 
     def test_solar_dermatitis_does_not_become_drug(self):
         got = map_code("692.72", text="\u65e5\u5149\u6027\u76ae\u819a\u708e")
         self.assertEqual(got.icd10, "L56.8")
         self.assertNotIn(got.icd10, ("L56.0", "L56.1", "L56.2"))
-        self.assertIn("692.72", got.chief_note)
+        self.assertNotIn("692.72", got.chief_note)
         self.assertIn("\u65e5\u5149\u6027\u76ae\u819a\u708e", got.chief_note)
+        self.assertNotIn("\u672a\u518d\u7d30\u5206", got.chief_note)
 
     def test_real_icd10_is_unchanged(self):
         got = map_code("L30.9")

@@ -1556,13 +1556,14 @@ class SqliteShadowStore(ShadowStore):
         if finished_only:
             where.append("(queue_status = 'finished' OR fhir_status = 'finished')")
         where_sql = " AND ".join(where)
-        # Case 自, or a blank/0 copay, is the self-pay row. There is no copay code 0.
+        # Self-pay is the visit case (9X / 自), not a blank copay and not a self-pay drug.
+        # A blank or 0 copay on an insurance visit is ordinary outpatient.
         # First visit is CC character 4 (1-based), the mark $, not times==1.
         # Missing card: deposit still held, or remark exactly U+62BC.
         bucket_sql = (
             "CASE "
-            "WHEN TRIM(IFNULL(case_no, '')) IN ('\u81ea', '\u81ea\u8cbb') THEN '\u81ea\u8cbb' "
-            "WHEN TRIM(IFNULL(copay_code, '')) IN ('', '0') THEN '\u81ea\u8cbb' "
+            "WHEN UPPER(TRIM(IFNULL(case_no, ''))) IN ('9X', '\u81ea', '\u81ea\u8cbb') THEN '\u81ea\u8cbb' "
+            "WHEN TRIM(IFNULL(copay_code, '')) IN ('', '0') THEN '\u4e00\u822c' "
             "ELSE copay_code END"
         )
         first_sql = "SUBSTR(IFNULL(reg_cc, ''), 4, 1) = '$'"
@@ -1603,13 +1604,15 @@ class SqliteShadowStore(ShadowStore):
             returns = conn.execute(
                 """
                 SELECT encounter_date,
-                       CASE WHEN TRIM(IFNULL(copay_code, '')) IN ('', '0') THEN '\u81ea\u8cbb'
+                       CASE WHEN UPPER(TRIM(IFNULL(case_no, ''))) IN ('9X', '\u81ea', '\u81ea\u8cbb') THEN '\u81ea\u8cbb'
+                            WHEN TRIM(IFNULL(copay_code, '')) IN ('', '0') THEN '\u4e00\u822c'
                             ELSE copay_code END,
                        COUNT(*), COALESCE(SUM(amount), 0)
                 FROM cash_return
                 WHERE encounter_date >= ? AND encounter_date <= ?
                 GROUP BY encounter_date,
-                         CASE WHEN TRIM(IFNULL(copay_code, '')) IN ('', '0') THEN '\u81ea\u8cbb'
+                         CASE WHEN UPPER(TRIM(IFNULL(case_no, ''))) IN ('9X', '\u81ea', '\u81ea\u8cbb') THEN '\u81ea\u8cbb'
+                              WHEN TRIM(IFNULL(copay_code, '')) IN ('', '0') THEN '\u4e00\u822c'
                               ELSE copay_code END
                 """,
                 (d0, d1),

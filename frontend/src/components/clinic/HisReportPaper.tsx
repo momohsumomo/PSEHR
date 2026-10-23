@@ -16,12 +16,12 @@ function cell(v: unknown): string {
 /** 統計報表紙面：表頭、明細、合計列（疾病／人數／藥品／診療／申報統計共用）。 */
 export function HisReportPaper({ report, clinicName, rangeLabel }: Props) {
   return (
-    <div className="p-4 text-black" style={{ fontFamily: HIS_FONT, fontSize: 12 }}>
-      <div className="mb-1 text-center text-[15px] font-bold">
+    <div className="p-4 text-black" style={{ fontFamily: HIS_FONT, fontSize: 24 }}>
+      <div className="mb-1 text-center text-[30px] font-bold">
         {clinicName ? `${clinicName}　` : ""}
         {report.title}
       </div>
-      {rangeLabel && <div className="mb-2 text-center text-[12px]">看診日期：{rangeLabel}</div>}
+      {rangeLabel && <div className="mb-2 text-center text-[24px]">看診日期：{rangeLabel}</div>}
       <table className="w-full border-collapse">
         <thead>
           <tr>
@@ -72,7 +72,7 @@ export function HisReportPaper({ report, clinicName, rangeLabel }: Props) {
           </tr>
         </tfoot>
       </table>
-      {report.note && <p className="mt-2 text-[11px] text-[#444]">{report.note}</p>}
+      {report.note && <p className="mt-2 text-[22px] text-[#444]">{report.note}</p>}
     </div>
   );
 }

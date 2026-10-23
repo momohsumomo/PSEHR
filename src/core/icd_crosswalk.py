@@ -7,8 +7,8 @@ Sources (public CMS/CDC files under data/icd/):
 
 A typed ICD-10 is returned as itself. A typed ICD-9 always yields one
 billable ICD-10. Laterality, depth, and a cause the chart does not state
-are not invented. When the ICD-10 title does not carry the ICD-9 meaning,
-chief_note is one sentence for the chart's chief complaint.
+are not invented. chief_note is only the part of the ICD-9 that is more
+precise than the ICD-10 title. The same disease is not copied into the complaint.
 """
 
 from __future__ import annotations
@@ -240,13 +240,30 @@ def _note_suffix(source_title: str, target_title: str, kind: str) -> str:
         parts.append("\u672a\u5206\u904e\u654f\u6216\u523a\u6fc0")
     elif "unspecified cause" in tgt and "unspecified cause" not in src:
         parts.append("\u672a\u5206\u539f\u56e0")
-    if not parts and kind in ("approximate", "choice"):
-        parts.append("\u672a\u518d\u7d30\u5206")
     if kind == "nomap":
         parts.append("\u6b64\u78bc\u5728 ICD-10 \u7121\u540c\u7fa9\u78bc")
     if not parts:
         return ""
     return "\uff0c" + "\u8207".join(parts)
+
+
+def _chief_note(icd9: str, label: str, src_title: str, target_title: str, kind: str, suffix: str) -> str:
+    """Only the ICD-9 wording the ICD-10 title does not already carry."""
+    if kind in ("icd10", "identical"):
+        return ""
+    gap = suffix.lstrip("\uff0c").strip()
+    finer = bool(_tokens(src_title) - _tokens(target_title))
+    if kind == "nomap":
+        head = " ".join(part for part in (f"ICD-9 {dot_icd9(icd9)}", label.strip()) if part)
+        if gap and gap not in head:
+            return f"{head}\uff0c{gap}" if head else gap
+        return head
+    parts: list[str] = []
+    if finer and label.strip():
+        parts.append(label.strip())
+    if gap:
+        parts.append(gap)
+    return "\uff0c".join(parts)
 
 
 @dataclass
@@ -356,10 +373,9 @@ def _finish(
         label = shown
     else:
         label = tables().zh.get(icd9) or src_title or dot_icd9(icd9)
-    suffix = _note_suffix(src_title, _title_of(nhi), kind)
-    note = ""
-    if kind not in ("icd10", "identical"):
-        note = f"ICD-9 {dot_icd9(icd9)} {label}{suffix}".strip()
+    target_title = _title_of(nhi)
+    suffix = _note_suffix(src_title, target_title, kind)
+    note = _chief_note(icd9, label, src_title, target_title, kind, suffix)
     secs = []
     for sec in secondary or []:
         sc = bare(sec)

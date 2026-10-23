@@ -8,7 +8,7 @@ type Props = {
 
 const mono: CSSProperties = {
   fontFamily: "Consolas, 'Courier New', " + HIS_FONT,
-  fontSize: 12,
+  fontSize: 24,
   color: "#000",
 };
 
@@ -42,7 +42,7 @@ export function HisRegisterBookPaper({ report }: Props) {
   const t = report.totals;
   return (
     <div style={{ ...mono, minHeight: "100%" }}>
-      <div style={{ textAlign: "center", fontSize: 16, fontWeight: 700, marginBottom: 6, fontFamily: HIS_FONT }}>
+      <div style={{ textAlign: "center", fontSize: 32, fontWeight: 700, marginBottom: 6, fontFamily: HIS_FONT }}>
         {"<< 掛號簿 >>"} {report.clinicName}
       </div>
       <div style={{ textAlign: "center", marginBottom: 4, fontFamily: HIS_FONT }}>
@@ -51,7 +51,7 @@ export function HisRegisterBookPaper({ report }: Props) {
         {"　　"}科別: {report.dept}
         {"　　"}案件: {report.caseFilter}
       </div>
-      <div style={{ textAlign: "right", marginBottom: 8, fontSize: 11, fontFamily: HIS_FONT }}>
+      <div style={{ textAlign: "right", marginBottom: 8, fontSize: 22, fontFamily: HIS_FONT }}>
         列印: {report.printedAtRoc} Time: {report.printedTime} （報表編號: {report.reportNo}）
       </div>
 
@@ -59,7 +59,7 @@ export function HisRegisterBookPaper({ report }: Props) {
         style={{
           width: "100%",
           borderCollapse: "collapse",
-          fontSize: 11,
+          fontSize: 22,
           tableLayout: "fixed",
         }}
       >
@@ -127,7 +127,7 @@ export function HisRegisterBookPaper({ report }: Props) {
         </tbody>
       </table>
 
-      <div style={{ marginTop: 14, fontFamily: HIS_FONT, fontSize: 12 }}>
+      <div style={{ marginTop: 14, fontFamily: HIS_FONT, fontSize: 24 }}>
         <div style={{ marginBottom: 8 }}>
           應收現金 : {fmt(report.cashReceivable)} 元
           <span style={{ display: "inline-block", width: "4rem" }} />
@@ -137,7 +137,7 @@ export function HisRegisterBookPaper({ report }: Props) {
           style={{
             borderCollapse: "collapse",
             fontFamily: HIS_FONT,
-            fontSize: 12,
+            fontSize: 24,
             marginTop: 4,
           }}
         >
@@ -175,7 +175,7 @@ export function HisRegisterBookPaper({ report }: Props) {
         </table>
       </div>
 
-      <div style={{ textAlign: "center", marginTop: 24, fontSize: 11, fontFamily: HIS_FONT }}>Page: 1</div>
+      <div style={{ textAlign: "center", marginTop: 24, fontSize: 22, fontFamily: HIS_FONT }}>Page: 1</div>
     </div>
   );
 }

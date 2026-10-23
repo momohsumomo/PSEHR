@@ -57,6 +57,7 @@ const COPAY_LABEL: Record<string, string> = {
   D12: "一般門診",
   D24: "一般門診加藥品",
   "\u81ea\u8cbb": "\u81ea\u8cbb\u770b\u8a3a",
+  "\u4e00\u822c": "\u4e00\u822c\u9580\u8a3a",
 };
 
 function n(v: unknown): number {
@@ -512,12 +513,13 @@ function emptyBucket(code: string): RegisterBookCaseBucket {
   };
 }
 
-/** 掛號簿身分。案件自費，或部代空白，都算自費看診。沒有部代 0 這一列。 */
+/** 掛號簿身分。自費看診只看案件（9X／自）。部代空白是一般健保，自費藥不改這次看診的身分。 */
 function identityBucket(copayRaw: string, caseRaw: string): string {
   const copay = copayRaw.trim();
   const caseNo = caseRaw.trim();
-  if (caseNo === "\u81ea" || caseNo === "\u81ea\u8cbb") return "\u81ea\u8cbb";
-  if (!copay || copay === "0") return "\u81ea\u8cbb";
+  const caseUp = caseNo.toUpperCase();
+  if (caseUp === "9X" || caseNo === "\u81ea" || caseNo === "\u81ea\u8cbb") return "\u81ea\u8cbb";
+  if (!copay || copay === "0") return "\u4e00\u822c";
   return copay;
 }
 

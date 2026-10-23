@@ -295,7 +295,14 @@ function BodySiteDialog({
           })}
         </div>
         <div className="flex justify-end gap-2 px-2 py-1">
-          <button type="button" className="border bg-[#D4D0C8] px-2 py-0.5 text-xs" onClick={() => setPicked([])}>
+          <button
+            type="button"
+            className="border bg-[#D4D0C8] px-2 py-0.5 text-xs"
+            onClick={() => {
+              setPicked([]);
+              setTyped("");
+            }}
+          >
             {"\u6e05\u9664"}
           </button>
           <button
@@ -1297,7 +1304,7 @@ export function RxGrid({
             }}
             onApply={(next) => {
               const ids = siteTargets.length ? siteTargets : [siteLineId];
-              for (const id of ids) onChangeLine(id, { bodySite: next });
+              for (const id of ids) onChangeLine(id, { bodySite: next, tag: "" });
             }}
           />
         )

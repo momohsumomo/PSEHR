@@ -49,14 +49,14 @@ const inputCls =
 const labelBlue = "font-bold";
 
 const labelStyle: CSSProperties = {
-  fontSize: HIS.fs.secondary,
+  fontSize: HIS.fs.secondary * 2,
   color: HIS.labelText,
   fontFamily: HIS_FONT,
 };
 
 const inputStyle: CSSProperties = {
-  fontSize: HIS.fs.body,
-  height: HIS.row.formField,
+  fontSize: HIS.fs.body * 2,
+  height: HIS.row.formField * 2,
   fontFamily: HIS_FONT,
 };
 
@@ -105,7 +105,7 @@ function YesNo({
   onChange: (v: boolean) => void;
 }) {
   return (
-    <span className="ml-auto flex items-center gap-2" style={{ fontSize: HIS.fs.body, fontFamily: HIS_FONT }}>
+    <span className="ml-auto flex items-center gap-2" style={{ fontSize: HIS.fs.body * 2, fontFamily: HIS_FONT }}>
       <span className={labelBlue} style={labelStyle}>{"=> 選擇是否統計"}</span>
       <label className="flex items-center gap-0.5">
         <input type="radio" checked={value} onChange={() => onChange(true)} />
@@ -372,7 +372,7 @@ export function BillingPage() {
   return (
     <div
       className="flex h-screen flex-col overflow-hidden text-black"
-      style={{ background: "#808080", fontFamily: HIS_FONT, fontSize: HIS.fs.body }}
+      style={{ background: "#808080", fontFamily: HIS_FONT, fontSize: HIS.fs.body * 2 }}
     >
       {/* 模擬蓋在大廳上的統計對話框 */}
       <div
@@ -467,7 +467,7 @@ export function BillingPage() {
               <button
                 type="button"
                 className="border px-2 py-0.5 font-bold"
-                style={{ borderColor: border, background: chrome, fontSize: HIS.fs.secondary }}
+                style={{ borderColor: border, background: chrome, fontSize: HIS.fs.secondary * 2 }}
                 onClick={() => setStatus("病名列出清單：請先在條件填關鍵字（殼）。")}
               >
                 列出清單
@@ -549,7 +549,7 @@ export function BillingPage() {
                     className={`flex items-center gap-1 ${labelBlue}`}
                     style={{
                       ...labelStyle,
-                      fontSize: emphasize ? HIS.fs.body : HIS.fs.secondary,
+                      fontSize: emphasize ? HIS.fs.body * 2 : HIS.fs.secondary * 2,
                       fontWeight: emphasize ? 700 : 600,
                     }}
                   >
@@ -572,7 +572,7 @@ export function BillingPage() {
                 <button
                   type="button"
                   className="border px-2 py-0.5 font-bold"
-                  style={{ borderColor: border, background: "#E8E8E8", fontSize: HIS.fs.secondary }}
+                  style={{ borderColor: border, background: "#E8E8E8", fontSize: HIS.fs.secondary * 2 }}
                   onClick={() => setStatus("當日就診明細：請用現金統計＋明細預覽。")}
                 >
                   當日就診明細
@@ -596,7 +596,7 @@ export function BillingPage() {
                 <button
                   type="button"
                   className="border px-2 py-0.5 font-bold"
-                  style={{ borderColor: border, background: chrome, fontSize: HIS.fs.secondary }}
+                  style={{ borderColor: border, background: chrome, fontSize: HIS.fs.secondary * 2 }}
                   onClick={() => setStatus("列出清單（殼）。")}
                 >
                   列出清單
@@ -658,7 +658,7 @@ export function BillingPage() {
         {/* E. 底列 */}
         <div
           className="flex shrink-0 items-center gap-2 border-t px-2 py-0.5"
-          style={{ borderColor: HIS.chromeBorder, background: HIS.chrome, fontSize: HIS.fs.secondary }}
+          style={{ borderColor: HIS.chromeBorder, background: HIS.chrome, fontSize: HIS.fs.secondary * 2 }}
         >
           <span className="min-w-0 flex-1 truncate">
             {status}

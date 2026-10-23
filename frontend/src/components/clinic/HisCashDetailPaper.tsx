@@ -12,7 +12,7 @@ type Props = {
 
 const mono: CSSProperties = {
   fontFamily: "Consolas, 'Courier New', " + HIS_FONT,
-  fontSize: 12,
+  fontSize: 24,
   color: "#000",
 };
 
@@ -44,9 +44,9 @@ const COLS = [
 
 const NUM = new Set(["押金", "部額", "藥優", "掛費", "已收", "欠款", "雜費", "還款", "還單"]);
 
-/** 一頁約 11 人，對掛號簿橫式紙。最後一頁留合計與人次，最多 7 列。 */
-const ROWS_PER_PAGE = 11;
-const LAST_PAGE_MAX = 7;
+/** 字是原來的兩倍，紙張仍是掛號簿橫式。一頁約 5 人。最後一頁留合計與人次，最多 3 列。 */
+const ROWS_PER_PAGE = 5;
+const LAST_PAGE_MAX = 3;
 
 type Money = {
   deposit: number;
@@ -131,21 +131,21 @@ export function HisCashDetailPaper({ report, rows, pageNo = 1, isLast = true }: 
 
   return (
     <div style={{ ...mono, minHeight: "100%" }}>
-      <div style={{ textAlign: "center", fontSize: 16, fontWeight: 700, marginBottom: 6, fontFamily: HIS_FONT }}>
+      <div style={{ textAlign: "center", fontSize: 32, fontWeight: 700, marginBottom: 6, fontFamily: HIS_FONT }}>
         {"<< 掛號簿 >>"} {report.clinicName}
       </div>
-      <div style={{ textAlign: "center", marginBottom: 2, fontFamily: HIS_FONT, fontSize: 12 }}>
+      <div style={{ textAlign: "center", marginBottom: 2, fontFamily: HIS_FONT, fontSize: 24 }}>
         期間: {report.dateFromRoc}～{report.dateToRoc}
         {"　"}時段: {report.shiftLabel}
         {"　"}醫師: {report.doctor}
         {"　"}科別: {report.dept}
         {"　"}案件: {report.caseFilter}
       </div>
-      <div style={{ textAlign: "center", marginBottom: 8, fontSize: 11, fontFamily: HIS_FONT }}>
+      <div style={{ textAlign: "center", marginBottom: 8, fontSize: 22, fontFamily: HIS_FONT }}>
         付印:{report.printedAtRoc} Time:{report.printedTime} （報表編號: {report.reportNo}）
       </div>
 
-      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
+      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 22 }}>
         <thead>
           <tr>
             {COLS.map((c) => (
@@ -206,10 +206,10 @@ export function HisCashDetailPaper({ report, rows, pageNo = 1, isLast = true }: 
         </tbody>
       </table>
 
-      <div style={{ textAlign: "center", marginTop: 8, fontFamily: HIS_FONT, fontSize: 12 }}>Page: {pageNo}</div>
+      <div style={{ textAlign: "center", marginTop: 8, fontFamily: HIS_FONT, fontSize: 24 }}>Page: {pageNo}</div>
 
       {isLast ? (
-        <div style={{ marginTop: 10, fontFamily: HIS_FONT, fontSize: 12 }}>
+        <div style={{ marginTop: 10, fontFamily: HIS_FONT, fontSize: 24 }}>
           <div style={{ marginBottom: 8 }}>
             應收現金 : {fmt(report.cashReceivable)} 元
             <span style={{ display: "inline-block", width: "2rem" }} />
