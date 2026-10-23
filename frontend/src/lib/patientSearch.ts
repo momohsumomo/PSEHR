@@ -41,9 +41,10 @@ export function formatBirthdayRoc(raw: string | undefined): string {
     const y = Number(iso[1]) - 1911;
     if (y > 0) return `${y}.${iso[2]}.${iso[3]}`;
   }
-  const dotted = text.match(/^(\d{1,3})[./-](\d{1,2})[./-](\d{1,2})$/);
+  const dotted = text.match(/^(\d{1,4})[./-](\d{1,2})[./-](\d{1,2})$/);
   if (dotted) {
-    const y = Number(dotted[1]);
+    let y = Number(dotted[1]);
+    if (y > 1911) y -= 1911;
     const m = Number(dotted[2]);
     const d = Number(dotted[3]);
     if (y > 0 && m >= 1 && m <= 12 && d >= 1 && d <= 31) {
@@ -51,6 +52,17 @@ export function formatBirthdayRoc(raw: string | undefined): string {
     }
   }
   const digits = text.replace(/\D/g, "");
+  if (digits.length === 8) {
+    const gy = Number(digits.slice(0, 4));
+    if (gy > 1911) {
+      const y = gy - 1911;
+      const m = Number(digits.slice(4, 6));
+      const d = Number(digits.slice(6, 8));
+      if (y > 0 && m >= 1 && m <= 12 && d >= 1 && d <= 31) {
+        return `${y}.${String(m).padStart(2, "0")}.${String(d).padStart(2, "0")}`;
+      }
+    }
+  }
   if (digits.length >= 7) {
     const y = Number(digits.slice(0, 3));
     const m = Number(digits.slice(3, 5));

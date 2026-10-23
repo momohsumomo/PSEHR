@@ -1,7 +1,8 @@
 import { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useClinicWorkspace } from "@/hooks/useClinicWorkspace";
-import { cancelRegister, CardReadError, importCareOnline, type CardFaultReport } from "@/api/clinicApi";
+import { cancelRegister, CardReadError, fetchStaff, importCareOnline, type CardFaultReport } from "@/api/clinicApi";
+import { pharmacistDisplayName, type ClinicStaffLike } from "@/lib/doctorName";
 import { IcCardInfoDialog } from "@/components/clinic/IcCardInfoDialog";
 import { ChangePharmacistDialog } from "@/components/clinic/ChangePharmacistDialog";
 import { emptyRegisterForm, type RegisterEditForm } from "@/components/clinic/RegisterEditDialog";
@@ -214,6 +215,12 @@ export function RegisterPage() {
   const incoming = useIncomingReferralAsk();
 
   const [localError, setLocalError] = useState<string | null>(null);
+  const [staffPeople, setStaffPeople] = useState<ClinicStaffLike[]>([]);
+  useEffect(() => {
+    void fetchStaff()
+      .then((rows) => setStaffPeople(rows))
+      .catch(() => setStaffPeople([]));
+  }, []);
   const [busy, setBusy] = useState(false);
   const [birthdayQ, setBirthdayQ] = useState("");
   const [idNoQ, setIdNoQ] = useState("");
@@ -1215,7 +1222,7 @@ export function RegisterPage() {
           {careBusy ? "載入中…" : "載入照護線上"}
         </button>
         <span>
-          看診中: {roomLabel(selected?.room || "1")} {selected?.pharmacist || lastPharmacist() || "—"}
+          看診中: {roomLabel(selected?.room || "1")} {pharmacistDisplayName(selected?.pharmacist || lastPharmacist(), staffPeople, selected?.pharmacist || lastPharmacist()) || "—"}
         </span>
         <label className="flex items-center gap-1">
           <span>插號</span>
@@ -1330,7 +1337,7 @@ export function RegisterPage() {
         open={patientEditOpen}
         onClose={closePatientEdit}
         seed={patientEditSeed}
-        onSaved={() => void refreshQueue()}
+        onSaved={() => navigate("/clinic")}
       />
 
       <PatientFinderDialog

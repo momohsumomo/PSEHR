@@ -4,39 +4,47 @@ export type ClinicStaffLike = {
   name: string;
   role?: string;
   status?: string;
+  certNo?: string;
+  nhiId?: string;
 };
 
 function hasChinese(text: string): boolean {
   return /[\u4e00-\u9fff]/.test(text);
 }
 
-/** Receipts print the person's name. Visits often store the staff id, like ys- plus a login code. */
+function staffName(value: string, people: ClinicStaffLike[]): string {
+  const id = value.trim();
+  if (!id) return "";
+  const hit = people.find(
+    (person) =>
+      person.id === id ||
+      person.name === id ||
+      (person.certNo && person.certNo === id) ||
+      (person.nhiId && person.nhiId === id),
+  );
+  return String(hit?.name || "").trim();
+}
+
+/** Receipts and pickers show the person's name. Visits may still store a staff id. */
 export function pharmacistDisplayName(
   raw: string | undefined | null,
   staff?: ClinicStaffLike[],
   fallback?: string,
 ): string {
   const people = staff || [];
-  const fromId = (value: string) => {
-    const id = value.trim();
-    if (!id) return "";
-    const hit = people.find((person) => person.id === id);
-    const name = String(hit?.name || "").trim();
-    return hasChinese(name) ? name : "";
-  };
   const text = String(raw || "").trim();
   if (text) {
-    const named = fromId(text);
+    const named = staffName(text, people);
     if (named) return named;
     if (hasChinese(text)) return text;
   }
   const other = String(fallback || "").trim();
   if (other) {
-    const named = fromId(other);
+    const named = staffName(other, people);
     if (named) return named;
     if (hasChinese(other)) return other;
   }
-  return hasChinese(text) ? text : other;
+  return "";
 }
 
 export function doctorDisplayName(raw: string | undefined | null, doctorId?: string): string {

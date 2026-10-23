@@ -186,6 +186,14 @@ function patchWithTotal(
 /** Yisheng-style Rx grid: pickers on right-click for qty/route/sig/days */
 type BodyPhrase = { code: string; name: string };
 
+const strokeOrder = new Intl.Collator("zh-Hant-u-co-stroke");
+
+function byStroke(a: BodyPhrase, b: BodyPhrase): number {
+  const byName = strokeOrder.compare(a.name, b.name);
+  if (byName) return byName;
+  return strokeOrder.compare(a.code, b.code);
+}
+
 function splitSites(value: string): string[] {
   return value.split(/\s+/).map((s) => s.trim()).filter(Boolean);
 }
@@ -220,9 +228,9 @@ function BodySiteDialog({
     };
   }, []);
   const q = query.trim();
-  const shown = phrases.filter(
-    (row) => !q || row.name.includes(q) || row.code.includes(q),
-  );
+  const shown = phrases
+    .filter((row) => !q || row.name.includes(q) || row.code.includes(q))
+    .sort(byStroke);
   const toggle = (name: string) => {
     setPicked((prev) => {
       const next = prev.includes(name) ? prev.filter((item) => item !== name) : [...prev, name];
@@ -344,6 +352,9 @@ export function RxGrid({
   const [editCell, setEditCell] = useState<{ id: string; key: string } | null>(null);
   const [focusCol, setFocusCol] = useState("name");
   const [qtyDraft, setQtyDraft] = useState("");
+  const [daysDraft, setDaysDraft] = useState("");
+  const daysDraftRef = useRef("");
+  const daysEditRef = useRef("");
   const [qtyMenuText, setQtyMenuText] = useState("");
   const [coverOn, setCoverOn] = useState(false);
   const [coverText, setCoverText] = useState("");
@@ -463,6 +474,12 @@ export function RxGrid({
       if (key === "qty") {
         setQtyDraft(line.qty != null && Number(line.qty) > 0 ? String(line.qty) : "");
       }
+      if (key === "days") {
+        const shown = line.days != null && Number(line.days) > 0 ? String(line.days) : "";
+        daysDraftRef.current = shown;
+        daysEditRef.current = line.id;
+        setDaysDraft(shown);
+      }
     }
     setEditCell({ id: line.id, key });
   };
@@ -470,14 +487,14 @@ export function RxGrid({
   const discardEdit = (line: RxLine, key: string) => {
     const origin = editOrigin.current;
     if (!origin || origin.id !== line.id) return;
-    if (key === "qty") {
+    if (key === "qty" || key === "days") {
       qtyCancelRef.current = true;
+      if (key === "days") daysEditRef.current = "";
       return;
     }
     const back: Partial<RxLine> = {};
     if (key === "name" || key === "shortName") back.name = origin.name;
     else if (key === "sig") back.sig = origin.sig;
-    else if (key === "days") back.days = origin.days;
     else if (key === "route") back.route = origin.route;
     else return;
     onChangeLine?.(line.id, back);
@@ -486,8 +503,25 @@ export function RxGrid({
   const cancelCover = () => {
     setCoverOn(false);
     setCoverText("");
+    daysEditRef.current = "";
     onCoverQuery?.(null);
     setEditCell(null);
+  };
+
+  const commitDaysEdit = (line: RxLine, text: string): Partial<RxLine> | null => {
+    daysEditRef.current = "";
+    const raw = text.trim();
+    if (raw === "") {
+      const patch = patchWithTotal(line, { days: 0 }, usages);
+      onChangeLine?.(line.id, patch);
+      return patch;
+    }
+    if (!/^\d+$/.test(raw)) return null;
+    const n = Number(raw);
+    if (!Number.isFinite(n) || n < 0) return null;
+    const patch = patchWithTotal(line, { days: n }, usages);
+    onChangeLine?.(line.id, patch);
+    return patch;
   };
 
   const cancelOpenEdit = () => {
@@ -706,7 +740,10 @@ export function RxGrid({
                     }
                     if (key === "days") {
                       if (!/\d/.test(e.key)) return;
-                      onChangeLine(line.id, patchWithTotal(line, { days: Number(e.key) }, usages));
+                      const next = daysEditRef.current === line.id ? `${daysDraftRef.current}${e.key}` : e.key;
+                      daysEditRef.current = line.id;
+                      daysDraftRef.current = next;
+                      setDaysDraft(next);
                       setCoverOn(false);
                       setEditCell({ id: line.id, key });
                       return;
@@ -859,9 +896,7 @@ export function RxGrid({
                               : col.key === "qty"
                               ? qtyDraft
                               : col.key === "days"
-                                ? line.days != null && Number(line.days) > 0
-                                  ? String(line.days)
-                                  : ""
+                                ? daysDraft
                                 : col.key === "sig"
                                   ? line.sig || ""
                                   : col.key === "route"
@@ -880,10 +915,11 @@ export function RxGrid({
                               return;
                             }
                             if (col.key === "days") {
-                              onChangeLine?.(
-                                line.id,
-                                patchWithTotal(line, { days: Number(v) || 0 }, usages),
-                              );
+                              if (v === "" || /^\d+$/.test(v)) {
+                                daysDraftRef.current = v;
+                                daysEditRef.current = line.id;
+                                setDaysDraft(v);
+                              }
                             } else if (col.key === "sig") {
                               onChangeLine?.(
                                 line.id,
@@ -916,6 +952,8 @@ export function RxGrid({
                             if (coverOn) {
                               if (col.key === "qty" && coverText.trim() && coverText.trim() !== ".") {
                                 commitQtyEdit(line, coverText);
+                              } else if (col.key === "days" && /^\d+$/.test(coverText.trim())) {
+                                commitDaysEdit(line, coverText);
                               }
                               cancelCover();
                               return;
@@ -924,6 +962,13 @@ export function RxGrid({
                               commitQtyEdit(line, qtyDraft);
                               setEditCell((cur) =>
                                 cur?.id === line.id && cur.key === "qty" ? null : cur,
+                              );
+                              return;
+                            }
+                            if (col.key === "days") {
+                              commitDaysEdit(line, daysDraftRef.current || daysDraft);
+                              setEditCell((cur) =>
+                                cur?.id === line.id && cur.key === "days" ? null : cur,
                               );
                               return;
                             }
@@ -965,10 +1010,7 @@ export function RxGrid({
                                 } else if (col.key === "qty") {
                                   commitQtyEdit(line, text);
                                 } else if (col.key === "days") {
-                                  onChangeLine?.(
-                                    line.id,
-                                    patchWithTotal(line, { days: Number(text) || 0 }, usages),
-                                  );
+                                  commitDaysEdit(line, text);
                                 } else if (col.key === "sig") {
                                   onChangeLine?.(
                                     line.id,
@@ -986,6 +1028,7 @@ export function RxGrid({
                               }
                               const qtyPatch =
                                 col.key === "qty" ? commitQtyEdit(line, qtyDraft) : null;
+                              if (col.key === "days") commitDaysEdit(line, daysDraftRef.current || daysDraft);
                               setEditCell(null);
                               if (isDraft) onCommitDraft?.(line.id, undefined, qtyPatch ?? undefined);
                             }

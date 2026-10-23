@@ -358,6 +358,7 @@ export function PatientListPage() {
         }
         setSuccess("資料修改存檔成功！");
         setMode("browse");
+        navigate("/clinic");
       } else if (mode === "add") {
         if (apiMode) {
           const fhirPayload = patientRecordToFhir(editForm);
@@ -404,6 +405,7 @@ export function PatientListPage() {
         }
         setSuccess("建立新病患存檔成功！");
         setMode("browse");
+        navigate("/clinic");
       }
       setShowPinModal(false);
       setPinInput("");

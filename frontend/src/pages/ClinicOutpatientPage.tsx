@@ -89,7 +89,7 @@ import { openDepositSlip } from "@/lib/visitReceiptPrint";
 import { VisitPrintDialog } from "@/components/clinic/VisitPrintDialog";
 import { buildSimpleSlipHtml, storedSelfPayText, visitCashParts } from "@/lib/simpleSlip";
 import { buildDepositSlipHtml } from "@/lib/clinicPrintDocs";
-import { doctorDisplayName, pharmacistDisplayName, pickClinicDoctor } from "@/lib/doctorName";
+import { doctorDisplayName, pharmacistDisplayName, pickClinicDoctor, type ClinicStaffLike } from "@/lib/doctorName";
 import { openNhiCloudRx } from "@/lib/nhiCloud";
 import { registerHubAction } from "@/lib/registerHubActions";
 import { RefundDepositDialog } from "@/components/clinic/RefundDepositDialog";
@@ -298,6 +298,12 @@ export function ClinicOutpatientPage() {
   const [clinicTab, setClinicTab] = useState<ClinicTab>(seekBoot ? "chart" : "list");
   const [registerOptionsOpen, setRegisterOptionsOpen] = useState(false);
   const [patientEditOpen, setPatientEditOpen] = useState(false);
+  const [staffPeople, setStaffPeople] = useState<ClinicStaffLike[]>([]);
+  useEffect(() => {
+    void fetchStaff()
+      .then((rows) => setStaffPeople(rows))
+      .catch(() => setStaffPeople([]));
+  }, []);
   const [finderPatient, setFinderPatient] = useState<PatientEditSeed | null>(null);
   const [leaveToLobby, setLeaveToLobby] = useState(false);
   const [liveCase, setLiveCase] = useState<{ encounterId: string; display: string } | null>(null);
@@ -2663,7 +2669,12 @@ export function ClinicOutpatientPage() {
     材料費: selected?.materialFee || confirmForm.materialFee || "",
     診察費: selected?.consultFee || confirmForm.consultFee || "",
     押金: selected?.deposit || confirmForm.deposit || "",
-    目前藥師: selected?.pharmacist || confirmForm.pharmacist || "",
+    目前藥師:
+      pharmacistDisplayName(
+        selected?.pharmacist || confirmForm.pharmacist,
+        staffPeople,
+        selected?.pharmacist || confirmForm.pharmacist,
+      ) || "",
     病患: selected?.patientDisplay || "",
   };
 
@@ -2880,7 +2891,7 @@ export function ClinicOutpatientPage() {
               : `診療作業 — ${CLINIC_MODULE_TABS.find((t) => t.id === clinicTab)?.label || ""}`}
         </span>
         <span className="ml-auto font-normal opacity-90">
-          {currentDate} · {session?.shift || ""} · {roomLabel(session?.room || "1")} · {session?.pharmacist || "—"}
+          {currentDate} · {session?.shift || ""} · {roomLabel(session?.room || "1")} · {pharmacistDisplayName(session?.pharmacist, staffPeople, session?.pharmacist) || "—"}
         </span>
         <button
           type="button"
@@ -3647,7 +3658,11 @@ export function ClinicOutpatientPage() {
         open={patientEditOpen}
         onClose={closePatientEdit}
         seed={patientEditSeed}
-        onSaved={() => void refreshQueue()}
+        onSaved={() => {
+          setLeaveAsk(false);
+          if (clinicTab !== "list") closeChartNow(false);
+          else void refreshQueue();
+        }}
       />
       <CertificateDialog
         open={certificateOpen}

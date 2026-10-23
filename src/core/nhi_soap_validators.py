@@ -13,7 +13,7 @@ from src.core.nhi_validators import NhiValidationError, validate_taiwan_id_no_fo
 CHIEF_COMPLAINT_MAX = 500
 SOAP_SECTION_MAX = 8000
 
-_FORBIDDEN_TEXT = re.compile(r"[<>\x00]")
+_NULL_TEXT = re.compile(r"\x00")
 
 
 class NhiSoapIntake(BaseModel):
@@ -65,8 +65,8 @@ class NhiSoapIntake(BaseModel):
             if required:
                 raise NhiValidationError(f"{label} 不可為空白")
             return None
-        if _FORBIDDEN_TEXT.search(text):
-            raise NhiValidationError(f"{label} 不可含 < > 或空字元")
+        if _NULL_TEXT.search(text):
+            raise NhiValidationError(f"{label} 不可含空字元")
         if len(text) > max_len:
             raise NhiValidationError(f"{label} 超過 {max_len} 字")
         return text

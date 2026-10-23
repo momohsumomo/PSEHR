@@ -7,6 +7,7 @@ import { HisWinTitle } from "@/components/clinic/HisPageFrame";
 import { HIS, HIS_FONT } from "@/lib/hisTheme";
 import { HisFixedClockInput } from "@/components/clinic/HisFixedClockInput";
 import { RocBirthdayInput } from "@/components/clinic/RocBirthdayInput";
+import { pharmacistDisplayName } from "@/lib/doctorName";
 import { NHI_NOCARD_REASONS, needsNhiNoCardReason } from "@/lib/registerModes";
 
 export type IcException =
@@ -425,7 +426,7 @@ export function RegisterEditDialog({
                 </Field>
                 <Field label={"\u85e5\u5e2b"}>
                   <div className="flex gap-1">
-                    <select className={`${inputCls} bg-[#b6f5b6] font-bold`} value={form.pharmacist} onChange={(e) => onChange({ pharmacist: e.target.value })}>
+                    <select className={`${inputCls} bg-[#b6f5b6] font-bold`} value={pharmacistDisplayName(form.pharmacist, pharmacists, "") || form.pharmacist} onChange={(e) => onChange({ pharmacist: e.target.value })}>
                       <option value="">{"\uff08\u5fc5\u586b\uff09"}</option>
                       {pharmacists.map((p) => (
                         <option key={p.id} value={p.name}>

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { fetchStaff, type ApiStaffRecord } from "@/api/clinicApi";
 import { useListNav } from "@/hooks/useListNav";
 import { thisPcPrintsOnSave, thisPcUploadsCloudOnSave } from "@/lib/clinicDevice";
-import { doctorDisplayName } from "@/lib/doctorName";
+import { doctorDisplayName, pharmacistDisplayName } from "@/lib/doctorName";
 import { HIS, HIS_FONT } from "@/lib/hisTheme";
 import { skipsCloudWrite } from "@/lib/queueOrder";
 import type { DiagnosisRow, QueueEntry, RxLine } from "@/mocks/clinicMocks";
@@ -349,6 +349,7 @@ export function VisitSaveConfirmPanel({
   const head = "mb-0.5 border-b border-[#808080] pb-0.5 font-bold leading-tight";
   const zone = "border border-[#808080] bg-white px-1.5 py-1";
   const row = "flex flex-wrap items-center gap-x-3 gap-y-0.5";
+  const pharmacistShown = pharmacistDisplayName(draft.pharmacist, pharmacists, "") || draft.pharmacist;
 
   return (
     <div className="absolute inset-0 z-30 flex flex-col" style={{ fontFamily: HIS_FONT, background: HIS.chrome, fontSize: 24 }}>
@@ -417,12 +418,12 @@ export function VisitSaveConfirmPanel({
                 <select
                   className="border border-[#808080] bg-white px-1"
                   style={{ height: "1.35em", color: HIS.inputBlue, minWidth: "8ch" }}
-                  value={draft.pharmacist}
+                  value={pharmacistShown}
                   onChange={(e) => onChange({ pharmacist: e.target.value })}
                 >
                   <option value="">{"\u8acb\u9078\u64c7"}</option>
-                  {draft.pharmacist && !pharmacists.some((row) => row.name === draft.pharmacist) ? (
-                    <option value={draft.pharmacist}>{draft.pharmacist}</option>
+                  {pharmacistShown && !pharmacists.some((row) => row.name === pharmacistShown) ? (
+                    <option value={pharmacistShown}>{pharmacistShown}</option>
                   ) : null}
                   {pharmacists.map((row) => (
                     <option key={row.id} value={row.name}>

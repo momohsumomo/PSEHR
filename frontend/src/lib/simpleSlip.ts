@@ -1,4 +1,5 @@
 import type { DiagnosisRow, RxLine } from "@/mocks/clinicMocks";
+import { formatBirthdayRoc } from "@/lib/patientSearch";
 import { ceilCashTen, rawSelfPay } from "@/lib/selfPayMoney";
 
 export type SimpleSlipInput = {
@@ -280,7 +281,8 @@ function pageHtml(
     : "";
   const chart = hide("chart") ? "" : `${esc(show(input.medicalNo))}:`;
   const idPart = hide("idno") ? "" : esc(show(input.idNo));
-  const birth = hide("birthday") ? "" : `\u751f\u65e5${esc(show(input.birthday))}(${esc(show(input.age))})`;
+  const birthShown = formatBirthdayRoc(input.birthday) || show(input.birthday);
+  const birth = hide("birthday") ? "" : `\u751f\u65e5${esc(birthShown)}(${esc(show(input.age))})`;
   const who = `${chart}${esc(show(input.name))}`;
   const doctorBit = hide("doctor") ? "" : `\u91ab\u5e2b:${esc(show(input.doctor))}`;
   const pharmacistBit = hide("pharmacist") ? "" : `\u85e5\u5e2b:${esc(show(input.pharmacist))}`;

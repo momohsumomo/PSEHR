@@ -46,7 +46,12 @@ export function ClinicSessionGate({ initial, preferToday, onConfirm, onCancel }:
       .then((rows) => {
         const list = pharmacistRows(rows);
         setStaff(list);
-        setPharmacist((prev) => prev || list[0]?.name || "");
+        setPharmacist((prev) => {
+          const hit = list.find(
+            (p) => p.id === prev || p.name === prev || p.certNo === prev || p.nhiId === prev,
+          );
+          return (hit?.name || prev || list[0]?.name || "").trim();
+        });
         const found = new Set<string>(["1"]);
         for (const row of rows) {
           if (row.status && row.status !== "\u5728\u8077" && row.status !== "active") continue;

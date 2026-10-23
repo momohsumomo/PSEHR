@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { fetchStaff, patchEncounterReg, type ApiStaffRecord } from "@/api/clinicApi";
 import { useEscLayer } from "@/hooks/useEscLayer";
 import { loadClinicSession, saveClinicSession, type ClinicSession } from "@/lib/clinicSession";
+import { pharmacistDisplayName } from "@/lib/doctorName";
 import { HIS, HIS_FONT } from "@/lib/hisTheme";
 
 export type PharmacistVisitRow = {
@@ -157,7 +158,7 @@ export function ChangePharmacistDialog({ open, onClose, date, shift, dept, rows,
                   <span>
                     {row.queueNumber} {row.patientDisplay}
                   </span>
-                  <span className="text-[#606060]">{row.pharmacist || "—"}</span>
+                  <span className="text-[#606060]">{pharmacistDisplayName(row.pharmacist, staff, row.pharmacist) || "—"}</span>
                 </div>
               ))
             ) : (

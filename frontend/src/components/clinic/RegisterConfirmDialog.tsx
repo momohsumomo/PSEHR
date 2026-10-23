@@ -11,7 +11,7 @@ import {
   type CardFaultReport,
 } from "@/api/clinicApi";
 import { CardFaultPanel } from "@/components/clinic/CardFaultPanel";
-import { doctorDisplayName, pickClinicDoctor } from "@/lib/doctorName";
+import { doctorDisplayName, pharmacistDisplayName, pickClinicDoctor } from "@/lib/doctorName";
 import {
   type IcException,
   type RegisterEditForm,
@@ -983,7 +983,7 @@ export function RegisterConfirmDialog({
               <Row label="藥師">
                 <select
                   className={form.pharmacist ? pickedCls : inputCls}
-                  value={form.pharmacist}
+                  value={pharmacistDisplayName(form.pharmacist, pharmacists, "") || form.pharmacist}
                   onChange={(e) => onChange({ pharmacist: e.target.value })}
                 >
                   <option value="">（必填）</option>

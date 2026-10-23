@@ -24,7 +24,7 @@ class NhiMedicationIntake(BaseModel):
     tradeName: str | None = Field(None, max_length=80, description="商品名稱，病患收據用")
     payMark: str | None = Field(None, max_length=4, description="計費標記，例如 自")
     memo: str | None = Field(None, max_length=8, description="註記，例如 [")
-    daysSupply: int | None = Field(None, ge=1, le=90, description="給藥日份")
+    daysSupply: int | None = Field(None, ge=1, description="給藥日份")
     quantity: float | None = Field(None, gt=0, le=9999, description="次量／總量（計價用）")
     unitPrice: float | None = Field(
         None,
