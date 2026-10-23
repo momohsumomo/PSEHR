@@ -108,3 +108,106 @@ export function AppointmentCheckInDialog({
     </div>
   );
 }
+
+/** 診療清單雙擊預約：先問要不要報到。 */
+export function PrebookArriveDialog({
+  open,
+  onYes,
+  onNo,
+}: {
+  open: boolean;
+  onYes: () => void;
+  onNo: () => void;
+}) {
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (ev: KeyboardEvent) => {
+      if (ev.key !== "Enter") return;
+      ev.preventDefault();
+      ev.stopPropagation();
+      onYes();
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, [open, onYes]);
+
+  if (!open) return null;
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/45 p-3">
+      <div className="w-[min(22rem,94vw)] overflow-hidden rounded border border-[#80C080] bg-[#E8F8E8] shadow-2xl">
+        <header className="bg-[#004D00] px-3 py-1.5 text-xs font-black text-white">
+          {"\u9810\u7d04\u5831\u5230"}
+        </header>
+        <p className="px-3 py-4 text-[15px] font-bold text-[#004D00]">
+          {"\u662f\u5426\u8981\u9810\u7d04\u5831\u5230?"}
+        </p>
+        <footer className="flex gap-1 border-t border-[#80C080] bg-[#C5EBC5] px-2 py-1.5">
+          <button
+            type="button"
+            className="rounded border border-[#004D00] bg-[#004D00] px-3 py-1 text-xs font-bold text-white"
+            onClick={onYes}
+          >
+            {"\u662f"}
+          </button>
+          <button
+            type="button"
+            className="rounded border border-[#80C080] bg-white px-3 py-1 text-xs font-bold text-[#004D00]"
+            onClick={onNo}
+          >
+            {"\u5426"}
+          </button>
+        </footer>
+      </div>
+    </div>
+  );
+}
+
+/** 預約報到的第二問：無健保卡時選押金或自費，再開一般掛號窗。 */
+export function PrebookNoCardDialog({
+  open,
+  onDeposit,
+  onSelfPay,
+  onNo,
+}: {
+  open: boolean;
+  onDeposit: () => void;
+  onSelfPay: () => void;
+  onNo: () => void;
+}) {
+  if (!open) return null;
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/45 p-3">
+      <div className="w-[min(24rem,94vw)] overflow-hidden rounded border border-[#80C080] bg-[#E8F8E8] shadow-2xl">
+        <header className="bg-[#004D00] px-3 py-1.5 text-xs font-black text-white">
+          {"\u7121\u5065\u4fdd\u5361\u5831\u5230"}
+        </header>
+        <p className="px-3 py-4 text-[15px] font-bold text-[#004D00]">
+          {"\u662f\u5426\u8981\u7121\u5065\u4fdd\u5361\u5831\u5230?"}
+        </p>
+        <footer className="flex gap-1 border-t border-[#80C080] bg-[#C5EBC5] px-2 py-1.5">
+          <button
+            type="button"
+            className="rounded border border-[#004D00] bg-[#004D00] px-3 py-1 text-xs font-bold text-white"
+            onClick={onDeposit}
+          >
+            {"\u62bc\u91d1"}
+          </button>
+          <button
+            type="button"
+            className="rounded border border-[#004D00] bg-white px-3 py-1 text-xs font-bold text-[#004D00]"
+            onClick={onSelfPay}
+          >
+            {"\u81ea\u8cbb"}
+          </button>
+          <button
+            type="button"
+            className="rounded border border-[#80C080] bg-white px-3 py-1 text-xs font-bold text-[#004D00]"
+            onClick={onNo}
+          >
+            {"\u5426"}
+          </button>
+        </footer>
+      </div>
+    </div>
+  );
+}

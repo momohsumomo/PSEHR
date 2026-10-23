@@ -11,7 +11,7 @@ import { useIncomingReferralAsk } from "@/components/clinic/ReferralAcceptDialog
 import { PatientFinderDialog } from "@/components/clinic/PatientFinderDialog";
 import { DeleteRegisterDialog } from "@/components/clinic/DeleteRegisterDialog";
 import { REGI_COLUMNS } from "@/components/clinic/HisRegisterToolBar";
-import { FIRST_VISIT_NAME, isFirstVisit, visitListMark } from "@/lib/visitListMark";
+import { FIRST_VISIT_BG, isFirstVisit, visitListMark } from "@/lib/visitListMark";
 import { ClinicShortcutBar } from "@/components/clinic/ClinicShortcutBar";
 import { RegisterOptionsDialog } from "@/components/clinic/RegisterOptionsDialog";
 import { RefundDepositDialog } from "@/components/clinic/RefundDepositDialog";
@@ -1150,10 +1150,8 @@ export function RegisterPage() {
                       fontSize: isPrimary ? HIS.fs.primary : HIS.fs.body,
                       fontWeight: isPrimary ? 700 : 400,
                       textAlign: col.key === "doneMark" ? "center" : undefined,
-                      color:
-                        col.key === "patientDisplay" && isFirstVisit(e.regCc)
-                          ? FIRST_VISIT_NAME
-                          : undefined,
+                      background:
+                        col.key === "patientDisplay" && isFirstVisit(e.regCc) ? FIRST_VISIT_BG : undefined,
                     }}
                   >
                     {col.key === "doneMark" ? (

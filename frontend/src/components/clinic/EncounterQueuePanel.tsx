@@ -15,7 +15,7 @@ import {
   type QueueStatus,
 } from "@/mocks/clinicMocks";
 import { HIS, HIS_FONT, HIS_QUEUE_COL_WIDTHS } from "@/lib/hisTheme";
-import { FIRST_VISIT_NAME, isFirstVisit, visitListMark } from "@/lib/visitListMark";
+import { FIRST_VISIT_BG, isFirstVisit, visitListMark } from "@/lib/visitListMark";
 import { ageYearsMonths } from "@/lib/ageLabel";
 import { displayCase } from "@/lib/caseMark";
 import { roomLabel } from "@/lib/roomMark";
@@ -437,12 +437,9 @@ export function EncounterQueuePanel({
                         borderColor: "#A0A0A0",
                         fontSize: isPrimary ? HIS.fs.primary : HIS.fs.body,
                         fontWeight: isPrimary ? 700 : 400,
-                        color:
-                          col.key === "patientDisplay" && isFirstVisit(e.regCc)
-                            ? FIRST_VISIT_NAME
-                            : col.key === "preVisit" && visitListMark(e)
-                              ? "#800080"
-                              : undefined,
+                        background:
+                          col.key === "patientDisplay" && isFirstVisit(e.regCc) ? FIRST_VISIT_BG : undefined,
+                        color: col.key === "preVisit" && visitListMark(e) ? "#800080" : undefined,
                       }}
                       title={
                         col.key === "doneMark" ? undefined : queueCellValue(e, col.key)

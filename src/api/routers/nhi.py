@@ -1219,7 +1219,7 @@ def refund_deposit(encounter_id: str, body: dict[str, Any] | None = None) -> dic
     card_id = str(profile.get("idNo") or "")
     if not card_matches(str(prepared.get("idNo") or ""), card_id):
         raise HTTPException(status_code=422, detail="\u63d2\u5361\u8eab\u5206\u8b49\u8207\u9019\u7b46\u62bc\u55ae\u4e0d\u7b26\uff0c\u672a\u53d6\u865f\u3001\u672a\u9000\u62bc\u3002")
-    result = request_visit_number(ic_exception="ic", desk_sign=desk_sign if isinstance(desk_sign, dict) else None)
+    result = request_visit_number(ic_exception="afterCheck", desk_sign=desk_sign if isinstance(desk_sign, dict) else None)
     if not result.ok or not (result.sequenceNumber or "").strip():
         raise HTTPException(status_code=422, detail=result.reason or "沒有取到就醫序號，沒有退押。")
     got = str(result.hcIdNo or card_id)

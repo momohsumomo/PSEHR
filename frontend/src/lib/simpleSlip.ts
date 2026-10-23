@@ -195,9 +195,40 @@ function leftTable(rows: RxLine[], fontPx: number): string {
   return `<table style="width:100%;border-collapse:collapse;table-layout:fixed;font-size:${fontPx}px;line-height:1.15;">${body}</table>`;
 }
 
+/** In the clinic, not handed to the patient. Right receipt omits these names. */
+const DONE_IN_CLINIC = new Set([
+  "\u6ce8\u5c04",
+  "\u6cbb\u7642",
+  "\u624b\u8853",
+  "\u6aa2\u67e5",
+  "\u8655\u7f6e",
+  "\u7279\u6750",
+  "\u865b\u64ec",
+]);
+
+const IN_CLINIC_ROUTE = new Set([
+  "injection",
+  "im",
+  "iv",
+  "ivd",
+  "ivp",
+  "sc",
+  "treatment",
+  "exam",
+  "material",
+]);
+
+/** Oral and topical drugs go home. A procedure, injection, or surgery stays off the right copy. */
+export function patientTakesHome(row: RxLine): boolean {
+  const label = (row.cast || row.typeName || "").trim();
+  if (label) return !DONE_IN_CLINIC.has(label);
+  return !IN_CLINIC_ROUTE.has(String(row.route || "").trim().toLowerCase());
+}
+
 function rightTable(rows: RxLine[], fontPx: number): string {
+  const shown = rows.filter(patientTakesHome);
   const body =
-    rows
+    shown
       .map((row) => {
         const qty = esc(row.qty == null ? "\u2014" : String(row.qty));
         const total = esc(show(row.totalAmount));

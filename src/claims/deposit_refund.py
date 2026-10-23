@@ -1,8 +1,9 @@
 # -*- coding: utf-8 -*-
-"""Deposit refund: card sequence, cash back, upload with the refund day.
+"""Deposit refund: makeup-card sequence, cash back, upload with the refund day.
 
-Overdue visits stay deposits. This module does not convert them to self-pay
-and does not invent a sequence number.
+The bureau call is a makeup read (afterCheck 2). The monthly visit date stays
+the original encounter day. This module does not invent a second treatment id,
+and does not convert an overdue deposit to self-pay.
 """
 
 from __future__ import annotations
@@ -157,11 +158,11 @@ def apply_refund(
         dict(existing),
         {
             "icException": "ic",
-            "afterCheck": "1",
+            "afterCheck": "2",
             "treatSeq": seq,
             "treatmentNumber": treat,
             "treatDateTime": (treat_date_time or "").strip(),
-            "icRemark": "2" if card_again else None,
+            "icRemark": "2",
             "actualTreatId": old_treat if card_again else None,
             "actualTreatWhen": old_when[:13] if card_again and len(old_when) >= 13 else None,
             "securitySign": (signature or "").strip(),

@@ -349,35 +349,14 @@ export function RxGrid({
   const [detailOpen, setDetailOpen] = useState(false);
   const [siteLineId, setSiteLineId] = useState<string | null>(null);
   const [siteTargets, setSiteTargets] = useState<string[]>([]);
-  const sitePickRef = useRef<string[]>([]);
-  const sitePlainTimer = useRef<number | null>(null);
   const publishSites = (ids: string[]) => {
-    sitePickRef.current = ids;
     setSiteTargets(ids);
   };
-  const rememberSite = (id: string, ctrl: boolean) => {
-    if (sitePlainTimer.current != null) {
-      window.clearTimeout(sitePlainTimer.current);
-      sitePlainTimer.current = null;
-    }
-    if (ctrl) {
-      const cur = sitePickRef.current;
-      publishSites(cur.includes(id) ? cur : [...cur, id]);
-      return;
-    }
-    sitePlainTimer.current = window.setTimeout(() => {
-      publishSites([id]);
-      sitePlainTimer.current = null;
-    }, 280);
-  };
-  const openSites = (id: string, ctrl: boolean) => {
-    if (sitePlainTimer.current != null) {
-      window.clearTimeout(sitePlainTimer.current);
-      sitePlainTimer.current = null;
-    }
-    const cur = sitePickRef.current;
-    const ids = ctrl || (cur.length > 1 && cur.includes(id)) ? Array.from(new Set([...cur, id])) : [id];
-    publishSites(ids);
+  const openSites = (id: string) => {
+    const checked = lines
+      .filter((row) => (row.tag || "").trim() === "\u2713")
+      .map((row) => row.id);
+    publishSites(checked.length ? checked : [id]);
     setSiteLineId(id);
   };
   /** 單擊只選取。雙擊既有內容才開覆蓋層，Enter 才寫入。 */
@@ -842,12 +821,14 @@ export function RxGrid({
                               ? "\u53f3\u9375\u958b\u555f\u5feb\u901f\u9078\u55ae"
                               : undefined
                       }
-                      onMouseDown={(e) => {
-                        if (col.key !== "bodySite" || readonly || !onChangeLine || e.button !== 0 || e.detail !== 1) return;
-                        rememberSite(line.id, e.ctrlKey || e.metaKey);
-                      }}
                       onClick={(e) => {
                         e.stopPropagation();
+                        if (col.key === "tag" && !readonly && onChangeLine) {
+                          onSelectIndex?.(rowIdx);
+                          const on = (line.tag || "").trim() === "\u2713";
+                          onChangeLine(line.id, { tag: on ? "" : "\u2713" });
+                          return;
+                        }
                         if (editCell && (editCell.id !== line.id || editCell.key !== col.key)) {
                           cancelOpenEdit();
                         }
@@ -870,7 +851,7 @@ export function RxGrid({
                           e.preventDefault();
                           e.stopPropagation();
                           onSelectIndex?.(rowIdx);
-                          openSites(line.id, e.ctrlKey || e.metaKey);
+                          openSites(line.id);
                           return;
                         }
                         if (!canEdit) return;
@@ -901,7 +882,7 @@ export function RxGrid({
                           e.preventDefault();
                           e.stopPropagation();
                           onSelectIndex?.(rowIdx);
-                          openSites(line.id, e.ctrlKey || e.metaKey);
+                          openSites(line.id);
                         } else if (col.key === "name" || col.key === "shortName") {
                           e.preventDefault();
                           e.stopPropagation();

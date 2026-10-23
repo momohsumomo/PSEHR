@@ -21,4 +21,4 @@ export function visitListMark(
   return text;
 }
 
-export const FIRST_VISIT_NAME = "#0000AA";
+export const FIRST_VISIT_BG = "#FFFF00";

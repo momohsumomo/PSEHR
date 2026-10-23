@@ -102,7 +102,7 @@ import {
 import { HIS, HIS_FONT, hisFontStyle } from "@/lib/hisTheme";
 import { findCardCheckIn, findWaitingAppointment, otherShiftAppointmentNote } from "@/lib/appointmentCheckIn";
 import { compareClinicQueue, normalizeClock, nowClock, planQueueNumber, shiftQueueNumbers, showsUploadCircle, skipsCloudWrite } from "@/lib/queueOrder";
-import { AppointmentCheckInDialog, InsertNumberDialog } from "@/components/clinic/InsertNumberDialog";
+import { AppointmentCheckInDialog, InsertNumberDialog, PrebookArriveDialog, PrebookNoCardDialog } from "@/components/clinic/InsertNumberDialog";
 import { useEscLayer } from "@/hooks/useEscLayer";
 
 type ChartRailTab = "common" | "full" | "oral" | "waiting" | "history";
@@ -333,6 +333,8 @@ export function ClinicOutpatientPage() {
     fromCard: boolean;
     seed: Partial<RegisterEditForm>;
   } | null>(null);
+  const [prebookAskId, setPrebookAskId] = useState<string | null>(null);
+  const [noCardAskId, setNoCardAskId] = useState<string | null>(null);
   const [confirmForm, setConfirmForm] = useState<RegisterEditForm>(() => emptyRegisterForm());
   const [finderOpen, setFinderOpen] = useState(false);
   const [newPatientQuery, setNewPatientQuery] = useState<string | null>(null);
@@ -396,6 +398,8 @@ export function ClinicOutpatientPage() {
   const leaveBypassRef = useRef(false);
   const afterSaveLeaveRef = useRef<(() => void) | null>(null);
   const printSimpleSlipRef = useRef<() => void>(() => {});
+  const leaveListAfterPrintRef = useRef(false);
+  const closeChartNowRef = useRef<(discard: boolean) => void>(() => {});
   const openLabSheetRef = useRef<() => void>(() => {});
   const finishReply = useCallback(() => {
     setReplyAsk(null);
@@ -1197,6 +1201,9 @@ export function ClinicOutpatientPage() {
         }
       }
       if (saveDraft.printRx) {
+        const holdForReply =
+          apiMode && (selected?.acceptReferral || "").trim() === "1" && !(selected?.referralLocalId || "").trim();
+        leaveListAfterPrintRef.current = !holdForReply;
         printSimpleSlipRef.current();
       } else {
         openLabSheetRef.current();
@@ -1261,6 +1268,8 @@ export function ClinicOutpatientPage() {
         people,
         session?.pharmacist,
       );
+      const leaveList = leaveListAfterPrintRef.current;
+      leaveListAfterPrintRef.current = false;
       const result = await openPrintPreview({
       kind: "receipt",
       layout: "paged",
@@ -1315,6 +1324,10 @@ export function ClinicOutpatientPage() {
         setPrintNote(
           result.printed ? `\u5df2\u9001\u5230 ${result.printer}` : "\u9810\u89bd\u5df2\u95dc\u9589\uff0c\u5c1a\u672a\u9001\u51fa\u3002",
         );
+        if (leaveList) {
+          setSaveLayerOpen(false);
+          closeChartNowRef.current(true);
+        }
         const clinicNow = readLocalClinicBundle().profile;
         openLabSheetRef.current();
         if (!result.printed) return;
@@ -1669,6 +1682,21 @@ export function ClinicOutpatientPage() {
     refreshQueue,
     setSelectedEncounterId,
   ]);
+  closeChartNowRef.current = closeChartNow;
+
+  const openListPatient = useCallback(
+    (id: string) => {
+      const row = queue.find((e) => e.encounterId === id);
+      if (row?.prebook) {
+        setSelectedEncounterId(id);
+        setNoCardAskId(null);
+        setPrebookAskId(id);
+        return;
+      }
+      openChart(id);
+    },
+    [queue, openChart, setSelectedEncounterId],
+  );
 
   const closeChart = useCallback(() => {
     const eid = selectedEncounterId;
@@ -2061,6 +2089,47 @@ export function ClinicOutpatientPage() {
     };
   }, [session]);
 
+  const openPrebookChoice = useCallback(
+    (kind: "deposit" | "selfPay") => {
+      const id = noCardAskId;
+      setNoCardAskId(null);
+      if (!id) return;
+      const row = queue.find((e) => e.encounterId === id);
+      if (!row) return;
+      const base = seedFromEntry(row);
+      if (kind === "deposit") {
+        openConfirmFromSeed(
+          {
+            ...base,
+            prebook: false,
+            payType: "4",
+            icException: "deposit",
+            caseNo: base.caseNo === "9X" ? "01" : base.caseNo || "01",
+            deposit: loadClinicRegisterDefaults().depositAmount,
+            noCardReason: "",
+          },
+          true,
+        );
+        return;
+      }
+      openConfirmFromSeed(
+        {
+          ...base,
+          prebook: false,
+          payType: "4",
+          icException: "selfPay",
+          caseNo: "9X",
+          deposit: "",
+          copayAmt: "0",
+          copayCode: "",
+          noCardReason: "",
+        },
+        true,
+      );
+    },
+    [noCardAskId, queue, seedFromEntry, openConfirmFromSeed],
+  );
+
   const openF3RegisterEdit = useCallback(() => {
     const entry =
       selected ??
@@ -2115,7 +2184,7 @@ export function ClinicOutpatientPage() {
           break;
         case "clinicMain":
           if (isList) {
-            if (selectedEncounterId) openChart(selectedEncounterId);
+            if (selectedEncounterId) openListPatient(selectedEncounterId);
             else setActionError("請先點清單一筆，再按 F4 看診");
           } else if (selectedEncounterId) {
             openChart(selectedEncounterId);
@@ -2250,6 +2319,7 @@ export function ClinicOutpatientPage() {
       openDeleteDialog,
       printVisitReceipt,
       selected,
+      openListPatient,
     ],
   );
 
@@ -2265,6 +2335,8 @@ export function ClinicOutpatientPage() {
       { open: replyAsk != null, close: finishReply },
       { open: newPatientQuery != null, close: () => setNewPatientQuery(null) },
       { open: checkInAsk != null, close: () => setCheckInAsk(null) },
+      { open: noCardAskId != null, close: () => setNoCardAskId(null) },
+      { open: prebookAskId != null, close: () => setPrebookAskId(null) },
       { open: insertAsk != null, close: () => answerInsert(false) },
       {
         open: leaveAsk,
@@ -2317,6 +2389,8 @@ export function ClinicOutpatientPage() {
         finderOpen ||
         newPatientQuery != null ||
         checkInAsk != null ||
+        prebookAskId != null ||
+        noCardAskId != null ||
         deleteOpen ||
         stubId ||
         icInfoOpen ||
@@ -2352,7 +2426,7 @@ export function ClinicOutpatientPage() {
       }
       if (isList && ev.key === "F4" && selectedEncounterId) {
         ev.preventDefault();
-        openChart(selectedEncounterId);
+        openListPatient(selectedEncounterId);
         return;
       }
       if (!isList && ev.key === "F8") {
@@ -2499,6 +2573,9 @@ export function ClinicOutpatientPage() {
     otherMenuOpen,
     openF3RegisterEdit,
     openDeleteDialog,
+    openListPatient,
+    prebookAskId,
+    noCardAskId,
   ]);
 
   const appliedPackageRef = useRef<string | null>(null);
@@ -3050,7 +3127,7 @@ export function ClinicOutpatientPage() {
               entries={queueForPanel}
               selectedId={selectedEncounterId}
               onSelect={setSelectedEncounterId}
-              onOpen={openChart}
+              onOpen={openListPatient}
               onStatusChange={onStatusChange}
               mode="table"
               variant="page"
@@ -3707,6 +3784,21 @@ export function ClinicOutpatientPage() {
           setNewPatientQuery(null);
           onPatientPickedForRegister(hit);
         }}
+      />
+      <PrebookArriveDialog
+        open={prebookAskId != null}
+        onYes={() => {
+          const id = prebookAskId;
+          setPrebookAskId(null);
+          if (id) setNoCardAskId(id);
+        }}
+        onNo={() => setPrebookAskId(null)}
+      />
+      <PrebookNoCardDialog
+        open={noCardAskId != null}
+        onDeposit={() => openPrebookChoice("deposit")}
+        onSelfPay={() => openPrebookChoice("selfPay")}
+        onNo={() => setNoCardAskId(null)}
       />
       <AppointmentCheckInDialog
         open={checkInAsk != null}

@@ -178,7 +178,10 @@ export interface RxLine {
   bodySite?: string;
   /** 商品名稱。左側收據用 name（自定名稱）。 */
   tradeName?: string;
-  /** 標 */
+  /** 藥品主檔 CAST／TYPE，例如內服、外用、注射、治療、手術。 */
+  cast?: string;
+  typeName?: string;
+  /** 標。看診時勾選，雙擊部位會寫進每一個有勾的列。不寫進申報。 */
   tag?: string;
 }
 

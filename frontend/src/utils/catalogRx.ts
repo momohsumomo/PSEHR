@@ -62,6 +62,8 @@ export function applyClinicDrugDisplayNames(
           shortName: hit.alias || hit.shortName || line.shortName,
           unit: (hit.unit || line.unit || "").trim(),
           route: (hit.route as RxLine["route"]) || line.route,
+          cast: (hit.cast || "").trim() || line.cast,
+          typeName: (hit.typeName || "").trim() || line.typeName,
           sig:
             line.sig && line.sig !== "\u2014" && !looksLikeFatDosage(line.sig)
               ? line.sig
@@ -114,6 +116,8 @@ export function catalogDrugToRxLine(drug: CatalogDrug, usages?: CatalogUsage[]):
     nhiCode: clinicSaveCode(drug),
     unitPrice: Number.isFinite(price) && price > 0 ? price : undefined,
     route: drug.route,
+    cast: (drug.cast || "").trim(),
+    typeName: (drug.typeName || "").trim(),
     unit: (drug.unit || "").trim(),
     selfPay: drug.payMark === "\u81ea" || drug.selfPay,
     payMark: drug.payMark || (drug.selfPay ? "\u81ea" : ""),
