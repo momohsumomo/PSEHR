@@ -505,7 +505,17 @@ function Watch-ClinicEdges {
     $closed = $true
     Write-Log ("closed " + $name)
   }
-  if ($closed -and -not (Test-AnyClinicEdgeVisible)) { Release-CardSession }
+  if ($closed -and -not (Test-AnyClinicEdgeVisible)) { Stop-LocalCard6 }
+}
+
+function Stop-LocalCard6 {
+  Release-CardSession
+  foreach ($name in @("ciet6001s01", "cies6001s04")) {
+    Get-Process -Name $name -ErrorAction SilentlyContinue | ForEach-Object {
+      try { Stop-Process -Id $_.Id -Force -ErrorAction SilentlyContinue } catch {}
+    }
+  }
+  Write-Log "closed card software 6.0"
 }
 
 function Stop-IdlePrintEdge {

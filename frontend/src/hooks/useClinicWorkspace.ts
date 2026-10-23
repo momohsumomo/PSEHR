@@ -556,15 +556,10 @@ export function useClinicWorkspace(options?: {
         const mapped = mapWorkspace(ws);
         setWorkspaceFor(requestedId);
         const pid = String(ws.patientId || "").split("/").pop() || "";
-        const cached = pid ? historyCacheRef.current.get(pid) : undefined;
-        setWorkspaceData({
-          ...mapped,
-          historyVisits: cached ?? mapped.historyVisits,
-        });
+        setWorkspaceData(mapped);
         setError(null);
 
-        // 2) light 歷史（快）；有快取則略過網路
-        if (!pid || cached) return;
+        if (!pid) return;
         try {
           const hist = await fetchPatientVisits(pid, 200, {
             light: true,

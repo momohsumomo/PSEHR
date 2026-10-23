@@ -58,6 +58,14 @@ export async function request<T>(path: string, init?: RequestInit): Promise<T> {
         const body = detail as { message: string; diagnose?: CardFaultReport };
         throw new CardReadError(body.message, body.diagnose ?? null);
       }
+      if (detail && typeof detail === "object" && "message" in detail) {
+        const body = detail as { message?: unknown; statusCode?: unknown };
+        const err = new Error(typeof body.message === "string" ? body.message : "操作失敗") as Error & {
+          statusCode?: number;
+        };
+        if (typeof body.statusCode === "number") err.statusCode = body.statusCode;
+        throw err;
+      }
       if (detail != null) throw new Error(JSON.stringify(detail));
     } catch (e) {
       if (e instanceof Error && e.name !== "SyntaxError") throw e;
@@ -871,14 +879,7 @@ export async function refundDeposit(encounterId: string): Promise<{
   });
 }
 
-export async function fetchSeqNext(body: {
-  treatmentItem?: string;
-  afterCheck?: string;
-  paperCard?: boolean;
-  icException?: string;
-  patientIdNo?: string;
-  noCardReason?: string;
-}): Promise<{
+type SeqNextResult = {
   ok: boolean;
   skipped: boolean;
   reason: string;
@@ -892,28 +893,67 @@ export async function fetchSeqNext(body: {
   isSameDay?: boolean | null;
   hvExpire?: boolean | null;
   treatmentLimit?: number | null;
-}> {
+};
+
+export async function fetchSeqNext(body: {
+  treatmentItem?: string;
+  afterCheck?: string;
+  paperCard?: boolean;
+  icException?: string;
+  patientIdNo?: string;
+  noCardReason?: string;
+}): Promise<SeqNextResult> {
   const mode = body.icException || (body.paperCard ? "paper" : "ic");
   const noCard = mode === "noCard" || mode === "childNoCard" || mode === "pregnantNoCard" || mode === "badCard" || mode === "paper";
   let deskSign: DeskSign | undefined;
   if (mode !== "selfPay" && mode !== "deposit") {
     deskSign = noCard ? await signLocalSam("03") : await signLocalHc("03");
   }
-  const ctrl = new AbortController();
-  const timer = window.setTimeout(() => ctrl.abort(), 35000);
-  try {
-    return await request("/nhi/v1/card/seq-next", {
+  const post = (sign: DeskSign | undefined) => {
+    const ctrl = new AbortController();
+    const timer = window.setTimeout(() => ctrl.abort(), 35000);
+    return request<SeqNextResult>("/nhi/v1/card/seq-next", {
       method: "POST",
-      body: JSON.stringify({ ...body, deskSign }),
+      body: JSON.stringify({ ...body, deskSign: sign }),
       signal: ctrl.signal,
-    });
+    }).finally(() => window.clearTimeout(timer));
+  };
+  try {
+    return await post(deskSign);
   } catch (e) {
-    if (e instanceof DOMException && e.name === "AbortError") {
-      throw new Error("健保局取號逾時。未編造就醫序號，本筆尚未掛進清單。");
+    const code = e && typeof e === "object" && "statusCode" in e ? (e as { statusCode?: number }).statusCode : undefined;
+    const refreshable = !noCard && mode !== "selfPay" && mode !== "deposit" && (code === 3201 || code === 3213);
+    if (!refreshable) {
+      if (e instanceof DOMException && e.name === "AbortError") {
+        throw new Error("健保局取號逾時。未編造就醫序號，本筆尚未掛進清單。");
+      }
+      throw e;
     }
-    throw e;
-  } finally {
-    window.clearTimeout(timer);
+    const updateSign = await signLocalHc("04");
+    const updateCtrl = new AbortController();
+    const updateTimer = window.setTimeout(() => updateCtrl.abort(), 40000);
+    try {
+      await request("/nhi/v1/card/hc-content-update", {
+        method: "POST",
+        body: JSON.stringify({ deskSign: updateSign }),
+        signal: updateCtrl.signal,
+      });
+    } catch (updateErr) {
+      if (updateErr instanceof DOMException && updateErr.name === "AbortError") {
+        throw new Error("更新健保卡逾時。這張卡沒有改寫，也沒有取號。");
+      }
+      throw updateErr;
+    } finally {
+      window.clearTimeout(updateTimer);
+    }
+    try {
+      return await post(await signLocalHc("03"));
+    } catch (again) {
+      if (again instanceof DOMException && again.name === "AbortError") {
+        throw new Error("健保局取號逾時。未編造就醫序號，本筆尚未掛進清單。");
+      }
+      throw again;
+    }
   }
 }
 

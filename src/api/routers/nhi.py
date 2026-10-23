@@ -1182,8 +1182,32 @@ def card_seq_next(body: NhiSeqNextRequest) -> dict[str, Any]:
         "samId": result.samId,
     }
     if not result.ok:
-        raise HTTPException(status_code=422, detail=result.reason)
+        raise HTTPException(
+            status_code=422,
+            detail={"message": result.reason, "statusCode": result.statusCode},
+        )
     return payload
+
+
+class NhiHcUpdateRequest(BaseModel):
+    deskSign: dict[str, Any] | None = None
+
+
+@router.post(
+    "/v1/card/hc-content-update",
+    summary="向健保局更新這張健保卡的內容（效期、就醫可用次數）",
+)
+def card_hc_content_update(body: NhiHcUpdateRequest) -> dict[str, Any]:
+    """Desk signs service type 04. This server does not touch a reader."""
+    from src.core.nhi_seq_bridge import request_hc_content_update
+
+    result = request_hc_content_update(desk_sign=body.deskSign)
+    if not result.ok:
+        raise HTTPException(
+            status_code=422,
+            detail={"message": result.reason, "statusCode": result.statusCode},
+        )
+    return {"ok": True, "reason": result.reason, "statusCode": 0}
 
 
 @router.get(

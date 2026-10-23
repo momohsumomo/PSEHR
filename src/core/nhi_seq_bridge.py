@@ -241,6 +241,56 @@ def request_seq_next(
     )
 
 
+def request_hc_content_update(*, desk_sign: dict[str, Any] | None = None) -> SeqResult:
+    """Ask the bureau to refresh this card. Signature service type is 04.
+
+    Does not invent a visit sequence. A failed update leaves the card unchanged.
+    """
+    try:
+        signed = posted_sign(desk_sign)
+    except RuntimeError as exc:
+        return SeqResult(ok=False, reason=str(exc))
+    body = {
+        "clientRandom": signed.get("clientRandom"),
+        "hospitalId": signed.get("hospitalId"),
+        "samId": signed.get("samId"),
+        "signature": signed.get("signature"),
+        "hcId": signed.get("hcId"),
+        "hcIdNo": signed.get("hcIdNo"),
+    }
+    try:
+        http_status, data = _call_business("/v1/HcContent/Update", body, timeout_sec=40.0)
+    except RuntimeError as exc:
+        return SeqResult(
+            ok=False,
+            reason=str(exc),
+            hcId=str(signed.get("hcId") or ""),
+            hcIdNo=str(signed.get("hcIdNo") or ""),
+        )
+    if not isinstance(data, dict):
+        return SeqResult(ok=False, reason=f"更新健保卡回傳不是 JSON（HTTP {http_status}）。這張卡沒有改寫。")
+    code = data.get("statusCode")
+    if http_status >= 400 or code not in (None, 0):
+        hint = status_hint(int(code)) if isinstance(code, int) else f"HTTP {http_status}"
+        detail = data.get("message") or data.get("detail") or data.get("error") or ""
+        return SeqResult(
+            ok=False,
+            reason=f"更新健保卡失敗（{hint}{('：' + str(detail)) if detail else ''}）。這張卡沒有改寫，也沒有取號。",
+            statusCode=int(code) if isinstance(code, int) else None,
+            raw=data,
+            hcId=str(signed.get("hcId") or ""),
+            hcIdNo=str(signed.get("hcIdNo") or ""),
+        )
+    return SeqResult(
+        ok=True,
+        reason="健保卡內容已更新",
+        statusCode=0,
+        hcId=str(signed.get("hcId") or ""),
+        hcIdNo=str(signed.get("hcIdNo") or ""),
+        raw=data,
+    )
+
+
 def request_seq_rollback(
     *,
     treatment_date_time: str,
