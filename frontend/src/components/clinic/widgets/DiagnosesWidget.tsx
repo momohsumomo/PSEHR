@@ -3,7 +3,7 @@ import type { CatalogDiagnosis } from "@/types/clinicCatalog";
 import type { DiagnosisRow } from "@/mocks/clinicMocks";
 import { diagnosisLabel, searchDiagnoses } from "@/utils/catalogSearch";
 import { readyIcd9 } from "@/lib/icdCrosswalk";
-import { crosswalkDiagnosis } from "@/api/clinicApi";
+import { crosswalkDiagnosis, searchDiagnosisCodes } from "@/api/clinicApi";
 import { CatalogDropdown } from "@/components/clinic/CatalogDropdown";
 import { DiagnosisFinder, type DxChoice } from "@/components/clinic/DiagnosisFinder";
 import { Icd10ConditionDialog, IcdShortcutDialog } from "@/components/clinic/IcdBrowseDialogs";
@@ -251,6 +251,11 @@ export function DiagnosesWidget({
   };
 
   const commitPlain = (payload: DiagnosisRow, row: number, note?: string) => {
+    if (!(payload.icd10 || payload.nhiIcd10 || "").trim()) {
+      setMenuOpen(false);
+      setFinder({ row, query: payload.text || "" });
+      return;
+    }
     if (note) onChiefNote?.(note);
     if (diagnosisTaken(displayDiagnoses, payload, row < displayDiagnoses.length ? row : undefined)) {
       setCombo(null);
@@ -286,15 +291,58 @@ export function DiagnosesWidget({
     requestAnimationFrame(() => focusCell(nextRow, adding ? 1 : focusCol));
   };
 
+  const askIcd10 = (row: number, query: string) => {
+    setMenuOpen(false);
+    setFinder({ row, query });
+  };
+
   const commitMapped = (payload: DiagnosisRow, row: number) => {
-    const code = (payload.icd10 || payload.nhiIcd10 || "").trim();
-    if (!readyIcd9(code)) {
+    const ten = (payload.icd10 || payload.nhiIcd10 || "").trim();
+    const nine = (payload.icd9 || "").trim();
+    const asNine = readyIcd9(ten) ? ten : readyIcd9(nine) ? nine : "";
+    if (ten && !asNine) {
       commitPlain(payload, row);
       return;
     }
     void (async () => {
       try {
-        const mapped = await crosswalkDiagnosis(code, payload.text);
+        if (!asNine) {
+          const found = await searchDiagnosisCodes(payload.text || "");
+          const top = found[0];
+          const items = (top
+            ? [
+                { icd10: top.icd10, nhiIcd10: top.nhiIcd10, text: top.title || top.name || payload.text || top.icd10 },
+                ...(top.secondary || []).map((sec) => ({
+                  icd10: sec.icd10,
+                  nhiIcd10: sec.nhiIcd10,
+                  text: sec.title || sec.icd10,
+                })),
+              ]
+            : []
+          ).filter((item) => item.icd10);
+          const unique = items.filter((item, index) => items.findIndex((prev) => prev.icd10 === item.icd10) === index);
+          if (unique.length > 1) {
+            setMenuOpen(false);
+            setFinder(null);
+            setCombo({ row, note: "", items: unique });
+            return;
+          }
+          if (unique.length === 1) {
+            commitPlain(
+              {
+                icd10: unique[0].icd10,
+                nhiIcd10: unique[0].nhiIcd10 || unique[0].icd10.replace(/\./g, ""),
+                text: payload.text?.trim() || unique[0].text,
+                icd9: found[0]?.icd9 || nine,
+              },
+              row,
+            );
+            return;
+          }
+          askIcd10(row, payload.text || "");
+          return;
+        }
+        const mapped = await crosswalkDiagnosis(asNine, payload.text);
         const items = [
           {
             icd10: mapped.icd10,
@@ -315,7 +363,7 @@ export function DiagnosesWidget({
         }
         const one = items[0];
         if (!one) {
-          commitPlain(payload, row);
+          askIcd10(row, payload.text || asNine);
           return;
         }
         commitPlain(
@@ -323,13 +371,13 @@ export function DiagnosesWidget({
             icd10: one.icd10,
             nhiIcd10: one.nhiIcd10 || one.icd10.replace(/\./g, ""),
             text: one.text,
-            icd9: payload.icd9,
+            icd9: nine || asNine,
           },
           row,
           mapped.chiefNote || "",
         );
       } catch {
-        commitPlain(payload, row);
+        askIcd10(row, payload.text || asNine);
       }
     })();
   };

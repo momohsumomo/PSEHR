@@ -551,7 +551,7 @@ def _orders(
         code = str(meta.get("nhiCode") or "").strip()
         if not code:
             continue
-        if str(meta.get("payMark") or "").strip() == "\u81ea":
+        if str(meta.get("payMark") or "").strip() == "\u81ea" or "[" in str(meta.get("memo") or ""):
             continue
         resource = med.get("resource") or {}
         billing = _extract_med_billing(resource, meta)

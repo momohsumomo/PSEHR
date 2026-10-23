@@ -13,10 +13,33 @@ export function ceilCashTen(n: number): number {
   return Math.ceil(tens - 1e-9) * 10;
 }
 
-/** Cash is added only when the line note contains [ or @. A self-pay mark alone does not. */
+function selfMark(row: RxLine): boolean {
+  const mark = (row.payMark || (row.selfPay ? "\u81ea" : "")).trim();
+  return mark === "\u81ea";
+}
+
+/**
+ * Cash total needs both marks: pay mark 自 and a [ note.
+ * [ alone is not charged. @ still means claim and also charge.
+ */
 function counted(row: RxLine): boolean {
   const memo = (row.memo || "").trim();
-  return memo.includes("[") || memo.includes("@");
+  if (memo.includes("@")) return true;
+  return selfMark(row) && memo.includes("[");
+}
+
+/** Self-pay unit times the billed total. Null when this line is not in the cash total. */
+export function cashSelfPayLine(
+  row: RxLine,
+  drugs: CatalogDrug[] = [],
+  usages?: CatalogUsage[],
+): number | null {
+  if (!counted(row)) return null;
+  const price = cashPrice(row, drugs);
+  if (price == null) return null;
+  const billed = billedDrugQty(row, usages);
+  const qty = billed > 0 ? billed : enteredQty(row);
+  return price * qty;
 }
 
 function cashPrice(row: RxLine, drugs: CatalogDrug[]): number | null {
@@ -44,12 +67,8 @@ export function rawSelfPay(
   usages?: CatalogUsage[],
 ): number {
   return rows.reduce((sum, row) => {
-    if (!counted(row)) return sum;
-    const price = cashPrice(row, drugs);
-    if (price == null) return sum;
-    const billed = billedDrugQty(row, usages);
-    const qty = billed > 0 ? billed : enteredQty(row);
-    return sum + price * qty;
+    const line = cashSelfPayLine(row, drugs, usages);
+    return line == null ? sum : sum + line;
   }, 0);
 }
 

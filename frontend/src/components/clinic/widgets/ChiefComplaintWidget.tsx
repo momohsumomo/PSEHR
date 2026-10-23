@@ -76,7 +76,32 @@ export function ChiefComplaintWidget({
     return () => watch.disconnect();
   }, [ccText, suffix]);
 
-  const textStyle = {
+  function clickLandsOnText(area: HTMLTextAreaElement, clientX: number, clientY: number): boolean {
+  const text = area.value;
+  const pos = area.selectionStart ?? text.length;
+  const lineStart = text.lastIndexOf("\n", Math.max(0, pos - 1)) + 1;
+  const breakAt = text.indexOf("\n", pos);
+  const line = text.slice(lineStart, breakAt === -1 ? text.length : breakAt);
+  const cs = window.getComputedStyle(area);
+  const canvas = document.createElement("canvas");
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return true;
+  ctx.font = `${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`;
+  const padL = Number.parseFloat(cs.paddingLeft) || 0;
+  const padT = Number.parseFloat(cs.paddingTop) || 0;
+  const fontPx = Number.parseFloat(cs.fontSize) || 16;
+  const lineHeight = Number.parseFloat(cs.lineHeight) || fontPx * 1.25;
+  const rect = area.getBoundingClientRect();
+  const x = clientX - rect.left - padL + area.scrollLeft;
+  const y = clientY - rect.top - padT + area.scrollTop;
+  const lineIndex = text.slice(0, lineStart).split("\n").length - 1;
+  if (y < lineIndex * lineHeight - 2 || y > (lineIndex + 1) * lineHeight + 2) return false;
+  const width = ctx.measureText(line).width;
+  const slop = Math.max(ctx.measureText("\u5b57").width, fontPx);
+  return x >= -2 && x <= width + slop;
+}
+
+const textStyle = {
     ...hisTextareaStyle,
     fontWeight: 700,
     fontSize: HIS.fs.body,
@@ -131,6 +156,22 @@ export function ChiefComplaintWidget({
           }}
           onScroll={() => syncMirror()}
           onSelect={(e) => setCaret(e.currentTarget.selectionStart ?? 0)}
+          onClick={(e) => {
+            const area = areaRef.current;
+            if (!area) return;
+            const text = area.value;
+            if (!text.trim()) return;
+            if (clickLandsOnText(area, e.clientX, e.clientY)) return;
+            const next = text.endsWith("\n") ? text : `${text}\n`;
+            setCcText(next);
+            setCaret(next.length);
+            window.requestAnimationFrame(() => {
+              area.selectionStart = next.length;
+              area.selectionEnd = next.length;
+              area.scrollTop = area.scrollHeight;
+              syncMirror();
+            });
+          }}
           onKeyDown={(e) => {
             if (e.key !== "Tab" || e.shiftKey || !suffix) return;
             e.preventDefault();

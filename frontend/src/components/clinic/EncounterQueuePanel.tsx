@@ -272,7 +272,13 @@ export function EncounterQueuePanel({
   useEffect(() => {
     const root = scrollerRef.current;
     if (!root || !selectedId) return;
-    root.querySelector(`[data-qid="${selectedId}"]`)?.scrollIntoView({ block: "nearest" });
+    const row = root.querySelector<HTMLElement>(`[data-qid="${selectedId}"]`);
+    row?.scrollIntoView({ block: "nearest" });
+    const header = root.querySelector("thead");
+    if (row && header) {
+      const overlap = header.getBoundingClientRect().bottom - row.getBoundingClientRect().top;
+      if (overlap > 0.5) root.scrollTop -= overlap;
+    }
   }, [selectedId, sortedEntries]);
 
   useEffect(() => {

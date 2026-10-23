@@ -533,7 +533,9 @@ def _resolve_icd9(code: str, text: str | None) -> Crosswalk:
         ranked.append((_score(src_title, title or tgt), (title or "").lower().count("unspecified"), tgt))
     ranked.sort(key=lambda item: (-item[0], -item[1], len(item[2]), item[2]))
     if ranked and ranked[0][0] > 0:
-        return _finish(c, ranked[0][2], "choice", False, text)
+        chosen = ranked[0][2]
+        others = [tgt for tgt in plain_targets if bare(tgt) != bare(chosen)]
+        return _finish(c, chosen, "choice", False, text, others)
     found, score = _search_chapter(c, src_title)
     return _finish(c, found, "kept", score <= 0, text)
 

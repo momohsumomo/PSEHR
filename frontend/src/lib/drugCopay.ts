@@ -26,9 +26,11 @@ function treatmentOrder(code: string): boolean {
   return true;
 }
 
-/** Self-pay and outside-lab lines are not part of the NHI drug fee. A memo bracket alone is not. */
+/** Self-pay, a [ note, and outside-lab lines are not part of the NHI drug fee. */
 function excludedFromDrugFee(line: RxLine): boolean {
   const mark = (line.payMark || (line.selfPay ? "\u81ea" : "")).trim();
+  const memo = (line.memo || "").trim();
+  if (memo.includes("[")) return true;
   return (
     mark === "\u81ea" ||
     mark === "\u4ea4" ||

@@ -498,7 +498,9 @@ def build_claims_summary(
                     price_source = "pack_lookup"
 
             pay_mark = str(meta.get("payMark") or "").strip()
-            if pay_mark == "\u81ea":
+            memo = str(meta.get("memo") or "")
+            # 自 is cash. [ alone is not filed and not charged.
+            if pay_mark == "\u81ea" or "[" in memo:
                 continue
             # 交付檢驗、轉檢、不另計價：醫令留在檔裡，點數是 0。
             # 舊匯入把型態 6 寫成「材」，那一欄其實是交付檢驗。

@@ -19,6 +19,7 @@ export function storedCase(caseNo: string | undefined | null): string {
 function claimLine(line: RxLine): boolean {
   const mark = String(line.payMark || "").trim();
   if (mark === "\u81ea" || line.selfPay) return false;
+  if (String(line.memo || "").includes("[")) return false;
   return true;
 }
 

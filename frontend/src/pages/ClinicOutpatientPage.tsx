@@ -3182,9 +3182,14 @@ export function ClinicOutpatientPage() {
                     }}
                     onChangeLine={(id, patch) => {
                       chartDirtyRef.current = true; setSaveSpent(false);
-                      const next = currentRx.map((l) => (l.id === id ? { ...l, ...patch } : l));
-                      if (apiMode) setApiRxOverlay(next);
-                      else setMockCurrentRx(next);
+                      const apply = (rows: RxLine[]) => rows.map((l) => (l.id === id ? { ...l, ...patch } : l));
+                      if (apiMode) setApiRxOverlay((prev) => apply(prev ?? apiCurrentRx ?? []));
+                      else if (selectedEncounterId) {
+                        setCurrentRxByEncounter((prev) => ({
+                          ...prev,
+                          [selectedEncounterId]: apply(prev[selectedEncounterId] || []),
+                        }));
+                      }
                     }}
                     sections={sections}
                     prefs={prefs}

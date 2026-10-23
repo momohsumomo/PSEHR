@@ -448,33 +448,33 @@ export function Icd10ConditionDialog({
 
 import type { RxLine } from "@/mocks/clinicMocks";
 import type { CatalogDrug } from "@/types/clinicCatalog";
+import type { CatalogUsage } from "@/utils/rxTotal";
 import { lineSelfPayPrice } from "@/utils/catalogRx";
+import { cashSelfPayLine } from "@/lib/selfPayMoney";
 
-function money(line: RxLine): { price: string; amount: string } {
+function money(line: RxLine): { price: string } {
   const price = Number(line.unitPrice);
-  if (!Number.isFinite(price)) return { price: "\u2014", amount: "\u2014" };
-  const raw = String(line.totalAmount || "");
-  const matched = raw.match(/[\d.]+/);
-  const qty = matched ? Number(matched[0]) : Number(line.qty || 0);
-  const amount = qty > 0 ? price * qty : price;
-  return { price: price.toFixed(2), amount: amount.toFixed(2) };
+  if (!Number.isFinite(price)) return { price: "\u2014" };
+  return { price: price.toFixed(2) };
 }
 
 export function RxDetailSheet({
   lines,
   drugs = [],
+  usages,
   onClose,
 }: {
   lines: RxLine[];
   drugs?: CatalogDrug[];
+  usages?: CatalogUsage[];
   onClose: () => void;
 }) {
   useEscLayer([{ open: true, close: onClose }]);
   const rows = lines.filter((line) => (line.name || "").trim() || (line.nhiCode || "").trim());
   let sum = 0;
   for (const line of rows) {
-    const amount = Number(money(line).amount);
-    if (Number.isFinite(amount)) sum += amount;
+    const amount = cashSelfPayLine(line, drugs, usages);
+    if (amount != null) sum += amount;
   }
   return createPortal(
     <div
@@ -502,6 +502,7 @@ export function RxDetailSheet({
               {rows.map((line, i) => {
                 const cost = money(line);
                 const selfPrice = lineSelfPayPrice(line, drugs);
+                const cash = cashSelfPayLine(line, drugs, usages);
                 const mark = line.payMark || (line.selfPay ? "\u81ea" : "");
                 return (
                   <tr key={line.id} className="bg-white">
@@ -516,7 +517,7 @@ export function RxDetailSheet({
                     <td className="border border-[#E0E0E0] px-1 text-right">{cost.price}</td>
                     <td className="border border-[#E0E0E0] px-1 text-right">{selfPrice == null ? "\u2014" : selfPrice.toFixed(2)}</td>
                     <td className="border border-[#E0E0E0] px-1">{mark || "\u5065\u4fdd"}</td>
-                    <td className="border border-[#E0E0E0] px-1 text-right">{cost.amount}</td>
+                    <td className="border border-[#E0E0E0] px-1 text-right">{cash == null ? "" : cash.toFixed(2)}</td>
                   </tr>
                 );
               })}
@@ -524,7 +525,7 @@ export function RxDetailSheet({
           </table>
         </div>
         <div className="flex items-center justify-between border-t border-[#A0A0A0] px-2 py-1 text-[12px]">
-          <span>{"\u91d1\u984d\u5408\u8a08"} {sum.toFixed(2)}</span>
+          <span>{"\u81ea\u8cbb\u52a0\u7e3d"} {sum.toFixed(2)}</span>
           <button type="button" className="border border-[#003C74] bg-white px-3 py-1" onClick={onClose}>{"\u95dc\u9589"}</button>
         </div>
       </div>

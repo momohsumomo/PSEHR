@@ -107,7 +107,8 @@ export function buildDelegateLabHtml(input: LabSlipInput): string {
         </tr>`,
       )
       .join("") || `<tr><td></td><td>\u2014</td><td></td><td></td></tr>`;
-  return `<div class="slip-page" style="padding:8mm 10mm;box-sizing:border-box;background:#fff;color:#000;font-size:13px;line-height:1.45;">
+  return `<div class="slip-page" style="display:flex;flex-direction:row;background:#fff;color:#000;">
+    <div style="width:50%;box-sizing:border-box;padding:6mm 5mm;font-size:13px;line-height:1.45;">
     <div style="text-align:center;font-weight:bold;font-size:18px;">\u5168\u6c11\u5065\u5eb7\u4fdd\u96aa\u9580\u8a3a\u4ea4\u4ed8\u6aa2\u9a57(\u67e5)\u8655\u65b9\u7b8b(\u6848\u4ef6:${esc(show(input.caseNo))})</div>
     <div>${esc(show(input.clinicName))} &lt;${esc(show(input.clinicCode))}&gt;\u9662\u6240\u5730\u5740:${esc(show(input.address))}</div>
     <div>\u59d3\u540d:${esc(show(input.name))} \u8eab\u5206\u8b49:${esc(show(input.idNo))}/${esc(show(input.sex))}  \u751f\u65e5:${esc(show(rocDots(input.birthday)))}  \u75c5\u6b77\u865f:${esc(show(input.medicalNo))}</div>
@@ -134,6 +135,8 @@ export function buildDelegateLabHtml(input: LabSlipInput): string {
       <div>\u96fb\u3000\u3000\u8a71:</div>
       <div></div>
     </div>
+    </div>
+    <div style="width:50%"></div>
   </div>`;
 }
 
