@@ -23,7 +23,7 @@ from src.core.nhi_cshis6_client import (
 )
 
 UPLOAD_PATH = "/v1/UploadData/Upload"
-_BATCH = 7
+_BATCH = 20
 _HEAD = '<?xml version="1.0" encoding="Big5"?>\n<RECS>\n'
 _TAIL = "\n</RECS>"
 _NO_CONSOLE = "\u8b80\u5361\u6a5f\u4e3b\u63a7\u53f0\u6c92\u958b\uff0c\u5b89\u5168\u6a21\u7d44\u7121\u6cd5\u7c3d\u7ae0\u3002\u8ddf\u53d6\u865f\u4e00\u6a23\uff0c\u4e0d\u7528\u91ab\u4e8b\u4eba\u54e1\u5361\u3002"
