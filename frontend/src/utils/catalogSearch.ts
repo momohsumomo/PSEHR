@@ -6,33 +6,55 @@ export function matchQuery(text: string, query: string): boolean {
   return text.toLowerCase().includes(q);
 }
 
+function drugMatchScore(drug: CatalogDrug, lower: string): number {
+  const alias = (drug.alias || drug.shortName || "").toLowerCase();
+  let score = 0;
+  if (alias) {
+    if (alias === lower) score += 200;
+    else if (alias.startsWith(lower)) score += 120;
+    else if (alias.includes(lower)) score += 40;
+  }
+  const fields = [drug.customName, drug.nhiCode, drug.drugNo, drug.name, drug.generic];
+  for (const f of fields) {
+    if (!f) continue;
+    const fl = f.toLowerCase();
+    if (fl === lower) score += 100;
+    else if (fl.startsWith(lower)) score += 50;
+    else if (fl.includes(lower)) score += 10;
+  }
+  return score;
+}
+
 function rankDrugs(pool: CatalogDrug[], query: string, limit: number): CatalogDrug[] {
   const q = query.trim();
   if (!q) return pool.slice(0, limit);
   const lower = q.toLowerCase();
-  const scored = pool
-    .map((d) => {
-      const alias = (d.alias || d.shortName || "").toLowerCase();
-      let score = 0;
-      if (alias) {
-        if (alias === lower) score += 200;
-        else if (alias.startsWith(lower)) score += 120;
-        else if (alias.includes(lower)) score += 40;
-      }
-      const fields = [d.customName, d.nhiCode, d.drugNo, d.name, d.generic];
-      for (const f of fields) {
-        if (!f) continue;
-        const fl = f.toLowerCase();
-        if (fl === lower) score += 100;
-        else if (fl.startsWith(lower)) score += 50;
-        else if (fl.includes(lower)) score += 10;
-      }
-      return { d, score };
-    })
+  return pool
+    .map((d) => ({ d, score: drugMatchScore(d, lower) }))
     .filter((x) => x.score > 0)
     .sort((a, b) => b.score - a.score)
-    .slice(0, limit);
-  return scored.map((x) => x.d);
+    .slice(0, limit)
+    .map((x) => x.d);
+}
+
+/** 右欄大項。檢查、處置、用藥先分開；特材自成一區，不跟藥混。 */
+export const DRUG_RAIL_SECTIONS = ["用藥", "處置", "檢查", "材料"] as const;
+export type DrugRailSection = (typeof DRUG_RAIL_SECTIONS)[number];
+
+export function drugRailSection(drug: CatalogDrug): DrugRailSection {
+  const cast = `${drug.cast || ""} ${drug.typeName || ""}`;
+  const route = `${drug.route || ""} ${drug.useType || ""}`.toLowerCase();
+  if (cast.includes("檢查") || route.includes("exam")) return "檢查";
+  if (
+    cast.includes("治療") ||
+    cast.includes("手術") ||
+    cast.includes("處置") ||
+    route.includes("treatment")
+  ) {
+    return "處置";
+  }
+  if (cast.includes("特材") || cast.includes("材料") || route.includes("material")) return "材料";
+  return "用藥";
 }
 
 export function searchDrugs(drugs: CatalogDrug[], query: string, limit = 12): CatalogDrug[] {
@@ -152,5 +174,27 @@ export function browseDrugs(
 ): CatalogDrug[] {
   const opened = drugs.filter((d) => d.clinicIndex === true);
   const pool = indexedOnly && opened.length ? opened : drugs;
-  return rankDrugs(pool, query, limit);
+  const q = query.trim().toLowerCase();
+  const rows = pool.map((d, index) => ({
+    d,
+    index,
+    score: q ? drugMatchScore(d, q) : 0,
+  }));
+  const matched = q ? rows.filter((row) => row.score > 0) : rows;
+  matched.sort((a, b) => {
+    const section =
+      DRUG_RAIL_SECTIONS.indexOf(drugRailSection(a.d)) - DRUG_RAIL_SECTIONS.indexOf(drugRailSection(b.d));
+    if (section) return section;
+    if (!q) {
+      const common = Number(b.d.clinicIndex === true) - Number(a.d.clinicIndex === true);
+      if (common) return common;
+      const sortA = Number(a.d.sort ?? a.d.typeSort ?? a.index);
+      const sortB = Number(b.d.sort ?? b.d.typeSort ?? b.index);
+      if (sortA !== sortB) return sortA - sortB;
+    } else if (b.score !== a.score) {
+      return b.score - a.score;
+    }
+    return a.index - b.index;
+  });
+  return matched.slice(0, limit).map((row) => row.d);
 }

@@ -5,7 +5,7 @@
 import { useMemo, useState } from "react";
 import type { CatalogDiagnosis, CatalogDrug, CatalogPackage } from "@/types/clinicCatalog";
 import type { DiagnosisRow, RxLine } from "@/mocks/clinicMocks";
-import { browseDiagnoses, browseDrugs } from "@/utils/catalogSearch";
+import { browseDiagnoses, browseDrugs, drugRailSection } from "@/utils/catalogSearch";
 import { catalogDrugToRxLine, resolvePackageLines } from "@/utils/catalogRx";
 import { HIS, HIS_FONT } from "@/lib/hisTheme";
 
@@ -100,7 +100,7 @@ export function ChartContextRail({
   const zoneHint =
     listFocus === "dx"
       ? "目前對應：病名選單（點左側病名區可切換）"
-      : "目前對應：處置選單（常用＝診所開放的藥；完全＝設定裡整份藥檔）";
+      : "目前對應：處置選單（先分檢查、處置、用藥；常用排在該類最上面）";
 
   const filterQuery = listFocus === "rx" ? rxQuery : dxQuery;
   const setFilterQuery = listFocus === "rx" ? setRxQuery : setDxQuery;
@@ -190,25 +190,37 @@ export function ChartContextRail({
           ))}
         {listFocus === "rx" &&
           rxTab === "drug" &&
-          drugHits.map((d) => (
-            <li key={`${d.nhiCode}-${d.drugNo}`} className="border-b" style={{ borderColor: "#E0E8F0" }}>
-              <button
-                type="button"
-                className="flex w-full gap-1 px-1 py-0.5 text-left hover:bg-[#FFFF80]"
-                onClick={() => {
-                  onAddRx([catalogDrugToRxLine(d)]);
-                  setRxQuery("");
-                }}
-                onDoubleClick={() => {
-                  onAddRx([catalogDrugToRxLine(d)]);
-                  setRxQuery("");
-                }}
-              >
-                <span className="w-16 shrink-0 font-mono text-[10px]">{d.alias || d.shortName || d.nhiCode || "\u2014"}</span>
-                <span className="min-w-0 flex-1 font-bold">{d.customName || d.name}</span>
-              </button>
-            </li>
-          ))}
+          drugHits.map((d, i) => {
+            const section = drugRailSection(d);
+            const showSection = railMode !== "oral" && (i === 0 || drugRailSection(drugHits[i - 1]) !== section);
+            return (
+              <li key={`${section}-${d.nhiCode}-${d.drugNo}-${i}`} className="border-b" style={{ borderColor: "#E0E8F0" }}>
+                {showSection ? (
+                  <div
+                    className="sticky top-0 px-1 py-0.5 text-[11px] font-bold text-[#003C74]"
+                    style={{ background: "#E0DCD0" }}
+                  >
+                    {section}
+                  </div>
+                ) : null}
+                <button
+                  type="button"
+                  className="flex w-full gap-1 px-1 py-0.5 text-left hover:bg-[#FFFF80]"
+                  onClick={() => {
+                    onAddRx([catalogDrugToRxLine(d)]);
+                    setRxQuery("");
+                  }}
+                  onDoubleClick={() => {
+                    onAddRx([catalogDrugToRxLine(d)]);
+                    setRxQuery("");
+                  }}
+                >
+                  <span className="w-16 shrink-0 font-mono text-[10px]">{d.alias || d.shortName || d.nhiCode || "\u2014"}</span>
+                  <span className="min-w-0 flex-1 font-bold">{d.customName || d.name}</span>
+                </button>
+              </li>
+            );
+          })}
         {listFocus === "rx" &&
           rxTab === "pkg" &&
           pkgHits.map((p) => (

@@ -33,6 +33,7 @@ import {
   type ClinicTab,
 } from "@/lib/clinicShortcutSets";
 import { rxLinesMissingFrom } from "@/lib/dittoRxLines";
+import { splitStoppedRxLines, stoppedRxLabels } from "@/utils/catalogRx";
 import { EncounterQueuePanel } from "@/components/clinic/EncounterQueuePanel";
 import { HistoryRxPanel } from "@/components/clinic/HistoryRxPanel";
 import { PatientHeaderWidget } from "@/components/clinic/widgets/PatientHeaderWidget";
@@ -103,7 +104,7 @@ import {
 } from "@/components/clinic/VisitSaveConfirmPanel";
 import { HIS, HIS_FONT, hisFontStyle } from "@/lib/hisTheme";
 import { findCardCheckIn, findWaitingAppointment, otherShiftAppointmentNote } from "@/lib/appointmentCheckIn";
-import { compareClinicQueue, normalizeClock, nowClock, planQueueNumber, shiftQueueNumbers, showsUploadCircle, skipsCloudWrite } from "@/lib/queueOrder";
+import { compareClinicQueue, normalizeClock, nowClock, planQueueNumber, shiftQueueNumbers, skipsCloudWrite } from "@/lib/queueOrder";
 import { AppointmentCheckInDialog, InsertNumberDialog, PrebookArriveDialog, PrebookNoCardDialog } from "@/components/clinic/InsertNumberDialog";
 import { useEscLayer } from "@/hooks/useEscLayer";
 
@@ -355,6 +356,7 @@ export function ClinicOutpatientPage() {
     regFee: string;
     date: string;
   } | null>(null);
+  const [retiredRxAsk, setRetiredRxAsk] = useState<{ names: string[]; run: () => void } | null>(null);
   const [cardDiagnose, setCardDiagnose] = useState<CardFaultReport | null>(null);
   const [printMenuOpen, setPrintMenuOpen] = useState(false);
   const [chartFocus, setChartFocus] = useState<ChartEditFocus>("history");
@@ -1036,12 +1038,18 @@ export function ClinicOutpatientPage() {
     if (liveCase?.encounterId === selectedEncounterId && liveCase.display) {
       draft.caseNo = liveCase.display;
     }
-    setSaveDraft(draft);
     setCardNote(null);
-    if (selected && showsUploadCircle(selected) && draft.writeCard) {
+    const alreadySaved = Boolean(
+      selected &&
+        !skipsCloudWrite(selected) &&
+        (selected.cardWritten || selected.queueStatus === "finished"),
+    );
+    if (alreadySaved) {
+      setSaveDraft({ ...draft, writeCard: false });
       setCloudAgainAsk(true);
       return;
     }
+    setSaveDraft(draft);
     setSaveLayerOpen(true);
   }, [isChart, selectedEncounterId, selected, displayDiagnoses, currentRx, liveCase, catalog.drugs, catalog.usages]);
 
@@ -1412,13 +1420,32 @@ export function ClinicOutpatientPage() {
     void openSaveLayer();
   }, [saveLayerOpen, openSaveLayer, confirmSave, saving, saveSpent, cloudAgainAsk]);
 
-  const dittoRx = useCallback(
+  const commitDittoRx = useCallback(
     (lines: RxLine[]) => {
       const missing = rxLinesMissingFrom(currentRx, lines);
       if (!missing.length) return;
       addRxLines(cloneRxLines(missing));
     },
     [addRxLines, cloneRxLines, currentRx],
+  );
+
+  const offerRxLines = useCallback(
+    (lines: RxLine[], run: (kept: RxLine[]) => void) => {
+      const { kept, stopped } = splitStoppedRxLines(lines, catalog.drugs);
+      if (!stopped.length) {
+        run(kept);
+        return;
+      }
+      setRetiredRxAsk({ names: stoppedRxLabels(stopped), run: () => run(kept) });
+    },
+    [catalog.drugs],
+  );
+
+  const dittoRx = useCallback(
+    (lines: RxLine[]) => {
+      offerRxLines(lines, commitDittoRx);
+    },
+    [commitDittoRx, offerRxLines],
   );
 
   const dittoCc = useCallback(
@@ -1443,28 +1470,34 @@ export function ClinicOutpatientPage() {
 
   const dittoVisit = useCallback(
     (visit: HistoryVisit) => {
-      dittoCc(visit.chiefComplaint, visit.visitDate);
-      dittoDx(visit.diagnoses);
-      dittoRx(visit.medications);
+      offerRxLines(visit.medications, (kept) => {
+        dittoCc(visit.chiefComplaint, visit.visitDate);
+        dittoDx(visit.diagnoses);
+        commitDittoRx(kept);
+      });
     },
-    [dittoCc, dittoDx, dittoRx],
+    [commitDittoRx, dittoCc, dittoDx, offerRxLines],
   );
 
   const transferVisit = useCallback(
     (visit: HistoryVisit) => {
-      dittoCc(visit.chiefComplaint, visit.visitDate, true);
-      dittoDx(visit.diagnoses, true);
-      dittoRx(visit.medications);
+      offerRxLines(visit.medications, (kept) => {
+        dittoCc(visit.chiefComplaint, visit.visitDate, true);
+        dittoDx(visit.diagnoses, true);
+        commitDittoRx(kept);
+      });
     },
-    [dittoCc, dittoDx, dittoRx],
+    [commitDittoRx, dittoCc, dittoDx, offerRxLines],
   );
 
   const transferVisitNoCc = useCallback(
     (visit: HistoryVisit) => {
-      dittoDx(visit.diagnoses, true);
-      dittoRx(visit.medications);
+      offerRxLines(visit.medications, (kept) => {
+        dittoDx(visit.diagnoses, true);
+        commitDittoRx(kept);
+      });
     },
-    [dittoDx, dittoRx],
+    [commitDittoRx, dittoDx, offerRxLines],
   );
 
   const copyPrevRx = useCallback(() => {
@@ -2337,6 +2370,7 @@ export function ClinicOutpatientPage() {
 
   useEscLayer(
     [
+      { open: retiredRxAsk != null, close: () => setRetiredRxAsk(null) },
       { open: replyAsk != null, close: finishReply },
       { open: newPatientQuery != null, close: () => setNewPatientQuery(null) },
       { open: checkInAsk != null, close: () => setCheckInAsk(null) },
@@ -3656,32 +3690,32 @@ export function ClinicOutpatientPage() {
           }}
         >
           <div className="w-[min(28rem,94vw)] border border-black bg-[#F4F1EA] p-3 text-[14px] shadow-lg">
-            <div className="mb-2 text-[16px] font-bold">{"\u9019\u7b46\u5df2\u7d93\u5beb\u5165\u904e\u96f2\u7aef"}</div>
+            <div className="mb-2 text-[16px] font-bold">是否還需要再一次存檔寫入雲端？</div>
             <p className="mb-3 leading-snug">
-              {"\u82e5\u9019\u6b21\u53ea\u6539\u81ea\u8cbb\u6216\u7528\u6cd5\uff0c\u53ef\u4ee5\u4e0d\u518d\u4e0a\u50b3\u3002\u9078\u5426\u5c31\u4e0d\u5fc5\u63d2\u5065\u4fdd\u5361\uff0c\u4e5f\u4e0d\u6703\u518d\u5beb\u4e00\u6b21\u3002"}
+              這筆已經存過。選否，這次存檔頁的「寫入健保雲端」不打勾，只更新資料庫。選是，這次才打勾並再寫一次雲端。
             </p>
             <div className="flex justify-end gap-2">
               <button
                 type="button"
                 className="border border-[#808080] bg-white px-3 py-1 font-bold"
                 onClick={() => {
-                  setSaveDraft((d) => ({ ...d, writeCard: false }));
+                  setSaveDraft((d) => ({ ...d, writeCard: false, writeDx: false, writeOrders: false }));
                   setCloudAgainAsk(false);
                   setSaveLayerOpen(true);
                 }}
               >
-                {"\u4e0d\u7528\u518d\u4e0a\u50b3"}
+                否，只存本機
               </button>
               <button
                 type="button"
                 className="border border-[#004d00] bg-[#C8F0C8] px-3 py-1 font-bold"
                 onClick={() => {
-                  setSaveDraft((d) => ({ ...d, writeCard: true }));
+                  setSaveDraft((d) => ({ ...d, writeCard: true, writeDx: true, writeOrders: true }));
                   setCloudAgainAsk(false);
                   setSaveLayerOpen(true);
                 }}
               >
-                {"\u8981\u518d\u4e0a\u50b3"}
+                是，再寫入雲端
               </button>
             </div>
           </div>
@@ -3925,6 +3959,52 @@ export function ClinicOutpatientPage() {
                 onClick={() => setDepositAsk(null)}
               >
                 否
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {retiredRxAsk && (
+        <div
+          className="fixed inset-0 z-[110] flex items-center justify-center bg-black/40"
+          onMouseDown={() => setRetiredRxAsk(null)}
+        >
+          <div
+            className="w-[min(26rem,92vw)] border bg-[#F0F0F0] shadow-lg"
+            style={{ borderColor: HIS.chromeDark, fontFamily: HIS_FONT }}
+            onMouseDown={(event) => event.stopPropagation()}
+          >
+            <div className="bg-[#2060A0] px-2 py-1 text-xs font-bold text-white">這個藥已經沒在用了</div>
+            <div className="px-3 py-3 text-[13px] leading-relaxed text-black">
+              <p>下列藥品在藥品資料已註記 N，不會帶進這次看診：</p>
+              <ul className="my-2 list-disc pl-5">
+                {retiredRxAsk.names.map((name) => (
+                  <li key={name}>{name}</li>
+                ))}
+              </ul>
+              <p>按確認後，只帶入其餘還在用的內容。停用的藥請自行改開。</p>
+            </div>
+            <div className="flex justify-end gap-1 border-t px-2 py-2" style={{ borderColor: HIS.chromeDark }}>
+              <button
+                type="button"
+                autoFocus
+                className="border px-3 py-0.5 text-xs font-bold"
+                style={{ borderColor: "#404040", background: "#FFFF80" }}
+                onClick={() => {
+                  const run = retiredRxAsk.run;
+                  setRetiredRxAsk(null);
+                  run();
+                }}
+              >
+                確認
+              </button>
+              <button
+                type="button"
+                className="border px-3 py-0.5 text-xs font-bold"
+                style={{ borderColor: "#404040", background: "#fff" }}
+                onClick={() => setRetiredRxAsk(null)}
+              >
+                取消
               </button>
             </div>
           </div>

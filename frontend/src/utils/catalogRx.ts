@@ -127,6 +127,84 @@ export function catalogDrugToRxLine(drug: CatalogDrug, usages?: CatalogUsage[]):
   return withComputedTotal(line, usages);
 }
 
+type RxIdentity = {
+  name?: string;
+  shortName?: string;
+  nhiCode?: string;
+};
+
+function normDrugToken(value: string | undefined): string {
+  return String(value || "").replace(/\s+/g, " ").trim().toUpperCase();
+}
+
+/** 藥品主檔選用欄註記 N：這筆已經不開放再開。 */
+export function drugMarkedStopped(drug: CatalogDrug): boolean {
+  return String(drug.indexFlag || "").trim().toUpperCase() === "N";
+}
+
+function productKeys(drug: CatalogDrug): string[] {
+  return [drug.customName, drug.name, drug.alias, drug.shortName, drug.drugNo]
+    .map((value) => normDrugToken(value))
+    .filter(Boolean);
+}
+
+function lineMatchesProduct(line: RxIdentity, drug: CatalogDrug): boolean {
+  const keys = productKeys(drug);
+  const alias = normDrugToken(line.shortName);
+  const name = normDrugToken(line.name);
+  if (alias && keys.includes(alias)) return true;
+  if (name && (keys.includes(name) || normDrugToken(drug.nhiCode) === name)) return true;
+  return false;
+}
+
+function lineMatchesCode(line: RxIdentity, drug: CatalogDrug): boolean {
+  const code = normDrugToken(line.nhiCode);
+  if (!code) return false;
+  return normDrugToken(drug.nhiCode) === code || productKeys(drug).includes(code);
+}
+
+function drugStillOpen(drug: CatalogDrug): boolean {
+  if (drugMarkedStopped(drug)) return false;
+  const flag = String(drug.indexFlag || "").trim().toUpperCase();
+  return flag === "Y" || drug.clinicIndex === true;
+}
+
+/**
+ * 歷史處方裡，名稱或快碼對到「選用 N」而且沒有另一筆還在用的同名藥。
+ * 同健保碼、不同品名的新廠牌不算同一筆，避免把已停用的舊藥悄悄換成新藥。
+ */
+export function splitStoppedRxLines<T extends RxIdentity>(
+  lines: T[],
+  drugs: CatalogDrug[],
+): { kept: T[]; stopped: T[] } {
+  const stoppedDrugs = drugs.filter(drugMarkedStopped);
+  if (!lines.length || !stoppedDrugs.length) return { kept: lines.slice(), stopped: [] };
+  const openDrugs = drugs.filter(drugStillOpen);
+  const kept: T[] = [];
+  const stopped: T[] = [];
+  for (const line of lines) {
+    const hitStopped = stoppedDrugs.some(
+      (drug) => lineMatchesProduct(line, drug) || lineMatchesCode(line, drug),
+    );
+    const hitOpen = openDrugs.some((drug) => lineMatchesProduct(line, drug));
+    if (hitStopped && !hitOpen) stopped.push(line);
+    else kept.push(line);
+  }
+  return { kept, stopped };
+}
+
+export function stoppedRxLabels(lines: RxIdentity[]): string[] {
+  const seen = new Set<string>();
+  const labels: string[] = [];
+  for (const line of lines) {
+    const label = String(line.name || line.shortName || line.nhiCode || "").trim() || "未命名藥品";
+    if (seen.has(label)) continue;
+    seen.add(label);
+    labels.push(label);
+  }
+  return labels;
+}
+
 function packageSourceLines(pkg: CatalogPackage): Array<{
   drugNo?: string;
   drugCode?: string;

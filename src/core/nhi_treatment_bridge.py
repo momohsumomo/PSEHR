@@ -61,8 +61,15 @@ def order_signs_from_write(
     raw_items = data.get("hexSignatureItems")
     if not isinstance(raw_items, list) or not raw_items:
         raw_items = data.get("signatureItems") if isinstance(data.get("signatureItems"), list) else []
+    writes = [rx for rx in prescriptions if str((rx or {}).get("treatmentItem") or "").upper() not in {"A", "B", "C", "D", "E"}]
+    if len(raw_items) == len(writes):
+        rows = writes
+    else:
+        rows = prescriptions
     paired: list[tuple[str, str]] = []
-    for rx, item in zip(prescriptions, raw_items):
+    for rx, item in zip(rows, raw_items):
+        if str((rx or {}).get("treatmentItem") or "").upper() in {"A", "B", "C", "D", "E"}:
+            continue
         code = str((rx or {}).get("treatmentItemCode") or "").strip()
         sign = as_hex_field(str(item or ""), 40)
         if code and sign:
@@ -156,6 +163,7 @@ def write_visit_to_cloud(
     subs = (codes[1:] + ["", "", "", "", ""])[:5]
 
     wrote_codes = False
+    dx_already = False
     wrote_rx = False
     rx_count = 0
     order_signs: list[tuple[str, str]] = []
@@ -196,13 +204,24 @@ def write_visit_to_cloud(
         last_raw = data
         code = data.get("statusCode")
         if code not in (None, 0):
-            return CloudWriteResult(
-                ok=False,
-                statusCode=int(code) if code is not None else None,
-                reason=f"WriteCodeFee \u5931\u6557\uff1a{status_hint(int(code))}",
-                raw=data,
-            )
-        wrote_codes = True
+            # 3209：這筆就醫的診斷已經在雲端。再寫一次不會蓋掉，處方改動要接著送。
+            if int(code) == 3209:
+                dx_already = True
+                if not (write_orders and prescriptions):
+                    return CloudWriteResult(
+                        ok=True,
+                        reason="\u8a3a\u65b7\u5df2\u5728\u96f2\u7aef\uff0c\u6c92\u6709\u91cd\u5beb\u3002\u672c\u6a5f\u75c5\u6b77\u5df2\u66f4\u65b0\u3002",
+                        raw=data,
+                    )
+            else:
+                return CloudWriteResult(
+                    ok=False,
+                    statusCode=int(code) if code is not None else None,
+                    reason=f"WriteCodeFee \u5931\u6557\uff1a{status_hint(int(code))}",
+                    raw=data,
+                )
+        else:
+            wrote_codes = True
 
     if write_orders and prescriptions:
         # re-sign for second call
@@ -267,13 +286,17 @@ def write_visit_to_cloud(
         parts.append("WriteCodeFee")
     if wrote_rx:
         parts.append(f"Prescription/Write x{rx_count}")
+    if dx_already and wrote_rx:
+        reason = "\u8a3a\u65b7\u5df2\u5728\u96f2\u7aef\uff0c\u6c92\u6709\u91cd\u5beb\u3002\u9019\u6b21\u7684\u8655\u65b9\u5df2\u518d\u5beb\u5165\u3002"
+    else:
+        reason = "\u96f2\u7aef\u5beb\u5165\u6210\u529f\uff1a" + "+".join(parts)
     return CloudWriteResult(
         ok=True,
         wroteCodes=wrote_codes,
         wrotePrescriptions=wrote_rx,
         prescriptionCount=rx_count,
         orderSigns=order_signs,
-        reason="\u96f2\u7aef\u5beb\u5165\u6210\u529f\uff1a" + "+".join(parts),
+        reason=reason,
         raw=last_raw,
     )
 
