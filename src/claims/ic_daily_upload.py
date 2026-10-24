@@ -68,6 +68,41 @@ def _visit_time(reg: dict[str, Any], iso_day: str, slot: str) -> str:
     return ""
 
 
+def _bump_stamp(stamp: str) -> str:
+    from datetime import datetime, timedelta
+
+    moment = datetime(
+        int(stamp[:3]) + 1911,
+        int(stamp[3:5]),
+        int(stamp[5:7]),
+        int(stamp[7:9]),
+        int(stamp[9:11]),
+        int(stamp[11:13]),
+    ) + timedelta(seconds=1)
+    return f"{moment.year - 1911:03d}{moment.month:02d}{moment.day:02d}{moment.strftime('%H%M%S')}"
+
+
+def unique_visit_times(records: list[dict[str, Any]]) -> None:
+    """Two visits cannot share one second. The first keeps the stored clock."""
+    used: set[str] = set()
+    for rec in records:
+        mb = rec.setdefault("mb1", {})
+        stamp = str(mb.get("M11") or "")
+        if len(stamp) != 13 or not stamp.isdigit():
+            continue
+        nxt = stamp
+        guard = 0
+        while nxt in used and guard < 86400:
+            nxt = _bump_stamp(nxt)
+            guard += 1
+        if nxt != stamp:
+            mb["M11"] = nxt
+            for order in rec.get("orders") or []:
+                if str(order.get("D01") or "") == stamp:
+                    order["D01"] = nxt
+        used.add(nxt)
+
+
 def _icd(code: str) -> str:
     return str(code or "").replace(".", "").strip()[:9]
 
@@ -243,6 +278,7 @@ def collect_ic_day(store: Any, day: str, institution: str) -> dict[str, Any]:
     from src.claims.ic_sign_lookup import fill_signs, unsigned_normal
 
     fill_signs(included, iso)
+    unique_visit_times(included)
     xml = render_ic_daily_xml(included)
     return {
         "date": iso,

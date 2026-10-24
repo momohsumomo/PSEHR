@@ -1,5 +1,20 @@
 # -*- coding: utf-8 -*-
-from src.claims.ic_daily_upload import render_ic_daily_xml
+import unittest
+
+from src.claims.ic_daily_upload import render_ic_daily_xml, unique_visit_times
+
+
+class VisitTimeTests(unittest.TestCase):
+    def test_duplicate_visit_second_moves_the_later_one(self):
+        rows = [
+            {"mb1": {"M11": "1151023114946"}, "orders": [{"D01": "1151023114946"}]},
+            {"mb1": {"M11": "1151023114946"}, "orders": [{"D01": "1151023114946"}]},
+        ]
+        unique_visit_times(rows)
+        self.assertEqual(rows[0]["mb1"]["M11"], "1151023114946")
+        self.assertEqual(rows[0]["orders"][0]["D01"], "1151023114946")
+        self.assertEqual(rows[1]["mb1"]["M11"], "1151023114947")
+        self.assertEqual(rows[1]["orders"][0]["D01"], "1151023114947")
 
 
 def test_daily_fee_is_first_band_per_person_minus_copay():
