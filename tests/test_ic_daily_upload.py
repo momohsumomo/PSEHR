@@ -1,8 +1,9 @@
 # -*- coding: utf-8 -*-
 import unittest
 
-from src.claims.ic_daily_upload import render_ic_daily_xml, unique_visit_times
+from src.claims.ic_daily_upload import _orders, order_sign_queues, pack_order_signs, render_ic_daily_xml, unique_visit_times
 from src.claims.ic_upload_send import xml_batches
+from src.core.nhi_treatment_bridge import order_signs_from_write
 
 
 class VisitTimeTests(unittest.TestCase):
@@ -27,6 +28,53 @@ class BatchTests(unittest.TestCase):
         self.assertEqual(parts[1].count("<REC>"), 1)
         self.assertTrue(parts[0].startswith('<?xml version="1.0" encoding="Big5"?>'))
         self.assertTrue(parts[1].rstrip().endswith("</RECS>"))
+
+
+class OrderSignTests(unittest.TestCase):
+    def test_card_signature_lands_on_the_same_drug(self):
+        sign = "AB" * 20
+        packed = pack_order_signs([("ZZTEST0001", sign)])
+        queues = order_sign_queues(packed)
+        meds = [
+            {
+                "indexMeta": {"nhiCode": "ZZTEST0001", "daysSupply": 3, "quantity": 9, "useage": "BID"},
+                "resource": {},
+            },
+            {
+                "indexMeta": {"nhiCode": "ZZTEST0002", "daysSupply": 3, "quantity": 9, "useage": "BID"},
+                "resource": {},
+            },
+        ]
+        orders, *_rest = _orders(
+            meds, "1151023110000", "0", {}, {}, casts={}, sign_queues=queues
+        )
+        self.assertEqual(orders[0]["D02"], "1")
+        self.assertEqual(orders[0]["D11"], sign)
+        self.assertNotIn("D11", orders[1])
+
+    def test_outside_dispense_does_not_consume_the_signature(self):
+        sign = "CD" * 20
+        queues = order_sign_queues(pack_order_signs([("ZZTEST0001", sign)]))
+        meds = [
+            {
+                "indexMeta": {"nhiCode": "ZZTEST0001", "daysSupply": 3, "quantity": 9, "useage": "BID"},
+                "resource": {},
+            }
+        ]
+        orders, *_rest = _orders(
+            meds, "1151023110000", "1", {}, {}, casts={}, sign_queues=queues
+        )
+        self.assertEqual(orders[0]["D02"], "M")
+        self.assertNotIn("D11", orders[0])
+        self.assertEqual(queues["ZZTEST0001"], [sign])
+
+    def test_write_response_keeps_hex_in_order(self):
+        hx = "12" * 20
+        pairs = order_signs_from_write(
+            [{"treatmentItemCode": "zztest0001"}],
+            {"hexSignatureItems": [hx]},
+        )
+        self.assertEqual(pairs, [("zztest0001", hx)])
 
 
 def test_daily_fee_is_first_band_per_person_minus_copay():

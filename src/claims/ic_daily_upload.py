@@ -29,6 +29,37 @@ def _abnormal_seq(seq: str) -> bool:
     return bool(text) and text[:1].isalpha()
 
 
+def pack_order_signs(pairs: list[tuple[str, str]]) -> str:
+    """One line per card signature: order code, then 40 hex characters."""
+    lines: list[str] = []
+    for code, sign in pairs:
+        token = "".join(ch for ch in str(code or "").upper() if ch.isalnum())[:12]
+        hx = "".join(ch for ch in str(sign or "").upper() if ch in "0123456789ABCDEF")
+        if token and len(hx) == 40:
+            lines.append(f"{token},{hx}")
+    return "\n".join(lines)
+
+
+def order_sign_queues(raw: str) -> dict[str, list[str]]:
+    queues: dict[str, list[str]] = {}
+    for line in str(raw or "").splitlines():
+        code, sep, sign = line.partition(",")
+        if not sep:
+            continue
+        token = "".join(ch for ch in code.upper() if ch.isalnum())[:12]
+        hx = sign.strip().upper()
+        if token and len(hx) == 40 and all(ch in "0123456789ABCDEF" for ch in hx):
+            queues.setdefault(token, []).append(hx)
+    return queues
+
+
+def _take_order_sign(queues: dict[str, list[str]], code: str) -> str:
+    bucket = queues.get("".join(ch for ch in str(code or "").upper() if ch.isalnum())[:12])
+    if not bucket:
+        return ""
+    return bucket.pop(0)
+
+
 def _esc(value: Any) -> str:
     text = str(value or "")
     return (
@@ -392,7 +423,7 @@ def _compose(
     dispense = str(reg.get("dispense") or "0").strip()[:1] or "0"
     meds = store.list_medication_requests(encounter_id=encounter_id)
     orders, oral_days, drug_days, has_general, has_chronic, line_points = _orders(
-        meds, when, dispense, usages, routes
+        meds, when, dispense, usages, routes, sign_queues=order_sign_queues(str(reg.get("orderSigns") or ""))
     )
     if drug_days <= 0:
         m23 = "2"
@@ -573,6 +604,7 @@ def _orders(
     usages: dict,
     routes: dict,
     casts: dict[str, str] | None = None,
+    sign_queues: dict[str, list[str]] | None = None,
 ) -> tuple[list[dict[str, str]], int, int, bool, bool, int]:
     orders: list[dict[str, str]] = []
     oral_days = 0
@@ -583,6 +615,7 @@ def _orders(
     seq = 1
     deliver = dispense == "1"
     table = casts if casts is not None else _order_casts()
+    queues = sign_queues if sign_queues is not None else {}
 
     def _rank(med: dict[str, Any]) -> tuple:
         code = str((med.get("indexMeta") or {}).get("nhiCode") or "").strip()
@@ -656,6 +689,10 @@ def _orders(
         else:
             row["D05"] = "0"
             row["D10"] = _qty(billed or 1)
+        if kind in {"1", "2", "3"}:
+            signed = _take_order_sign(queues, code)
+            if signed:
+                row["D11"] = signed
         orders.append(row)
         seq += 1
     return orders, oral_days, drug_days, has_general, has_chronic, points

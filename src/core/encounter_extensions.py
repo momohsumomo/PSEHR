@@ -58,6 +58,7 @@ REG_STRING_KEYS = (
     "referralRetry",
     "samId",
     "securitySign",
+    "orderSigns",
     "icUploadDate",
     "icCaseNo",
     "icRemark",

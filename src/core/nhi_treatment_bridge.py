@@ -14,6 +14,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any
 
+from src.claims.ic_sign_lookup import as_hex_field
 from src.core.nhi_cshis6_client import DEFAULT_CONSOLE_BASE, status_hint
 from src.core.nhi_seq_bridge import _call_business, posted_sign
 
@@ -27,6 +28,7 @@ class CloudWriteResult:
     wroteCodes: bool = False
     wrotePrescriptions: bool = False
     prescriptionCount: int = 0
+    orderSigns: list[tuple[str, str]] = field(default_factory=list)
     raw: dict[str, Any] | None = None
 
 
@@ -47,6 +49,25 @@ class CloudTreatQueryResult:
     treatments: list[CloudTreatHit] = field(default_factory=list)
     statusCode: int | None = None
     raw: dict[str, Any] | None = None
+
+
+def order_signs_from_write(
+    prescriptions: list[dict[str, Any]],
+    data: dict[str, Any] | None,
+) -> list[tuple[str, str]]:
+    """HEX signatures from Prescription/Write, one per written order. These are D11."""
+    if not isinstance(data, dict):
+        return []
+    raw_items = data.get("hexSignatureItems")
+    if not isinstance(raw_items, list) or not raw_items:
+        raw_items = data.get("signatureItems") if isinstance(data.get("signatureItems"), list) else []
+    paired: list[tuple[str, str]] = []
+    for rx, item in zip(prescriptions, raw_items):
+        code = str((rx or {}).get("treatmentItemCode") or "").strip()
+        sign = as_hex_field(str(item or ""), 40)
+        if code and sign:
+            paired.append((code, sign))
+    return paired
 
 
 def _icd(raw: str) -> str:
@@ -137,6 +158,7 @@ def write_visit_to_cloud(
     wrote_codes = False
     wrote_rx = False
     rx_count = 0
+    order_signs: list[tuple[str, str]] = []
     last_raw: dict[str, Any] | None = None
 
     if write_dx:
@@ -231,6 +253,7 @@ def write_visit_to_cloud(
             )
         wrote_rx = True
         rx_count = len(prescriptions[:60])
+        order_signs = order_signs_from_write(prescriptions[:60], data)
 
     if not write_dx and not (write_orders and prescriptions):
         return CloudWriteResult(
@@ -249,6 +272,7 @@ def write_visit_to_cloud(
         wroteCodes=wrote_codes,
         wrotePrescriptions=wrote_rx,
         prescriptionCount=rx_count,
+        orderSigns=order_signs,
         reason="\u96f2\u7aef\u5beb\u5165\u6210\u529f\uff1a" + "+".join(parts),
         raw=last_raw,
     )

@@ -531,9 +531,23 @@ def write_visit_to_card(
         desk_sign=desk_sign,
         desk_sign_rx=desk_sign_rx,
     )
+    reason = result.reason
+    if result.ok and not result.skipped and result.orderSigns and isinstance(enc, dict):
+        from src.claims.ic_daily_upload import pack_order_signs
+        from src.core.encounter_extensions import put_reg_string
+
+        packed = pack_order_signs(result.orderSigns)
+        if packed:
+            try:
+                put_reg_string(enc, "orderSigns", packed)
+                from src.app.bootstrap import get_fhir_repository
+
+                get_fhir_repository().update_resource("Encounter", encounter_id, enc)
+            except Exception:
+                reason = reason + " \u8655\u65b9\u7c3d\u7ae0\u6c92\u6709\u5beb\u9032\u770b\u8a3a\u3002"
     return CardWriteResult(
         written=bool(result.ok),
-        reason=result.reason,
+        reason=reason,
         consoleReachable=True,
         source="cloud" if result.ok and not result.skipped else ("skipped" if result.skipped else "cloud-fail"),
     )
