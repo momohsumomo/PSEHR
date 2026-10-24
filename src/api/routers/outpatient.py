@@ -100,14 +100,14 @@ def get_outpatient_workspace(
     allergies = _allergy_rows_for_patient(store, patient_id)
     has_alert = any(a["level"] in ("confirmed", "high") for a in allergies)
 
-    # SOAP 可延後：主訴優先 reasonCode（匯入 MAINTELL 已寫入）
-    cc = ""
-    for rc in encounter.get("reasonCode") or []:
-        if isinstance(rc, dict) and rc.get("text"):
-            cc = chief_complaint_text(str(rc["text"]))
-            break
-
+    # 跟調閱病歷同一份。reasonCode 曾被掛號備註蓋過，有存檔主訴時不以它為準。
+    cc = chief_complaint_text(store.lookup_chief_complaint(encounter_id))
     soap = None
+    if not cc:
+        for rc in encounter.get("reasonCode") or []:
+            if isinstance(rc, dict) and rc.get("text"):
+                cc = chief_complaint_text(str(rc["text"]))
+                break
     if not cc:
         comp_id = store.find_soap_composition_id_by_encounter(encounter_id)
         if comp_id:

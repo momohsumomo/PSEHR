@@ -118,6 +118,7 @@ function mapApiQueue(entries: ApiQueueEntry[]): QueueEntry[] {
     preVisitCompleted: Boolean(e.queueMeta.preVisitCompleted),
     visitKind: e.queueMeta.visitKind || "",
     reasonText: e.queueMeta.reasonText ?? "",
+    visitCc: e.queueMeta.visitCc || "",
     slotTime: e.queueMeta.slotTime,
     medicalNo: e.queueMeta.medicalNo,
     age: e.queueMeta.age,

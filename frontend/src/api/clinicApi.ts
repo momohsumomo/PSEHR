@@ -130,6 +130,7 @@ export type ApiQueueEntry = {
     visitKind?: string;
     hasAllergyAlert?: boolean;
     reasonText?: string;
+    visitCc?: string;
     slotTime?: string;
     medicalNo?: string;
     age?: string;

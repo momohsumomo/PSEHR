@@ -20,6 +20,8 @@ export interface QueueEntry {
   /** 問診主要目的。cosmetic 時掛號列用粉紅底。 */
   visitKind?: string;
   reasonText: string;
+  /** 這次就診寫下的主訴。病人備註在 reasonText，不要混進來。 */
+  visitCc?: string;
   /** 醫聖 DoctBrw 欄位（UX 展示；API 模式可逐步對齊） */
   slotTime?: string;
   medicalNo?: string;

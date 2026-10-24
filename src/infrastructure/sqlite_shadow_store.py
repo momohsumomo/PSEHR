@@ -16,6 +16,21 @@ from src.core.context import current_machine_id, current_operator_identity
 
 DEFAULT_DB_PATH = Path(__file__).resolve().parents[2] / "data" / "shadow.db"
 
+# 調閱病歷與診療主訴用同一份：先這次就診寫下的主訴，空白才看 SOAP。
+# 掛號備註（病人備註、註記）不在這裡。
+STORED_CHIEF_COMPLAINT_SQL = """
+COALESCE(
+  NULLIF(TRIM(ei.chief_complaint), ''),
+  (
+    SELECT NULLIF(TRIM(cn.chief_complaint), '')
+    FROM clinical_note_index cn
+    WHERE cn.encounter_id = ei.resource_id
+    LIMIT 1
+  ),
+  ''
+)
+"""
+
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS resource_cache (
     resource_type TEXT NOT NULL,
@@ -1012,14 +1027,7 @@ class SqliteShadowStore(ShadowStore):
               ei.resource_id AS encounter_id,
               ei.encounter_date AS visit_date,
               ei.queue_number AS queue_number,
-              COALESCE(
-                ei.chief_complaint,
-                (
-                  SELECT cn.chief_complaint FROM clinical_note_index cn
-                  WHERE cn.encounter_id = ei.resource_id LIMIT 1
-                ),
-                ''
-              ) AS chief_complaint,
+              """ + STORED_CHIEF_COMPLAINT_SQL + """ AS chief_complaint,
               (
                 SELECT ci.summary_text FROM condition_index ci
                 WHERE ci.encounter_id = ei.resource_id
@@ -1060,6 +1068,35 @@ class SqliteShadowStore(ShadowStore):
                 }
             )
         return out
+
+    def lookup_chief_complaint(self, encounter_id: str) -> str:
+        """跟調閱病歷同一份主訴。沒有這筆就診時回空字串。"""
+        eid = (encounter_id or "").split("/")[-1]
+        if not eid:
+            return ""
+        with self._connect() as conn:
+            row = conn.execute(
+                f"SELECT {STORED_CHIEF_COMPLAINT_SQL} FROM encounter_index ei WHERE ei.resource_id = ?",
+                (eid,),
+            ).fetchone()
+        if row is None:
+            return ""
+        return str(row[0] or "")
+
+    def set_encounter_chief_complaint(self, encounter_id: str, text: str) -> None:
+        """醫師存主訴時，讓調閱病歷讀到的那一欄跟著更新。"""
+        eid = (encounter_id or "").split("/")[-1]
+        if not eid:
+            return
+        with self._connect() as conn:
+            conn.execute(
+                """
+                UPDATE encounter_index
+                SET chief_complaint = ?, updated_at = datetime('now')
+                WHERE resource_id = ?
+                """,
+                (str(text or "").strip(), eid),
+            )
 
     def list_encounters_for_patient(
         self, patient_id: str, *, limit: int | None = None
@@ -1309,7 +1346,8 @@ class SqliteShadowStore(ShadowStore):
                     ei.times_no,
                     ei.owe_card,
                     ei.reg_cc,
-                    ei.reg_remark
+                    ei.reg_remark,
+                    {STORED_CHIEF_COMPLAINT_SQL}
                 FROM encounter_index ei
                 CROSS JOIN resource_cache rc
                   ON rc.resource_type = 'Encounter' AND rc.resource_id = ei.resource_id
@@ -1507,6 +1545,7 @@ class SqliteShadowStore(ShadowStore):
                     "oweCard": bool(row[17]),
                     "regCc": row[18] or "",
                     "regRemark": row[19] or "",
+                    "visitCc": row[20] or "",
                     "referredOut": resource_id in referred_out,
                     **{
                         k: v
@@ -1884,7 +1923,8 @@ class SqliteShadowStore(ShadowStore):
                     pi.medical_no,
                     pi.phone,
                     pi.address,
-                    pi.id_no
+                    pi.id_no,
+                    """ + STORED_CHIEF_COMPLAINT_SQL + """
                 FROM encounter_index ei
                 JOIN resource_cache rc
                   ON rc.resource_type = 'Encounter' AND rc.resource_id = ei.resource_id
@@ -1996,6 +2036,7 @@ class SqliteShadowStore(ShadowStore):
                 "visitKind": previsit_visit_kind(resource),
                 "hasAllergyAlert": has_allergy,
                 "reasonText": reason_text,
+                "visitCc": row[16] or "",
                 "slotTime": slot_time,
                 "medicalNo": medical_no or identifier or "—",
                 "phone": phone or "—",

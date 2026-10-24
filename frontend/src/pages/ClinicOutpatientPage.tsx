@@ -2115,7 +2115,7 @@ export function ClinicOutpatientPage() {
       birthday: roc.slice(0, 7),
       sex: entry.sex || (entry.ageSex?.endsWith("M") ? "M" : "F"),
       patientName: entry.patientDisplay,
-      reasonText: entry.reasonText || "",
+      reasonText: entry.visitCc || "",
       caseNo: entry.caseNo && entry.caseNo !== "—" ? entry.caseNo : "01",
       copayCode: entry.copayCode || "",
       payType: entry.payType || "4",
