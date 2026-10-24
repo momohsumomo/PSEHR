@@ -38,7 +38,8 @@ export type PreparedPrint = {
   feed: PrinterFeed;
 };
 
-type PreviewRequest = PreparedPrint & {
+export type PreviewRequest = {
+  sheets: PreparedPrint[];
   resolve: (result: PrintSendResult) => void;
   reject: (err: Error) => void;
 };
@@ -83,20 +84,30 @@ export function preparePrint(job: PrintJob): PreparedPrint {
   };
 }
 
-export function openPrintPreview(job: PrintJob): Promise<PrintSendResult> {
-  const prepared = preparePrint(job);
+function presentSheets(sheets: PreparedPrint[]): Promise<PrintSendResult> {
   const pending = new Promise<PrintSendResult>((resolve, reject) => {
     if (!previewHandler) {
       reject(new Error("\u9810\u89bd\u756b\u9762\u9084\u6c92\u6e96\u5099\u597d\u3002\u8acb\u91cd\u65b0\u6574\u7406\u5f8c\u518d\u6309\u5217\u5370\u3002"));
       return;
     }
-    previewHandler({ ...prepared, resolve, reject });
+    previewHandler({ sheets, resolve, reject });
   });
   return pending.catch((err: unknown) => {
     const msg = err instanceof Error ? err.message : "\u9001\u5230\u5370\u8868\u6a5f\u5931\u6557";
     window.alert(msg);
     throw err instanceof Error ? err : new Error(msg);
   });
+}
+
+export function openPrintPreview(job: PrintJob): Promise<PrintSendResult> {
+  return presentSheets([preparePrint(job)]);
+}
+
+/** One preview for every sheet. The wheel browses; print can send all of them. */
+export function openPrintBatch(jobs: PrintJob[]): Promise<PrintSendResult> {
+  const sheets = jobs.map((job) => preparePrint(job));
+  if (!sheets.length) return Promise.resolve({ printed: false, printer: "" });
+  return presentSheets(sheets);
 }
 
 function buildPrintHtml(

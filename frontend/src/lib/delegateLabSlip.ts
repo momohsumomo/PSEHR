@@ -1,6 +1,5 @@
 import type { RxLine } from "@/mocks/clinicMocks";
 import { openPrintPreview } from "@/lib/printJob";
-import { findPrintSetup, loadPrintSettings } from "@/lib/printSettings";
 
 /** Pay marks that belong on the delegated-lab sheet. Same pair Yisheng prints. */
 const LAB_MARKS = new Set(["\u4ea4", "\u8f49"]);
@@ -139,15 +138,20 @@ export function buildDelegateLabHtml(input: LabSlipInput): string {
   </div>`;
 }
 
-export async function openDelegateLabSlip(input: LabSlipInput): Promise<void> {
-  if (!input.lines.length) return;
-  findPrintSetup(loadPrintSettings(), "labSlip");
-  await openPrintPreview({
-    kind: "rx",
-    layout: "paged",
-    setupId: "labSlip",
+export function labSlipPrintJob(input: LabSlipInput) {
+  if (!input.lines.length) return null;
+  return {
+    kind: "rx" as const,
+    layout: "paged" as const,
+    setupId: "labSlip" as const,
     title: "\u5168\u6c11\u5065\u5eb7\u4fdd\u96aa\u9580\u8a3a\u4ea4\u4ed8\u6aa2\u9a57(\u67e5)\u8655\u65b9\u7b8b",
-    lines: [],
+    lines: [] as [],
     bodyHtml: buildDelegateLabHtml(input),
-  });
+  };
+}
+
+export async function openDelegateLabSlip(input: LabSlipInput): Promise<void> {
+  const job = labSlipPrintJob(input);
+  if (!job) return;
+  await openPrintPreview(job);
 }

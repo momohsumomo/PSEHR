@@ -84,10 +84,10 @@ import { loadLocalDeviceMeta } from "@/lib/clinicDevice";
 import { appendChiefNotes, mapDiagnosisList, readyIcd9, resolveIcd9Row } from "@/lib/icdCrosswalk";
 import { loadClinicRegisterDefaults } from "@/lib/clinicProfile";
 import { isDepositHold } from "@/lib/registerModes";
-import { openPrintPreview } from "@/lib/printJob";
+import { openPrintBatch, openPrintPreview, type PrintJob } from "@/lib/printJob";
 import { depositPrintOptions, findPrintSetup, loadPrintSettings, partOn } from "@/lib/printSettings";
-import { openReleaseRxIfWanted } from "@/lib/releaseRx";
-import { giveDaysBesideLabs, labSlipLines, openDelegateLabSlip } from "@/lib/delegateLabSlip";
+import { releaseRxPrintJob } from "@/lib/releaseRx";
+import { giveDaysBesideLabs, labSlipLines, labSlipPrintJob, openDelegateLabSlip } from "@/lib/delegateLabSlip";
 import { openDepositSlip } from "@/lib/visitReceiptPrint";
 import { VisitPrintDialog } from "@/components/clinic/VisitPrintDialog";
 import { buildSimpleSlipHtml, storedSelfPayText, visitCashParts } from "@/lib/simpleSlip";
@@ -1281,10 +1281,10 @@ export function ClinicOutpatientPage() {
       );
       const leaveList = leaveListAfterPrintRef.current;
       leaveListAfterPrintRef.current = false;
-      const result = await openPrintPreview({
-      kind: "receipt",
-      layout: "paged",
-      setupId: "simple",
+      const jobs: PrintJob[] = [{
+      kind: "receipt" as const,
+      layout: "paged" as const,
+      setupId: "simple" as const,
       title: "\u7c21\u5f0f\u4ea4\u4ed8\u8655\u65b9\u7c3d",
       bodyHtml: buildSimpleSlipHtml({
         medicalNo: selected?.medicalNo || "",
@@ -1330,8 +1330,65 @@ export function ClinicOutpatientPage() {
         showFeeTable: partOn(setup, "feeTable"),
         showWarning: partOn(setup, "warning"),
       }),
-      lines: [],
+      lines: [] as [],
+      }];
+      const clinicNow = readLocalClinicBundle().profile;
+      const labJob = labSlipPrintJob({
+        caseNo: saveDraft.caseNo,
+        clinicName: clinicNow.clinicName,
+        clinicCode: clinicNow.clinicCode,
+        address: clinicNow.address,
+        phone: clinicNow.phone,
+        name: selected?.patientDisplay || "",
+        idNo: selected?.idNo || selected?.id || "",
+        sex: selected?.sex || selected?.ageSex || "",
+        birthday: selected?.birthday || "",
+        medicalNo: selected?.medicalNo || "",
+        copayCode: saveDraft.copayCode,
+        dept: saveDraft.dept || clinicNow.mainDept || "",
+        visitDate: currentDate,
+        cardNo: saveDraft.cardNo,
+        queueNo: selected ? String(selected.queueNumber) : "",
+        doctorId: selected?.doctorId || saveDraft.doctor || "",
+        diagnoses: displayDiagnoses.map((row) => ({
+          code: row.icd10 || row.nhiIcd10 || "",
+          text: row.text || "",
+        })),
+        giveDays: giveDaysBesideLabs(currentRx),
+        lines: labSlipLines(currentRx),
       });
+      if (labJob) jobs.push(labJob);
+      const releaseJob = releaseRxPrintJob({
+        caseNo: saveDraft.caseNo,
+        clinicName: clinicNow.clinicName,
+        clinicCode: clinicNow.clinicCode,
+        address: clinicNow.address,
+        phone: clinicNow.phone,
+        name: selected?.patientDisplay || "",
+        idNo: selected?.idNo || selected?.id || "",
+        sex: selected?.sex || selected?.ageSex || "",
+        birthday: selected?.birthday || "",
+        medicalNo: selected?.medicalNo || "",
+        dept: saveDraft.dept || clinicNow.mainDept || "",
+        visitDate: currentDate,
+        cardNo: saveDraft.cardNo,
+        queueNo: selected ? String(selected.queueNumber) : "",
+        doctor: saveDraft.doctor,
+        pharmacist: pharmacistName,
+        diagnoses: displayDiagnoses.map((row) => ({
+          code: row.icd10 || row.nhiIcd10 || "",
+          text: row.text || "",
+        })),
+        drugs: currentRx.map((row) => ({
+          name: row.name,
+          sig: row.sig,
+          days: row.days || 0,
+          qty: row.qty == null ? "" : String(row.qty),
+          total: row.totalAmount == null ? "" : String(row.totalAmount),
+        })),
+      });
+      if (releaseJob) jobs.push(releaseJob);
+      const result = await openPrintBatch(jobs);
         setPrintNote(
           result.printed ? `\u5df2\u9001\u5230 ${result.printer}` : "\u9810\u89bd\u5df2\u95dc\u9589\uff0c\u5c1a\u672a\u9001\u51fa\u3002",
         );
@@ -1339,38 +1396,6 @@ export function ClinicOutpatientPage() {
           setSaveLayerOpen(false);
           closeChartNowRef.current(true);
         }
-        const clinicNow = readLocalClinicBundle().profile;
-        openLabSheetRef.current();
-        if (!result.printed) return;
-        await openReleaseRxIfWanted({
-          caseNo: saveDraft.caseNo,
-          clinicName: clinicNow.clinicName,
-          clinicCode: clinicNow.clinicCode,
-          address: clinicNow.address,
-          phone: clinicNow.phone,
-          name: selected?.patientDisplay || "",
-          idNo: selected?.idNo || selected?.id || "",
-          sex: selected?.sex || selected?.ageSex || "",
-          birthday: selected?.birthday || "",
-          medicalNo: selected?.medicalNo || "",
-          dept: saveDraft.dept || clinicNow.mainDept || "",
-          visitDate: currentDate,
-          cardNo: saveDraft.cardNo,
-          queueNo: selected ? String(selected.queueNumber) : "",
-          doctor: saveDraft.doctor,
-          pharmacist: pharmacistName,
-          diagnoses: displayDiagnoses.map((row) => ({
-            code: row.icd10 || row.nhiIcd10 || "",
-            text: row.text || "",
-          })),
-          drugs: currentRx.map((row) => ({
-            name: row.name,
-            sig: row.sig,
-            days: row.days || 0,
-            qty: row.qty == null ? "" : String(row.qty),
-            total: row.totalAmount == null ? "" : String(row.totalAmount),
-          })),
-        });
     })().catch((err: unknown) => {
         const msg = err instanceof Error ? err.message : "\u9001\u5230\u5370\u8868\u6a5f\u5931\u6557";
         setPrintNote(msg);

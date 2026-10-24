@@ -3,9 +3,9 @@ import { pharmacistDisplayName } from "@/lib/doctorName";
 import { buildDepositSlipHtml } from "@/lib/clinicPrintDocs";
 import { readLocalClinicBundle } from "@/lib/clinicProfile";
 import { lastClinicDept } from "@/lib/clinicSession";
-import { openPrintPreview } from "@/lib/printJob";
+import { openPrintBatch, openPrintPreview, type PrintJob } from "@/lib/printJob";
 import { depositPrintOptions, findPrintSetup, loadPrintSettings, partOn } from "@/lib/printSettings";
-import { openReleaseRxIfWanted } from "@/lib/releaseRx";
+import { releaseRxPrintJob } from "@/lib/releaseRx";
 import { buildSimpleSlipHtml, visitCashParts } from "@/lib/simpleSlip";
 import type { CatalogDrug } from "@/types/clinicCatalog";
 import { applyClinicDrugDisplayNames } from "@/utils/catalogRx";
@@ -132,12 +132,12 @@ export async function openSavedVisitReceipt(entry: QueueEntry, visitDate: string
   const clinic = readLocalClinicBundle();
   const setup = findPrintSetup(loadPrintSettings(), "simple");
   const profile = clinic.profile;
-  const sent = await openPrintPreview({
-    kind: "receipt",
-    layout: "paged",
-    setupId: "simple",
+  const jobs: PrintJob[] = [{
+    kind: "receipt" as const,
+    layout: "paged" as const,
+    setupId: "simple" as const,
     title: "\u7c21\u5f0f\u4ea4\u4ed8\u8655\u65b9\u7c3d",
-    lines: [],
+    lines: [] as [],
     bodyHtml: buildSimpleSlipHtml({
       medicalNo: entry.medicalNo || "",
       name: entry.patientDisplay || "",
@@ -182,9 +182,8 @@ export async function openSavedVisitReceipt(entry: QueueEntry, visitDate: string
       showFeeTable: partOn(setup, "feeTable"),
       showWarning: partOn(setup, "warning"),
     }),
-  });
-  if (!sent.printed) return;
-  await openReleaseRxIfWanted({
+  }];
+  const releaseJob = releaseRxPrintJob({
     caseNo: entry.caseNo || "",
     clinicName: profile.clinicName,
     clinicCode: profile.clinicCode,
@@ -213,4 +212,6 @@ export async function openSavedVisitReceipt(entry: QueueEntry, visitDate: string
       total: row.totalAmount == null ? "" : String(row.totalAmount),
     })),
   });
+  if (releaseJob) jobs.push(releaseJob);
+  await openPrintBatch(jobs);
 }

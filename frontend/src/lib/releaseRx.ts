@@ -1,6 +1,5 @@
 import { readLocalClinicBundle } from "@/lib/clinicProfile";
 import { openPrintPreview } from "@/lib/printJob";
-import { findPrintSetup, loadPrintSettings } from "@/lib/printSettings";
 
 /** Visit cases that can release a prescription. This clinic leaves them all off. */
 export const RELEASE_RX_CASES: { code: string; label: string }[] = [
@@ -138,16 +137,21 @@ export function buildReleaseRxHtml(input: ReleaseRxInput): string {
   return pages.map((chunk, index) => page(input, chunk, index, index === pages.length - 1)).join("");
 }
 
-/** Opens the released prescription after the visit slip has been sent. No-op when this clinic left every case off. */
-export async function openReleaseRxIfWanted(input: ReleaseRxInput): Promise<void> {
-  if (!releaseRxWanted(input.caseNo)) return;
-  findPrintSetup(loadPrintSettings(), "releaseRx");
-  await openPrintPreview({
-    kind: "rx",
-    layout: "paged",
-    setupId: "releaseRx",
+export function releaseRxPrintJob(input: ReleaseRxInput) {
+  if (!releaseRxWanted(input.caseNo)) return null;
+  return {
+    kind: "rx" as const,
+    layout: "paged" as const,
+    setupId: "releaseRx" as const,
     title: "\u5168\u6c11\u5065\u5eb7\u4fdd\u96aa\u9580\u8a3a\u4ea4\u4ed8\u8abf\u5291\u8655\u65b9\u7b8b",
-    lines: [],
+    lines: [] as [],
     bodyHtml: buildReleaseRxHtml(input),
-  });
+  };
+}
+
+/** Opens the released prescription. No-op when this clinic left every case off. */
+export async function openReleaseRxIfWanted(input: ReleaseRxInput): Promise<void> {
+  const job = releaseRxPrintJob(input);
+  if (!job) return;
+  await openPrintPreview(job);
 }
