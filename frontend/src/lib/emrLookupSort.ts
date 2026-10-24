@@ -16,7 +16,7 @@ export type EmrSortRow = {
 };
 
 function cmpName(a: string, b: string): number {
-  return a.localeCompare(b, "zh-Hant-u-co-zhuyin", { numeric: true, sensitivity: "base" });
+  return a.localeCompare(b, "zh-Hant-u-co-stroke", { numeric: true, sensitivity: "base" });
 }
 
 function rowFinished(q: EmrSortRow["queueMeta"]): boolean {
