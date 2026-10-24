@@ -127,7 +127,7 @@ export function PrintFormatDialog({ row, printers, onClose, onSaved }: Props) {
           };
           setFontRow(kept);
           const size = Math.abs(Number.parseFloat(source.value || ""));
-          if ((!row.fontSizePx || row.fontSizePx === 9) && size >= 7 && size <= 16) setRxFont(size);
+          if (row.id === "simple" && (!row.fontSizePx || row.fontSizePx === 9) && size >= 7 && size <= 16) setRxFont(size);
         }
       })
       .catch(() => {
@@ -216,8 +216,10 @@ export function PrintFormatDialog({ row, printers, onClose, onSaved }: Props) {
     }
     Object.assign(patch, simplePatchFromFlags(row, draft, items));
     Object.assign(patch, depositPatchFromFlags(row, draft, items));
-    if (row.id === "simple") {
+    if (row.id === "simple" || row.id === "labSlip") {
       patch.fontSizePx = rxFont;
+    }
+    if (row.id === "simple") {
       patch.drugFontSizePx = drugFont;
     }
     onSaved(patch);
@@ -287,34 +289,38 @@ export function PrintFormatDialog({ row, printers, onClose, onSaved }: Props) {
                 ))}
               </select>
             </label>
-            {row.id === "simple" && (
+            {(row.id === "simple" || row.id === "labSlip") && (
               <>
                 <label>
-                  {"\u8655\u65b9\u5b57\u7d1a "}
+                  {row.id === "labSlip" ? "\u5b57\u7d1a " : "\u8655\u65b9\u5b57\u7d1a "}
                   <input
                     className={`${input} w-24`}
                     type="number"
-                    min={7}
+                    min={row.id === "labSlip" ? 6 : 7}
                     max={16}
                     step={0.5}
                     value={rxFont}
                     onChange={(e) => setRxFont(Number(e.target.value))}
                   />
                 </label>
-                <label>
-                  {"\u85e5\u540d\u5b57\u7d1a "}
-                  <input
-                    className={`${input} w-24`}
-                    type="number"
-                    min={7}
-                    max={16}
-                    step={0.5}
-                    value={drugFont}
-                    onChange={(e) => setDrugFont(Number(e.target.value))}
-                  />
-                </label>
+                {row.id === "simple" ? (
+                  <label>
+                    {"\u85e5\u540d\u5b57\u7d1a "}
+                    <input
+                      className={`${input} w-24`}
+                      type="number"
+                      min={7}
+                      max={16}
+                      step={0.5}
+                      value={drugFont}
+                      onChange={(e) => setDrugFont(Number(e.target.value))}
+                    />
+                  </label>
+                ) : null}
                 <p className="col-span-2 text-[11px] text-[#606060]">
-                  {"\u8655\u65b9\u5b57\u7d1a\u7ba1\u62ac\u982d\u3001\u53f3\u4e0a\u9662\u6240\u540d\u7a31\u548c\u53f3\u5074\u4e0b\u65b9\u8cbb\u7528\u660e\u7d30\u3002\u85e5\u540d\u5b57\u7d1a\u53ea\u7ba1\u85e5\u54c1\u90a3\u4e00\u6bb5\u3002"}
+                  {row.id === "labSlip"
+                    ? "\u5b57\u7d1a\u7ba1\u6574\u5f35\u4ea4\u4ed8\u6aa2\u9a57\u8655\u65b9\u7b8b\u3002\u53f3\u908a\u662f\u7bc4\u4f8b\uff0c\u6539\u5b57\u7d1a\u6703\u99ac\u4e0a\u770b\u5230\u3002\u5de6\u534a\u908a\u6392\u4e0d\u4e0b\u7684\u6703\u63a5\u5230\u53f3\u534a\u908a\u3002"
+                    : "\u8655\u65b9\u5b57\u7d1a\u7ba1\u62ac\u982d\u3001\u53f3\u4e0a\u9662\u6240\u540d\u7a31\u548c\u53f3\u5074\u4e0b\u65b9\u8cbb\u7528\u660e\u7d30\u3002\u85e5\u540d\u5b57\u7d1a\u53ea\u7ba1\u85e5\u54c1\u90a3\u4e00\u6bb5\u3002"}
                 </p>
               </>
             )}
@@ -324,7 +330,7 @@ export function PrintFormatDialog({ row, printers, onClose, onSaved }: Props) {
                   ? "\u7248\u9762\u7dad\u6301\u5de6\u53f3\u5169\u806f\u3002\u9577\u5bec\u5728\u4e0a\u9762\u6539\uff0c\u4e0b\u9762\u662f\u9019\u4e00\u9805\u81ea\u5df1\u7684\u5217\u5370\u9805\u76ee\u3002"
                   : "\u9019\u4efd\u55ae\u64da\u7684\u7d19\u5f35\u7248\u9762\u4f9d\u898f\u5b9a\u3002\u4e0b\u9762\u662f\u9019\u4e00\u9805\u81ea\u5df1\u7684\u5217\u5370\u9805\u76ee\u3002"}
               </p>
-            ) : (
+            ) : row.id === "labSlip" ? null : (
               <label className="col-span-2">
                 {"\u8868\u5c3e "}
                 <input className={`${input} w-[18rem]`} value={footer} onChange={(e) => setFooter(e.target.value)} />
@@ -336,6 +342,8 @@ export function PrintFormatDialog({ row, printers, onClose, onSaved }: Props) {
             <p>
               {row.id === "audit"
                 ? "\u53f3\u908a\u5c31\u662f\u9019\u5f35\u62bd\u5be9\u55ae\u7684\u7248\u9762\u3002\u7d19\u5f35\u548c\u5370\u8868\u6a5f\u5b58\u9019\u88e1\u3002\u770b\u8a3a\u756b\u9762\u9084\u6c92\u6709\u6309\u9215\u9001\u5370\u9019\u5f35\u3002"
+                : row.id === "labSlip"
+                  ? "\u9019\u4e00\u5217\u5c31\u662f\u770b\u8a3a\u5b58\u6a94\u5370\u51fa\u4f86\u7684\u4ea4\u4ed8\u6aa2\u9a57\u8655\u65b9\u7b8b\u3002\u53f3\u908a\u7bc4\u4f8b\u6709\u59d3\u540d\u3001\u75c5\u540d\u548c\u6aa2\u9a57\u9805\u76ee\uff0c\u5b57\u7d1a\u6539\u4e86\u6703\u99ac\u4e0a\u8ddf\u8457\u8b8a\u3002"
                 : row.layoutFixed
                   ? "\u53f3\u908a\u5c31\u662f\u8a3a\u7642\u9001\u5370\u7684\u540c\u4e00\u5f35\u3002\u7d19\u5f35\u4f9d\u898f\u5b9a\uff0c\u9019\u88e1\u9078\u5370\u8868\u6a5f\u3002"
                   : "\u9019\u4efd\u55ae\u76ee\u524d\u53ea\u8a2d\u7d19\u5f35\u548c\u5370\u8868\u6a5f\u3002\u7528\u4e0d\u5230\u7684\u9805\u76ee\u4e0d\u653e\u9032\u4f86\u3002"}

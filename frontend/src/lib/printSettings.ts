@@ -159,6 +159,7 @@ export const DEFAULT_PRINT_SETUPS: PrintSetup[] = [
     printerName: "",
     footer: "",
     layoutFixed: false,
+    fontSizePx: 9,
   },
 ];
 

@@ -1,5 +1,6 @@
 import type { RxLine } from "@/mocks/clinicMocks";
 import { openPrintPreview } from "@/lib/printJob";
+import { findPrintSetup, loadPrintSettings } from "@/lib/printSettings";
 
 /** Pay marks that belong on the delegated-lab sheet. Same pair Yisheng prints. */
 const LAB_MARKS = new Set(["\u4ea4", "\u8f49"]);
@@ -31,6 +32,7 @@ export type LabSlipInput = {
   diagnoses: { code: string; text: string }[];
   giveDays: number;
   lines: LabSlipLine[];
+  fontSizePx?: number;
 };
 
 export function labSlipLines(rows: RxLine[]): LabSlipLine[] {
@@ -90,11 +92,13 @@ function itemLabel(row: LabSlipLine): string {
   return `${row.mark}(${code || name})`;
 }
 
-/** 210×93 左半邊先排。字跟醫聖同一級，放不下的項目接到右半邊，不截掉。 */
+/** 210×93 左半邊先排。字級跟列印設定走，放不下的項目接到右半邊，不截掉。 */
 export function buildDelegateLabHtml(input: LabSlipInput): string {
   const names = input.diagnoses.map((row) => String(row.text || "").trim()).filter(Boolean);
   const codes = input.diagnoses.map((row) => String(row.code || "").trim()).filter(Boolean);
   const days = input.giveDays > 0 ? String(input.giveDays).padStart(2, "0") : "";
+  const bodyPx = input.fontSizePx && input.fontSizePx > 0 ? input.fontSizePx : 9;
+  const titlePx = bodyPx + 1;
   const line =
     "display:flex;align-items:baseline;break-inside:avoid;page-break-inside:avoid;";
   const body =
@@ -109,8 +113,8 @@ export function buildDelegateLabHtml(input: LabSlipInput): string {
       )
       .join("") || `<div>\u2014</div>`;
   return `<div class="slip-page">
-    <div style="box-sizing:border-box;flex:1 1 auto;min-height:0;height:100%;column-count:2;column-fill:auto;-webkit-column-fill:auto;column-gap:3mm;padding:1mm 1.5mm;font-family:PMingLiU,'MingLiU','\u7d30\u660e\u9ad4','Microsoft JhengHei',serif;font-size:9px;line-height:1.15;color:#000;">
-    <div style="text-align:center;font-weight:bold;font-size:10px;line-height:1.15;">\u5168\u6c11\u5065\u5eb7\u4fdd\u96aa\u9580\u8a3a\u4ea4\u4ed8\u6aa2\u9a57(\u67e5)\u8655\u65b9\u7b8b(\u6848\u4ef6:${esc(show(input.caseNo))})</div>
+    <div style="box-sizing:border-box;flex:1 1 auto;min-height:0;height:100%;column-count:2;column-fill:auto;-webkit-column-fill:auto;column-gap:3mm;padding:1mm 1.5mm;font-family:PMingLiU,'MingLiU','\u7d30\u660e\u9ad4','Microsoft JhengHei',serif;font-size:${bodyPx}px;line-height:1.15;color:#000;">
+    <div style="text-align:center;font-weight:bold;font-size:${titlePx}px;line-height:1.15;">\u5168\u6c11\u5065\u5eb7\u4fdd\u96aa\u9580\u8a3a\u4ea4\u4ed8\u6aa2\u9a57(\u67e5)\u8655\u65b9\u7b8b(\u6848\u4ef6:${esc(show(input.caseNo))})</div>
     <div>${esc(show(input.clinicName))} &lt;${esc(show(input.clinicCode))}&gt;\u9662\u6240\u5730\u5740:${esc(show(input.address))}</div>
     <div>\u59d3\u540d:${esc(show(input.name))} \u8eab\u5206\u8b49:${esc(show(input.idNo))}/${esc(show(input.sex))}  \u751f\u65e5:${esc(show(rocDots(input.birthday)))}  \u75c5\u6b77\u865f:${esc(show(input.medicalNo))}</div>
     <div>\u90e8\u865f:(${esc(show(input.copayCode))})\u79d1\u5225:${esc(show(input.dept))} \u5c31\u8a3a\u65e5:${esc(show(rocDots(input.visitDate)))} \u5361:${esc(show(input.cardNo))}\u770b\u8a3a\u865f:(${esc(show(input.queueNo))})</div>
@@ -140,13 +144,15 @@ export function buildDelegateLabHtml(input: LabSlipInput): string {
 
 export function labSlipPrintJob(input: LabSlipInput) {
   if (!input.lines.length) return null;
+  const setup = findPrintSetup(loadPrintSettings(), "labSlip");
+  const font = input.fontSizePx && input.fontSizePx > 0 ? input.fontSizePx : setup.fontSizePx;
   return {
     kind: "rx" as const,
     layout: "paged" as const,
     setupId: "labSlip" as const,
     title: "\u5168\u6c11\u5065\u5eb7\u4fdd\u96aa\u9580\u8a3a\u4ea4\u4ed8\u6aa2\u9a57(\u67e5)\u8655\u65b9\u7b8b",
     lines: [] as [],
-    bodyHtml: buildDelegateLabHtml(input),
+    bodyHtml: buildDelegateLabHtml({ ...input, fontSizePx: font }),
   };
 }
 

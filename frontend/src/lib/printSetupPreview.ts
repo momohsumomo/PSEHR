@@ -8,6 +8,7 @@ import {
   buildDepositSlipHtml,
   buildReferralSlipHtml,
 } from "@/lib/clinicPrintDocs";
+import { buildDelegateLabHtml } from "@/lib/delegateLabSlip";
 import { SIMPLE_PRINT_PARTS, type PrintSetupId } from "@/lib/printSettings";
 
 export type PreviewClinic = {
@@ -338,7 +339,35 @@ function definedPages(
   face: Face,
   items: SciniRow[],
   draft: Record<string, string>,
+  fontSizePx?: number,
 ): string[] | null {
+  if (id === "labSlip") {
+    return [buildDelegateLabHtml({
+      caseNo: "04",
+      clinicName: face.clinic.name,
+      clinicCode: face.clinic.code,
+      address: face.clinic.address || "\u7bc4\u4f8b\u5730\u5740",
+      phone: face.clinic.phone || "02-00000000",
+      name: "\u7bc4\u4f8b",
+      idNo: "A000000000",
+      sex: "\u5973",
+      birthday: "1980-01-01",
+      medicalNo: "000000",
+      copayCode: "D12",
+      dept: "\u76ae\u819a\u79d1",
+      visitDate: "2026-10-24",
+      cardNo: "0001",
+      queueNo: "1",
+      doctorId: "A000",
+      diagnoses: [{ code: "L309", text: "\u76ae\u819a\u708e" }],
+      giveDays: 7,
+      lines: [
+        { mark: "\u4ea4", code: "09004C", name: "\u4e09\u9178\u7518\u6cb9\u8102", total: "1" },
+        { mark: "\u4ea4", code: "09005C", name: "\u81bd\u56fa\u9187", total: "1" },
+      ],
+      fontSizePx,
+    })];
+  }
   if (id === "releaseRx") {
     return [buildReleaseRxHtml({
       caseNo: "01",
@@ -474,7 +503,7 @@ export function buildSetupPreviewPages(args: {
   clinic: PreviewClinic;
 }): PreviewPage[] {
   const face = faceOf(args.id, args.items, args.draft, args.footer, args.focusEntry, args.clinic);
-  const defined = definedPages(args.id, face, args.items, args.draft);
+  const defined = definedPages(args.id, face, args.items, args.draft, args.fontSizePx);
   const htmls =
     args.id === "simple"
       ? simplePages(face, args.items, args.draft, args.drugFontSizePx, args.fontSizePx)
