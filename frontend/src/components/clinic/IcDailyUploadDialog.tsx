@@ -89,7 +89,7 @@ export function IcDailyUploadDialog({ open, onClose }: Props) {
       return;
     }
     setBusy(true);
-    setStatus("");
+    setStatus("正在送給健保署，請稍候。");
     let sent = 0;
     try {
       for (let i = 0; i < days.length; i += 1) {

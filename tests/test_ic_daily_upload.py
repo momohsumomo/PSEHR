@@ -2,6 +2,7 @@
 import unittest
 
 from src.claims.ic_daily_upload import render_ic_daily_xml, unique_visit_times
+from src.claims.ic_upload_send import xml_batches
 
 
 class VisitTimeTests(unittest.TestCase):
@@ -15,6 +16,17 @@ class VisitTimeTests(unittest.TestCase):
         self.assertEqual(rows[0]["orders"][0]["D01"], "1151023114946")
         self.assertEqual(rows[1]["mb1"]["M11"], "1151023114947")
         self.assertEqual(rows[1]["orders"][0]["D01"], "1151023114947")
+
+
+class BatchTests(unittest.TestCase):
+    def test_large_day_is_split_into_sevens(self):
+        rows = [{"h01": "A", "mb1": {"M13": str(i)}, "orders": []} for i in range(8)]
+        parts = xml_batches(render_ic_daily_xml(rows), 7)
+        self.assertEqual(len(parts), 2)
+        self.assertEqual(parts[0].count("<REC>"), 7)
+        self.assertEqual(parts[1].count("<REC>"), 1)
+        self.assertTrue(parts[0].startswith('<?xml version="1.0" encoding="Big5"?>'))
+        self.assertTrue(parts[1].rstrip().endswith("</RECS>"))
 
 
 def test_daily_fee_is_first_band_per_person_minus_copay():
