@@ -209,7 +209,7 @@ export function HisCashDetailPaper({ report, rows, pageNo = 1, isLast = true }: 
       <div style={{ textAlign: "center", marginTop: 8, fontFamily: HIS_FONT, fontSize: 24 }}>Page: {pageNo}</div>
 
       {isLast ? (
-        <div style={{ marginTop: 10, fontFamily: HIS_FONT, fontSize: 24 }}>
+        <div style={{ marginTop: 10, fontFamily: HIS_FONT, fontSize: 22 }}>
           <div style={{ marginBottom: 8 }}>
             應收現金 : {fmt(report.cashReceivable)} 元
             <span style={{ display: "inline-block", width: "2rem" }} />
@@ -246,6 +246,7 @@ const tdNum: CSSProperties = {
   textAlign: "right",
   fontVariantNumeric: "tabular-nums",
   whiteSpace: "nowrap",
+  fontSize: 20,
 };
 
 const tdSum: CSSProperties = {

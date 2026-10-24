@@ -414,7 +414,12 @@ export function SelfRegisterKioskPage() {
           <CardConsoleDebugButton compact variant="light" align="end" scope="local" label={"\u91cd\u65b0\u6574\u7406\u8b80\u5361\u6a5f"} />
         </div>
         <p className="text-[1.7rem] font-semibold tracking-wide text-[#12324a]">{clinicName || "\u81ea\u52a9\u639b\u865f"}</p>
-        <h1 className="mt-1 text-xl font-medium tracking-[0.22em] text-[#3d7a96]">{"\u81ea\u52a9\u639b\u865f"}</h1>
+        <h1 className="mt-1 text-5xl font-bold tracking-[0.18em] text-[#12324a]">
+          {"\u81ea\u52a9\u639b\u865f"}
+          <span className="ml-4 align-middle text-2xl font-semibold tracking-normal text-[#0f4c6e]">
+            {waitLabel || "\u5019\u8a3a\u4eba\u6578 \u2014"}
+          </span>
+        </h1>
         <div className="mx-auto mt-3 h-1 w-16 rounded-full bg-[#c4a36a]" />
       </header>
       {note && mode !== "done" && mode !== "notice" ? (
@@ -422,9 +427,6 @@ export function SelfRegisterKioskPage() {
       ) : null}
       {mode === "home" ? (
         <div className="flex min-h-0 flex-1 flex-col gap-4 p-6">
-          <div className="shrink-0 rounded-2xl bg-white/85 px-6 py-4 text-center text-3xl font-bold text-[#0f4c6e] shadow">
-            {waitLabel || "\u5019\u8a3a\u4eba\u6578 \u2014"}
-          </div>
           <div className="flex min-h-0 flex-1 gap-6">
           <button type="button" disabled={busy} className={`${card} bg-[#1A6FB5] text-white`} onClick={() => { setNote(""); setMode("kind"); }}>
             <span className="mb-5 h-1.5 w-14 rounded-full bg-[#d6ebf8]" />

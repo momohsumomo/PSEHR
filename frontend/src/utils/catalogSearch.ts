@@ -37,9 +37,16 @@ function rankDrugs(pool: CatalogDrug[], query: string, limit: number): CatalogDr
     .map((x) => x.d);
 }
 
-/** 右欄大項。檢查、處置、用藥先分開；特材自成一區，不跟藥混。 */
-export const DRUG_RAIL_SECTIONS = ["用藥", "處置", "檢查", "材料"] as const;
+/** 右欄大項。檢驗、處置、藥品依這個順序；特材排在藥品後面。 */
+export const DRUG_RAIL_SECTIONS = ["檢查", "處置", "用藥", "材料"] as const;
 export type DrugRailSection = (typeof DRUG_RAIL_SECTIONS)[number];
+
+export const DRUG_RAIL_SECTION_LABEL: Record<DrugRailSection, string> = {
+  檢查: "檢驗",
+  處置: "處置",
+  用藥: "藥品",
+  材料: "材料",
+};
 
 export function drugRailSection(drug: CatalogDrug): DrugRailSection {
   const cast = `${drug.cast || ""} ${drug.typeName || ""}`;

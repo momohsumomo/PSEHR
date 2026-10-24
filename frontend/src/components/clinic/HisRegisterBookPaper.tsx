@@ -127,7 +127,7 @@ export function HisRegisterBookPaper({ report }: Props) {
         </tbody>
       </table>
 
-      <div style={{ marginTop: 14, fontFamily: HIS_FONT, fontSize: 24 }}>
+      <div style={{ marginTop: 14, fontFamily: HIS_FONT, fontSize: 22 }}>
         <div style={{ marginBottom: 8 }}>
           應收現金 : {fmt(report.cashReceivable)} 元
           <span style={{ display: "inline-block", width: "4rem" }} />
@@ -137,7 +137,7 @@ export function HisRegisterBookPaper({ report }: Props) {
           style={{
             borderCollapse: "collapse",
             fontFamily: HIS_FONT,
-            fontSize: 24,
+            fontSize: 22,
             marginTop: 4,
           }}
         >
@@ -190,6 +190,7 @@ const tdNum: CSSProperties = {
   textAlign: "right",
   fontVariantNumeric: "tabular-nums",
   whiteSpace: "nowrap",
+  fontSize: 20,
 };
 const bucketCode: CSSProperties = {
   padding: "1px 8px 1px 0",
@@ -207,4 +208,5 @@ const bucketNum: CSSProperties = {
   fontVariantNumeric: "tabular-nums",
   whiteSpace: "nowrap",
   minWidth: "3.2em",
+  fontSize: 22,
 };

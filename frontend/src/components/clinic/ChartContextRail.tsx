@@ -5,7 +5,7 @@
 import { useMemo, useState } from "react";
 import type { CatalogDiagnosis, CatalogDrug, CatalogPackage } from "@/types/clinicCatalog";
 import type { DiagnosisRow, RxLine } from "@/mocks/clinicMocks";
-import { browseDiagnoses, browseDrugs, drugRailSection } from "@/utils/catalogSearch";
+import { browseDiagnoses, browseDrugs, DRUG_RAIL_SECTION_LABEL, drugRailSection } from "@/utils/catalogSearch";
 import { catalogDrugToRxLine, resolvePackageLines } from "@/utils/catalogRx";
 import { HIS, HIS_FONT } from "@/lib/hisTheme";
 
@@ -100,7 +100,7 @@ export function ChartContextRail({
   const zoneHint =
     listFocus === "dx"
       ? "目前對應：病名選單（點左側病名區可切換）"
-      : "目前對應：處置選單（先分檢查、處置、用藥；常用排在該類最上面）";
+      : "目前對應：處置選單（先分檢驗、處置、藥品；常用排在該類最上面）";
 
   const filterQuery = listFocus === "rx" ? rxQuery : dxQuery;
   const setFilterQuery = listFocus === "rx" ? setRxQuery : setDxQuery;
@@ -197,10 +197,10 @@ export function ChartContextRail({
               <li key={`${section}-${d.nhiCode}-${d.drugNo}-${i}`} className="border-b" style={{ borderColor: "#E0E8F0" }}>
                 {showSection ? (
                   <div
-                    className="sticky top-0 px-1 py-0.5 text-[11px] font-bold text-[#003C74]"
+                    className="sticky top-0 px-1 py-1 text-[15px] font-bold text-[#003C74]"
                     style={{ background: "#E0DCD0" }}
                   >
-                    {section}
+                    {DRUG_RAIL_SECTION_LABEL[section]}
                   </div>
                 ) : null}
                 <button
