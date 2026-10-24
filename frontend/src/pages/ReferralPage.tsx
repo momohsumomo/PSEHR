@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
+  fetchReferralDownloads,
   fetchReferralSlips,
   saveReferralSlip,
   type ReferralSlipRow,
@@ -13,7 +14,7 @@ import { readLocalClinicBundle } from "@/lib/clinicProfile";
 import { HIS, HIS_FONT } from "@/lib/hisTheme";
 import type { QueueEntry } from "@/mocks/clinicMocks";
 
-type Mode = "out" | "reply";
+type Mode = "out" | "reply" | "down";
 
 const OUT_PURPOSE: Array<[string, string]> = [
   ["1", "\u6025\u8a3a\u6cbb\u7642"],
@@ -106,7 +107,7 @@ export function ReferralPage() {
   useEscLayer([{ open: true, close: () => navigate("/") }]);
 
   const load = useCallback(async (kind: Mode) => {
-    const data = await fetchReferralSlips(kind);
+    const data = kind === "down" ? await fetchReferralDownloads() : await fetchReferralSlips(kind);
     setItems(data.items || []);
   }, []);
 
@@ -146,6 +147,7 @@ export function ReferralPage() {
   }, [queue]);
 
   const addToday = async (row: QueueEntry) => {
+    if (mode === "down") return;
     setBusy(true);
     setNote("");
     try {
@@ -232,16 +234,21 @@ export function ReferralPage() {
       <div className="flex items-center gap-2 border-b bg-[#E8E4DC] px-2 py-1" style={{ borderColor: "#808080" }}>
         {tab("out", "\u8f49\u51fa")}
         {tab("reply", "\u56de\u8986")}
+        {tab("down", "\u4e0b\u8f09")}
         <span className="text-[12px]">
           {mode === "out"
             ? "\u5de6\u908a\u662f\u5168\u90e8\u8f49\u51fa\u5b58\u6a94\uff0c\u4e0d\u9650\u4eca\u5929\u3002\u8981\u65b0\u958b\u4e00\u5f35\uff0c\u518d\u5f9e\u770b\u8a3a\u52a0\u5165\u3002"
-            : "\u5de6\u908a\u662f\u5168\u90e8\u56de\u8986\u5b58\u6a94\uff0c\u4e0d\u9650\u4eca\u5929\u3002\u5e8f\u865f\u8207\u5167\u5bb9\u90fd\u7559\u5728\u9019\u4efd\u7d00\u9304\u88e1\u3002"}
+            : mode === "reply"
+              ? "\u5de6\u908a\u662f\u5168\u90e8\u56de\u8986\u5b58\u6a94\uff0c\u4e0d\u9650\u4eca\u5929\u3002\u5e8f\u865f\u8207\u5167\u5bb9\u90fd\u7559\u5728\u9019\u4efd\u7d00\u9304\u88e1\u3002"
+              : "\u8b80\u5361\u6642\u5f9e\u5065\u4fdd\u7f72\u4e0b\u8f09\u4e26\u7559\u4e0b\u4f86\u3002\u5225\u4eba\u8f49\u4f86\u7684\u3001\u5c0d\u65b9\u56de\u8986\u6211\u5011\u7684\uff0c\u90fd\u5728\u9019\u88e1\u3002\u5df2\u7d93\u63a5\u53d7\u904e\u7684\uff0c\u8b80\u5361\u6642\u4e0d\u6703\u518d\u554f\u3002"}
         </span>
       </div>
       <div className="flex min-h-0 flex-1">
         <aside className="flex w-80 shrink-0 flex-col border-r bg-white" style={{ borderColor: "#808080" }}>
           <div className="flex items-center border-b px-2 py-1 text-[12px] font-bold" style={{ borderColor: "#808080" }}>
-            <span>{mode === "out" ? `\u8f49\u51fa\u540d\u55ae\uff08${shown.length}\uff09` : `\u56de\u8986\u540d\u55ae\uff08${shown.length}\uff09`}</span>
+            <span>
+              {mode === "out" ? `\u8f49\u51fa\u540d\u55ae\uff08${shown.length}\uff09` : mode === "reply" ? `\u56de\u8986\u540d\u55ae\uff08${shown.length}\uff09` : `\u4e0b\u8f09\u540d\u55ae\uff08${shown.length}\uff09`}
+            </span>
             {mode === "reply" ? (
               <button
                 type="button"
@@ -311,6 +318,7 @@ export function ReferralPage() {
               ))
             )}
           </ul>
+          {mode === "down" ? null : (
           <div className="border-t" style={{ borderColor: "#808080" }}>
             <button
               type="button"
@@ -338,10 +346,13 @@ export function ReferralPage() {
               </div>
             ) : null}
           </div>
+          )}
         </aside>
         <section className="min-w-0 flex-1 overflow-auto bg-[#F4F1EA] p-3 text-[13px]">
           {!current ? (
             <p>{"\u8acb\u5148\u5f9e\u5de6\u908a\u9078\u4e00\u4f4d\u3002\u9019\u88e1\u4e0d\u6703\u81ea\u52d5\u5e36\u51fa\u7b2c\u4e00\u500b\u4eba\u3002"}</p>
+          ) : mode === "down" ? (
+            <DownloadSheet current={current} />
           ) : mode === "out" ? (
             <OutSlipSheet current={current} onOpen={() => setSlipOpen(true)} />
           ) : (
@@ -367,6 +378,37 @@ export function ReferralPage() {
         }}
         onSaved={() => void load("out")}
       />
+    </div>
+  );
+}
+
+function DownloadSheet({ current }: { current: ReferralSlipRow }) {
+  const line = "border border-black p-2 align-top";
+  return (
+    <div className="max-w-3xl border bg-white p-3" style={{ borderColor: "#000" }}>
+      <div className="mb-2 text-[16px] font-bold">{current.status || "\u8f49\u8a3a"}</div>
+      <table className="w-full border-collapse text-[13px]">
+        <tbody>
+          <tr>
+            <td className={line}>{"\u59d3\u540d "}{current.patientName || "\u2014"}</td>
+            <td className={line}>{"\u75c5\u6b77\u865f "}{current.medicalNo || "\u2014"}</td>
+            <td className={line}>{"\u8eab\u5206\u8b49 "}{current.idNo || "\u2014"}</td>
+          </tr>
+          <tr>
+            <td className={line} colSpan={2}>{"\u9662\u6240 "}{current.destHosp || "\u2014"} {current.destCode}</td>
+            <td className={line}>{"\u958b\u55ae "}{rocDay(current.openedOn) || current.openedOn || "\u2014"}</td>
+          </tr>
+          <tr>
+            <td className={line} colSpan={2}>{"\u5e8f\u865f "}{current.serial || "\u2014"}</td>
+            <td className={line}>{"\u6709\u6548\u671f\u9650 "}{current.validUntil || "\u2014"}</td>
+          </tr>
+          <tr>
+            <td className={line} colSpan={3}>
+              <div className="whitespace-pre-wrap">{current.note || "\u2014"}</div>
+            </td>
+          </tr>
+        </tbody>
+      </table>
     </div>
   );
 }

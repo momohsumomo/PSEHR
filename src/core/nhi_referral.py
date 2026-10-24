@@ -27,7 +27,12 @@ QUERY_URL = "https://medws.nhi.gov.tw/IPI/API/IPIE0001/GetRefData_rc6"
 TEST_PATIENT_ID = "A000000005"
 OPEN_TYPE_CODE = "10"
 REPLY_TYPE_CODE = "04"
-_ROW = re.compile(r"(\d{16}),([^,]*),(\d{8}),([1-4]),")
+# serial, self-seq, open date, kind, type name, hosp id, hosp name, status, contact, valid
+_FULL = re.compile(
+    r"(\d{16}),([^,]*),(\d{8}),([1-4]),([^,]*),([^,]*),([^,]*),([^,]*),([^,]*),(\d{0,8})"
+)
+_SHORT = re.compile(r"(\d{16}),([^,]*),(\d{8}),([1-4]),")
+_ACCEPT_KINDS = {"2", "4"}
 _DELETED = "\u522a\u9664"
 
 DLL_PATH = Path(os.environ.get("NHI_EIIAPI_DLL", r"Z:\SC\nhi_eiiapi.dll"))
@@ -79,6 +84,31 @@ class ReferralSlip:
     kind: str
     summary: str
     deleted: bool
+    hosp_id: str = ""
+    hosp_name: str = ""
+    status: str = ""
+    contact: str = ""
+    valid_until: str = ""
+    type_name: str = ""
+
+
+def bureau_already_accepted(slip: ReferralSlip) -> bool:
+    """The platform already treats this notice as accepted or answered."""
+    status = slip.status or ""
+    if "\u5df2\u53d7\u7406" in status or "\u5df2\u56de\u5fa9" in status or "\u5df2\u56de\u590d" in status:
+        return True
+    return (slip.contact or "") in {"A", "B", "C"}
+
+
+def needs_accept_prompt(slip: ReferralSlip, accepted: set[str] | None = None) -> bool:
+    """Ask only for a referral sent to us that this clinic has not accepted."""
+    if slip.deleted or not slip.serial or slip.kind not in _ACCEPT_KINDS:
+        return False
+    if slip.serial in (accepted or set()):
+        return False
+    if bureau_already_accepted(slip):
+        return False
+    return True
 
 
 def parse_slips(payload: dict[str, Any] | str | None) -> list[ReferralSlip]:
@@ -104,28 +134,34 @@ def parse_slips(payload: dict[str, Any] | str | None) -> list[ReferralSlip]:
             text = str(row.get("oEtData") or "")
         elif isinstance(row, str):
             text = row
-        match = _ROW.search(text.replace(" ", ""))
+        flat = re.sub(r"\s+", "", text)
+        match = _FULL.search(flat) or _SHORT.search(flat)
         if not match:
             continue
-        summary = text[: match.start()]
+        summary = flat[: match.start()].rstrip(",").rstrip("\u3002")
+        groups = match.groups()
         found.append(
             ReferralSlip(
-                serial=match.group(1),
-                hosp_seq=match.group(2),
-                open_date=match.group(3),
-                kind=match.group(4),
+                serial=groups[0],
+                hosp_seq=groups[1],
+                open_date=groups[2],
+                kind=groups[3],
                 summary=summary,
-                deleted=_DELETED in text,
+                deleted=_DELETED in flat,
+                type_name=groups[4] if len(groups) > 4 else "",
+                hosp_id=groups[5] if len(groups) > 5 else "",
+                hosp_name=groups[6] if len(groups) > 6 else "",
+                status=groups[7] if len(groups) > 7 else "",
+                contact=groups[8] if len(groups) > 8 else "",
+                valid_until=groups[9] if len(groups) > 9 else "",
             )
         )
     return found
 
 
-def choose_incoming(slips: list[ReferralSlip]) -> ReferralSlip | None:
-    """Accept-referral rows first, then any live serial. Deleted rows stay out."""
-    live = [row for row in slips if not row.deleted and row.serial]
-    incoming = [row for row in live if row.kind == "2"]
-    pool = incoming or live
+def choose_incoming(slips: list[ReferralSlip], accepted: set[str] | None = None) -> ReferralSlip | None:
+    """The newest referral sent to us that this clinic has not accepted yet."""
+    pool = [row for row in slips if needs_accept_prompt(row, accepted)]
     if not pool:
         return None
     return max(pool, key=lambda row: row.open_date)

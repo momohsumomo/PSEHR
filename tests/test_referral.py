@@ -1,7 +1,7 @@
 """Referral slip parsing. No network."""
 import unittest
 
-from src.core.nhi_referral import choose_incoming, parse_slips
+from src.core.nhi_referral import choose_incoming, needs_accept_prompt, parse_slips
 from src.core.referral_desk import physician_ids
 
 
@@ -25,12 +25,28 @@ class ReferralParseTests(unittest.TestCase):
     def test_picks_live_incoming_not_deleted(self) -> None:
         slips = parse_slips(SAMPLE)
         self.assertEqual(len(slips), 2)
+        accepted = slips[1]
+        self.assertEqual(accepted.serial, "2019002112345678")
+        self.assertEqual(accepted.status, "\u5df2\u53d7\u7406\u672a\u56de\u5fa9")
+        self.assertFalse(needs_accept_prompt(accepted))
+        self.assertIsNone(choose_incoming(slips))
+
+    def test_asks_only_when_not_yet_accepted(self) -> None:
+        fresh = (
+            "\u81fa\u5317\u865b\u64ec\u8a3a\u65bc2019\u5e745\u67083\u65e5\u958b\u7acb\u8f49\u8a3a\u55ae\u81f3\u672c\u9662\u6240\uff0c"
+            "\u76ee\u524d\u72c0\u614b\u70ba\u672a\u53d7\u7406\u3002,"
+            "2019002012345678,35012000002019050300003,20190503,2,"
+            "\u63a5\u53d7\u8f49\u8a3a,3501200000,"
+            "\u81fa\u5317\u865b\u64ec\u8a3a,\u672a\u53d7\u7406,,20190801"
+        )
+        slips = parse_slips('{"sub":[{"oEtData":"%s"}]}' % fresh)
+        self.assertEqual(len(slips), 1)
+        self.assertTrue(needs_accept_prompt(slips[0]))
+        self.assertFalse(needs_accept_prompt(slips[0], {"2019002012345678"}))
         chosen = choose_incoming(slips)
-        self.assertIsNotNone(chosen)
         assert chosen is not None
-        self.assertEqual(chosen.serial, "2019002112345678")
-        self.assertEqual(chosen.kind, "2")
-        self.assertFalse(chosen.deleted)
+        self.assertEqual(chosen.serial, "2019002012345678")
+        self.assertEqual(chosen.hosp_id, "3501200000")
 
     def test_physician_list_keeps_id_and_drops_pin(self) -> None:
         rows = physician_ids(

@@ -13,6 +13,7 @@ from src.core.nhi_fhir_mapper import TW_NATIONAL_ID_SYSTEM
 from src.core.nhi_cshis6_client import DEFAULT_HOSPITAL_ID
 from src.core.nhi_referral import query_referrals
 from src.core.referral_desk import list_slips, mark_uploaded, physician_ids, save_slip
+from src.core.referral_inbox import list_downloads, mark_accepted, prompts_for, remember_download
 
 router = APIRouter(prefix="/nhi/v1/referral", tags=["NHI-referral"])
 
@@ -251,6 +252,25 @@ def referral_slips(kind: str = "") -> dict[str, Any]:
     return {"items": list_slips(kind)}
 
 
+@router.get("/downloads")
+def referral_downloads() -> dict[str, Any]:
+    """Notices already read down from the bureau. This does not call the bureau."""
+    return {"items": list_downloads()}
+
+
+class ReferralAcceptedBody(BaseModel):
+    serial: str = ""
+
+
+@router.post("/accepted")
+def referral_accepted(body: ReferralAcceptedBody) -> dict[str, Any]:
+    serial = body.serial.strip()
+    if not serial:
+        return {"ok": False, "reason": "\u6c92\u6709\u8f49\u8a3a\u55ae\u5e8f\u865f"}
+    mark_accepted(serial, "accept")
+    return {"ok": True}
+
+
 @router.get("/physicians")
 def referral_physicians() -> dict[str, Any]:
     return {"items": physician_ids(list(get_shadow_store().get_staff_list()))}
@@ -277,6 +297,8 @@ def referral_save_slip(body: ReferralSlipBody) -> dict[str, Any]:
         item = save_slip(body.model_dump(exclude_unset=True))
     except ValueError as exc:
         return {"ok": False, "reason": str(exc)}
+    if body.kind == "reply" and (item.get("serial") or "").strip():
+        mark_accepted(str(item.get("serial") or ""), "reply")
     return {"ok": True, "item": item}
 
 
@@ -290,24 +312,30 @@ def referral_query(body: ReferralQueryBody) -> dict[str, Any]:
             return {"ok": False, "reason": str(exc), "serial": ""}
         id_no = id_no or stored
     result = query_referrals(id_no, desk_sign=body.deskSign)
-    chosen = result.get("chosen")
+    stored = list(result.get("slips") or [])
+    if result.get("ok"):
+        remember_download(id_no, stored)
+    chosen_rows = prompts_for(id_no, stored) if result.get("ok") else []
+    chosen_rows.sort(key=lambda row: row.open_date, reverse=True)
+    chosen = chosen_rows[0] if chosen_rows else None
     serial = chosen.serial if chosen else ""
     slips = []
-    for row in result.get("slips") or []:
-        if getattr(row, "deleted", False) or not getattr(row, "serial", ""):
-            continue
+    for row in chosen_rows:
         slips.append(
             {
                 "serial": row.serial,
-                "hospId": row.hosp_seq,
+                "hospId": row.hosp_id or row.hosp_seq,
                 "openDate": row.open_date,
                 "kind": row.kind,
                 "summary": (row.summary or "")[:120],
             }
         )
+    reason = str(result.get("reason") or "")
+    if result.get("ok") and stored and not slips:
+        reason = "\u8f49\u8a3a\u8cc7\u6599\u5df2\u4e0b\u8f09\u3002\u6c92\u6709\u5c1a\u672a\u63a5\u53d7\u7684\u8f49\u8a3a\u3002"
     return {
         "ok": bool(result.get("ok")),
-        "reason": result.get("reason") or "",
+        "reason": reason,
         "serial": serial,
         "openDate": chosen.open_date if chosen else "",
         "retry": bool(result.get("retry")),

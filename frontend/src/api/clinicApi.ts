@@ -1023,6 +1023,17 @@ export async function fetchReferralSlips(kind: "out" | "reply"): Promise<{ items
   return request(`/nhi/v1/referral/slips?kind=${kind}`);
 }
 
+export async function fetchReferralDownloads(): Promise<{ items: ReferralSlipRow[] }> {
+  return request("/nhi/v1/referral/downloads");
+}
+
+export async function markReferralAccepted(serial: string): Promise<void> {
+  await request("/nhi/v1/referral/accepted", {
+    method: "POST",
+    body: JSON.stringify({ serial }),
+  });
+}
+
 export async function saveReferralSlip(body: Partial<ReferralSlipRow> & { kind: "out" | "reply" }): Promise<ReferralSlipRow> {
   const data = await request<{ ok: boolean; item?: ReferralSlipRow; reason?: string }>("/nhi/v1/referral/slips", {
     method: "POST",

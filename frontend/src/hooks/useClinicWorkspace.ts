@@ -9,6 +9,7 @@ import {
   patchQueueStatus,
   fetchSeqNext,
   queryReferral,
+  markReferralAccepted,
   patchEncounterReg,
   type ReferralSlipHit,
   readCardAndRegister,
@@ -914,6 +915,11 @@ export function useClinicWorkspace(options?: {
         if (!slips.length || !onIncoming) return false;
         const choice = await onIncoming(slips);
         if (!choice?.accept || !choice.serial) return false;
+        try {
+          await markReferralAccepted(choice.serial);
+        } catch {
+          /* The chart flag below still records this acceptance. */
+        }
         await patchEncounterReg(encounterId, {
           patientId,
           referralSeq: choice.serial,
