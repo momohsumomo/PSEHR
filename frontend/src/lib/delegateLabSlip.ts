@@ -91,40 +91,40 @@ function itemLabel(row: LabSlipLine): string {
   return `${row.mark}(${code || name})`;
 }
 
-/** Landscape sheet matching the clinic exam slip, page 2. */
+/** 210×93 左半邊先排。字跟醫聖同一級，放不下的項目接到右半邊，不截掉。 */
 export function buildDelegateLabHtml(input: LabSlipInput): string {
   const names = input.diagnoses.map((row) => String(row.text || "").trim()).filter(Boolean);
   const codes = input.diagnoses.map((row) => String(row.code || "").trim()).filter(Boolean);
   const days = input.giveDays > 0 ? String(input.giveDays).padStart(2, "0") : "";
+  const line =
+    "display:flex;align-items:baseline;break-inside:avoid;page-break-inside:avoid;";
   const body =
     input.lines
       .map(
-        (row, index) => `<tr>
-          <td style="width:2.2em;text-align:right;padding-right:0.4em;">${index + 1}</td>
-          <td>${esc(itemLabel(row))}</td>
-          <td style="width:4em;text-align:right;">${esc(row.total)}</td>
-          <td style="width:3em;"></td>
-        </tr>`,
+        (row, index) => `<div style="${line}">
+          <span style="width:1.6em;text-align:right;padding-right:0.3em;">${index + 1}</span>
+          <span style="flex:1 1 auto;min-width:0;">${esc(itemLabel(row))}</span>
+          <span style="width:3em;text-align:right;">${esc(row.total)}</span>
+          <span style="width:2em;"></span>
+        </div>`,
       )
-      .join("") || `<tr><td></td><td>\u2014</td><td></td><td></td></tr>`;
-  return `<div class="slip-page" style="display:flex;flex-direction:row;background:#fff;color:#000;">
-    <div style="width:50%;box-sizing:border-box;padding:6mm 5mm;font-size:13px;line-height:1.45;">
-    <div style="text-align:center;font-weight:bold;font-size:18px;">\u5168\u6c11\u5065\u5eb7\u4fdd\u96aa\u9580\u8a3a\u4ea4\u4ed8\u6aa2\u9a57(\u67e5)\u8655\u65b9\u7b8b(\u6848\u4ef6:${esc(show(input.caseNo))})</div>
+      .join("") || `<div>\u2014</div>`;
+  return `<div class="slip-page">
+    <div style="box-sizing:border-box;flex:1 1 auto;min-height:0;height:100%;column-count:2;column-fill:auto;-webkit-column-fill:auto;column-gap:3mm;padding:1mm 1.5mm;font-family:PMingLiU,'MingLiU','\u7d30\u660e\u9ad4','Microsoft JhengHei',serif;font-size:9px;line-height:1.15;color:#000;">
+    <div style="text-align:center;font-weight:bold;font-size:10px;line-height:1.15;">\u5168\u6c11\u5065\u5eb7\u4fdd\u96aa\u9580\u8a3a\u4ea4\u4ed8\u6aa2\u9a57(\u67e5)\u8655\u65b9\u7b8b(\u6848\u4ef6:${esc(show(input.caseNo))})</div>
     <div>${esc(show(input.clinicName))} &lt;${esc(show(input.clinicCode))}&gt;\u9662\u6240\u5730\u5740:${esc(show(input.address))}</div>
     <div>\u59d3\u540d:${esc(show(input.name))} \u8eab\u5206\u8b49:${esc(show(input.idNo))}/${esc(show(input.sex))}  \u751f\u65e5:${esc(show(rocDots(input.birthday)))}  \u75c5\u6b77\u865f:${esc(show(input.medicalNo))}</div>
     <div>\u90e8\u865f:(${esc(show(input.copayCode))})\u79d1\u5225:${esc(show(input.dept))} \u5c31\u8a3a\u65e5:${esc(show(rocDots(input.visitDate)))} \u5361:${esc(show(input.cardNo))}\u770b\u8a3a\u865f:(${esc(show(input.queueNo))})</div>
     <div>\u50b7\u75c5\u540d\u7a31:${esc(names.join("\u3001") || "\u2014")}</div>
     <div>\u75be\u75c5\u4ee3\u865f:${esc(codes.join(",") || "\u2014")}${days ? `    (\u7d66\u85e5${esc(days)}\u5929)` : ""}</div>
-    <table style="width:100%;border-collapse:collapse;margin-top:1mm;">
-      <tr>
-        <td style="width:2.2em;border-bottom:1px solid #000;">\u9805</td>
-        <td style="border-bottom:1px solid #000;">\u6aa2\u9a57\u9805\u76ee</td>
-        <td style="width:4em;text-align:right;border-bottom:1px solid #000;">\u7e3d\u91cf</td>
-        <td style="width:3em;border-bottom:1px solid #000;">\u8a3b</td>
-      </tr>
-      ${body}
-    </table>
-    <div style="margin-top:6mm;display:grid;grid-template-columns:1.1fr 1fr 1fr;gap:4mm;">
+    <div style="${line}border-bottom:1px solid #000;margin-top:0.4mm;">
+      <span style="width:1.6em;">\u9805</span>
+      <span style="flex:1 1 auto;">\u6aa2\u9a57\u9805\u76ee</span>
+      <span style="width:3em;text-align:right;">\u7e3d\u91cf</span>
+      <span style="width:2em;">\u8a3b</span>
+    </div>
+    ${body}
+    <div style="margin-top:1.5mm;display:grid;grid-template-columns:1.15fr 1fr 1fr;column-gap:2mm;row-gap:0.2mm;break-inside:avoid;page-break-inside:avoid;">
       <div>\u91ab\u5e2b\u4ee3\u865f:${esc(show(input.doctorId))}</div>
       <div>\u8655\u65b9\u9662\u6240\u6838\u7ae0</div>
       <div>\u6aa2\u9a57\u6a5f\u69cb\u6838\u7ae0</div>
@@ -136,7 +136,6 @@ export function buildDelegateLabHtml(input: LabSlipInput): string {
       <div></div>
     </div>
     </div>
-    <div style="width:50%"></div>
   </div>`;
 }
 
