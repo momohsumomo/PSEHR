@@ -17,6 +17,7 @@ import type { PatientHit } from "@/lib/patientSearch";
 import { takeClaimsEmr } from "@/lib/claimsEmr";
 import { useEscLayer } from "@/hooks/useEscLayer";
 import { useListNav } from "@/hooks/useListNav";
+import { compareEmrRows, type SortDir, type SortKey } from "@/lib/emrLookupSort";
 
 /**
  * 對醫聖「調閱病歷系統」：
@@ -180,8 +181,6 @@ const inputStyle: CSSProperties = {
   fontFamily: HIS_FONT,
 };
 
-type SortKey = "name" | "date" | "serno" | "case";
-
 function feeInRange(value: number, fromRaw: string, toRaw: string): boolean {
   const from = Number(fromRaw);
   const to = Number(toRaw);
@@ -224,6 +223,7 @@ type EmrHold = {
   encounterId: string;
   status: string;
   sortKey: SortKey;
+  sortDir: SortDir;
 };
 
 let emrHold: EmrHold | null = null;
@@ -263,7 +263,8 @@ export function EmrLookupPage() {
   const [resultOpen, setResultOpen] = useState(false);
   const [rows, setRows] = useState<ApiQueueEntry[]>([]);
   const [selectedIdx, setSelectedIdx] = useState(0);
-  const [sortKey, setSortKey] = useState<SortKey>("date");
+  const [sortKey, setSortKey] = useState<SortKey>("name");
+  const [sortDir, setSortDir] = useState<SortDir>("asc");
   const [detail, setDetail] = useState<PatientVisitEntry | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
 
@@ -283,26 +284,21 @@ export function EmrLookupPage() {
   const sortedRows = useMemo(() => {
     const copy = [...rows];
     copy.sort((a, b) => {
-      const qa = a.queueMeta || {};
-      const qb = b.queueMeta || {};
-      if (sortKey === "name") {
-        return String(qa.patientDisplay || "").localeCompare(String(qb.patientDisplay || ""), "zh-Hant");
-      }
-      if (sortKey === "serno") {
-        const byDate = String(qa.encounterDate || "").localeCompare(String(qb.encounterDate || ""));
-        if (byDate !== 0) return byDate;
-        return Number(qa.queueNumber || 0) - Number(qb.queueNumber || 0);
-      }
-      if (sortKey === "case") {
-        return String(qa.caseNo || "").localeCompare(String(qb.caseNo || ""));
-      }
-      // date（預設）：看診日 → 流水
-      const byDate = String(qa.encounterDate || "").localeCompare(String(qb.encounterDate || ""));
-      if (byDate !== 0) return byDate;
-      return Number(qa.queueNumber || 0) - Number(qb.queueNumber || 0);
+      const n = compareEmrRows(a, b, sortKey);
+      return sortDir === "asc" ? n : -n;
     });
     return copy;
-  }, [rows, sortKey]);
+  }, [rows, sortKey, sortDir]);
+
+  const chooseSort = (key: SortKey) => {
+    const id = sortedRows[selectedIdx]?.resource?.id;
+    if (id) focusReturnId.current = id;
+    if (key === sortKey) setSortDir((dir) => (dir === "asc" ? "desc" : "asc"));
+    else {
+      setSortKey(key);
+      setSortDir("asc");
+    }
+  };
 
   const resultListRef = useRef<HTMLDivElement>(null);
   const onResultIndex = useCallback((i: number) => setSelectedIdx(i), []);
@@ -348,6 +344,7 @@ export function EmrLookupPage() {
     setDrugFeeTo(hold.drugFeeTo);
     setOpts({ sameDay: hold.sameDay, hasImage: hold.hasImage });
     setSortKey(hold.sortKey);
+    setSortDir(hold.sortDir === "desc" ? "desc" : "asc");
     setRows(hold.rows);
     setStatus(hold.status);
     setResultOpen(true);
@@ -539,6 +536,7 @@ export function EmrLookupPage() {
       encounterId: row.resource.id,
       status,
       sortKey,
+      sortDir,
     };
     sessionStorage.setItem(EMR_RETURN_KEY, String(emrReturnEpoch));
     const q = row.queueMeta || {};
@@ -570,7 +568,7 @@ export function EmrLookupPage() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [resultOpen, finderOpen, selected, dateFrom, dateTo, queriedFrom, queriedTo, shift, room, patientId, patientKey, patientLabel, ccText, dxText, drugText, opts.sameDay, opts.hasImage, txFeeFrom, txFeeTo, drugFeeFrom, drugFeeTo, rows, status, sortKey, navigate]);
+  }, [resultOpen, finderOpen, selected, dateFrom, dateTo, queriedFrom, queriedTo, shift, room, patientId, patientKey, patientLabel, ccText, dxText, drugText, opts.sameDay, opts.hasImage, txFeeFrom, txFeeTo, drugFeeFrom, drugFeeTo, rows, status, sortKey, sortDir, navigate]);
 
   const qm = selected?.queueMeta;
   const visitIso = String(qm?.encounterDate || detail?.visitDate || "");
@@ -998,13 +996,34 @@ export function EmrLookupPage() {
                 <table className="w-full border-collapse" style={{ fontSize: HIS.fs.secondary }}>
                   <thead className="sticky top-0 z-10" style={{ background: HIS.headerBg }}>
                     <tr style={{ height: HIS.row.listHeader }}>
-                      <th className="border px-1 py-0.5 text-left" style={{ borderColor: HIS.chromeBorder }}>姓名</th>
-                      <th className="border px-1 py-0.5 text-left" style={{ borderColor: HIS.chromeBorder }}>看診日</th>
-                      <th className="border px-1 py-0.5 text-right" style={{ borderColor: HIS.chromeBorder }}>流水</th>
-                      <th className="border px-1 py-0.5 text-left" style={{ borderColor: HIS.chromeBorder }}>案卡</th>
-                      <th className="border px-1 py-0.5" style={{ borderColor: HIS.chromeBorder }}>醫</th>
-                      <th className="border px-1 py-0.5" style={{ borderColor: HIS.chromeBorder }}>補</th>
-                      <th className="border px-1 py-0.5" style={{ borderColor: HIS.chromeBorder }}>完</th>
+                      {(
+                        [
+                          ["name", "姓名", "text-left"],
+                          ["date", "看診日", "text-left"],
+                          ["serno", "流水", "text-right"],
+                          ["case", "案卡", "text-left"],
+                          ["card", "醫", "text-center"],
+                          ["makeup", "補", "text-center"],
+                          ["done", "完", "text-center"],
+                        ] as const
+                      ).map(([key, label, align]) => {
+                        const active = sortKey === key;
+                        return (
+                          <th
+                            key={key}
+                            className={`cursor-pointer select-none border px-1 py-0.5 ${align}`}
+                            style={{
+                              borderColor: HIS.chromeBorder,
+                              background: active ? "#C8D8F0" : undefined,
+                            }}
+                            title="按一下依這個欄位排序，再按一次反過來"
+                            onClick={() => chooseSort(key)}
+                          >
+                            {label}
+                            {active ? (sortDir === "asc" ? " ▲" : " ▼") : ""}
+                          </th>
+                        );
+                      })}
                     </tr>
                   </thead>
                   <tbody>
@@ -1042,7 +1061,9 @@ export function EmrLookupPage() {
                           <td className="border border-[#A0C0D0] px-1 py-0.5 text-center">
                             {q.cardWritten ? "✓" : ""}
                           </td>
-                          <td className="border border-[#A0C0D0] px-1 py-0.5 text-center" />
+                          <td className="border border-[#A0C0D0] px-1 py-0.5 text-center">
+                            {String(q.afterCheck) === "2" ? "✓" : ""}
+                          </td>
                           <td className="border border-[#A0C0D0] px-1 py-0.5 text-center">
                             {q.queueStatus === "finished" || q.fhirStatus === "finished" ? "✓" : ""}
                           </td>
@@ -1058,24 +1079,6 @@ export function EmrLookupPage() {
                       : "尚無結果。"}
                   </p>
                 )}
-              </div>
-              <div
-                className="flex shrink-0 flex-wrap gap-3 border-t px-2 py-1"
-                style={{ borderColor: HIS.chromeBorder, background: HIS.chrome, fontSize: HIS.fs.secondary }}
-              >
-                {(
-                  [
-                    ["date", "看診日"],
-                    ["name", "姓名"],
-                    ["serno", "流水"],
-                    ["case", "案"],
-                  ] as const
-                ).map(([k, t]) => (
-                  <label key={k} className="flex items-center gap-1 font-bold">
-                    <input type="radio" checked={sortKey === k} onChange={() => setSortKey(k)} />
-                    {t}
-                  </label>
-                ))}
               </div>
             </div>
 
