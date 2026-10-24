@@ -162,8 +162,6 @@ def nhi_encounter_to_fhir(intake: NhiEncounterIntake) -> dict[str, Any]:
         queueStatus=intake.queueStatus,
     )
     data = body.to_fhir_dict()
-    if intake.reasonText:
-        data["reasonCode"] = [{"text": intake.reasonText}]
     if not data.get("period"):
         if intake.encounterDate:
             # 用指定的就醫日加上目前時間
@@ -212,6 +210,7 @@ def nhi_encounter_to_fhir(intake: NhiEncounterIntake) -> dict[str, Any]:
             "referralDate": intake.referralDate,
             "acceptReferral": intake.acceptReferral,
             "prebook": intake.prebook,
+            "noteMark": intake.reasonText,
         },
     )
     return data

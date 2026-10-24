@@ -693,29 +693,6 @@ def register_nhi_encounter(body: NhiEncounterIntake) -> dict[str, Any]:
     }
 
 
-def _chief_from_reg_form(store: Any, encounter: dict[str, Any], reason_text: str | None) -> str:
-    """掛號畫面送上來的字。跟病人備註或這筆註記相同，就不是主訴。"""
-    from src.core.encounter_extensions import extract_reg_meta
-    from src.core.patient_visit_history import chief_complaint_text
-    from src.infrastructure.sqlite_shadow_store import _load_patient_clinic_fields
-
-    incoming = chief_complaint_text(reason_text)
-    if not incoming:
-        return ""
-    note = chief_complaint_text(str(extract_reg_meta(encounter).get("noteMark") or ""))
-    if note and incoming == note:
-        return ""
-    subject = encounter.get("subject") or {}
-    patient_id = str(subject.get("reference") or "").split("/")[-1]
-    memo = ""
-    if patient_id:
-        with store._connect() as conn:
-            memo = chief_complaint_text(_load_patient_clinic_fields(conn, patient_id).get("memo"))
-    if memo and incoming == memo:
-        return ""
-    return incoming
-
-
 @router.patch(
     "/v1/encounter/{encounter_id}/reg",
     summary="修改此次掛號資料（掛號編輯／F3）",
@@ -770,16 +747,12 @@ def patch_encounter_reg(encounter_id: str, body: NhiEncounterIntake) -> dict[str
             "acceptReferral": body.acceptReferral,
             "prebook": body.prebook,
             "cardWritten": body.cardWritten,
+            "noteMark": body.reasonText,
         },
     )
     # Check-in replaces the appointment. forespeak 預 would keep the Yu column.
     if not body.prebook:
         put_reg_string(payload, "forespeak", "")
-    # 掛號表單的 reasonText 常是病人備註。跟備註或註記一樣就不要蓋掉醫師主訴。
-    cc_text = _chief_from_reg_form(store, existing, body.reasonText)
-    if cc_text:
-        payload["reasonCode"] = [{"text": cc_text[:4000]}]
-        store.set_encounter_chief_complaint(encounter_id, cc_text)
     enc_date = ""
     start = str((payload.get("period") or {}).get("start") or "")
     if "T" in start:

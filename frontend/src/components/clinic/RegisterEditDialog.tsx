@@ -323,7 +323,7 @@ export function RegisterEditDialog({
                 <Field label={"\u8a3a\u9593"}>
                   <input className={inputCls} value={form.room} onChange={(e) => onChange({ room: e.target.value })} />
                 </Field>
-                <Field label={"\u4e3b\u8ff0"}>
+                <Field label={"\u7279\u5225\u8a18\u8f09"}>
                   <input className={inputCls} value={form.reasonText} onChange={(e) => onChange({ reasonText: e.target.value })} />
                 </Field>
               </div>

@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-import json
 import tempfile
 import unittest
 from pathlib import Path
 
-from src.api.routers.nhi import _chief_from_reg_form
-from src.core.encounter_extensions import attach_reg_extension
+from src.core.encounter_extensions import attach_reg_extension, extract_reg_meta
+from src.core.nhi_clinical_mappers import nhi_encounter_to_fhir
+from src.core.nhi_encounter_validators import NhiEncounterIntake
 from src.infrastructure.sqlite_shadow_store import SqliteShadowStore
 
 
@@ -84,40 +84,17 @@ class ChiefComplaintSourceTest(unittest.TestCase):
             self.assertEqual(store.lookup_chief_complaint("enc-3"), "skip 4m")
             _close(store)
 
-    def test_registration_does_not_keep_a_remark_as_the_complaint(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            store = SqliteShadowStore(Path(tmp) / "t.db")
-            store.initialize()
-            patient = {
-                "resourceType": "Patient",
-                "id": "p1",
-                "extension": [
-                    {
-                        "url": "https://wundadi.tw/fhir/StructureDefinition/patient-clinic-ext",
-                        "extension": [{"url": "memo", "valueString": "HF"}],
-                    }
-                ],
-            }
-            with store._connect() as conn:
-                conn.execute(
-                    """
-                    INSERT INTO resource_cache
-                      (resource_type, resource_id, payload_json)
-                    VALUES ('Patient', 'p1', ?)
-                    """,
-                    (json.dumps(patient),),
-                )
-            encounter = attach_reg_extension(
-                {
-                    "resourceType": "Encounter",
-                    "id": "enc-1",
-                    "subject": {"reference": "Patient/p1"},
-                },
-                {"noteMark": "HF"},
-            )
-            self.assertEqual(_chief_from_reg_form(store, encounter, "HF"), "")
-            self.assertEqual(_chief_from_reg_form(store, encounter, "skip 4m"), "skip 4m")
-            _close(store)
+    def test_registration_text_is_a_visit_note_not_the_complaint(self) -> None:
+        made = nhi_encounter_to_fhir(NhiEncounterIntake(patientId="p1", reasonText="HF"))
+        self.assertNotIn("reasonCode", made)
+        self.assertEqual(extract_reg_meta(made).get("noteMark"), "HF")
+
+        kept = attach_reg_extension(
+            {"resourceType": "Encounter", "id": "enc-1", "reasonCode": [{"text": "skip 4m"}]},
+            {"noteMark": "HF"},
+        )
+        self.assertEqual(kept["reasonCode"], [{"text": "skip 4m"}])
+        self.assertEqual(extract_reg_meta(kept).get("noteMark"), "HF")
 
 
 if __name__ == "__main__":
