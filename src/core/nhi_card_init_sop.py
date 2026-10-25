@@ -11,6 +11,7 @@ from dataclasses import dataclass, field
 from typing import Any, Protocol
 
 from src.core.nhi_cshis6_client import is_initialized, nested_status, status_hint
+from src.core.plain_text import plain_text
 
 KIND_DEAD = "dead"
 KIND_EMPTY = "empty"
@@ -127,7 +128,7 @@ def map_hc_basic(data: dict[str, Any]) -> dict[str, str] | None:
         "idNo": id_no.upper(),
         "birthday": birthday,
         "sex": sex.upper()[:1],
-        "patientName": str(name).strip() if name else "",
+        "patientName": plain_text(str(name)).strip() if name else "",
         "cardId": str(inner.get("cardId") or inner.get("cardSn") or "").strip(),
         "identityStatus": mark,
     }

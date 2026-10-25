@@ -52,6 +52,8 @@ export interface QueueEntry {
   /** 健保卡保險對象身分註記。1 福保、2 榮民、4 中低收入、8 災民。 */
   cardIdentity?: string;
   deposit?: string;
+  /** Collected deposit kept after a card refund. The return line takes it out of the day. */
+  depositPaid?: string;
   consultFee?: string;
   drugFee?: string;
   totalFee?: string;

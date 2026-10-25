@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { isDepositHold, needsNhiNoCardReason } from "@/lib/registerModes";
+import { depositInTotal } from "@/lib/visitFee";
 import {
   fetchQueueForDate,
   fetchPatientVisitDetail,
@@ -152,6 +153,7 @@ function mapApiQueue(entries: ApiQueueEntry[]): QueueEntry[] {
     regCc: e.queueMeta.regCc,
     referredOut: Boolean(e.queueMeta.referredOut),
     deposit: e.queueMeta.deposit,
+    depositPaid: e.queueMeta.depositPaid,
     regFee: e.queueMeta.regFee,
     copayAmt: e.queueMeta.copayAmt,
     drugCopay: e.queueMeta.drugCopay,
@@ -974,7 +976,9 @@ export function useClinicWorkspace(options?: {
         };
         const burden = String(form.burdenFee || "").trim() ? yuan(form.burdenFee) : yuan(form.copayAmt);
         const totalFee = String(
-          Math.round(yuan(form.regFee) + burden + yuan(form.deposit) + yuan(prior?.selfPay)),
+          Math.round(
+            yuan(form.regFee) + burden + depositInTotal(form.deposit, prior?.depositPaid) + yuan(prior?.selfPay),
+          ),
         );
         await patchEncounterReg(form.encounterId, {
           patientId,

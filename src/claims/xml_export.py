@@ -65,8 +65,10 @@ def render_claims_xml(
 
 
 def _esc(s: str) -> str:
+    from src.core.plain_text import plain_text
+
     return (
-        str(s)
+        plain_text(str(s))
         .replace("&", "&amp;")
         .replace("<", "&lt;")
         .replace(">", "&gt;")

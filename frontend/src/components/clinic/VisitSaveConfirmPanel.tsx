@@ -5,6 +5,7 @@ import { thisPcPrintsOnSave, thisPcUploadsCloudOnSave } from "@/lib/clinicDevice
 import { doctorDisplayName, pharmacistDisplayName } from "@/lib/doctorName";
 import { HIS, HIS_FONT } from "@/lib/hisTheme";
 import { skipsCloudWrite } from "@/lib/queueOrder";
+import { depositInTotal } from "@/lib/visitFee";
 import type { DiagnosisRow, QueueEntry, RxLine } from "@/mocks/clinicMocks";
 import { formatBirthdayRoc } from "@/lib/patientSearch";
 import { displayCase } from "@/lib/caseMark";
@@ -333,7 +334,7 @@ export function VisitSaveConfirmPanel({
   if (!open) return null;
   const noCloud = selected ? skipsCloudWrite(selected) : false;
   const charged = yuanNumber(draft.selfPay) ?? 0;
-  const deposit = yuanNumber(selected?.deposit) ?? 0;
+  const deposit = depositInTotal(selected?.deposit, selected?.depositPaid);
   const total =
     (yuanNumber(draft.regFee) ?? 0) +
     (yuanNumber(draft.burden) ?? 0) +

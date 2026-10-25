@@ -40,7 +40,9 @@ def merge_nhi_patient_update(existing: dict[str, Any], nhi_payload: dict[str, An
 
 def patient_name_entry(full: str) -> dict[str, Any]:
     """整段姓名。清單把姓和名接回來，所以畫面上看得到健保卡上的全名。"""
-    text = full.strip()
+    from src.core.plain_text import plain_text
+
+    text = plain_text(full).strip()
     if len(text) >= 2:
         return {"family": text[0], "given": [text[1:]], "text": text}
     return {"text": text}

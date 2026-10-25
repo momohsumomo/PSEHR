@@ -32,6 +32,7 @@ REG_STRING_KEYS = (
     "regFee",
     "copayAmt",
     "deposit",
+    "depositPaid",
     "consultFee",
     "drugFee",
     "materialFee",

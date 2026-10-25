@@ -339,6 +339,10 @@ class SqliteShadowStore(ShadowStore):
             id_cat_ext["valueString"] = default_code
 
     def cache_resource(self, resource_type: str, resource_id: str, payload: dict[str, Any]) -> None:
+        if resource_type == "Patient":
+            from src.core.plain_text import sanitize_patient_names
+
+            sanitize_patient_names(payload)
         with self._connect() as conn:
             if resource_type == "Patient":
                 self._auto_fill_patient_id_category(conn, payload)

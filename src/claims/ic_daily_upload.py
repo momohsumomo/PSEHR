@@ -61,7 +61,9 @@ def _take_order_sign(queues: dict[str, list[str]], code: str) -> str:
 
 
 def _esc(value: Any) -> str:
-    text = str(value or "")
+    from src.core.plain_text import plain_text
+
+    text = plain_text(str(value or ""))
     return (
         text.replace("&", "\uff06")
         .replace("<", "\uff1c")

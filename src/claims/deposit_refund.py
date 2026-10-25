@@ -113,6 +113,44 @@ def prepare_refund(store: Any, encounter_id: str, today: date | None = None) -> 
     }
 
 
+def cash_collected(parts: int, held: int, refunded: int) -> int:
+    """Visit total keeps a deposit that was taken.
+
+    The return line, not a smaller total, is what leaves that day's cash.
+    A deposit still in the drawer is `held`. After the card refund it is `refunded`.
+    """
+    held = max(0, int(held))
+    refunded = max(0, int(refunded))
+    if held > 0:
+        return int(parts) + held
+    return int(parts) + refunded
+
+
+def adjusted_visit_total(sent: int, parts: int, held: int, refunded: int) -> int:
+    """Refuse a later save that drops a refunded deposit out of the visit total."""
+    want = cash_collected(parts, held, refunded)
+    if int(refunded) > 0 and int(sent) < want:
+        return want
+    return int(sent)
+
+
+def refunded_cash(store: Any, encounter_id: str) -> int:
+    key = (encounter_id or "").strip()
+    if not key:
+        return 0
+    with store._connect() as conn:
+        row = conn.execute(
+            "SELECT amount FROM cash_return WHERE keywords = ?",
+            (key,),
+        ).fetchone()
+    if not row:
+        return 0
+    try:
+        return max(0, int(row[0] or 0))
+    except (TypeError, ValueError):
+        return 0
+
+
 def card_matches(expected_id_no: str, card_id_no: str) -> bool:
     exp = (expected_id_no or "").strip().upper()
     got = (card_id_no or "").strip().upper()
@@ -170,6 +208,7 @@ def apply_refund(
             "hcId": (hc_id or "").strip(),
             "hcIdNo": (hc_id_no or "").strip().upper(),
             "deposit": "0",
+            "depositPaid": str(int(prepared["amount"])),
             "icUploadDate": upload_day,
             "cardWritten": True,
         },

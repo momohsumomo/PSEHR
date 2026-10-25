@@ -9,6 +9,7 @@ from datetime import date, datetime
 from typing import Any, Iterable
 
 from src.claims.engine import ClaimEncounterRecord, ClaimsSummary
+from src.core.plain_text import plain_text
 
 DEFAULT_INSTITUTION_CODE = "3521013662"
 DEFAULT_DEPT = "11"
@@ -497,7 +498,7 @@ def _copay_code(raw: str | None) -> str:
 
 def claim_patient_name(name: str | None) -> str:
     """月申報 d49 只帶前 10 碼。病歷裡的姓名維持健保卡上的全名。"""
-    return str(name or "").strip()[:10]
+    return plain_text(str(name or "")).strip()[:10]
 
 
 def _treat_seq(raw: str | None) -> str:
@@ -560,7 +561,7 @@ def _t(name: str, value: Any) -> str:
 
 def _esc(value: Any) -> str:
     return (
-        str(value)
+        plain_text(str(value))
         .replace("&", "&amp;")
         .replace("<", "&lt;")
         .replace(">", "&gt;")

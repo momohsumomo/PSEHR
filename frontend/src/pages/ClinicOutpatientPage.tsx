@@ -105,6 +105,7 @@ import {
 import { HIS, HIS_FONT, hisFontStyle } from "@/lib/hisTheme";
 import { findCardCheckIn, findWaitingAppointment, otherShiftAppointmentNote } from "@/lib/appointmentCheckIn";
 import { compareClinicQueue, normalizeClock, nowClock, planQueueNumber, shiftQueueNumbers, skipsCloudWrite } from "@/lib/queueOrder";
+import { depositInTotal } from "@/lib/visitFee";
 import { AppointmentCheckInDialog, InsertNumberDialog, PrebookArriveDialog, PrebookNoCardDialog } from "@/components/clinic/InsertNumberDialog";
 import { useEscLayer } from "@/hooks/useEscLayer";
 
@@ -1107,11 +1108,11 @@ export function ClinicOutpatientPage() {
           selfPay: saveDraft.selfPay !== "—" ? saveDraft.selfPay : undefined,
           totalFee: String(
             Math.round(
-              [saveDraft.regFee, saveDraft.burden, saveDraft.drugCopay, selected?.deposit, saveDraft.selfPay].reduce((sum, part) => {
+              [saveDraft.regFee, saveDraft.burden, saveDraft.drugCopay, saveDraft.selfPay].reduce((sum, part) => {
                 if (!part || part === "—" || part === "-") return sum;
                 const n = Number(part.replace(/[^\d.-]/g, ""));
                 return sum + (Number.isFinite(n) ? n : 0);
-              }, 0),
+              }, 0) + depositInTotal(selected?.deposit, selected?.depositPaid),
             ),
           ),
         });
@@ -1192,7 +1193,7 @@ export function ClinicOutpatientPage() {
             /* circle flag is display-only; a failed patch does not undo the chart */
           }
         }
-      } else if (deskOnly && selected?.cardWritten && selected.patientId) {
+      } else if (deskOnly && selected?.cardWritten && selected.patientId && !depositInTotal(undefined, selected.depositPaid)) {
         try {
           await patchEncounterReg(selectedEncounterId, {
             patientId: selected.patientId,

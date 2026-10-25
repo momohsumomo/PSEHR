@@ -8,6 +8,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
+from src.core.plain_text import plain_text
 from src.spoke.drug_price import lookup_drug_price
 
 # 門診診察費暫時常數；日後可由 Pack／院所設定取代
@@ -379,7 +380,7 @@ def build_claims_summary(
         q_num, enc_date = row[6], row[7]
         birth_date, birthday_roc, sex, id_no_col = row[8], row[9], row[10], row[11]
         claim_doctor, claim_pharm, claim_seq = row[12], row[13], row[14]
-        patient_name = f"{family or ''}{given or ''}".strip() or "無姓名"
+        patient_name = plain_text(f"{family or ''}{given or ''}").strip() or "無姓名"
         patient_ref = id_no_col or identifier or medical_no or patient_id
         _ = patient_id
 

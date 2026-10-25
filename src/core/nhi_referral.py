@@ -238,8 +238,10 @@ def query_referrals(id_no: str, *, desk_sign: dict[str, Any] | None = None, cons
 
 
 def _xml_text(value: str) -> str:
+    from src.core.plain_text import plain_text
+
     return (
-        (value or "")
+        plain_text(value or "")
         .replace("&", "\uff06")
         .replace("<", "\uff1c")
         .replace(">", "\uff1e")

@@ -1,6 +1,7 @@
 import type { ApiQueueEntry } from "@/api/clinicApi";
 import { isoToRoc } from "@/components/clinic/HisRocDatePicker";
 import { cashDetailFileStem, cashDetailToXlsx } from "@/lib/cashDetailXlsx";
+import { plainText } from "@/lib/plainText";
 
 export { cashDetailFileStem };
 
@@ -575,7 +576,7 @@ export function buildCashDetailReport(opts: {
       key: `v-${e.resource?.id || i}`,
       dateIso: iso,
       dateMd: monthDay(iso),
-      name: String(q.patientDisplay || q.patientName || ""),
+      name: plainText(String(q.patientDisplay || q.patientName || "")),
       chart: String(q.medicalNo || ""),
       seg: shiftSeg(q.shift),
       seqText: String(q.queueNumber ?? ""),
@@ -617,7 +618,7 @@ export function buildCashDetailReport(opts: {
       key: `r-${iso}-${i}`,
       dateIso: iso,
       dateMd: monthDay(iso),
-      name: String(ret.patientName || ""),
+      name: plainText(String(ret.patientName || "")),
       chart,
       seg,
       seqText: "還單",

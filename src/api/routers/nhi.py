@@ -704,6 +704,38 @@ def patch_encounter_reg(encounter_id: str, body: NhiEncounterIntake) -> dict[str
     existing = repo.read_resource("Encounter", encounter_id)
     if existing is None:
         raise HTTPException(status_code=404, detail=f"Encounter/{encounter_id} 不存在")
+    from src.claims.deposit_refund import adjusted_visit_total, refunded_cash
+
+    prev = extract_reg_meta(existing)
+    refunded = refunded_cash(store, encounter_id)
+    updates: dict[str, Any] = {}
+    if body.cardWritten is False and prev.get("cardWritten") and refunded > 0:
+        updates["cardWritten"] = None
+
+    def _fee(value: Any) -> int:
+        try:
+            return int(float(str(value or "0").replace(",", "")))
+        except (TypeError, ValueError):
+            return 0
+
+    def _pick(sent: str | None, stored: Any) -> int:
+        if sent is not None and str(sent).strip() != "":
+            return _fee(sent)
+        return _fee(stored)
+
+    if refunded > 0 and body.totalFee is not None:
+        parts = (
+            _pick(body.regFee, prev.get("regFee"))
+            + _pick(body.copayAmt, prev.get("copayAmt"))
+            + _pick(body.drugCopay, prev.get("drugCopay"))
+            + _pick(body.selfPay, prev.get("selfPay"))
+        )
+        held = _pick(body.deposit, prev.get("deposit"))
+        want = adjusted_visit_total(_fee(body.totalFee), parts, held, refunded)
+        if want != _fee(body.totalFee):
+            updates["totalFee"] = str(want)
+    if updates:
+        body = body.model_copy(update=updates)
     payload = attach_reg_extension(
         dict(existing),
         {

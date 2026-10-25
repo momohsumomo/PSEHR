@@ -174,6 +174,8 @@ export type ApiQueueEntry = {
     drugCopay?: string;
     cardIdentity?: string;
     deposit?: string;
+    /** Deposit collected, kept after a card refund so the visit total does not shrink. */
+    depositPaid?: string;
     consultFee?: string;
     drugFee?: string;
     totalFee?: string;
