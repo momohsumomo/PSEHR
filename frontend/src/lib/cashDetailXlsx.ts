@@ -108,13 +108,13 @@ export function cashDoctorCode(doctorId: string): string {
 
 function rowCells(row: CashExcelInput): Array<string | number> {
   return [
-    padEnd(String(row.dateMd || ""), 5),
-    padDisplay(String(row.name || "").trim(), 10),
-    padEnd(String(row.chart || "").trim(), 10),
-    String(row.seg || ""),
-    String(row.seqText || ""),
-    padEnd(String(row.cardNo || ""), 4),
-    String(row.idNo || ""),
+    padEnd(plain(String(row.dateMd || "")), 5),
+    padDisplay(plain(String(row.name || "").trim()), 10),
+    padEnd(plain(String(row.chart || "").trim()), 10),
+    plain(String(row.seg || "")),
+    plain(String(row.seqText || "")),
+    padEnd(plain(String(row.cardNo || "")), 4),
+    plain(String(row.idNo || "")),
     money(row.deposit),
     String(row.caseNo || ""),
     padEnd(String(row.copayCode || ""), 3),
@@ -147,8 +147,13 @@ function colName(index: number): string {
   return name;
 }
 
+/** A null from a card name makes the whole workbook illegal, and Excel opens a blank file. */
+function plain(value: string): string {
+  return value.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\uFFFE\uFFFF]/g, "");
+}
+
 function xmlText(value: string): string {
-  return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  return plain(value).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
 function cellXml(col: number, row: number, value: string | number, header: boolean): string {
