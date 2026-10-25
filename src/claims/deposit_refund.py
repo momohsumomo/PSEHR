@@ -171,6 +171,7 @@ def apply_refund(
             "hcIdNo": (hc_id_no or "").strip().upper(),
             "deposit": "0",
             "icUploadDate": upload_day,
+            "cardWritten": True,
         },
     )
     repo.update_resource("Encounter", encounter_id, payload)

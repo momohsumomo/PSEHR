@@ -1040,9 +1040,7 @@ export function ClinicOutpatientPage() {
     }
     setCardNote(null);
     const alreadySaved = Boolean(
-      selected &&
-        !skipsCloudWrite(selected) &&
-        (selected.cardWritten || selected.queueStatus === "finished"),
+      selected && !skipsCloudWrite(selected) && selected.cardWritten,
     );
     if (alreadySaved) {
       setSaveDraft({ ...draft, writeCard: false });

@@ -13,6 +13,7 @@ import {
   patchEncounterReg,
   type ReferralSlipHit,
   readCardAndRegister,
+  correctPatientName,
   arrangeDiagnosisRows,
   registerCondition,
   registerEncounter,
@@ -670,8 +671,22 @@ export function useClinicWorkspace(options?: {
   const readCardRegisterPatient = useCallback(async () => {
     if (!apiMode) throw new Error("需 API 模式");
     const res = await readCardAndRegister(false);
+    const cardName = (res.validation?.cardName || "").trim();
+    const chartName = (res.validation?.patientName || "").trim();
+    const same = cardName.replace(/\s+/g, "") === chartName.replace(/\s+/g, "");
+    if (res.patientId && cardName && !same) {
+      const chartShown = chartName || "（病歷沒有姓名）";
+      const yes = window.confirm(
+        `健保卡姓名是「${cardName}」，病歷上是「${chartShown}」。\n要改成健保卡上的姓名嗎？`,
+      );
+      if (yes) {
+        await correctPatientName(res.patientId, cardName);
+        if (res.validation) res.validation.patientName = cardName;
+        await refreshQueue().catch(() => undefined);
+      }
+    }
     return res;
-  }, [apiMode]);
+  }, [apiMode, refreshQueue]);
 
   const registerPatientAndEncounter = useCallback(
     async (

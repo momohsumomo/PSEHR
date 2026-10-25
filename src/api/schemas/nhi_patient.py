@@ -16,7 +16,9 @@ class NhiValidationReport(BaseModel):
     sex: str
     birthDateIso: str | None = None
     patientName: str | None = None
+    cardName: str | None = None
     cardId: str | None = None
+    identityStatus: str | None = None
 
 
 class NhiPatientRegisterResponse(BaseModel):

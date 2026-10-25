@@ -714,6 +714,7 @@ export type PatientRegisterResponse = {
     birthdayRoc?: string;
     sex?: string;
     patientName?: string;
+    cardName?: string;
     cardId?: string;
     identityStatus?: string;
   };
@@ -790,6 +791,13 @@ export async function readCardAndRegister(mock = false): Promise<PatientRegister
   return request<PatientRegisterResponse>("/nhi/v1/card/read-and-register", {
     method: "POST",
     body: JSON.stringify({ basic }),
+  });
+}
+
+export async function correctPatientName(patientId: string, patientName: string): Promise<void> {
+  await request(`/nhi/v1/patient/${encodeURIComponent(patientId)}/name`, {
+    method: "POST",
+    body: JSON.stringify({ patientName }),
   });
 }
 

@@ -123,6 +123,8 @@ function PreviewWindow({ req, onClose }: { req: Req; onClose: () => void }) {
   const views = flatten(sheets);
   const [cursor, setCursor] = useState(0);
   const [ask, setAsk] = useState(false);
+  const [printed, setPrinted] = useState(false);
+  const printedRef = useRef(false);
   const [hint, setHint] = useState(
     views.length > 1
       ? "\u6efe\u8f2a\u63db\u9801\u3002\u6309\u5217\u5370\u6703\u554f\u8981\u6574\u4efd\u9084\u662f\u53ea\u5370\u9019\u4e00\u5f35\u3002"
@@ -157,12 +159,15 @@ function PreviewWindow({ req, onClose }: { req: Req; onClose: () => void }) {
     setHint("\u5df2\u5b58\u6a94\u3002\u6a94\u6848\u5728\u4e0b\u8f09\u8cc7\u6599\u593e\u3002");
   };
 
-  const sendSheets = (jobs: { html: string; sheet: PreparedPrint }[]) => {
+  const sendSheets = (jobs: { html: string; sheet: PreparedPrint }[], again = false) => {
+    if (printedRef.current && !again) return;
     const ready = jobs.filter((job) => job.sheet.printerName);
     if (!ready.length) {
       setHint("\u9019\u4e00\u5217\u9084\u6c92\u9078\u5370\u8868\u6a5f\uff0c\u6c92\u6709\u9001\u51fa\u53bb\u3002");
       return;
     }
+    printedRef.current = true;
+    setPrinted(true);
     sentName.current = ready.map((job) => job.sheet.printerName).filter((name, index, all) => all.indexOf(name) === index).join("\u3001");
     setHint("\u5df2\u4ea4\u7d66\u5370\u8868\u6a5f\uff0c\u96e2\u958b\u9019\u500b\u756b\u9762\u4e5f\u6703\u5370\u5b8c\u3002");
     void (async () => {
@@ -191,11 +196,11 @@ function PreviewWindow({ req, onClose }: { req: Req; onClose: () => void }) {
     })();
   };
 
-  const printChoice = (mode: "all" | "one") => {
+  const printChoice = (mode: "all" | "one", again = false) => {
     setAsk(false);
     if (!sheet) return;
     if (mode === "one") {
-      sendSheets([{ sheet, html: htmlForSlip(sheet.html, view.page) }]);
+      sendSheets([{ sheet, html: htmlForSlip(sheet.html, view.page) }], again);
       return;
     }
     const seen = new Set<number>();
@@ -206,15 +211,16 @@ function PreviewWindow({ req, onClose }: { req: Req; onClose: () => void }) {
       const one = sheets[item.sheet];
       if (one) jobs.push({ sheet: one, html: one.html });
     }
-    sendSheets(jobs);
+    sendSheets(jobs, again);
   };
 
-  const print = () => {
+  const print = (again = false) => {
+    if (printedRef.current && !again) return;
     if (views.length > 1) {
       setAsk(true);
       return;
     }
-    printChoice("all");
+    printChoice("all", again);
   };
 
   useEffect(() => {
@@ -265,7 +271,7 @@ function PreviewWindow({ req, onClose }: { req: Req; onClose: () => void }) {
       ev.preventDefault();
       ev.stopPropagation();
       if (ask) return;
-      print();
+      print(false);
     };
     window.addEventListener("keydown", onKey, true);
     return () => window.removeEventListener("keydown", onKey, true);
@@ -295,11 +301,21 @@ function PreviewWindow({ req, onClose }: { req: Req; onClose: () => void }) {
           </button>
           <button
             type="button"
-            className="border border-[#404040] bg-[#ffe14a] px-3 py-0.5 text-[12px] font-bold"
-            onClick={print}
+            disabled={printed}
+            className="border border-[#404040] bg-[#ffe14a] px-3 py-0.5 text-[12px] font-bold disabled:border-[#808080] disabled:bg-[#C0C0C0] disabled:text-[#666]"
+            onClick={() => print(false)}
           >
             <span className="font-mono text-[10px]">P</span> {"\u5217\u5370"}
           </button>
+          {printed ? (
+            <button
+              type="button"
+              className="border border-[#404040] bg-[#ffe14a] px-3 py-0.5 text-[12px] font-bold"
+              onClick={() => print(true)}
+            >
+              {"\u518d\u6b21\u5217\u5370"}
+            </button>
+          ) : null}
           <button type="button" className="border border-[#808080] bg-[#E8E8E8] px-3 py-0.5 text-[12px] font-bold" onClick={close}>
             Esc {"\u96e2\u958b"}
           </button>
@@ -334,14 +350,14 @@ function PreviewWindow({ req, onClose }: { req: Req; onClose: () => void }) {
                 <button
                   type="button"
                   className="border border-[#808080] bg-white px-3 py-1 font-bold"
-                  onClick={() => printChoice("one")}
+                  onClick={() => printChoice("one", printedRef.current)}
                 >
                   {"\u53ea\u5370\u9019\u4e00\u5f35"}
                 </button>
                 <button
                   type="button"
                   className="border border-[#004d00] bg-[#C8F0C8] px-3 py-1 font-bold"
-                  onClick={() => printChoice("all")}
+                  onClick={() => printChoice("all", printedRef.current)}
                 >
                   {"\u5b8c\u6574\u5217\u5370"}
                 </button>

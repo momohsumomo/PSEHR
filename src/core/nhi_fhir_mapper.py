@@ -38,6 +38,14 @@ def merge_nhi_patient_update(existing: dict[str, Any], nhi_payload: dict[str, An
     return merged
 
 
+def patient_name_entry(full: str) -> dict[str, Any]:
+    """整段姓名。清單把姓和名接回來，所以畫面上看得到健保卡上的全名。"""
+    text = full.strip()
+    if len(text) >= 2:
+        return {"family": text[0], "given": [text[1:]], "text": text}
+    return {"text": text}
+
+
 def nhi_intake_to_fhir_patient(intake: NhiPatientIntake) -> dict[str, Any]:
     """將通過 Pydantic 校驗的健保資料轉為 FHIR Patient。"""
     iso_birth = roc7_to_iso_date(intake.birthday)
@@ -45,12 +53,7 @@ def nhi_intake_to_fhir_patient(intake: NhiPatientIntake) -> dict[str, Any]:
 
     names: list[dict[str, Any]] = []
     if intake.patientName:
-        # 單姓名字串：首字為姓，其餘為名（繁體常見 2~4 字）
-        full = intake.patientName
-        if len(full) >= 2:
-            names.append({"family": full[0], "given": [full[1:]], "text": full})
-        else:
-            names.append({"text": full})
+        names.append(patient_name_entry(intake.patientName))
 
     payload: dict[str, Any] = {
         "resourceType": "Patient",

@@ -308,7 +308,7 @@ def _render_ddata(
     if copay_code in _EXEMPT_COPAY and waived > 0:
         dbody.append(_t("d43", waived))
     if rec.patientName:
-        dbody.append(_t("d49", rec.patientName[:20]))
+        dbody.append(_t("d49", claim_patient_name(rec.patientName)))
     if rec.referralOutHosp:
         dbody.append(_t("d55", rec.referralOutHosp[:10]))
     dbody.append(_t("d57", int(rec.basicCopayPoints)))
@@ -493,6 +493,11 @@ def _copay_code(raw: str | None) -> str:
     if not text or text in {"-", "\u2014"}:
         return ""
     return text[:3]
+
+
+def claim_patient_name(name: str | None) -> str:
+    """月申報 d49 只帶前 10 碼。病歷裡的姓名維持健保卡上的全名。"""
+    return str(name or "").strip()[:10]
 
 
 def _treat_seq(raw: str | None) -> str:

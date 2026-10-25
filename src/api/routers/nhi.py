@@ -1073,6 +1073,7 @@ def card_read_and_register(
         "cardBridgeNote": note,
         "validation": {
             **face,
+            "cardName": (intake.patientName or "").strip(),
             "cardId": card.profile.get("cardId") or "",
             "identityStatus": card.profile.get("identityStatus") or "",
         },
@@ -1080,6 +1081,32 @@ def card_read_and_register(
         "resource": resource,
         "indexLayer": dual.get("indexLayer") if dual else None,
     }
+
+
+class PatientNameBody(BaseModel):
+    patientName: str
+
+
+@router.post(
+    "/v1/patient/{patient_id}/name",
+    summary="把病歷姓名改成健保卡上的姓名",
+)
+def correct_patient_name(patient_id: str, body: PatientNameBody) -> dict[str, Any]:
+    from src.core.nhi_fhir_mapper import patient_name_entry
+
+    full = body.patientName.strip()
+    if not full:
+        raise HTTPException(status_code=422, detail="姓名不可為空")
+    if len(full) > 60:
+        raise HTTPException(status_code=422, detail="姓名不可超過 60 字")
+    repo = get_fhir_repository()
+    resource = repo.read_resource("Patient", patient_id)
+    if resource is None:
+        raise HTTPException(status_code=404, detail=f"Patient/{patient_id} 不存在")
+    updated = dict(resource)
+    updated["name"] = [patient_name_entry(full)]
+    repo.update_resource("Patient", patient_id, updated)
+    return {"ok": True, "patientId": patient_id, "patientName": full}
 
 
 class NhiCardWriteRequest(BaseModel):

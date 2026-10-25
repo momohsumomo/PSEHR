@@ -10,7 +10,7 @@ from src.claims.engine import (
     _billed_quantity,
     _catalog_lookup,
 )
-from src.claims.xml_export_nhi import render_nhi_outpatient_xml
+from src.claims.xml_export_nhi import claim_patient_name, render_nhi_outpatient_xml
 
 
 def _summary(rec: ClaimEncounterRecord) -> ClaimsSummary:
@@ -61,6 +61,10 @@ def _visit(**kwargs) -> ClaimEncounterRecord:
 
 
 class ClaimsXmlLayoutTest(unittest.TestCase):
+    def test_claim_name_keeps_the_first_ten_characters(self):
+        self.assertEqual(claim_patient_name("黃小明"), "黃小明")
+        self.assertEqual(claim_patient_name("CHRISTOPHER"), "CHRISTOPHE")
+        self.assertEqual(len(claim_patient_name("ABCDEFGHIJKLMNOP")), 10)
     def test_pdata_sits_inside_dbody_and_drug_sig_is_written(self):
         _test_pdata_sits_inside_dbody_and_drug_sig_is_written()
 
