@@ -400,6 +400,26 @@ def profile_to_patient_intake(profile: dict[str, str]) -> NhiPatientIntake:
         raise NhiValidationError(f"讀卡資料不完整：{exc}") from exc
 
 
+def cloud_order_from_request(entry: dict[str, Any]) -> dict[str, Any] | None:
+    """A cash line (pay mark) or a bracket note stays on the chart and is not a cloud order."""
+    meta = entry.get("indexMeta") or {}
+    pay_mark = str(meta.get("payMark") or "").strip()
+    memo = str(meta.get("memo") or "")
+    if pay_mark == "\u81ea" or "[" in memo:
+        return None
+    resource = entry.get("resource") or {}
+    item = {
+        "nhiCode": meta.get("nhiCode") or "",
+        "days": meta.get("daysSupply") or 1,
+        "qty": meta.get("quantity") or 1,
+        "sig": meta.get("dosageText") or "QD",
+    }
+    dosage = resource.get("dosageInstruction") or []
+    if dosage and isinstance(dosage[0], dict) and dosage[0].get("text"):
+        item["sig"] = str(dosage[0]["text"])
+    return item
+
+
 def write_visit_to_card(
     *,
     console_base: str = DEFAULT_CONSOLE_BASE,
@@ -475,18 +495,9 @@ def write_visit_to_card(
     meds: list[dict] = []
     try:
         for m in store.list_medication_requests(encounter_id=encounter_id):
-            meta = m.get("indexMeta") or {}
-            resource = m.get("resource") or {}
-            item = {
-                "nhiCode": meta.get("nhiCode") or "",
-                "days": meta.get("daysSupply") or 1,
-                "qty": meta.get("quantity") or 1,
-                "sig": meta.get("dosageText") or "QD",
-            }
-            dosage = resource.get("dosageInstruction") or []
-            if dosage and isinstance(dosage[0], dict) and dosage[0].get("text"):
-                item["sig"] = str(dosage[0]["text"])
-            meds.append(item)
+            item = cloud_order_from_request(m)
+            if item is not None:
+                meds.append(item)
     except Exception:
         pass
 
