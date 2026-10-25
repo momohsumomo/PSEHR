@@ -35,18 +35,17 @@ export function ChiefComplaintWidget({
   const [caret, setCaret] = useState(0);
   const [suffix, setSuffix] = useState("");
   const atEnd = caret === ccText.length;
-  const lineStart = ccText.lastIndexOf("\n") + 1;
-  const frag = ccText.slice(lineStart);
-  const prev = lineStart > 0 ? (ccText.slice(0, lineStart - 1).split("\n").pop() ?? "") : "";
+  const word = /(?:^|[^A-Za-z])([A-Za-z][A-Za-z'-]*)$/.exec(ccText);
+  const frag = atEnd && word ? word[1] : "";
 
   useEffect(() => {
-    if (!atEnd) {
+    if (!atEnd || frag.length < 2) {
       setSuffix("");
       return;
     }
     let cancel = false;
     const timer = window.setTimeout(() => {
-      void fetchCcSuggest(frag, prev)
+      void fetchCcSuggest(frag, "")
         .then((next) => {
           if (!cancel) setSuffix(next);
         })
@@ -58,7 +57,7 @@ export function ChiefComplaintWidget({
       cancel = true;
       window.clearTimeout(timer);
     };
-  }, [atEnd, frag, prev]);
+  }, [atEnd, frag]);
   const syncMirror = () => {
     const area = areaRef.current;
     const pre = preRef.current;
@@ -192,8 +191,8 @@ const textStyle = {
             });
           }}
           placeholder=""
-          aria-label={"\u4e3b\u8a34\uff08\u6253\u5b57\u5f8c Tab \u88dc\u5b8c\uff09"}
-          title={"\u4e3b\u8a34\uff1a\u6253\u5e7e\u500b\u5b57\uff0cTab \u88dc\u4e0a\u7247\u8a9e\uff1bF9 \u5b58\u6a94"}
+          aria-label={"\u4e3b\u8a34\uff08\u6253\u5230\u4e00\u500b\u8a5e\u7684\u4e00\u534a\uff0cTab \u88dc\u5b8c\u9019\u500b\u8a5e\uff09"}
+          title={"\u4e3b\u8a34\uff1a\u6253\u9019\u500b\u8a5e\u7684\u524d\u5e7e\u500b\u5b57\u6bcd\uff0cTab \u88dc\u5b8c\u9019\u500b\u8a5e\uff1bF9 \u5b58\u6a94"}
         />
       </div>
     </section>

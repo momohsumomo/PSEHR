@@ -30,6 +30,26 @@ def _norm(text: str) -> str:
     return " ".join(text.split()).lower()
 
 
+# A word starts after a non-letter, so "5th" does not become the word "th".
+_WORD = re.compile(r"(?:^|[^A-Za-z])([A-Za-z][A-Za-z'-]*)")
+
+
+def words_of(text: str) -> list[tuple[str, str]]:
+    """One (lowercase, original) pair per distinct word in this note."""
+    raw = chief_complaint_text(text)
+    found: list[tuple[str, str]] = []
+    seen: set[str] = set()
+    for surface in _WORD.findall(raw):
+        if len(surface) < 2:
+            continue
+        norm = surface.lower()
+        if norm in seen:
+            continue
+        seen.add(norm)
+        found.append((norm, surface))
+    return found
+
+
 def _clauses(line: str) -> list[str]:
     buf: list[str] = []
     found: list[str] = []
@@ -130,11 +150,25 @@ def ensure_schema(conn: sqlite3.Connection) -> None:
         )
         """
     )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS cc_learn_word (
+            norm TEXT PRIMARY KEY,
+            surface TEXT NOT NULL,
+            n INTEGER NOT NULL
+        )
+        """
+    )
 
 
 def _status(conn: sqlite3.Connection) -> str:
     row = conn.execute("SELECT v FROM cc_learn_meta WHERE k = 'status'").fetchone()
     return str(row["v"]) if row else ""
+
+
+def _words_ready(conn: sqlite3.Connection) -> bool:
+    row = conn.execute("SELECT v FROM cc_learn_meta WHERE k = 'words'").fetchone()
+    return bool(row and str(row["v"]) == "done")
 
 
 def _heartbeat(conn: sqlite3.Connection) -> None:
@@ -244,6 +278,82 @@ def _apply(conn: sqlite3.Connection, text: str, delta: int) -> None:
             )
 
 
+def _apply_words(conn: sqlite3.Connection, text: str, delta: int) -> None:
+    if not _words_ready(conn):
+        return
+    for norm, surface in words_of(text):
+        row = conn.execute("SELECT surface, n FROM cc_learn_word WHERE norm = ?", (norm,)).fetchone()
+        if row is None:
+            if delta > 0:
+                conn.execute(
+                    "INSERT INTO cc_learn_word(norm, surface, n) VALUES (?, ?, ?)",
+                    (norm, surface, delta),
+                )
+            continue
+        n = int(row["n"]) + delta
+        if n <= 0:
+            conn.execute("DELETE FROM cc_learn_word WHERE norm = ?", (norm,))
+            continue
+        kept = str(row["surface"])
+        if delta > 0 and surface[:1].isupper() and not kept[:1].isupper():
+            kept = surface
+        conn.execute(
+            "UPDATE cc_learn_word SET surface = ?, n = ? WHERE norm = ?",
+            (kept, n, norm),
+        )
+
+
+def index_words(db_path: Path) -> None:
+    """Count words in stored chief complaints. A line is not a completion unit."""
+    conn = _connect(db_path)
+    try:
+        ensure_schema(conn)
+        if _words_ready(conn):
+            return
+        exists = conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'encounter_index'"
+        ).fetchone()
+        counts: Counter[str] = Counter()
+        surfaces: dict[str, Counter[str]] = defaultdict(Counter)
+        if exists:
+            read = _connect(db_path)
+            try:
+                loaded = read.execute(
+                    """
+                    SELECT chief_complaint FROM encounter_index
+                    WHERE chief_complaint IS NOT NULL AND length(trim(chief_complaint)) > 0
+                    """
+                ).fetchall()
+            finally:
+                read.close()
+            for row in loaded:
+                for norm, surface in words_of(str(row["chief_complaint"] or "")):
+                    counts[norm] += 1
+                    surfaces[norm][surface] += 1
+        conn.execute("BEGIN IMMEDIATE")
+        conn.execute("DELETE FROM cc_learn_word")
+        rows = []
+        for norm, n in counts.items():
+            surface = surfaces[norm].most_common(1)[0][0]
+            rows.append((norm, surface, n))
+        for start in range(0, len(rows), 2000):
+            conn.executemany(
+                "INSERT INTO cc_learn_word(norm, surface, n) VALUES (?, ?, ?)",
+                rows[start : start + 2000],
+            )
+        conn.execute("INSERT OR REPLACE INTO cc_learn_meta(k, v) VALUES ('words', 'done')")
+        conn.commit()
+        log.info("cc words ready distinct=%s", len(rows))
+    except Exception:
+        try:
+            conn.rollback()
+        except sqlite3.Error:
+            pass
+        raise
+    finally:
+        conn.close()
+
+
 def _suffix_from(surface: str, fragment: str) -> str:
     typed = fragment.strip()
     if not typed:
@@ -256,49 +366,30 @@ def _suffix_from(surface: str, fragment: str) -> str:
 
 
 def suggest_suffix(db_path: Path, fragment: str, previous: str = "") -> str:
-    """Rest of the most common learned line, or the usual next line."""
-    frag = fragment or ""
-    prev = _norm(previous.strip()) if previous else ""
+    """Rest of the current word. A site plus a symptom is not one completion."""
+    del previous
+    typed = (fragment or "").strip()
+    match = _WORD.search(" " + typed)
+    word = match.group(1) if match else ""
+    if word != typed or len(word) < 2:
+        return ""
     conn = _connect(db_path)
     try:
         ensure_schema(conn)
-        if _status(conn) != "done":
-            from src.core.cc_complete import suggest_suffix as legacy_suffix
-
-            return legacy_suffix(frag)
-        if prev and len(frag.strip()) < 16:
-            key = _norm(frag)
-            row = conn.execute(
-                """
-                SELECT c.surface AS surface, p.n AS n
-                FROM cc_learn_pair p
-                JOIN cc_learn_chunk c ON c.norm = p.nxt_norm
-                WHERE p.prev_norm = ? AND p.n >= 2 AND c.n >= 2
-                  AND c.norm LIKE ? ESCAPE '\\'
-                ORDER BY p.n DESC, length(c.surface) ASC
-                LIMIT 1
-                """,
-                (prev, _like_prefix(key)),
-            ).fetchone()
-            if row:
-                suffix = _suffix_from(str(row["surface"]), frag)
-                if suffix:
-                    return suffix
-        typed = frag.strip()
-        if len(typed) < 2:
+        if not _words_ready(conn):
             return ""
         row = conn.execute(
             """
-            SELECT surface FROM cc_learn_chunk
+            SELECT surface FROM cc_learn_word
             WHERE n >= 2 AND norm LIKE ? ESCAPE '\\' AND length(surface) > ?
             ORDER BY n DESC, length(surface) ASC
             LIMIT 1
             """,
-            (_like_prefix(_norm(typed)), len(typed)),
+            (_like_prefix(word.lower()), len(word)),
         ).fetchone()
         if not row:
             return ""
-        return _suffix_from(str(row["surface"]), typed)
+        return _suffix_from(str(row["surface"]), word)
     finally:
         conn.close()
 
@@ -346,8 +437,10 @@ def observe(db_path: Path, encounter_id: str, text: str) -> None:
                 return
             if old:
                 _apply(conn, old, -1)
+                _apply_words(conn, old, -1)
             if body:
                 _apply(conn, body, 1)
+                _apply_words(conn, body, 1)
                 conn.execute(
                     """
                     INSERT INTO cc_learn_visit(encounter_id, body) VALUES (?, ?)
@@ -462,6 +555,10 @@ def bootstrap(db_path: Path) -> None:
         raise
     finally:
         conn.close()
+        try:
+            index_words(Path(db_path))
+        except Exception:
+            log.exception("cc word index failed")
 
 
 def start_cc_learner(db_path: Path) -> None:

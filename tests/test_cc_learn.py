@@ -26,7 +26,7 @@ class CcLearnTest(unittest.TestCase):
         observe(self.db, "e1", "Alpha itch spot")
         self.assertEqual(suggest_suffix(self.db, "Al"), "")
         observe(self.db, "e2", "Alpha itch spot")
-        self.assertEqual(suggest_suffix(self.db, "Al"), "pha itch spot")
+        self.assertEqual(suggest_suffix(self.db, "Al"), "pha")
 
     def test_editing_a_visit_moves_the_count(self):
         observe(self.db, "e1", "Alpha itch spot")
@@ -34,19 +34,22 @@ class CcLearnTest(unittest.TestCase):
         observe(self.db, "e1", "Beta swelling arm")
         self.assertEqual(suggest_suffix(self.db, "Al"), "")
         observe(self.db, "e3", "Beta swelling arm")
-        self.assertEqual(suggest_suffix(self.db, "Be"), "ta swelling arm")
+        self.assertEqual(suggest_suffix(self.db, "Be"), "ta")
 
-    def test_next_line_is_the_common_pair(self):
+    def test_a_sentence_is_not_one_completion(self):
         text = "Alpha itch spot\nBeta swelling arm"
         observe(self.db, "e1", text)
         observe(self.db, "e2", text)
-        self.assertEqual(suggest_suffix(self.db, "", "Alpha itch spot"), "Beta swelling arm")
+        self.assertEqual(suggest_suffix(self.db, "Al"), "pha")
+        self.assertEqual(suggest_suffix(self.db, "Be"), "ta")
+        self.assertEqual(suggest_suffix(self.db, "Itching on the fa"), "")
+        self.assertEqual(suggest_suffix(self.db, "", "Alpha itch spot"), "")
 
     def test_same_save_does_not_double_count(self):
         observe(self.db, "e1", "Alpha itch spot")
         observe(self.db, "e1", "Alpha itch spot")
         observe(self.db, "e2", "Alpha itch spot")
-        self.assertEqual(suggest_suffix(self.db, "Al"), "pha itch spot")
+        self.assertEqual(suggest_suffix(self.db, "Al"), "pha")
 
     def test_placeholder_is_not_a_complaint(self):
         observe(self.db, "e1", "\u9580\u8a3a\u639b\u865f")
