@@ -1450,6 +1450,9 @@ export function ClinicOutpatientPage() {
       const missing = rxLinesMissingFrom(currentRx, lines);
       if (!missing.length) return;
       addRxLines(cloneRxLines(missing));
+      // 空白列在帶入的藥品下面。游標放上去，才能接著打下一筆。
+      setSelectedRxIndex(currentRx.length + missing.length);
+      setChartFocus("rx");
     },
     [addRxLines, cloneRxLines, currentRx],
   );

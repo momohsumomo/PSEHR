@@ -268,7 +268,7 @@ export function CurrentRxWidget({
       }}
       tabIndex={active ? 0 : -1}
     >
-      <div className="min-h-0 flex-1 overflow-y-auto" style={{ background: HIS.rxBg }}>
+      <div data-rx-scroll className="min-h-0 flex-1 overflow-y-auto" style={{ background: HIS.rxBg }}>
         <RxGrid
           lines={displayLines}
           columns={currentRxColumns}

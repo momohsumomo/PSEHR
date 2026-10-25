@@ -432,7 +432,15 @@ export function RxGrid({
     if (nonceBump) lastFocusNonce.current = focusNonce;
     if (editCell?.id === line.id || coverOn) return;
     const row = rowRefs.current[line.id];
-    if (row && document.activeElement !== row) row.focus({ preventScroll: true });
+    if (!row) return;
+    if (document.activeElement !== row) row.focus({ preventScroll: true });
+    const scroller = row.closest("[data-rx-scroll]");
+    if (scroller instanceof HTMLElement) {
+      const rowRect = row.getBoundingClientRect();
+      const box = scroller.getBoundingClientRect();
+      if (rowRect.bottom > box.bottom) scroller.scrollTop += rowRect.bottom - box.bottom;
+      else if (rowRect.top < box.top) scroller.scrollTop -= box.top - rowRect.top;
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedIndex, focusNonce, active, editCell, lines.length]);
 
