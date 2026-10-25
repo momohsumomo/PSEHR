@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { lookupIntake, submitIntake } from "@/api/clinicApi";
-import { BodyMap, FaceZoom, HandsZoom, SITE_LABEL } from "@/components/kiosk/BodyMap";
+import { BodyMap, FaceZoom, LimbZoom, SITE_LABEL } from "@/components/kiosk/BodyMap";
 
 type Card = { encounterId: string; maskedName: string; idTail: string; filled?: boolean; sex?: string; access?: string };
 type Step = "id" | "again" | "aim" | "concern" | "where" | "what" | "days" | "score" | "doctor" | "prior" | "result" | "done";
@@ -405,8 +405,8 @@ export function IntakeKioskPage() {
             </h1>
             <p className="shrink-0 text-center text-base">
               {face === "back"
-                ? "\u9019\u662f\u80cc\u9762\uff0c\u4eba\u7684\u5de6\u908a\u5c31\u662f\u60a8\u7684\u5de6\u624b\u908a\u3002\u9ede\u5230\u7684\u5730\u65b9\u624d\u6703\u5708\u8d77\u4f86\u3002\u81c9\u4e0a\u7d30\u4f4d\u8acb\u5207\u56de\u6b63\u9762\u3002"
-                : "\u9762\u5c0d\u9019\u5f35\u5716\uff0c\u4eba\u7684\u5de6\u908a\u662f\u60a8\u7684\u53f3\u624b\u908a\u3002\u9ede\u5230\u7684\u5730\u65b9\u624d\u6703\u5708\u8d77\u4f86\u4e26\u986f\u793a\u540d\u7a31\u3002"}
+                ? "\u9019\u662f\u80cc\u9762\uff0c\u4eba\u7684\u5de6\u908a\u5c31\u662f\u60a8\u7684\u5de6\u624b\u908a\u3002\u9ede\u5230\u7684\u5730\u65b9\u624d\u6703\u5708\u8d77\u4f86\u3002\u540d\u7a31\u5217\u5728\u4e0b\u65b9\u3002\u81c9\u4e0a\u7d30\u4f4d\u8acb\u5207\u56de\u6b63\u9762\u3002"
+                : "\u9762\u5c0d\u9019\u5f35\u5716\uff0c\u4eba\u7684\u5de6\u908a\u662f\u60a8\u7684\u53f3\u624b\u908a\u3002\u9ede\u5230\u7684\u5730\u65b9\u624d\u6703\u5708\u8d77\u4f86\u3002\u540d\u7a31\u5217\u5728\u4e0b\u65b9\u3002"}
             </p>
             <div className="grid shrink-0 grid-cols-2 gap-2">
               <button type="button" className={`min-h-10 rounded-xl border-4 border-[#2060A0] bg-white text-lg font-bold text-black ${face === "front" ? onCls : ""}`} onClick={() => setFace("front")}>
@@ -416,24 +416,32 @@ export function IntakeKioskPage() {
                 {"\u80cc\u9762"}
               </button>
             </div>
-            <div className="flex min-h-0 flex-1 items-stretch gap-2">
-              <div className="flex min-h-0 w-[36%] flex-col">
+            <div className="grid min-h-0 flex-1 grid-cols-[1.35fr_1fr_1fr] items-stretch gap-2">
+              <div className="flex min-h-0 flex-col">
                 {face === "front" ? (
-                  <FaceZoom selected={sites} onToggle={toggleSite} />
+                  <FaceZoom selected={sites} onToggle={toggleSite} sex={picked?.sex} />
                 ) : (
                   <p className="m-auto text-center text-xl font-bold">{"\u81c9\u4e0a\u7d30\u4f4d\u8acb\u5207\u56de\u6b63\u9762"}</p>
                 )}
               </div>
-              <div className="min-h-0 min-w-0 flex-1">
+              <div className="min-h-0 min-w-0">
                 <BodyMap face={face} selected={sites} onToggle={toggleSite} />
               </div>
-              <div className="flex min-h-0 w-[32%] flex-col">
-                <HandsZoom face={face} selected={sites} onToggle={toggleSite} />
+              <div className="flex min-h-0 flex-col">
+                <LimbZoom face={face} selected={sites} onToggle={toggleSite} />
               </div>
             </div>
-            <p className="min-h-8 text-center text-xl">
-              {sites.length ? `\u5df2\u9078\uff1a${sites.map((id) => SITE_LABEL[id] || id).join("\u3001")}` : "\u9084\u6c92\u9078"}
-            </p>
+            <div className="flex min-h-16 flex-wrap content-start justify-center gap-2">
+              {sites.length === 0 ? (
+                <p className="text-xl">{"\u9084\u6c92\u9078"}</p>
+              ) : (
+                sites.map((id) => (
+                  <span key={id} className="rounded-full border-2 border-[#174E78] px-3 py-1 text-lg font-bold text-[#174E78]">
+                    {SITE_LABEL[id] || id}
+                  </span>
+                ))
+              )}
+            </div>
           </div>
         ) : null}
 

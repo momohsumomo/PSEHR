@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { BrowserRouter, Route, Routes } from "react-router-dom";
+import { BrowserRouter, Route, Routes, useLocation } from "react-router-dom";
 import { LobbyPage } from "@/pages/LobbyPage";
 import { PatientListPage } from "@/pages/PatientListPage";
 import { LoginPage } from "@/pages/LoginPage";
@@ -25,10 +25,17 @@ import { ReferralPage } from "@/pages/ReferralPage";
 import { PreventiveCarePage } from "@/pages/PreventiveCarePage";
 import { PatientPreVisitPage } from "@/pages/PatientPreVisitPage";
 import { IntakeKioskPage } from "@/pages/IntakeKioskPage";
+import { AnatomyPreviewPage } from "@/pages/AnatomyPreviewPage";
 import { SelfRegisterKioskPage } from "@/pages/SelfRegisterKioskPage";
 import { applyHisDocumentTheme } from "@/lib/hisTheme";
 import { PrintPreviewHost } from "@/components/clinic/PrintPreviewDialog";
 import { DeskExeNotice } from "@/components/clinic/DeskExeNotice";
+
+function DeskNoticeGate() {
+  const loc = useLocation();
+  if (loc.pathname === "/kiosk/body-preview") return null;
+  return <DeskExeNotice />;
+}
 
 function AppShell() {
   return (
@@ -58,6 +65,7 @@ function AppShell() {
       <Route path="/preventive-care" element={<PreventiveCarePage />} />
       <Route path="/previsit/:encounterId" element={<PatientPreVisitPage />} />
       <Route path="/kiosk/intake" element={<IntakeKioskPage />} />
+      <Route path="/kiosk/body-preview" element={<AnatomyPreviewPage />} />
       <Route path="/kiosk/register" element={<SelfRegisterKioskPage />} />
     </Routes>
   );
@@ -77,7 +85,7 @@ export default function App() {
   return (
     <BrowserRouter>
       <div className="wundadi-his flex h-dvh flex-col overflow-hidden" style={{ colorScheme: "only light" }}>
-        <DeskExeNotice />
+        <DeskNoticeGate />
         <AppShell />
         <PrintPreviewHost />
       </div>

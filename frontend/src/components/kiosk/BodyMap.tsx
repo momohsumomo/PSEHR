@@ -88,12 +88,44 @@ export const SITE_LABEL: Record<string, string> = {
   body_leg_right: "\u53f3\u4e0b\u80a2",
   body_leg_left: "\u5de6\u4e0b\u80a2",
   body_genital_buttock: "\u751f\u6b96\u81c0\u90e8",
+  body_shoulder_right: "\u53f3\u80a9",
+  body_shoulder_left: "\u5de6\u80a9",
+  body_upper_arm_right: "\u53f3\u4e0a\u81c2",
+  body_upper_arm_left: "\u5de6\u4e0a\u81c2",
+  body_forearm_right: "\u53f3\u4e0b\u81c2",
+  body_forearm_left: "\u5de6\u4e0b\u81c2",
+  body_chest_right: "\u53f3\u80f8",
+  body_chest_left: "\u5de6\u80f8",
+  body_abdomen_right: "\u53f3\u8179",
+  body_abdomen_left: "\u5de6\u8179",
+  body_back_upper_right: "\u53f3\u4e0a\u80cc",
+  body_back_upper_left: "\u5de6\u4e0a\u80cc",
+  body_back_lower_right: "\u53f3\u4e0b\u80cc",
+  body_back_lower_left: "\u5de6\u4e0b\u80cc",
+  body_buttock_right: "\u53f3\u81c0",
+  body_buttock_left: "\u5de6\u81c0",
+  body_thigh_right: "\u53f3\u5927\u817f",
+  body_thigh_left: "\u5de6\u5927\u817f",
+  body_calf_right: "\u53f3\u5c0f\u817f",
+  body_calf_left: "\u5de6\u5c0f\u817f",
   face_forehead: "\u984d\u982d",
+  face_forehead_right: "\u53f3\u984d",
+  face_forehead_left: "\u5de6\u984d",
   face_nose_glabella: "\u5370\u5802\u9f3b\u90e8",
+  face_glabella: "\u5370\u5802",
+  face_nose: "\u9f3b",
   face_left_cheek: "\u5de6\u81c9\u9830",
   face_right_cheek: "\u53f3\u81c9\u9830",
+  face_eye_right: "\u53f3\u773c",
+  face_eye_left: "\u5de6\u773c",
+  face_ear_right: "\u53f3\u8033",
+  face_ear_left: "\u5de6\u8033",
   face_perioral: "\u53e3\u5468",
+  face_upper_lip: "\u4e0a\u5507",
+  face_lower_lip: "\u4e0b\u5507",
   face_chin: "\u4e0b\u5df4",
+  face_chin_right: "\u53f3\u4e0b\u5df4",
+  face_chin_left: "\u5de6\u4e0b\u5df4",
   hand_right_palmar_fingers: "\u53f3\u624b\u638c\u9762\u624b\u6307",
   hand_right_palmar_palm: "\u53f3\u624b\u638c",
   hand_right_dorsal_fingers: "\u53f3\u624b\u80cc\u9762\u624b\u6307",
@@ -102,22 +134,60 @@ export const SITE_LABEL: Record<string, string> = {
   hand_left_palmar_palm: "\u5de6\u624b\u638c",
   hand_left_dorsal_fingers: "\u5de6\u624b\u80cc\u9762\u624b\u6307",
   hand_left_dorsal_dorsum: "\u5de6\u624b\u80cc",
+  hand_right_palmar_thumb: "\u53f3\u624b\u638c\u62c7\u6307",
+  hand_right_palmar_index: "\u53f3\u624b\u638c\u98df\u6307",
+  hand_right_palmar_middle: "\u53f3\u624b\u638c\u4e2d\u6307",
+  hand_right_palmar_ring: "\u53f3\u624b\u638c\u7121\u540d\u6307",
+  hand_right_palmar_little: "\u53f3\u624b\u638c\u5c0f\u6307",
+  hand_right_dorsal_thumb: "\u53f3\u624b\u80cc\u62c7\u6307",
+  hand_right_dorsal_index: "\u53f3\u624b\u80cc\u98df\u6307",
+  hand_right_dorsal_middle: "\u53f3\u624b\u80cc\u4e2d\u6307",
+  hand_right_dorsal_ring: "\u53f3\u624b\u80cc\u7121\u540d\u6307",
+  hand_right_dorsal_little: "\u53f3\u624b\u80cc\u5c0f\u6307",
+  hand_left_palmar_thumb: "\u5de6\u624b\u638c\u62c7\u6307",
+  hand_left_palmar_index: "\u5de6\u624b\u638c\u98df\u6307",
+  hand_left_palmar_middle: "\u5de6\u624b\u638c\u4e2d\u6307",
+  hand_left_palmar_ring: "\u5de6\u624b\u638c\u7121\u540d\u6307",
+  hand_left_palmar_little: "\u5de6\u624b\u638c\u5c0f\u6307",
+  hand_left_dorsal_thumb: "\u5de6\u624b\u80cc\u62c7\u6307",
+  hand_left_dorsal_index: "\u5de6\u624b\u80cc\u98df\u6307",
+  hand_left_dorsal_middle: "\u5de6\u624b\u80cc\u4e2d\u6307",
+  hand_left_dorsal_ring: "\u5de6\u624b\u80cc\u7121\u540d\u6307",
+  hand_left_dorsal_little: "\u5de6\u624b\u80cc\u5c0f\u6307",
+  foot_right_dorsal_hallux: "\u53f3\u8173\u80cc\u62c7\u8dbe",
+  foot_right_dorsal_second: "\u53f3\u8173\u80cc\u4e8c\u8dbe",
+  foot_right_dorsal_third: "\u53f3\u8173\u80cc\u4e09\u8dbe",
+  foot_right_dorsal_fourth: "\u53f3\u8173\u80cc\u56db\u8dbe",
+  foot_right_dorsal_little: "\u53f3\u8173\u80cc\u5c0f\u8dbe",
+  foot_right_dorsal_dorsum: "\u53f3\u8173\u80cc",
+  foot_right_posterior: "\u53f3\u8173\u5f8c",
+  foot_right_plantar_hallux: "\u53f3\u8173\u638c\u62c7\u8dbe",
+  foot_right_plantar_second: "\u53f3\u8173\u638c\u4e8c\u8dbe",
+  foot_right_plantar_third: "\u53f3\u8173\u638c\u4e09\u8dbe",
+  foot_right_plantar_fourth: "\u53f3\u8173\u638c\u56db\u8dbe",
+  foot_right_plantar_little: "\u53f3\u8173\u638c\u5c0f\u8dbe",
+  foot_right_plantar_sole: "\u53f3\u8173\u638c",
+  foot_right_plantar_fore: "\u53f3\u8173\u638c\u4e0a",
+  foot_right_plantar_mid: "\u53f3\u8173\u638c\u4e2d",
+  foot_right_plantar_heel: "\u53f3\u8173\u638c\u4e0b",
+  foot_left_dorsal_hallux: "\u5de6\u8173\u80cc\u62c7\u8dbe",
+  foot_left_dorsal_second: "\u5de6\u8173\u80cc\u4e8c\u8dbe",
+  foot_left_dorsal_third: "\u5de6\u8173\u80cc\u4e09\u8dbe",
+  foot_left_dorsal_fourth: "\u5de6\u8173\u80cc\u56db\u8dbe",
+  foot_left_dorsal_little: "\u5de6\u8173\u80cc\u5c0f\u8dbe",
+  foot_left_dorsal_dorsum: "\u5de6\u8173\u80cc",
+  foot_left_posterior: "\u5de6\u8173\u5f8c",
+  foot_left_plantar_hallux: "\u5de6\u8173\u638c\u62c7\u8dbe",
+  foot_left_plantar_second: "\u5de6\u8173\u638c\u4e8c\u8dbe",
+  foot_left_plantar_third: "\u5de6\u8173\u638c\u4e09\u8dbe",
+  foot_left_plantar_fourth: "\u5de6\u8173\u638c\u56db\u8dbe",
+  foot_left_plantar_little: "\u5de6\u8173\u638c\u5c0f\u8dbe",
+  foot_left_plantar_sole: "\u5de6\u8173\u638c",
+  foot_left_plantar_fore: "\u5de6\u8173\u638c\u4e0a",
+  foot_left_plantar_mid: "\u5de6\u8173\u638c\u4e2d",
+  foot_left_plantar_heel: "\u5de6\u8173\u638c\u4e0b",
 };
 
-const SHORT_LABEL: Record<string, string> = {
-  hand_right_palmar_fingers: "\u624b\u6307",
-  hand_right_palmar_palm: "\u624b\u638c",
-  hand_right_dorsal_fingers: "\u624b\u6307",
-  hand_right_dorsal_dorsum: "\u624b\u80cc",
-  hand_left_palmar_fingers: "\u624b\u6307",
-  hand_left_palmar_palm: "\u624b\u638c",
-  hand_left_dorsal_fingers: "\u624b\u6307",
-  hand_left_dorsal_dorsum: "\u624b\u80cc",
-};
-
-const SKIN = "#F3D7C4";
-const ON = "#F7C6DC";
-const LINE = "#8D6B52";
 const DASH = "#174E78";
 
 type Region = { readonly id: string; readonly paths: readonly string[]; readonly cx: number; readonly cy: number };
@@ -134,49 +204,18 @@ function frame(viewBox: string) {
   return { x, y, w, h };
 }
 
-function figureName(id: string) {
-  return SHORT_LABEL[id] || SITE_LABEL[id] || id;
-}
-
 function Figure({
   chart,
-  decor = [],
   selected,
   onToggle,
 }: {
   chart: Chart;
-  decor?: readonly string[];
   selected: string[];
   onToggle: (id: string) => void;
 }) {
   const box = frame(chart.viewBox);
   const plate = frame(chart.plateBox || chart.viewBox);
-  const mesh = !chart.plate && chart.regions.some((region) => region.paths.length > 40);
-  const hit = Math.max(box.w, box.h) * (mesh ? 0.012 : 0.028);
-  const ink = Math.max(box.w, box.h) * (mesh ? 0.004 : 0.0035);
-  const font = Math.max(box.w, box.h) * 0.042;
-  const mid = box.x + box.w / 2;
-  const picked = chart.regions.filter((region) => selected.includes(region.id));
-  const gap = box.h * 0.08;
-  const place = (rows: Region[], side: "left" | "right") => {
-    let last = box.y;
-    return [...rows].sort((a, b) => a.cy - b.cy).map((region) => {
-      let ly = Math.max(region.cy, last + gap);
-      const floor = box.y + box.h - font;
-      if (ly > floor) ly = floor;
-      last = ly;
-      return {
-        region,
-        lx: side === "left" ? box.x + font * 0.2 : box.x + box.w - font * 0.2,
-        ly,
-        anchor: side === "left" ? "start" : "end",
-      };
-    });
-  };
-  const labels = [
-    ...place(picked.filter((region) => region.cx < mid), "left"),
-    ...place(picked.filter((region) => region.cx >= mid), "right"),
-  ];
+  const ink = Math.max(box.w, box.h) * 0.004;
   return (
     <svg viewBox={chart.viewBox} className="h-full w-full touch-manipulation" role="group">
       {chart.plate ? (
@@ -192,8 +231,6 @@ function Figure({
       ) : null}
       {chart.regions.map((region) => {
         const on = selected.includes(region.id);
-        const fill = chart.plate ? (on ? "rgba(23,78,120,0.38)" : "transparent") : on ? ON : SKIN;
-        const stroke = chart.plate ? (on ? DASH : "transparent") : mesh ? fill : on ? DASH : LINE;
         return (
           <g
             key={region.id}
@@ -205,34 +242,25 @@ function Figure({
             onClick={() => onToggle(region.id)}
           >
             {region.paths.map((d, index) => (
-              <path
-                key={index}
-                d={d}
-                fill={fill}
-                fillRule="evenodd"
-                stroke={stroke}
-                strokeWidth={mesh ? ink : on ? ink * 2.2 : ink}
-                strokeDasharray={mesh || !on ? undefined : `${ink * 5} ${ink * 3.5}`}
-                strokeLinejoin="round"
-              />
+              <path key={index} d={d} fill="transparent" fillRule="evenodd" />
             ))}
-            {region.paths.map((d, index) => (
-              <path key={`hit-${index}`} d={d} fill="none" stroke="transparent" strokeWidth={hit} strokeLinejoin="round" />
-            ))}
+            {on
+              ? region.paths.map((d, index) => (
+                  <path
+                    key={`frame-${index}`}
+                    d={d}
+                    fill="none"
+                    stroke={DASH}
+                    strokeWidth={ink * 2.4}
+                    strokeDasharray={`${ink * 5} ${ink * 3.5}`}
+                    strokeLinejoin="round"
+                    style={{ pointerEvents: "none" }}
+                  />
+                ))
+              : null}
           </g>
         );
       })}
-      {decor.map((d, index) => (
-        <path key={`decor-${index}`} d={d} fill="none" stroke="#5C4030" strokeWidth={ink * 1.6} strokeLinejoin="round" style={{ pointerEvents: "none" }} />
-      ))}
-      {labels.map((row) => (
-        <g key={`label-${row.region.id}`} style={{ pointerEvents: "none" }}>
-          <line x1={row.region.cx} y1={row.region.cy} x2={row.lx} y2={row.ly} stroke={DASH} strokeWidth={ink} />
-          <text x={row.lx} y={row.ly} textAnchor={row.anchor} dominantBaseline="middle" fill={DASH} fontSize={font} fontWeight={700}>
-            {figureName(row.region.id)}
-          </text>
-        </g>
-      ))}
     </svg>
   );
 }
@@ -248,11 +276,20 @@ export function BodyMap({ face, selected, onToggle }: MapProps) {
   return <Figure chart={chart} selected={selected} onToggle={onToggle} />;
 }
 
-export function FaceZoom({ selected, onToggle }: { selected: string[]; onToggle: (id: string) => void }) {
-  return <Figure chart={ANATOMY.face} decor={ANATOMY.face.decor} selected={selected} onToggle={onToggle} />;
+export function FaceZoom({
+  selected,
+  onToggle,
+  sex,
+}: {
+  selected: string[];
+  onToggle: (id: string) => void;
+  sex?: string;
+}) {
+  const male = sex === "M" || sex === "\u7537";
+  return <Figure chart={male ? ANATOMY.face.male : ANATOMY.face.female} selected={selected} onToggle={onToggle} />;
 }
 
-export function HandsZoom({
+export function LimbZoom({
   face,
   selected,
   onToggle,
@@ -261,18 +298,37 @@ export function HandsZoom({
   selected: string[];
   onToggle: (id: string) => void;
 }) {
+  const [limb, setLimb] = useState<"hand" | "foot">("hand");
   const [side, setSide] = useState<"right" | "left">("right");
-  const chart = ANATOMY.hands[side];
-  const views = face === "back"
-    ? [["\u624b\u80cc\u9762", chart.dorsal], ["\u624b\u638c\u9762", chart.palmar]]
-    : [["\u624b\u638c\u9762", chart.palmar], ["\u624b\u80cc\u9762", chart.dorsal]];
+  const hand = ANATOMY.hands[side];
+  const foot = ANATOMY.feet[side];
+  const views: [string, Chart][] =
+    limb === "hand"
+      ? face === "back"
+        ? [
+            ["\u624b\u80cc\u9762", hand.dorsal],
+            ["\u624b\u638c\u9762", hand.palmar],
+          ]
+        : [
+            ["\u624b\u638c\u9762", hand.palmar],
+            ["\u624b\u80cc\u9762", hand.dorsal],
+          ]
+      : [
+            ["\u8173\u80cc", foot.dorsal],
+            ["\u8173\u638c", foot.plantar],
+          ];
+  const sideName = limb === "hand" ? { right: "\u53f3\u624b", left: "\u5de6\u624b" } : { right: "\u53f3\u8173", left: "\u5de6\u8173" };
   const tab = (on: boolean) =>
     `rounded-xl border-4 border-[#2060A0] py-2 text-xl font-bold ${on ? "bg-[#2060A0] text-white" : "bg-white text-black"}`;
   return (
     <div className="flex h-full min-h-0 flex-col gap-1">
       <div className="grid shrink-0 grid-cols-2 gap-1">
-        <button type="button" className={tab(side === "right")} onClick={() => setSide("right")}>{"\u53f3\u624b"}</button>
-        <button type="button" className={tab(side === "left")} onClick={() => setSide("left")}>{"\u5de6\u624b"}</button>
+        <button type="button" className={tab(limb === "hand")} onClick={() => setLimb("hand")}>{"\u624b"}</button>
+        <button type="button" className={tab(limb === "foot")} onClick={() => setLimb("foot")}>{"\u8173"}</button>
+      </div>
+      <div className="grid shrink-0 grid-cols-2 gap-1">
+        <button type="button" className={tab(side === "right")} onClick={() => setSide("right")}>{sideName.right}</button>
+        <button type="button" className={tab(side === "left")} onClick={() => setSide("left")}>{sideName.left}</button>
       </div>
       <div className="grid min-h-0 flex-1 grid-cols-2 gap-1">
         {views.map(([title, view]) => (
