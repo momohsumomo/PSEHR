@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { chartPaint, overlayForEncounter, textForEncounter } from "@/lib/chartScreen";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { ClinicalAlertsPanel } from "@/components/clinic/ClinicalAlertsPanel";
 import { ClinicShortcutBar } from "@/components/clinic/ClinicShortcutBar";
@@ -127,14 +128,20 @@ function visibleComplaint(value: string | null | undefined): string {
 
 const CHART_DRAFT_KEY = "psehr.chartDrafts.v1";
 
-type ChartDraft = { cc: string; dx: DiagnosisRow[]; rx: RxLine[] };
+type ChartDraft = { cc: string; dx: DiagnosisRow[]; rx: RxLine[]; bound?: string };
 
 function loadChartDrafts(): Record<string, ChartDraft> {
   try {
     const raw = localStorage.getItem(CHART_DRAFT_KEY);
     if (!raw) return {};
     const parsed = JSON.parse(raw) as Record<string, ChartDraft>;
-    return parsed && typeof parsed === "object" ? parsed : {};
+    if (!parsed || typeof parsed !== "object") return {};
+    const out: Record<string, ChartDraft> = {};
+    for (const [id, draft] of Object.entries(parsed)) {
+      if (!draft || draft.bound !== id) continue;
+      out[id] = draft;
+    }
+    return out;
   } catch {
     return {};
   }
@@ -278,7 +285,19 @@ export function ClinicOutpatientPage() {
     {},
   );
   const [selectedMediaId, setSelectedMediaId] = useState<string | null>(null);
-  const [ccText, setCcText] = useState("");
+  const [ccSlot, setCcSlot] = useState<{ id: string; text: string }>({ id: "", text: "" });
+  const ccText = textForEncounter(ccSlot.id, selectedEncounterId || "", ccSlot.text);
+  const chartNowRef = useRef(selectedEncounterId || "");
+  chartNowRef.current = selectedEncounterId || "";
+  const setCcText = useCallback((action: string | ((prev: string) => string)) => {
+    const id = chartNowRef.current;
+    setCcSlot((prev) => {
+      const current = prev.id === id ? prev.text : "";
+      const text = typeof action === "function" ? action(current) : action;
+      if (prev.id === id && prev.text === text) return prev;
+      return { id, text };
+    });
+  }, []);
   const [showDevPanels, setShowDevPanels] = useState(false);
   const [localDxByEncounter, setLocalDxByEncounter] = useState<
     Record<string, DiagnosisRow[]>
@@ -381,8 +400,40 @@ export function ClinicOutpatientPage() {
    * A visit that already has the check mark asks before leaving; declining keeps
    * the saved chart and does not write the edits.
    */
-  const [apiRxOverlay, setApiRxOverlay] = useState<RxLine[] | null>(null);
-  const [apiDxOverlay, setApiDxOverlay] = useState<DiagnosisRow[] | null>(null);
+  const [dxSlot, setDxSlot] = useState<{ id: string; value: DiagnosisRow[] | null }>({
+    id: "",
+    value: null,
+  });
+  const [rxSlot, setRxSlot] = useState<{ id: string; value: RxLine[] | null }>({
+    id: "",
+    value: null,
+  });
+  const apiDxOverlay = overlayForEncounter(dxSlot.id, selectedEncounterId || "", dxSlot.value);
+  const apiRxOverlay = overlayForEncounter(rxSlot.id, selectedEncounterId || "", rxSlot.value);
+  const setApiDxOverlay = useCallback(
+    (action: DiagnosisRow[] | null | ((prev: DiagnosisRow[] | null) => DiagnosisRow[] | null)) => {
+      const id = chartNowRef.current;
+      setDxSlot((prev) => {
+        const current = prev.id === id ? prev.value : null;
+        const value = typeof action === "function" ? action(current) : action;
+        if (prev.id === id && prev.value === value) return prev;
+        return { id, value };
+      });
+    },
+    [],
+  );
+  const setApiRxOverlay = useCallback(
+    (action: RxLine[] | null | ((prev: RxLine[] | null) => RxLine[] | null)) => {
+      const id = chartNowRef.current;
+      setRxSlot((prev) => {
+        const current = prev.id === id ? prev.value : null;
+        const value = typeof action === "function" ? action(current) : action;
+        if (prev.id === id && prev.value === value) return prev;
+        return { id, value };
+      });
+    },
+    [],
+  );
   const [visitDrafts, setVisitDrafts] = useState<Record<string, ChartDraft>>(loadChartDrafts);
   useEffect(() => {
     try {
@@ -588,9 +639,6 @@ export function ClinicOutpatientPage() {
     ccDirtyRef.current = false;
     chartDirtyRef.current = false;
     dxListRef.current = [];
-    if (ccText) setCcText("");
-    if (apiDxOverlay) setApiDxOverlay(null);
-    if (apiRxOverlay) setApiRxOverlay(null);
   }
   useEffect(() => {
     if ((chartEncounterRef.current || "") !== (selectedEncounterId || "")) return;
@@ -653,30 +701,52 @@ export function ClinicOutpatientPage() {
   }, [selectedEncounterId]);
 
   useEffect(() => {
-    if (!selectedEncounterId || ccDirtyRef.current || chartDirtyRef.current) return;
-    const wsId = String((ws.encounterResource as { id?: string } | null)?.id || "");
-    if (wsId !== selectedEncounterId) return;
+    if (!selectedEncounterId || ccFromWs === undefined) return;
+    const editingThis =
+      (ccDirtyRef.current || chartDirtyRef.current) &&
+      (ccSlot.id === selectedEncounterId ||
+        dxSlot.id === selectedEncounterId ||
+        rxSlot.id === selectedEncounterId);
+    if (editingThis) return;
     const server = visibleComplaint(ccFromWs);
-    const draft = visitDrafts[selectedEncounterId];
-    if (server) {
-      setCcText(server);
-      if (draft) {
-        setVisitDrafts((prev) => {
-          if (!prev[selectedEncounterId]) return prev;
-          const next = { ...prev };
-          delete next[selectedEncounterId];
-          return next;
-        });
-      }
-      return;
-    }
-    if (draft?.cc) setCcText(draft.cc);
-    const serverChartEmpty = !displayDiagnoses.length && !(apiCurrentRx?.length);
-    if (draft && serverChartEmpty && (draft.dx.length || draft.rx.length)) {
+    const draft = visitDrafts[selectedEncounterId] ?? null;
+    const finished =
+      selected?.queueStatus === "finished" ||
+      selected?.queueStatus === "no_show" ||
+      selected?.queueStatus === "cancelled";
+    const paint = chartPaint({
+      finished,
+      serverCc: server,
+      selectedId: selectedEncounterId,
+      draft,
+    });
+    if (paint.restoreDraft && draft) {
+      setCcText(draft.cc);
       setApiDxOverlay(draft.dx);
       setApiRxOverlay(draft.rx);
+      return;
     }
-  }, [apiCurrentRx, ccFromWs, displayDiagnoses.length, selectedEncounterId, visitDrafts, ws.encounterResource]);
+    setCcText(paint.cc);
+    if (paint.dropDraft) {
+      setVisitDrafts((prev) => {
+        if (!prev[selectedEncounterId]) return prev;
+        const next = { ...prev };
+        delete next[selectedEncounterId];
+        return next;
+      });
+    }
+  }, [
+    ccFromWs,
+    ccSlot.id,
+    dxSlot.id,
+    rxSlot.id,
+    selected?.queueStatus,
+    selectedEncounterId,
+    setApiDxOverlay,
+    setApiRxOverlay,
+    setCcText,
+    visitDrafts,
+  ]);
 
   useEffect(() => {
     setSelectedMediaId(lesionMedia[lesionMedia.length - 1]?.id ?? null);
@@ -815,7 +885,11 @@ export function ClinicOutpatientPage() {
           [selectedEncounterId]: next.slice(serverCount),
         }));
       }
-      if (note) setCcText((prev) => appendChiefNotes(prev, [note]));
+      if (note) {
+        ccDirtyRef.current = true;
+        chartDirtyRef.current = true;
+        setCcText((prev) => appendChiefNotes(prev, [note]));
+      }
       return true;
     },
     [apiMode, diagnoses.length, selectedEncounterId],
@@ -1593,8 +1667,9 @@ export function ClinicOutpatientPage() {
     (encounterId: string, opts?: { fromSeek?: boolean; label?: string }) => {
       const entry = queue.find((e) => e.encounterId === encounterId);
       const finished =
-        entry?.queueStatus === "finished" || entry?.queueStatus === "no_show";
-      const draft = visitDrafts[encounterId];
+        entry?.queueStatus === "finished" ||
+        entry?.queueStatus === "no_show" ||
+        entry?.queueStatus === "cancelled";
       if (encounterId === selectedEncounterId) {
         setClinicTab("chart");
         return;
@@ -1611,27 +1686,16 @@ export function ClinicOutpatientPage() {
       setSelectedRxIndex(-1);
       commandFocusBump.current += 1;
       chartDirtyRef.current = false;
+      ccDirtyRef.current = false;
       setSaveSpent(false);
 
       if (finished) {
-        // Re-open saved visit: always server truth until F9
         setVisitDrafts((prev) => {
           if (!prev[encounterId]) return prev;
           const next = { ...prev };
           delete next[encounterId];
           return next;
         });
-        setApiRxOverlay(null);
-        setApiDxOverlay(null);
-        ccDirtyRef.current = false;
-      } else if (draft?.cc || draft?.dx.length || draft?.rx.length) {
-        setCcText(draft.cc);
-        setApiDxOverlay(draft.dx);
-        setApiRxOverlay(draft.rx);
-      } else {
-        setCcText("");
-        setApiDxOverlay(null);
-        setApiRxOverlay(null);
       }
 
       if (opts?.fromSeek) {
@@ -1643,7 +1707,7 @@ export function ClinicOutpatientPage() {
         setSeekEnteredBanner(null);
       }
     },
-    [queue, setSelectedEncounterId, visitDrafts, selectedEncounterId],
+    [queue, setSelectedEncounterId, selectedEncounterId],
   );
 
   const retiredDraftsRef = useRef(new Set<string>());
@@ -1668,7 +1732,7 @@ export function ClinicOutpatientPage() {
       if (touched && body) {
         setVisitDrafts((prev) => ({
           ...prev,
-          [eid]: { cc: ccText, dx: displayDiagnoses, rx: currentRx },
+          [eid]: { cc: ccText, dx: displayDiagnoses, rx: currentRx, bound: eid },
         }));
         if (entry?.queueStatus !== "in_progress") {
           void handleStatusChange(eid, "in_progress").then(() => refreshQueue());
@@ -3306,6 +3370,7 @@ export function ClinicOutpatientPage() {
                 <div className="flex h-auto min-h-[4.25rem] max-h-[6rem] shrink-0 gap-0.5 px-0.5 pt-0.5">
                   <div className="min-w-0 flex-1">
                     <ChiefComplaintWidget
+                      key={selectedEncounterId || "none"}
                       apiMode={apiMode}
                       saving={saving}
                       ccText={ccText}
@@ -3330,12 +3395,17 @@ export function ClinicOutpatientPage() {
                 </div>
                 <div className="h-auto min-h-[5.25rem] max-h-[8rem] shrink-0 px-0.5">
                   <DiagnosesWidget
+                    key={selectedEncounterId || "none"}
                     maxDiagnoses={CLAIM_DX_LIMIT}
                     catalog={catalog.diagnoses}
                     displayDiagnoses={displayDiagnoses}
                     addDiagnosis={addDiagnosis}
                     onChangeDiagnosis={changeDiagnosisAt}
-                    onChiefNote={(note) => setCcText((prev) => appendChiefNotes(prev, [note]))}
+                    onChiefNote={(note) => {
+                      ccDirtyRef.current = true;
+                      chartDirtyRef.current = true;
+                      setCcText((prev) => appendChiefNotes(prev, [note]));
+                    }}
                     onRemove={removeDiagnosisAt}
                     historyFontPx={HIS.fs.body}
                     active={chartFocus === "dx"}
@@ -3348,6 +3418,7 @@ export function ClinicOutpatientPage() {
                 </div>
                 <div className="min-h-0 flex-1 px-0.5">
                   <CurrentRxWidget
+                    key={selectedEncounterId || "none"}
                     catalog={catalog}
                     addRxLines={(lines) => {
                       addRxLines(lines);
