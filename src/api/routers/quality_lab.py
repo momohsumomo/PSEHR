@@ -23,7 +23,7 @@ from src.core.quality_lab import (
     roc_now,
     zip_name,
 )
-from src.core.quality_lab_desk import get_report, list_pending, mark_uploaded, save_report
+from src.core.quality_lab_desk import find_for_visit, get_report, list_pending, mark_uploaded, save_report
 
 router = APIRouter(prefix="/nhi/v1/quality-lab", tags=["quality-lab"])
 
@@ -147,6 +147,11 @@ def save(body: QualityLabBody) -> dict[str, Any]:
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return {"ok": True, "id": row.get("id") or "", "status": "saved"}
+
+
+@router.get("/saved")
+def saved(encounterId: str = "", orderCode: str = "") -> dict[str, Any]:
+    return {"report": find_for_visit(encounterId, orderCode)}
 
 
 @router.get("/pending")

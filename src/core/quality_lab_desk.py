@@ -64,6 +64,23 @@ def list_pending() -> list[dict[str, Any]]:
     return [_public(dict(row)) for row in rows]
 
 
+def find_for_visit(encounter_id: str, order_code: str) -> dict[str, Any] | None:
+    eid = str(encounter_id or "").split("/")[-1].strip()
+    code = str(order_code or "").strip().upper()
+    if not eid or not code:
+        return None
+    with get_shadow_store()._connect() as conn:
+        _ensure(conn)
+        row = conn.execute(
+            "SELECT * FROM quality_lab_report WHERE encounter_id=? AND order_code=? "
+            "ORDER BY updated_at DESC LIMIT 1",
+            (eid, code),
+        ).fetchone()
+    if not row:
+        return None
+    return _public(dict(row))
+
+
 def get_report(report_id: str) -> dict[str, Any] | None:
     with get_shadow_store()._connect() as conn:
         _ensure(conn)

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { saveQualityLab } from "@/api/clinicApi";
+import { fetchSavedQualityLab, saveQualityLab } from "@/api/clinicApi";
 import { HIS_FONT } from "@/lib/hisTheme";
 import type { RxLine } from "@/mocks/clinicMocks";
 
@@ -80,6 +80,8 @@ export function QualityLabPanel({
   const [imageIdx, setImageIdx] = useState(0);
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState("");
+  const [savedMark, setSavedMark] = useState("");
+  const dirty = useRef(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const imagesRef = useRef(images);
   imagesRef.current = images;
@@ -95,6 +97,31 @@ export function QualityLabPanel({
   }, [doctors, doctorId, doctorName]);
   const born = rocParts(birthday);
   const day = rocParts(when);
+
+  useEffect(() => {
+    const lineNow = form || ask;
+    if (!lineNow || !encounterId) return;
+    let stop = false;
+    void fetchSavedQualityLab(encounterId, lineNow.nhiCode)
+      .then((row) => {
+        if (stop || !row) return;
+        if (!dirty.current) setReport(row.report);
+        if (row.slipNo) setSlip(row.slipNo);
+        if (row.doctor) {
+          const hit = people.find((person) => person.id === row.doctor || person.name === row.doctor);
+          setPhysician(hit?.id || hit?.name || row.doctor);
+        }
+        setSavedMark(
+          row.status === "uploaded"
+            ? "\u9019\u6b21\u770b\u8a3a\u5df2\u7d93\u9001\u51fa\u3002"
+            : "\u9019\u6b21\u770b\u8a3a\u5df2\u7d93\u5b58\u904e\u3002",
+        );
+      })
+      .catch(() => undefined);
+    return () => {
+      stop = true;
+    };
+  }, [ask, form, encounterId, people]);
 
   useEffect(() => {
     if (!form || slip) return;
@@ -114,6 +141,7 @@ export function QualityLabPanel({
           <div className="px-2 py-1 text-[13px] text-black">{"\u8ad6\u8cea\u6aa2\u9a57\u5831\u544a"}</div>
           <p className="bg-[#F0F0F0] px-3 py-4 text-[13px] leading-relaxed text-black">
             {`${ask.name || ask.nhiCode}\uff08${ask.nhiCode}\uff09\u8981\u586b\u5beb\u8ad6\u8cea\u6aa2\u9a57\u4e0a\u50b3\u55ce\uff1f`}
+            {savedMark ? <span className="mt-2 block">{savedMark}</span> : null}
           </p>
           <div className="flex justify-end gap-1 px-2 py-2">
             <button type="button" className="border border-[#404040] bg-[#FFFF80] px-3 py-0.5 text-xs font-bold" onClick={onYes}>
@@ -227,7 +255,10 @@ export function QualityLabPanel({
           <textarea
             className="h-36 w-full resize-none border border-[#7aa] bg-white px-1 text-[13px] text-black"
             value={report}
-            onChange={(e) => setReport(e.target.value)}
+            onChange={(e) => {
+              dirty.current = true;
+              setReport(e.target.value);
+            }}
           />
           <div className="flex min-h-40 gap-2">
             <div className="min-h-40 flex-1 overflow-hidden border border-[#808080] bg-white">
@@ -288,6 +319,7 @@ export function QualityLabPanel({
               e.target.value = "";
             }}
           />
+          {savedMark && !note ? <p className="text-[13px] text-black">{savedMark}</p> : null}
           {note ? <p className="text-[13px] text-black">{note}</p> : null}
         </div>
       </div>

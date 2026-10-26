@@ -2453,6 +2453,29 @@ export async function fetchQualityLabOrders(): Promise<Record<string, string>> {
   return out;
 }
 
+export async function fetchSavedQualityLab(
+  encounterId: string,
+  orderCode: string,
+): Promise<{
+  report: string;
+  slipNo: string;
+  doctor: string;
+  status: string;
+} | null> {
+  const query = new URLSearchParams({ encounterId, orderCode });
+  const body = await request<{
+    report: { report?: string; slipNo?: string; doctor?: string; status?: string } | null;
+  }>(`/nhi/v1/quality-lab/saved?${query}`);
+  const row = body.report;
+  if (!row || !String(row.report || "").trim()) return null;
+  return {
+    report: String(row.report || ""),
+    slipNo: String(row.slipNo || ""),
+    doctor: String(row.doctor || ""),
+    status: String(row.status || ""),
+  };
+}
+
 export async function saveQualityLab(body: {
   encounterId: string;
   orderCode: string;
