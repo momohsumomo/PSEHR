@@ -43,7 +43,6 @@ from src.api.routers import (
     staff,
 )
 from src.app.bootstrap import get_shadow_store
-from src.core.local_print_server import start_local_print_server
 from src.infrastructure.sync_worker import start_sync_worker, stop_sync_worker
 from src.spoke.hydrator_worker import start_pack_hydrator_worker, stop_pack_hydrator_worker
 from src.spoke.pack_store import PackStore
@@ -126,7 +125,6 @@ def on_startup() -> None:
     PackStore(store.db_path).initialize()
     start_sync_worker(store)
     start_pack_hydrator_worker()
-    start_local_print_server()
     from src.core.cc_learn import start_cc_learner
 
     start_cc_learner(store.db_path)

@@ -126,24 +126,34 @@ function Test-FreshPrintAgent {
   } catch { return $false }
 }
 
+function Stop-PythonPrintServer {
+  $removed = $false
+  $conns = @(Get-NetTCPConnection -LocalPort 5310 -State Listen -ErrorAction SilentlyContinue)
+  foreach ($conn in $conns) {
+    $procId = [int]$conn.OwningProcess
+    if ($procId -le 4) { continue }
+    $proc = Get-CimInstance Win32_Process -Filter "ProcessId=$procId" -ErrorAction SilentlyContinue
+    if ($proc -and $proc.CommandLine -match "local_print_server") {
+      Stop-Process -Id $procId -Force -ErrorAction SilentlyContinue
+      $removed = $true
+    }
+  }
+  if ($removed) { Start-Sleep -Seconds 1 }
+}
+
 function Start-PrintAgent {
   Register-DeskHook
+  if (Test-Listen 5310) { Stop-PythonPrintServer }
   if ((Test-Listen 5310) -and (Test-FreshPrintAgent)) { return }
-  if (Test-Listen 5310) {
-    Get-NetTCPConnection -LocalPort 5310 -State Listen -ErrorAction SilentlyContinue | ForEach-Object {
-      $procId = [int]$_.OwningProcess
-      if ($procId -le 4) { return }
-      $proc = Get-CimInstance Win32_Process -Filter "ProcessId=$procId" -ErrorAction SilentlyContinue
-      if ($proc -and $proc.CommandLine -match "local_print_server") {
-        Stop-Process -Id $procId -Force -ErrorAction SilentlyContinue
-      }
-    }
-    Start-Sleep -Seconds 1
-  }
   if (Test-Listen 5310) { return }
-  $python = Resolve-Python
-  if (-not $python) { throw "This PC has no Python. Run the station installer once." }
-  Start-HiddenCmd $Root "set PYTHONPATH=$Root&& `"$python`" -m src.core.local_print_server" "print.log"
+  $client = -join @([char]0x5BA2, [char]0x6236, [char]0x7AEF)
+  $agent = Join-Path $Root (Join-Path $client "desk_agent.ps1")
+  if (-not (Test-Path -LiteralPath $agent)) {
+    Write-HostLog "desk agent missing"
+    return
+  }
+  $ps = Join-Path $env:SystemRoot "System32\WindowsPowerShell\v1.0\powershell.exe"
+  Start-Process -FilePath $ps -WindowStyle Hidden -ArgumentList "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$agent`"" | Out-Null
 }
 
 function Write-HostLog([string]$line) {
