@@ -8,6 +8,7 @@ import { CatalogDropdown } from "@/components/clinic/CatalogDropdown";
 import { DiagnosisFinder, type DxChoice } from "@/components/clinic/DiagnosisFinder";
 import { Icd10ConditionDialog, IcdShortcutDialog } from "@/components/clinic/IcdBrowseDialogs";
 import { HIS, HIS_FONT } from "@/lib/hisTheme";
+import { diagnosisKey, diagnosisTaken } from "@/lib/diagnosisIdentity";
 
 interface DiagnosesWidgetProps {
   catalog: CatalogDiagnosis[];
@@ -40,20 +41,6 @@ function dropSideRow(prev: Record<string, string>, row: number): Record<string, 
     next[`${at > row ? at - 1 : at}:${rawCol}`] = value;
   }
   return next;
-}
-
-function diagnosisKey(row: { nhiIcd10?: string; icd10?: string; text?: string }): string {
-  return (row.nhiIcd10 || row.icd10 || row.text || "").trim().toUpperCase();
-}
-
-function diagnosisTaken(
-  rows: { nhiIcd10?: string; icd10?: string; text?: string }[],
-  row: { nhiIcd10?: string; icd10?: string; text?: string },
-  except?: number,
-): boolean {
-  const key = diagnosisKey(row);
-  if (!key) return false;
-  return rows.some((item, index) => index !== except && diagnosisKey(item) === key);
 }
 
 /**

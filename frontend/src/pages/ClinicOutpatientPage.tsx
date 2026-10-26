@@ -33,6 +33,7 @@ import {
   type ClinicTab,
 } from "@/lib/clinicShortcutSets";
 import { rxLinesMissingFrom } from "@/lib/dittoRxLines";
+import { diagnosisTaken, sameDiagnosis } from "@/lib/diagnosisIdentity";
 import { splitStoppedRxLines, stoppedRxLabels } from "@/utils/catalogRx";
 import { EncounterQueuePanel } from "@/components/clinic/EncounterQueuePanel";
 import { HistoryRxPanel } from "@/components/clinic/HistoryRxPanel";
@@ -136,20 +137,6 @@ function loadChartDrafts(): Record<string, ChartDraft> {
   } catch {
     return {};
   }
-}
-
-function diagnosisKey(row: { nhiIcd10?: string; icd10?: string; text?: string }): string {
-  return (row.nhiIcd10 || row.icd10 || row.text || "").trim().toUpperCase();
-}
-
-function diagnosisTaken(
-  rows: { nhiIcd10?: string; icd10?: string; text?: string }[],
-  row: { nhiIcd10?: string; icd10?: string; text?: string },
-  except?: number,
-): boolean {
-  const key = diagnosisKey(row);
-  if (!key) return false;
-  return rows.some((item, index) => index !== except && diagnosisKey(item) === key);
 }
 
 /** 門診申報 d19–d23：一個主診斷、四個次診斷。 */
@@ -598,9 +585,8 @@ export function ClinicOutpatientPage() {
     const pending = dxListRef.current;
     const visible = displayDiagnoses;
     const pendingExtendsVisible =
-      visible.length > 0 &&
       pending.length > visible.length &&
-      visible.every((row, index) => diagnosisKey(row) === diagnosisKey(pending[index]));
+      visible.every((row, index) => sameDiagnosis(row, pending[index]));
     if (pendingExtendsVisible) return;
     dxListRef.current = visible;
   }, [displayDiagnoses]);
@@ -823,17 +809,25 @@ export function ClinicOutpatientPage() {
 
   const addDiagnosis = useCallback(
     (row: DiagnosisRow): true | string => {
+      if (diagnosisTaken(dxListRef.current, row)) {
+        const msg = `病名「${row.text || row.nhiIcd10 || row.icd10}」已經有了，同一筆看診不重複。`;
+        setActionError(msg);
+        return msg;
+      }
       markChartDirty();
       const code = (row.icd10 || row.nhiIcd10 || "").trim();
       if (!readyIcd9(code)) {
         return placeDiagnosisRows([row]);
       }
+      const holdId = `dx-hold-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+      dxListRef.current = [...dxListRef.current, { ...row, id: holdId }];
       const job = dxQueueRef.current.then(async () => {
         let rows = [row];
         let note = "";
         try {
           const resolved = await resolveIcd9Row(row);
           if (resolved.choices.length > 1) {
+            dxListRef.current = dxListRef.current.filter((item) => item.id !== holdId);
             const msg = "這個 ICD-9 會對到兩個 ICD-10，請雙擊病名勾一個或兩個再寫入。";
             setActionError(msg);
             return;
@@ -843,6 +837,7 @@ export function ClinicOutpatientPage() {
         } catch {
           rows = [row];
         }
+        dxListRef.current = dxListRef.current.filter((item) => item.id !== holdId);
         placeDiagnosisRows(rows, note);
       });
       dxQueueRef.current = job.then(

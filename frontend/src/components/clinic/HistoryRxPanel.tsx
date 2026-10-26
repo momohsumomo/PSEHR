@@ -275,9 +275,10 @@ export function HistoryRxPanel({
             disabled={!dittoCcEnabled || !selected?.chiefComplaint}
             className="shrink-0 self-start bg-amber-600 px-1 py-0.5 font-bold text-white disabled:opacity-40"
             style={{ fontSize: headFs - 1 }}
-            onClick={() => selected && onDittoCc(selected.chiefComplaint, selected.visitDate)}
+            title="雙擊帶入"
+            onDoubleClick={() => selected && onDittoCc(selected.chiefComplaint, selected.visitDate)}
           >
-            Ditto
+            雙擊
           </button>
         </section>
         <div
@@ -312,9 +313,10 @@ export function HistoryRxPanel({
             disabled={!dittoDxEnabled || !selected?.diagnoses.length}
             className="shrink-0 self-start bg-amber-600 px-1 py-0.5 font-bold text-white disabled:opacity-40"
             style={{ fontSize: headFs - 1 }}
-            onClick={() => selected && onDittoDx(selected.diagnoses)}
+            title="雙擊帶入"
+            onDoubleClick={() => selected && onDittoDx(selected.diagnoses)}
           >
-            Ditto
+            雙擊
           </button>
         </section>
         <div
@@ -333,9 +335,10 @@ export function HistoryRxPanel({
               disabled={!selected?.medications.length}
               className="bg-amber-600 px-1 py-0.5 font-bold text-white disabled:opacity-40"
               style={{ fontSize: headFs - 1 }}
-              onClick={() => selected && onDittoRx(selected.medications)}
+              title="雙擊帶入。F7 也會帶入"
+              onDoubleClick={() => selected && onDittoRx(selected.medications)}
             >
-              Ditto (F7)
+              雙擊
             </button>
           </div>
           <div className="min-h-0 flex-1 overflow-auto">

@@ -1,5 +1,5 @@
 /**
- * 醫聖右欄目錄：依左欄焦點顯示主訴／病名／藥品清單（點兩下加入）。
+ * 醫聖右欄目錄：依左欄焦點顯示主訴／病名／藥品清單（雙擊帶入）。
  * 皮：zone-hint + pick-list（對 lookalike）
  */
 import { useMemo, useState } from "react";
@@ -36,7 +36,7 @@ export function ChartContextRail({
   diagnoses,
   drugs,
   packages,
-  ccChips: _ccChips = [],
+  ccChips = [],
   dxQuery,
   setDxQuery,
   rxQuery,
@@ -44,12 +44,11 @@ export function ChartContextRail({
   onAddDx,
   onReject,
   onAddRx,
-  onAddCc: _onAddCc,
+  onAddCc,
   fontSizePx = 13,
 }: Props) {
-  void _onAddCc;
-  void _ccChips;
   const [rxTab, setRxTab] = useState<"drug" | "pkg">("drug");
+  const [ccQuery, setCcQuery] = useState("");
 
   const dxPool = useMemo(() => {
     if (railMode === "full") return diagnoses;
@@ -77,7 +76,13 @@ export function ChartContextRail({
     onAddDx({ icd10: d.icd10, nhiIcd10: d.icd10, text: d.text });
     setDxQuery("");
   };
-  const listFocus: ChartEditFocus = focus === "cc" || focus === "history" ? "rx" : focus;
+  const listFocus: ChartEditFocus = focus === "history" ? "dx" : focus;
+  const ccHits = useMemo(() => {
+    const q = ccQuery.trim().toLowerCase();
+    const list = ccChips.map((text) => text.trim()).filter(Boolean);
+    if (!q) return list;
+    return list.filter((text) => text.toLowerCase().includes(q));
+  }, [ccChips, ccQuery]);
   const dxHits = useMemo(
     () => browseDiagnoses(dxPool, dxQuery, Math.max(dxPool.length, 1)),
     [dxPool, dxQuery],
@@ -98,12 +103,14 @@ export function ChartContextRail({
   }, [packages, rxQuery]);
 
   const zoneHint =
-    listFocus === "dx"
-      ? "目前對應：病名選單（點左側病名區可切換）"
-      : "目前對應：處置選單（先分檢驗、處置、藥品；常用排在該類最上面）";
+    listFocus === "cc"
+      ? "目前對應：主訴（雙擊帶入）"
+      : listFocus === "dx"
+        ? "目前對應：病名（雙擊帶入）"
+        : "目前對應：處置（雙擊帶入。先分檢驗、處置、藥品；常用排在該類最上面）";
 
-  const filterQuery = listFocus === "rx" ? rxQuery : dxQuery;
-  const setFilterQuery = listFocus === "rx" ? setRxQuery : setDxQuery;
+  const filterQuery = listFocus === "rx" ? rxQuery : listFocus === "cc" ? ccQuery : dxQuery;
+  const setFilterQuery = listFocus === "rx" ? setRxQuery : listFocus === "cc" ? setCcQuery : setDxQuery;
 
   return (
     <div className="flex h-full min-h-0 flex-col" style={{ background: "#F0F0F0", fontFamily: HIS_FONT }}>
@@ -126,14 +133,17 @@ export function ChartContextRail({
             color: HIS.inputBlue,
           }}
           placeholder={
-            listFocus === "rx" ? "藥名／健保碼／藥組" : "病名／ICD"
+            listFocus === "rx" ? "藥名／健保碼／藥組" : listFocus === "cc" ? "主訴" : "病名／ICD"
           }
           value={filterQuery}
           onChange={(e) => setFilterQuery(e.target.value)}
           onKeyDown={(e) => {
             if (e.key !== "Enter") return;
             e.preventDefault();
-            if (listFocus === "dx" && dxHits[0]) {
+            if (listFocus === "cc" && ccHits[0]) {
+              onAddCc?.(ccHits[0]);
+              setCcQuery("");
+            } else if (listFocus === "dx" && dxHits[0]) {
               pickDx(dxHits[0]);
             } else if (listFocus === "rx" && rxTab === "drug" && drugHits[0]) {
               onAddRx([catalogDrugToRxLine(drugHits[0])]);
@@ -174,13 +184,26 @@ export function ChartContextRail({
         )}
       </div>
       <ul className="min-h-0 flex-1 overflow-y-auto bg-white" style={{ fontSize: fontSizePx }}>
+        {listFocus === "cc" &&
+          ccHits.map((text) => (
+            <li key={text} className="border-b" style={{ borderColor: "#E8D0E8" }}>
+              <button
+                type="button"
+                className="w-full px-1 py-0.5 text-left font-bold hover:bg-[#FFFF80]"
+                title="雙擊帶入"
+                onDoubleClick={() => onAddCc?.(text)}
+              >
+                {text}
+              </button>
+            </li>
+          ))}
         {listFocus === "dx" &&
           dxHits.map((d, i) => (
             <li key={`${d.icd10}-${d.text}-${i}`} className="border-b" style={{ borderColor: "#D0E8D0" }}>
               <button
                 type="button"
                 className="flex w-full gap-1 px-1 py-0.5 text-left hover:bg-[#FFFF80]"
-                onClick={() => pickDx(d)}
+                title="雙擊帶入"
                 onDoubleClick={() => pickDx(d)}
               >
                 <span className="w-16 shrink-0 font-mono text-[11px]">{d.short || d.icd10 || "\u2014"}</span>
@@ -206,10 +229,7 @@ export function ChartContextRail({
                 <button
                   type="button"
                   className="flex w-full gap-1 px-1 py-0.5 text-left hover:bg-[#FFFF80]"
-                  onClick={() => {
-                    onAddRx([catalogDrugToRxLine(d)]);
-                    setRxQuery("");
-                  }}
+                  title="雙擊帶入"
                   onDoubleClick={() => {
                     onAddRx([catalogDrugToRxLine(d)]);
                     setRxQuery("");
@@ -228,10 +248,7 @@ export function ChartContextRail({
               <button
                 type="button"
                 className="w-full px-1 py-0.5 text-left font-bold hover:bg-[#FFFF80]"
-                onClick={() => {
-                  onAddRx(resolvePackageLines(p, drugs));
-                  setRxQuery("");
-                }}
+                title="雙擊帶入"
                 onDoubleClick={() => {
                   onAddRx(resolvePackageLines(p, drugs));
                   setRxQuery("");
@@ -241,7 +258,8 @@ export function ChartContextRail({
               </button>
             </li>
           ))}
-        {((listFocus === "dx" && !dxHits.length) ||
+        {((listFocus === "cc" && !ccHits.length) ||
+          (listFocus === "dx" && !dxHits.length) ||
           (listFocus === "rx" && rxTab === "drug" && !drugHits.length) ||
           (listFocus === "rx" && rxTab === "pkg" && !pkgHits.length)) && (
           <li className="px-2 py-6 text-center text-[11px] text-[#808080]">無符合項目</li>

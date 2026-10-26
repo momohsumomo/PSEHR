@@ -128,8 +128,6 @@ function isPrimaryCol(key: string): boolean {
 
 function isNarrowCol(key: string): boolean {
   return (
-    key === "qty" ||
-    key === "days" ||
     key === "selfPay" ||
     key === "payMark" ||
     key === "route" ||
@@ -137,6 +135,10 @@ function isNarrowCol(key: string): boolean {
     key === "memo" ||
     key === "totalAmount"
   );
+}
+
+function isMeasureCol(key: string): boolean {
+  return key === "qty" || key === "days";
 }
 
 function isEditableDraftCol(key: string): boolean {
@@ -659,17 +661,22 @@ export function RxGrid({
                 style={{
                   borderColor: HIS.chromeBorder,
                   background: HIS.rxHeader,
-                  fontSize: HIS.fs.secondary,
-                  maxWidth: col.widthCh ? `${col.widthCh}ch` : undefined,
-                  width: isNarrowCol(col.key)
-                    ? col.widthCh
-                      ? `${col.widthCh}ch`
-                      : "2.25rem"
-                    : isPrimaryCol(col.key)
-                      ? undefined
-                      : col.widthCh
+                  fontSize: isMeasureCol(col.key) ? 16 : HIS.fs.secondary,
+                  maxWidth: isMeasureCol(col.key) ? undefined : col.widthCh ? `${col.widthCh}ch` : undefined,
+                  minWidth: col.key === "qty" ? "4.8rem" : col.key === "days" ? "3.6rem" : undefined,
+                  width: isMeasureCol(col.key)
+                    ? col.key === "qty"
+                      ? "4.8rem"
+                      : "3.6rem"
+                    : isNarrowCol(col.key)
+                      ? col.widthCh
                         ? `${col.widthCh}ch`
-                        : undefined,
+                        : "2.25rem"
+                      : isPrimaryCol(col.key)
+                        ? undefined
+                        : col.widthCh
+                          ? `${col.widthCh}ch`
+                          : undefined,
                 }}
                 title={
                   col.key === "payMark"
@@ -707,7 +714,7 @@ export function RxGrid({
                 style={{
                   background: sel ? "#E5F6E3" : rowIdx % 2 ? "#FFFFE0" : HIS.rxBg,
                   color: "#000",
-                  height: 20,
+                  minHeight: 30,
                   outline: sel ? "1px solid #808000" : undefined,
                   outlineOffset: -1,
                 }}
@@ -794,6 +801,7 @@ export function RxGrid({
                 {columns.map((col) => {
                   const primary = isPrimaryCol(col.key);
                   const narrow = isNarrowCol(col.key);
+                  const measure = isMeasureCol(col.key);
                   const pay = col.key === "payMark";
                   const memo = col.key === "memo";
                   const mark = resolvedPayMark(line);
@@ -811,17 +819,18 @@ export function RxGrid({
                       }`}
                       style={{
                         borderColor: "#A0A0A0",
-                        fontSize: primary ? HIS.fs.body : HIS.fs.secondary,
-                        fontWeight: primary || pay ? 700 : 400,
-                        maxWidth: col.widthCh ? `${col.widthCh}ch` : undefined,
+                        fontSize: measure ? 20 : primary ? HIS.fs.body : HIS.fs.secondary,
+                        fontWeight: measure || primary || pay ? 700 : 400,
+                        maxWidth: measure ? undefined : col.widthCh ? `${col.widthCh}ch` : undefined,
+                        minWidth:
+                          col.key === "qty" ? "4.8rem" : col.key === "days" ? "3.6rem" : pay || memo ? "1.4rem" : undefined,
                         textAlign:
-                          pay || memo || narrow || col.key === "totalAmount" ? "center" : undefined,
+                          measure || pay || memo || narrow || col.key === "totalAmount" ? "center" : undefined,
                         background: cellHot ? "#C6EBC2" : pay && mark ? "#D0D0D0" : undefined,
                         whiteSpace: readonly ? "nowrap" : undefined,
                         overflow: readonly ? "hidden" : undefined,
                         textOverflow: readonly ? "ellipsis" : undefined,
                         cursor: canEdit ? "text" : "default",
-                        minWidth: pay || memo ? "1.4rem" : undefined,
                         outline:
                           col.key === "bodySite" && siteTargets.includes(line.id)
                             ? "2px solid #1d4ed8"
@@ -930,12 +939,12 @@ export function RxGrid({
                           className="w-full border-0 bg-transparent px-0 outline-none"
                           autoFocus
                           style={{
-                            height: 18,
-                            fontSize: primary ? HIS.fs.body : HIS.fs.secondary,
+                            height: measure ? 26 : 18,
+                            fontSize: measure ? 20 : primary ? HIS.fs.body : HIS.fs.secondary,
                             fontFamily: HIS_FONT,
-                            fontWeight: primary ? 700 : 400,
+                            fontWeight: measure || primary ? 700 : 400,
                             color: "#111",
-                            textAlign: narrow ? "center" : "left",
+                            textAlign: measure || narrow ? "center" : "left",
                             cursor: "text",
                             background: "#C6EBC2",
                           }}
