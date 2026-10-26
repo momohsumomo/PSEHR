@@ -121,10 +121,13 @@ export function OutpatientSidebarQueue({
                     color: sel ? "#000" : "#C0E0FF",
                     fontWeight: sel ? 700 : 400,
                   }}
-                  onClick={() => setSelectedEncounterId(e.encounterId)}
+                  onClick={() => {
+                    if (onOpenChart) onOpenChart(e.encounterId);
+                    else setSelectedEncounterId(e.encounterId);
+                  }}
                   onDoubleClick={() => {
-                    setSelectedEncounterId(e.encounterId);
-                    onOpenChart?.(e.encounterId);
+                    if (onOpenChart) onOpenChart(e.encounterId);
+                    else setSelectedEncounterId(e.encounterId);
                   }}
                 >
                   <span className="w-4 shrink-0 font-bold">{statusMark(e.queueStatus)}</span>

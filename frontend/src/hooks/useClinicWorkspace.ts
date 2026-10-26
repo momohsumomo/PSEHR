@@ -632,19 +632,25 @@ export function useClinicWorkspace(options?: {
   const ccFromWs = workspaceLive?.cc;
   const patientIdNo = extractPatientIdNo(patientResource);
 
+  const selectedEncounterRef = useRef(selectedEncounterId);
+  selectedEncounterRef.current = selectedEncounterId;
+  const workspaceForRef = useRef(workspaceFor);
+  workspaceForRef.current = workspaceFor;
   const refreshWorkspace = useCallback(async (encounterId?: string) => {
-    const eid = encounterId ?? selectedEncounterId;
+    const eid = encounterId ?? selectedEncounterRef.current;
     if (!eid) return;
-    const gen = ++wsGen.current;
     const ws = await fetchWorkspace(eid, { historyLimit: 0 });
-    if (gen !== wsGen.current) return;
+    if (selectedEncounterRef.current !== eid) return;
     const mapped = mapWorkspace(ws);
     setWorkspaceFor(eid);
     setWorkspaceData((prev) => ({
       ...mapped,
-      historyVisits: prev?.historyVisits?.length ? prev.historyVisits : mapped.historyVisits,
+      historyVisits:
+        workspaceForRef.current === eid && prev?.historyVisits?.length
+          ? prev.historyVisits
+          : mapped.historyVisits,
     }));
-  }, [selectedEncounterId]);
+  }, []);
 
   const ensureAcceptReferralOrder = useCallback(async (encounterId: string) => {
     if (!encounterId || acceptOrderFlight.current.has(encounterId)) return;

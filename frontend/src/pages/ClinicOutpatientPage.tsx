@@ -393,6 +393,7 @@ export function ClinicOutpatientPage() {
   }, [visitDrafts]);
   const ccDirtyRef = useRef(false);
   const chartDirtyRef = useRef(false);
+  const chartEncounterRef = useRef<string | null>(null);
   const [leaveAsk, setLeaveAsk] = useState(false);
   const leaveBoxRef = useRef<HTMLDivElement>(null);
   const leaveIntentRef = useRef<
@@ -582,7 +583,17 @@ export function ClinicOutpatientPage() {
       ];
   const dxListRef = useRef<DiagnosisRow[]>([]);
   const dxQueueRef = useRef<Promise<void>>(Promise.resolve());
+  if (chartEncounterRef.current !== (selectedEncounterId || "")) {
+    chartEncounterRef.current = selectedEncounterId || "";
+    ccDirtyRef.current = false;
+    chartDirtyRef.current = false;
+    dxListRef.current = [];
+    if (ccText) setCcText("");
+    if (apiDxOverlay) setApiDxOverlay(null);
+    if (apiRxOverlay) setApiRxOverlay(null);
+  }
   useEffect(() => {
+    if ((chartEncounterRef.current || "") !== (selectedEncounterId || "")) return;
     const pending = dxListRef.current;
     const visible = displayDiagnoses;
     const pendingExtendsVisible =
@@ -590,7 +601,7 @@ export function ClinicOutpatientPage() {
       visible.every((row, index) => sameDiagnosis(row, pending[index]));
     if (pendingExtendsVisible) return;
     dxListRef.current = visible;
-  }, [displayDiagnoses]);
+  }, [displayDiagnoses, selectedEncounterId]);
 
   const isList = clinicTab === "list";
   const isChart = clinicTab === "chart";
@@ -633,37 +644,39 @@ export function ClinicOutpatientPage() {
   const historyFontPx = prefs.historyFontSizePx ?? 15;
   const allergyEmpty = prefs.allergyEmptyText ?? t.allergy.none;
 
-  // Reload edit surface only when switching encounter (not on workspace refresh)
   useEffect(() => {
     if (!selectedEncounterId) return;
-    const draft = visitDrafts[selectedEncounterId];
-    ccDirtyRef.current = false;
-    chartDirtyRef.current = false;
     setSelectedMediaId(null);
     setActionError(null);
     setSelectedDxIndex(0);
     setSelectedRxIndex(0);
-    if (draft) {
-      ccDirtyRef.current = true;
-      chartDirtyRef.current = true; setSaveSpent(false);
-      setCcText(draft.cc);
-      setApiDxOverlay(draft.dx);
-      setApiRxOverlay(draft.rx);
-      return;
-    }
-    setCcText("");
-    setApiRxOverlay(null);
-    setApiDxOverlay(null);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- restore draft once per encounter switch
   }, [selectedEncounterId]);
 
   useEffect(() => {
-    if (ccDirtyRef.current) return;
-    if (visitDrafts[selectedEncounterId || ""]) return;
+    if (!selectedEncounterId || ccDirtyRef.current || chartDirtyRef.current) return;
     const wsId = String((ws.encounterResource as { id?: string } | null)?.id || "");
-    if (selectedEncounterId && wsId && wsId !== selectedEncounterId) return;
-    setCcText(visibleComplaint(ccFromWs));
-  }, [ccFromWs, selectedEncounterId, visitDrafts, ws.encounterResource]);
+    if (wsId !== selectedEncounterId) return;
+    const server = visibleComplaint(ccFromWs);
+    const draft = visitDrafts[selectedEncounterId];
+    if (server) {
+      setCcText(server);
+      if (draft) {
+        setVisitDrafts((prev) => {
+          if (!prev[selectedEncounterId]) return prev;
+          const next = { ...prev };
+          delete next[selectedEncounterId];
+          return next;
+        });
+      }
+      return;
+    }
+    if (draft?.cc) setCcText(draft.cc);
+    const serverChartEmpty = !displayDiagnoses.length && !(apiCurrentRx?.length);
+    if (draft && serverChartEmpty && (draft.dx.length || draft.rx.length)) {
+      setApiDxOverlay(draft.dx);
+      setApiRxOverlay(draft.rx);
+    }
+  }, [apiCurrentRx, ccFromWs, displayDiagnoses.length, selectedEncounterId, visitDrafts, ws.encounterResource]);
 
   useEffect(() => {
     setSelectedMediaId(lesionMedia[lesionMedia.length - 1]?.id ?? null);
@@ -1582,6 +1595,10 @@ export function ClinicOutpatientPage() {
       const finished =
         entry?.queueStatus === "finished" || entry?.queueStatus === "no_show";
       const draft = visitDrafts[encounterId];
+      if (encounterId === selectedEncounterId) {
+        setClinicTab("chart");
+        return;
+      }
 
       setSelectedEncounterId(encounterId);
       setClinicTab("chart");
@@ -1607,13 +1624,12 @@ export function ClinicOutpatientPage() {
         setApiRxOverlay(null);
         setApiDxOverlay(null);
         ccDirtyRef.current = false;
-      } else if (draft) {
-        ccDirtyRef.current = true;
-        chartDirtyRef.current = true; setSaveSpent(false);
+      } else if (draft?.cc || draft?.dx.length || draft?.rx.length) {
         setCcText(draft.cc);
         setApiDxOverlay(draft.dx);
         setApiRxOverlay(draft.rx);
       } else {
+        setCcText("");
         setApiDxOverlay(null);
         setApiRxOverlay(null);
       }
@@ -1633,6 +1649,7 @@ export function ClinicOutpatientPage() {
   const retiredDraftsRef = useRef(new Set<string>());
   const holdUnsavedChart = useCallback(
     (eid: string) => {
+      if (!eid || eid !== selectedEncounterId) return;
       if (retiredDraftsRef.current.has(eid)) return;
       const entry = queue.find((e) => e.encounterId === eid);
       const saved =
@@ -1659,10 +1676,12 @@ export function ClinicOutpatientPage() {
         return;
       }
       if (touched && !body) {
-        setVisitDrafts((prev) => ({
-          ...prev,
-          [eid]: { cc: "", dx: [], rx: [] },
-        }));
+        setVisitDrafts((prev) => {
+          if (!prev[eid]) return prev;
+          const next = { ...prev };
+          delete next[eid];
+          return next;
+        });
         if (entry?.queueStatus === "in_progress") {
           void handleStatusChange(eid, "waiting").then(() => refreshQueue());
         }
@@ -1672,7 +1691,7 @@ export function ClinicOutpatientPage() {
         void handleStatusChange(eid, "waiting").then(() => refreshQueue());
       }
     },
-    [queue, visitDrafts, ccText, displayDiagnoses, currentRx, handleStatusChange, refreshQueue],
+    [queue, visitDrafts, ccText, displayDiagnoses, currentRx, handleStatusChange, refreshQueue, selectedEncounterId],
   );
 
   const openChart = useCallback(
