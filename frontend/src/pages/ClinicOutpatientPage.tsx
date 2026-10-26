@@ -32,6 +32,7 @@ import {
   CLINIC_MODULE_TABS,
   type ClinicTab,
 } from "@/lib/clinicShortcutSets";
+import { chartOrderKey, orderMayRepeat, withoutRepeatedOrders } from "@/utils/catalogSearch";
 import { rxLinesMissingFrom } from "@/lib/dittoRxLines";
 import { diagnosisTaken, sameDiagnosis } from "@/lib/diagnosisIdentity";
 import { splitStoppedRxLines, stoppedRxLabels } from "@/utils/catalogRx";
@@ -917,8 +918,14 @@ export function ClinicOutpatientPage() {
   const addRxLines = useCallback(
     (lines: RxLine[]) => {
       if (!lines.length) return;
+      const { kept, skipped } = withoutRepeatedOrders(currentRx, lines);
+      if (skipped.length) {
+        const names = skipped.filter(Boolean).slice(0, 3).join("\u3001");
+        setActionError(`\u300c${names}\u300d\u5df2\u7d93\u6709\u4e86\uff0c\u6aa2\u9a57\u548c\u8655\u7f6e\u540c\u4e00\u7b46\u770b\u8a3a\u4e0d\u91cd\u8907\u3002`);
+      }
+      if (!kept.length) return;
 
-      for (const line of lines) {
+      for (const line of kept) {
         const collision = allergies.find((a) => {
           const sub = (a.substance || "").toLowerCase().trim();
           const txt = (a.text || "").toLowerCase().trim();
@@ -949,18 +956,19 @@ export function ClinicOutpatientPage() {
       markChartDirty();
       if (apiMode) {
         const base = apiRxOverlay ?? apiCurrentRx ?? [];
-        const cloned = cloneRxLines(lines);
-        // 同一筆可以兩條一樣的藥（例如一條健保、一條自費）
+        const cloned = cloneRxLines(kept);
+        // 同一筆可以兩條一樣的藥（例如一條健保、一條自費）。檢驗和處置不行。
         setApiRxOverlay([...base, ...cloned]);
         return;
       }
-      setMockCurrentRx([...mockCurrentRx, ...lines]);
+      setMockCurrentRx([...mockCurrentRx, ...kept]);
     },
     [
       apiMode,
       apiRxOverlay,
       apiCurrentRx,
       cloneRxLines,
+      currentRx,
       markChartDirty,
       mockCurrentRx,
       setMockCurrentRx,
@@ -1352,7 +1360,7 @@ export function ClinicOutpatientPage() {
         copayCode: saveDraft.copayCode,
         dept: saveDraft.dept || clinicNow.mainDept || "",
         visitDate: currentDate,
-        cardNo: saveDraft.cardNo,
+        cardNo: saveDraft.treatSeq,
         queueNo: selected ? String(selected.queueNumber) : "",
         doctorId: selected?.doctorId || saveDraft.doctor || "",
         diagnoses: displayDiagnoses.map((row) => ({
@@ -1430,7 +1438,7 @@ export function ClinicOutpatientPage() {
       copayCode: saveDraft.copayCode,
       dept: saveDraft.dept || clinic.mainDept || "",
       visitDate: currentDate,
-      cardNo: saveDraft.cardNo,
+      cardNo: saveDraft.treatSeq,
       queueNo: selected ? String(selected.queueNumber) : "",
       doctorId: selected?.doctorId || saveDraft.doctor || "",
       diagnoses: dx,
@@ -3336,6 +3344,23 @@ export function ClinicOutpatientPage() {
                       else setMockCurrentRx(lines);
                     }}
                     onChangeLine={(id, patch) => {
+                      const current = currentRx.find((row) => row.id === id);
+                      if (current) {
+                        const next = { ...current, ...patch };
+                        const key = chartOrderKey(next);
+                        const clash =
+                          !orderMayRepeat(next) &&
+                          Boolean(key) &&
+                          currentRx.some(
+                            (row) => row.id !== id && !orderMayRepeat(row) && chartOrderKey(row) === key,
+                          );
+                        if (clash) {
+                          setActionError(
+                            `\u300c${next.name || next.nhiCode || ""}\u300d\u5df2\u7d93\u6709\u4e86\uff0c\u6aa2\u9a57\u548c\u8655\u7f6e\u540c\u4e00\u7b46\u770b\u8a3a\u4e0d\u91cd\u8907\u3002`,
+                          );
+                          return;
+                        }
+                      }
                       chartDirtyRef.current = true; setSaveSpent(false);
                       const apply = (rows: RxLine[]) => rows.map((l) => (l.id === id ? { ...l, ...patch } : l));
                       if (apiMode) setApiRxOverlay((prev) => apply(prev ?? apiCurrentRx ?? []));

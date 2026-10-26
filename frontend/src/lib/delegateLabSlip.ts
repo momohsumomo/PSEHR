@@ -35,14 +35,29 @@ export type LabSlipInput = {
   fontSizePx?: number;
 };
 
+/** 檢驗單「卡」是四碼就醫序號（0010、W012），不是十二碼健保卡號。 */
+export function labCardSeq(raw: string): string {
+  const text = String(raw || "").trim().toUpperCase();
+  if (!text || text === "\u2014" || text === "-") return "";
+  if (text.length >= 4 && /^[A-Z][A-Z0-9]{3}/.test(text)) return text.slice(0, 4);
+  const digits = text.replace(/\D/g, "");
+  if (!digits) return text.length <= 4 ? text : "";
+  if (digits.length >= 12) return "";
+  return digits.slice(-4).padStart(4, "0");
+}
+
 export function labSlipLines(rows: RxLine[]): LabSlipLine[] {
   const out: LabSlipLine[] = [];
+  const seen = new Set<string>();
   for (const row of rows) {
     const mark = String(row.payMark || "").trim();
     if (!LAB_MARKS.has(mark)) continue;
     const code = String(row.nhiCode || "").trim();
     const name = String(row.name || "").trim();
     if (!code && !name) continue;
+    const key = (code || name).replace(/\s+/g, "").toUpperCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
     const total = row.totalAmount || (row.qty != null && row.qty !== 0 ? String(row.qty) : "1");
     const shown = String(total).replace(/[^\d.]/g, "") || "1";
     out.push({ mark, code, name, total: shown });
@@ -117,7 +132,7 @@ export function buildDelegateLabHtml(input: LabSlipInput): string {
     <div style="text-align:center;font-weight:bold;font-size:${titlePx}px;line-height:1.15;">\u5168\u6c11\u5065\u5eb7\u4fdd\u96aa\u9580\u8a3a\u4ea4\u4ed8\u6aa2\u9a57(\u67e5)\u8655\u65b9\u7b8b(\u6848\u4ef6:${esc(show(input.caseNo))})</div>
     <div>${esc(show(input.clinicName))} &lt;${esc(show(input.clinicCode))}&gt;\u9662\u6240\u5730\u5740:${esc(show(input.address))}</div>
     <div>\u59d3\u540d:${esc(show(input.name))} \u8eab\u5206\u8b49:${esc(show(input.idNo))}/${esc(show(input.sex))}  \u751f\u65e5:${esc(show(rocDots(input.birthday)))}  \u75c5\u6b77\u865f:${esc(show(input.medicalNo))}</div>
-    <div>\u90e8\u865f:(${esc(show(input.copayCode))})\u79d1\u5225:${esc(show(input.dept))} \u5c31\u8a3a\u65e5:${esc(show(rocDots(input.visitDate)))} \u5361:${esc(show(input.cardNo))}\u770b\u8a3a\u865f:(${esc(show(input.queueNo))})</div>
+    <div>\u90e8\u865f:(${esc(show(input.copayCode))})\u79d1\u5225:${esc(show(input.dept))} \u5c31\u8a3a\u65e5:${esc(show(rocDots(input.visitDate)))} \u5361:${esc(show(labCardSeq(input.cardNo)))}\u770b\u8a3a\u865f:(${esc(show(input.queueNo))})</div>
     <div>\u50b7\u75c5\u540d\u7a31:${esc(names.join("\u3001") || "\u2014")}</div>
     <div>\u75be\u75c5\u4ee3\u865f:${esc(codes.join(",") || "\u2014")}${days ? `    (\u7d66\u85e5${esc(days)}\u5929)` : ""}</div>
     <div style="${line}border-bottom:1px solid #000;margin-top:0.4mm;">

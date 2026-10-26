@@ -207,6 +207,8 @@ export function CurrentRxWidget({
       days: next.days,
       qty: next.qty,
       route: next.route,
+      cast: next.cast,
+      typeName: next.typeName,
       totalAmount: next.totalAmount,
       payMark: base.payMark || next.payMark,
       selfPay: base.payMark ? base.selfPay : next.selfPay,

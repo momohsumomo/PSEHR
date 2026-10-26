@@ -48,6 +48,51 @@ export const DRUG_RAIL_SECTION_LABEL: Record<DrugRailSection, string> = {
   材料: "材料",
 };
 
+/** 藥品、材料可以同一張看診出現兩次。檢驗和處置不行。 */
+export function orderMayRepeat(row: {
+  route?: string;
+  cast?: string;
+  typeName?: string;
+  useType?: string;
+  payMark?: string;
+}): boolean {
+  const mark = String(row.payMark || "").trim();
+  if (mark === "\u4ea4" || mark === "\u8f49") return false;
+  const section = drugRailSection(row as CatalogDrug);
+  return section === "\u7528\u85e5" || section === "\u6750\u6599";
+}
+
+export function withoutRepeatedOrders<T extends { route?: string; cast?: string; typeName?: string; useType?: string; payMark?: string; nhiCode?: string; name?: string; shortName?: string }>(
+  existing: T[],
+  incoming: T[],
+): { kept: T[]; skipped: string[] } {
+  const keys = new Set(
+    existing.filter((row) => !orderMayRepeat(row)).map((row) => chartOrderKey(row)).filter(Boolean),
+  );
+  const kept: T[] = [];
+  const skipped: string[] = [];
+  for (const line of incoming) {
+    if (!orderMayRepeat(line)) {
+      const key = chartOrderKey(line);
+      if (key && keys.has(key)) {
+        skipped.push(String(line.name || line.nhiCode || "").trim());
+        continue;
+      }
+      if (key) keys.add(key);
+    }
+    kept.push(line);
+  }
+  return { kept, skipped };
+}
+
+export function chartOrderKey(row: { nhiCode?: string; name?: string; shortName?: string }): string {
+  const code = String(row.nhiCode || "").replace(/\s+/g, "").toUpperCase();
+  if (code && code !== "\u2014") return `c:${code}`;
+  const name = String(row.name || row.shortName || "").replace(/\s+/g, "").toUpperCase();
+  if (!name || name === "\u2014") return "";
+  return `n:${name}`;
+}
+
 export function drugRailSection(drug: CatalogDrug): DrugRailSection {
   const cast = `${drug.cast || ""} ${drug.typeName || ""}`;
   const route = `${drug.route || ""} ${drug.useType || ""}`.toLowerCase();
