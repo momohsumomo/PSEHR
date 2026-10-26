@@ -41,6 +41,7 @@ import { LesionPhotosWidget } from "@/components/clinic/widgets/LesionPhotosWidg
 import { ChiefComplaintWidget } from "@/components/clinic/widgets/ChiefComplaintWidget";
 import { DiagnosesWidget } from "@/components/clinic/widgets/DiagnosesWidget";
 import { CurrentRxWidget } from "@/components/clinic/widgets/CurrentRxWidget";
+import { QualityLabPanel } from "@/components/clinic/QualityLabPanel";
 import {
   ChartContextRail,
   type ChartEditFocus,
@@ -72,7 +73,7 @@ import {
   applyClinicDrugDisplayNames,
   resolvePackageLines,
 } from "@/utils/catalogRx";
-import { cancelRegister, writeVisitToCard, CardReadError, type CardFaultReport, patchEncounterReg, previewVisitCase, fetchStaff, saveReferralSlip, claimChartOpen, releaseChartOpen, CHART_IN_USE } from "@/api/clinicApi";
+import { cancelRegister, writeVisitToCard, CardReadError, type CardFaultReport, patchEncounterReg, previewVisitCase, fetchStaff, fetchQualityLabOrders, saveReferralSlip, claimChartOpen, releaseChartOpen, CHART_IN_USE } from "@/api/clinicApi";
 import { dropChartDraft } from "@/lib/chartDraft";
 import { displayCase, prescriptionDays, prescriptionOrders, storedCase } from "@/lib/caseMark";
 import { ageYearsMonths } from "@/lib/ageLabel";
@@ -322,6 +323,16 @@ export function ClinicOutpatientPage() {
     buildVisitSaveDraft({ selected: null, diagnoses: [], currentRx: [] }),
   );
   const [cardNote, setCardNote] = useState<string | null>(null);
+  const [qualityOrders, setQualityOrders] = useState<Record<string, string>>({ "13017C": "1" });
+  const [qualityAsk, setQualityAsk] = useState<RxLine | null>(null);
+  const [qualityForm, setQualityForm] = useState<RxLine | null>(null);
+  useEffect(() => {
+    void fetchQualityLabOrders().then(setQualityOrders).catch(() => undefined);
+  }, []);
+  useEffect(() => {
+    setQualityAsk(null);
+    setQualityForm(null);
+  }, [selectedEncounterId]);
   const [printNote, setPrintNote] = useState<string | null>(null);
   /** 掛號前確認存檔（F2 找人／F9 讀卡），F3 修改已掛的也開這一頁 */
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -3354,6 +3365,13 @@ export function ClinicOutpatientPage() {
                     onSelectIndex={(i) => {
                       setSelectedRxIndex(i);
                     }}
+                    onQualityLab={(line) => {
+                      const category = qualityOrders[String(line.nhiCode || "").trim().toUpperCase()];
+                      if (!category || !selectedEncounterId) return false;
+                      setQualityAsk(line);
+                      setQualityForm(null);
+                      return true;
+                    }}
                     rxQuery={rxQuery}
                     setRxQuery={setRxQuery}
                   />
@@ -4095,6 +4113,35 @@ export function ClinicOutpatientPage() {
           </div>
         </div>
       )}
+      <QualityLabPanel
+        key={(qualityForm || qualityAsk)?.id || "quality-lab"}
+        ask={qualityAsk}
+        form={qualityForm}
+        encounterId={selectedEncounterId}
+        category={qualityOrders[String((qualityForm || qualityAsk)?.nhiCode || "").trim().toUpperCase()] || "1"}
+        patientName={selected?.patientDisplay || ""}
+        birthday={selected?.birthday || ""}
+        chartNo={selected?.medicalNo || ""}
+        when={selected?.treatDateTime || currentDate || ""}
+        doctors={staffPeople
+          .filter((person) => {
+            const status = String(person.status || "\u5728\u8077");
+            if (status !== "\u5728\u8077" && status !== "active") return false;
+            return /\u91ab\u5e2b|\u9662\u9577|doctor/i.test(String(person.role || ""));
+          })
+          .map((person) => ({ id: person.id, name: person.name }))}
+        doctorId={selected?.doctorId || ""}
+        doctorName={doctorDisplayName(selected?.doctorName, selected?.doctorId)}
+        onYes={() => {
+          setQualityForm(qualityAsk);
+          setQualityAsk(null);
+        }}
+        onNo={() => setQualityAsk(null)}
+        onClose={() => {
+          setQualityAsk(null);
+          setQualityForm(null);
+        }}
+      />
       <DeleteRegisterDialog
         open={deleteOpen}
         busy={deleteBusy}

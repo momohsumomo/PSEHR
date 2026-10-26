@@ -2443,6 +2443,38 @@ export async function saveBackupSettings(body: { dir: string; keep: number }): P
   return request<BackupInfo>(`/maintenance/backup/settings`, { method: "PUT", body: JSON.stringify(body) });
 }
 
+export async function fetchQualityLabOrders(): Promise<Record<string, string>> {
+  const body = await request<{ orders: { code: string; category: string }[] }>("/nhi/v1/quality-lab/orders");
+  const out: Record<string, string> = {};
+  for (const row of body.orders || []) {
+    const code = String(row.code || "").trim().toUpperCase();
+    if (code) out[code] = String(row.category || "1");
+  }
+  return out;
+}
+
+export async function uploadQualityLab(body: {
+  encounterId: string;
+  orderCode: string;
+  orderName: string;
+  result: string;
+  unit: string;
+  refLow: string;
+  refHigh: string;
+  method: string;
+  specimen: string;
+  narrative: string;
+}): Promise<{ id: string; fileName: string }> {
+  return request<{ ok: boolean; id: string; fileName: string }>("/nhi/v1/quality-lab/upload", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export async function fetchDeskJob(id: string): Promise<{ state: string; detail: string }> {
+  return request<{ id: string; state: string; detail: string }>(`/clinic/desk/print/${id}`);
+}
+
 export async function runBackupNow(browserSettings?: Record<string, string | null>): Promise<BackupInfo> {
   return request<BackupInfo>(`/maintenance/backup/run`, {
     method: "POST",

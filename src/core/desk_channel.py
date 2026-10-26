@@ -88,14 +88,18 @@ def enqueue(ip: str, body: dict[str, Any], *, state: str = "queued") -> str:
     feed = str(body.get("feed") or "").strip().lower()
     if feed not in {"portrait", "landscape"}:
         feed = ""
+    kind = str(body.get("kind") or "print").strip() or "print"
     job = {
         "id": job_id,
         "ip": ip,
+        "kind": kind,
         "html": str(body.get("html") or ""),
         "printerName": str(body.get("printerName") or ""),
         "widthMm": body.get("widthMm") or 0,
         "heightMm": body.get("heightMm") or 0,
         "feed": feed,
+        "fileName": str(body.get("fileName") or ""),
+        "fileB64": str(body.get("fileB64") or ""),
         "state": state,
         "detail": "",
         "printer": "",
@@ -115,11 +119,14 @@ def take_jobs(ip: str) -> list[dict[str, Any]]:
         return [
             {
                 "id": job["id"],
+                "kind": job.get("kind") or "print",
                 "html": job["html"],
                 "printerName": job["printerName"],
                 "widthMm": job["widthMm"],
                 "heightMm": job["heightMm"],
                 "feed": job["feed"],
+                "fileName": job.get("fileName") or "",
+                "fileB64": job.get("fileB64") or "",
             }
             for job in rows
         ]
@@ -134,6 +141,7 @@ def finish_job(ip: str, job_id: str, *, ok: bool, printer: str = "", detail: str
         job["printer"] = printer
         job["detail"] = detail[:300]
         job["html"] = ""
+        job["fileB64"] = ""
         return True
 
 

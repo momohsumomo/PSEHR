@@ -55,6 +55,8 @@ type Props = {
   emptyText?: string;
   selectedIndex?: number;
   onSelectIndex?: (index: number) => void;
+  /** Double-click the order name. Return true when this line opens the lab sheet instead of editing. */
+  onQualityLab?: (line: RxLine) => boolean;
   usages?: CatalogUsage[];
   drugs?: CatalogDrug[];
   routes?: string[];
@@ -346,6 +348,7 @@ export function RxGrid({
   emptyText = "\u2014",
   selectedIndex,
   onSelectIndex,
+  onQualityLab,
   usages = [],
   drugs = [],
   routes = DEFAULT_ROUTE_PICKS,
@@ -862,6 +865,15 @@ export function RxGrid({
                         );
                       }}
                       onDoubleClick={(e) => {
+                        if (
+                          (col.key === "name" || col.key === "shortName") &&
+                          onQualityLab?.(line)
+                        ) {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          onSelectIndex?.(rowIdx);
+                          return;
+                        }
                         if (col.key === "bodySite" && !readonly && onChangeLine) {
                           e.preventDefault();
                           e.stopPropagation();

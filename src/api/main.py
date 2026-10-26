@@ -36,6 +36,7 @@ from src.api.routers import (
     outpatient,
     packages,
     patient,
+    quality_lab,
     referral,
     same_day,
     sandbox,
@@ -97,6 +98,7 @@ app.include_router(auth.router)
 app.include_router(nhi.router)
 app.include_router(kiosk.router)
 app.include_router(referral.router)
+app.include_router(quality_lab.router)
 app.include_router(patient.router)
 app.include_router(allergy_intolerance.router)
 app.include_router(encounter.router)

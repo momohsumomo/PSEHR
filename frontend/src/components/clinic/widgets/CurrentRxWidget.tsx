@@ -28,6 +28,7 @@ interface CurrentRxWidgetProps {
   onActivate?: () => void;
   selectedIndex?: number;
   onSelectIndex?: (index: number) => void;
+  onQualityLab?: (line: RxLine) => boolean;
   rxQuery: string;
   setRxQuery: (q: string) => void;
 }
@@ -81,6 +82,7 @@ export function CurrentRxWidget({
   onActivate,
   selectedIndex = -1,
   onSelectIndex,
+  onQualityLab,
   rxQuery,
   setRxQuery,
 }: CurrentRxWidgetProps) {
@@ -282,6 +284,7 @@ export function CurrentRxWidget({
           suggestActive={pickIdx}
           onSuggestActiveChange={setPickIdx}
           onSelectIndex={(i) => setSel(i)}
+          onQualityLab={onQualityLab}
           onChangeLine={handleChangeLine}
           onCommitDraft={(id, suggestIndex, patch) => {
             const d = drafts.find((x) => x.id === id);

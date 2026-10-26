@@ -945,6 +945,79 @@ public class PsehrTrustAll : ICertificatePolicy {
   Write-Log "printer list on 5310"
 }
 
+function Find-CloudEiiDll {
+  $override = [Environment]::GetEnvironmentVariable("NHI_CNHI_DLL")
+  $candidates = @()
+  if ($override) { $candidates += $override }
+  foreach ($dir in @("C:\NHI", "C:\NHI\NHIEII", "Z:\SC\DLL", "Z:\SC")) {
+    $candidates += (Join-Path $dir "cnhi_eiiapi.dll")
+  }
+  foreach ($path in $candidates) {
+    if (-not $path -or -not (Test-Path -LiteralPath $path)) { continue }
+    $bytes = [IO.File]::ReadAllBytes($path)
+    $text = [Text.Encoding]::ASCII.GetString($bytes)
+    if ($text.Contains("C:\NHI\SAM\COMX")) { return $path }
+  }
+  return ""
+}
+
+function Invoke-QualityLabJob($job) {
+  $dll = Find-CloudEiiDll
+  if (-not $dll) { return @{ ok = $false; detail = "missing-cloud-dll" } }
+  $name = "$($job.fileName)"
+  if ($name -notmatch '^[A-Za-z0-9]+\.zip$') { return @{ ok = $false; detail = "bad-name" } }
+  $dir = Join-Path $env:LOCALAPPDATA "PSEHR\quality-lab"
+  New-Item -ItemType Directory -Force -Path $dir | Out-Null
+  $zip = Join-Path $dir $name
+  [IO.File]::WriteAllBytes($zip, [Convert]::FromBase64String("$($job.fileB64)"))
+  $ps32 = Join-Path $env:WINDIR "SysWOW64\WindowsPowerShell\v1.0\powershell.exe"
+  if (-not (Test-Path -LiteralPath $ps32)) { return @{ ok = $false; detail = "missing-powershell32" } }
+  $dllDir = Split-Path -Parent $dll
+  $dllLit = $dll.Replace("'", "''")
+  $dirLit = $dllDir.Replace("'", "''")
+  $zipLit = $zip.Replace("'", "''")
+  $script = Join-Path $dir "send.ps1"
+  $lines = @(
+    "`$ErrorActionPreference = 'Stop'",
+    "Set-Location '$dirLit'",
+    "`$env:PATH = '$dirLit;' + `$env:PATH",
+    "Add-Type -TypeDefinition @'",
+    "using System.Runtime.InteropServices;",
+    "using System.Text;",
+    "public class LabUp {",
+    "  [DllImport(@`"$dllLit`", CallingConvention=CallingConvention.StdCall, CharSet=CharSet.Ansi)]",
+    "  public static extern int NHI_SendB(int port, string reader, string file, string typeCode, StringBuilder localId, StringBuilder nhiId);",
+    "}",
+    "'@",
+    "`$local = New-Object System.Text.StringBuilder 64",
+    "`$nhi = New-Object System.Text.StringBuilder 64",
+    "`$code = [LabUp]::NHI_SendB(0, '', '$zipLit', '26', `$local, `$nhi)",
+    "Write-Output ('code=' + `$code)"
+  )
+  $outFile = Join-Path $dir "send.out"
+  $errFile = Join-Path $dir "send.err"
+  if (Test-Path -LiteralPath $outFile) { Remove-Item -LiteralPath $outFile -Force }
+  if (Test-Path -LiteralPath $errFile) { Remove-Item -LiteralPath $errFile -Force }
+  [IO.File]::WriteAllText($script, ($lines -join "`r`n"), (New-Object System.Text.UTF8Encoding $false))
+  $proc = Start-Process -FilePath $ps32 -ArgumentList @("-NoProfile", "-ExecutionPolicy", "Bypass", "-File", $script) -PassThru -WindowStyle Hidden -RedirectStandardOutput $outFile -RedirectStandardError $errFile
+  if (-not $proc.WaitForExit(70000)) {
+    try { $proc.Kill() } catch {}
+    return @{ ok = $false; detail = "timeout" }
+  }
+  $text = ""
+  if (Test-Path -LiteralPath $outFile) { $text = [IO.File]::ReadAllText($outFile) }
+  $code = $null
+  foreach ($line in ($text -split "`n")) {
+    if ($line.StartsWith("code=")) {
+      $parsed = 0
+      if ([int]::TryParse($line.Substring(5).Trim(), [ref]$parsed)) { $code = $parsed }
+    }
+  }
+  if ($code -eq 0) { return @{ ok = $true; detail = "sent"; code = 0 } }
+  if ($null -eq $code) { return @{ ok = $false; detail = "no-code"; code = $proc.ExitCode } }
+  return @{ ok = $false; detail = "eii-$code"; code = $code }
+}
+
 function Start-DeskLoop {
   Stop-OldAgent
   $mutex = New-Object System.Threading.Mutex($false, "Local\PSEHR-desk-agent")
@@ -988,8 +1061,12 @@ function Start-DeskLoop {
             foreach ($job in @($pending.jobs)) {
               if (-not $job -or -not $job.id) { continue }
               try {
-                Invoke-OnePrint $job
-                $done = @{ ok = $true; printer = "$($job.printerName)" } | ConvertTo-Json -Compress
+                if ("$($job.kind)" -eq "quality-lab") {
+                  $done = Invoke-QualityLabJob $job | ConvertTo-Json -Compress
+                } else {
+                  Invoke-OnePrint $job
+                  $done = @{ ok = $true; printer = "$($job.printerName)" } | ConvertTo-Json -Compress
+                }
                 Invoke-DeskJson ("http://{0}:3010/api/clinic/desk/jobs/{1}" -f $ip, $job.id) "POST" $done | Out-Null
               } catch {
                 $fail = @{ ok = $false; detail = $_.Exception.Message } | ConvertTo-Json -Compress
