@@ -1,27 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { fetchDeskJob, uploadQualityLab } from "@/api/clinicApi";
+import { saveQualityLab } from "@/api/clinicApi";
 import { HIS_FONT } from "@/lib/hisTheme";
 import type { RxLine } from "@/mocks/clinicMocks";
-
-function explain(detail: string): string {
-  if (detail === "sent") return "\u5df2\u9001\u51fa\u3002\u7f72\u65b9\u9084\u8981\u518d\u6aa2\u6838\u3002";
-  if (detail === "missing-cloud-dll") return "\u9019\u53f0\u627e\u4e0d\u5230\u96f2\u7aef\u7248\u4e0a\u50b3\u7a0b\u5f0f\uff0c\u6c92\u6709\u9001\u51fa\u3002";
-  if (detail === "missing-powershell32") return "\u9019\u53f0\u6c92\u6709 32 \u4f4d\u5143 PowerShell\uff0c\u6c92\u6709\u9001\u51fa\u3002";
-  if (detail === "bad-name") return "\u6a94\u540d\u4e0d\u5c0d\uff0c\u6c92\u6709\u9001\u51fa\u3002";
-  if (detail === "no-code") return "\u4e0a\u50b3\u7a0b\u5f0f\u6c92\u6709\u56de\u4ee3\u78bc\u3002";
-  if (detail === "timeout") return "\u4e0a\u50b3\u7b49\u592a\u4e45\uff0c\u6c92\u6709\u9001\u51fa\u3002";
-  if (detail.startsWith("eii-")) return `\u4e0a\u50b3\u7a0b\u5f0f\u56de ${detail.slice(4)}\u3002`;
-  return detail || "\u4e0a\u50b3\u6c92\u6709\u5b8c\u6210\u3002";
-}
-
-async function waitJob(id: string): Promise<string> {
-  for (let i = 0; i < 40; i += 1) {
-    const view = await fetchDeskJob(id);
-    if (view.state === "done" || view.state === "error") return explain(view.detail || "");
-    await new Promise((resolve) => window.setTimeout(resolve, 1000));
-  }
-  return "\u4e0a\u50b3\u7b49\u592a\u4e45\uff0c\u8acb\u7a0d\u5f8c\u518d\u770b\u9019\u53f0\u6709\u6c92\u6709\u9001\u51fa\u3002";
-}
 
 function rocParts(raw: string): { y: string; m: string; d: string } | null {
   const text = (raw || "").trim();
@@ -66,7 +46,7 @@ export function QualityLabPanel({
   ask,
   form,
   encounterId,
-  category,
+  category: _category,
   patientName,
   birthday,
   chartNo,
@@ -103,8 +83,8 @@ export function QualityLabPanel({
   const fileRef = useRef<HTMLInputElement>(null);
   const imagesRef = useRef(images);
   imagesRef.current = images;
+  void _category;
   const line = form;
-  const narrativeKind = category === "2" || category === "3";
   const people = useMemo(() => {
     const rows = doctors.filter((person) => person.name.trim());
     const name = doctorName.trim();
@@ -156,21 +136,23 @@ export function QualityLabPanel({
     setBusy(true);
     setNote("");
     try {
-      const queued = await uploadQualityLab({
+      const doctorName = people.find((person) => (person.id || person.name) === physician)?.name || physician;
+      const reportOn = day ? `${day.y}${day.m}${day.d}` : "";
+      await saveQualityLab({
         encounterId,
         orderCode: line.nhiCode,
         orderName: line.name || line.nhiCode,
-        result: narrativeKind ? "" : report,
-        unit: "",
-        refLow: "",
-        refHigh: "",
-        method: "",
-        specimen: "",
-        narrative: narrativeKind ? report : "",
+        report,
+        patientName,
+        medicalNo: chartNo,
+        birthday,
+        doctor: doctorName,
+        slipNo: slip,
+        reportOn,
       });
-      setNote(await waitJob(queued.id));
+      setNote("\u5df2\u5b58\u9032\u4e3b\u6a5f\u3002\u9019\u53f0\u4e0d\u4e0a\u50b3\u3002\u8acb\u5230\u6c92\u6709\u958b 6.0 \u7684\u96fb\u8166\uff0c\u958b\u555f 5.1.7 \u5f8c\u7528\u8ad6\u8cea\u4e0a\u50b3\u5de5\u5177\u9001\u51fa\u3002");
     } catch (err) {
-      setNote(err instanceof Error ? err.message : "\u4e0a\u50b3\u6c92\u6709\u5b8c\u6210\u3002");
+      setNote(err instanceof Error ? err.message : "\u6c92\u6709\u5b58\u9032\u4e3b\u6a5f\u3002");
     } finally {
       setBusy(false);
     }
@@ -288,7 +270,7 @@ export function QualityLabPanel({
                 disabled={busy || !report.trim()}
                 onClick={() => void send()}
               >
-                {busy ? "\u4e0a\u50b3\u4e2d" : "\u5b58\u6a94"}
+                {busy ? "\u5b58\u6a94\u4e2d" : "\u5b58\u6a94"}
               </button>
               <button type="button" className="border border-[#808080] bg-[#E8E8E8] px-1 py-2 text-xs" onClick={onClose}>
                 {"\u96e2\u958b"}

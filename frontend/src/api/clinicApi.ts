@@ -2453,19 +2453,19 @@ export async function fetchQualityLabOrders(): Promise<Record<string, string>> {
   return out;
 }
 
-export async function uploadQualityLab(body: {
+export async function saveQualityLab(body: {
   encounterId: string;
   orderCode: string;
   orderName: string;
-  result: string;
-  unit: string;
-  refLow: string;
-  refHigh: string;
-  method: string;
-  specimen: string;
-  narrative: string;
-}): Promise<{ id: string; fileName: string }> {
-  return request<{ ok: boolean; id: string; fileName: string }>("/nhi/v1/quality-lab/upload", {
+  report: string;
+  patientName: string;
+  medicalNo: string;
+  birthday: string;
+  doctor: string;
+  slipNo: string;
+  reportOn: string;
+}): Promise<{ id: string; status: string }> {
+  return request<{ ok: boolean; id: string; status: string }>("/nhi/v1/quality-lab/save", {
     method: "POST",
     body: JSON.stringify(body),
   });
