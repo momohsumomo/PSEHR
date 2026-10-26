@@ -75,30 +75,57 @@ export function ChiefComplaintWidget({
     return () => watch.disconnect();
   }, [ccText, suffix]);
 
-  function clickLandsOnText(area: HTMLTextAreaElement, clientX: number, clientY: number): boolean {
-  const text = area.value;
-  const pos = area.selectionStart ?? text.length;
-  const lineStart = text.lastIndexOf("\n", Math.max(0, pos - 1)) + 1;
-  const breakAt = text.indexOf("\n", pos);
-  const line = text.slice(lineStart, breakAt === -1 ? text.length : breakAt);
-  const cs = window.getComputedStyle(area);
-  const canvas = document.createElement("canvas");
-  const ctx = canvas.getContext("2d");
-  if (!ctx) return true;
-  ctx.font = `${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`;
-  const padL = Number.parseFloat(cs.paddingLeft) || 0;
-  const padT = Number.parseFloat(cs.paddingTop) || 0;
-  const fontPx = Number.parseFloat(cs.fontSize) || 16;
-  const lineHeight = Number.parseFloat(cs.lineHeight) || fontPx * 1.25;
-  const rect = area.getBoundingClientRect();
-  const x = clientX - rect.left - padL + area.scrollLeft;
-  const y = clientY - rect.top - padT + area.scrollTop;
-  const lineIndex = text.slice(0, lineStart).split("\n").length - 1;
-  if (y < lineIndex * lineHeight - 2 || y > (lineIndex + 1) * lineHeight + 2) return false;
-  const width = ctx.measureText(line).width;
-  const slop = Math.max(ctx.measureText("\u5b57").width, fontPx);
-  return x >= -2 && x <= width + slop;
-}
+  /** 點在某一行右側空白：接那一行。只有點在最後一行下面，才另起一行。 */
+  function placeCaretFromClick(clientX: number, clientY: number) {
+    const area = areaRef.current;
+    const pre = preRef.current;
+    if (!area) return;
+    const text = area.value;
+    if (!text.trim()) return;
+    const node = pre?.firstChild;
+    if (!node || node.nodeType !== Node.TEXT_NODE || !node.textContent) return;
+    const cs = window.getComputedStyle(area);
+    const fontPx = Number.parseFloat(cs.fontSize) || 16;
+    const lineHeight = Number.parseFloat(cs.lineHeight) || fontPx * 1.25;
+    const parts = text.split("\n");
+    let offset = 0;
+    let lastBottom = area.getBoundingClientRect().top;
+    for (let i = 0; i < parts.length; i += 1) {
+      const line = parts[i];
+      const start = offset;
+      const end = start + line.length;
+      const range = document.createRange();
+      const at = Math.min(start, node.textContent.length);
+      const to = Math.min(end, node.textContent.length);
+      range.setStart(node, at);
+      range.setEnd(node, Math.max(at, to));
+      const rects = Array.from(range.getClientRects());
+      const top = rects.length ? rects[0].top : lastBottom;
+      const bottom = rects.length ? rects[rects.length - 1].top + lineHeight : top + lineHeight;
+      lastBottom = Math.max(lastBottom, bottom);
+      if (clientY >= top - 2 && clientY < bottom + 2) {
+        const row = rects.find((r) => clientY >= r.top - 2 && clientY < r.top + lineHeight + 2);
+        const rowRight = row ? row.right : rects.length ? rects[rects.length - 1].right : 0;
+        if (clientX > rowRight + 2) {
+          area.selectionStart = end;
+          area.selectionEnd = end;
+          setCaret(end);
+        }
+        return;
+      }
+      offset = end + 1;
+    }
+    if (clientY < lastBottom - 2) return;
+    const next = text.endsWith("\n") ? text : `${text}\n`;
+    setCcText(next);
+    setCaret(next.length);
+    window.requestAnimationFrame(() => {
+      area.selectionStart = next.length;
+      area.selectionEnd = next.length;
+      area.scrollTop = area.scrollHeight;
+      syncMirror();
+    });
+  }
 
 const textStyle = {
     ...hisTextareaStyle,
@@ -156,20 +183,7 @@ const textStyle = {
           onScroll={() => syncMirror()}
           onSelect={(e) => setCaret(e.currentTarget.selectionStart ?? 0)}
           onClick={(e) => {
-            const area = areaRef.current;
-            if (!area) return;
-            const text = area.value;
-            if (!text.trim()) return;
-            if (clickLandsOnText(area, e.clientX, e.clientY)) return;
-            const next = text.endsWith("\n") ? text : `${text}\n`;
-            setCcText(next);
-            setCaret(next.length);
-            window.requestAnimationFrame(() => {
-              area.selectionStart = next.length;
-              area.selectionEnd = next.length;
-              area.scrollTop = area.scrollHeight;
-              syncMirror();
-            });
+            placeCaretFromClick(e.clientX, e.clientY);
           }}
           onKeyDown={(e) => {
             if (e.key !== "Tab" || e.shiftKey || !suffix) return;

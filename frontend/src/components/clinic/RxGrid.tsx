@@ -714,7 +714,7 @@ export function RxGrid({
                 style={{
                   background: sel ? "#E5F6E3" : rowIdx % 2 ? "#FFFFE0" : HIS.rxBg,
                   color: "#000",
-                  minHeight: 30,
+                  height: 30,
                   outline: sel ? "1px solid #808000" : undefined,
                   outlineOffset: -1,
                 }}
@@ -819,6 +819,8 @@ export function RxGrid({
                       }`}
                       style={{
                         borderColor: "#A0A0A0",
+                        height: 30,
+                        verticalAlign: "middle",
                         fontSize: measure ? 20 : primary ? HIS.fs.body : HIS.fs.secondary,
                         fontWeight: measure || primary || pay ? 700 : 400,
                         maxWidth: measure ? undefined : col.widthCh ? `${col.widthCh}ch` : undefined,
@@ -939,7 +941,7 @@ export function RxGrid({
                           className="w-full border-0 bg-transparent px-0 outline-none"
                           autoFocus
                           style={{
-                            height: measure ? 26 : 18,
+                            height: 26,
                             fontSize: measure ? 20 : primary ? HIS.fs.body : HIS.fs.secondary,
                             fontFamily: HIS_FONT,
                             fontWeight: measure || primary ? 700 : 400,
@@ -1103,7 +1105,9 @@ export function RxGrid({
                           }}
                         />
                       ) : (
-                        cellValue(line, col.key, usages)
+                        <span className="block" style={{ minHeight: 26, lineHeight: "26px" }}>
+                          {cellValue(line, col.key, usages) || "\u00a0"}
+                        </span>
                       )}
                     </td>
                   );
