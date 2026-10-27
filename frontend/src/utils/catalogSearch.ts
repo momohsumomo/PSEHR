@@ -37,18 +37,35 @@ function rankDrugs(pool: CatalogDrug[], query: string, limit: number): CatalogDr
     .map((x) => x.d);
 }
 
-/** 右欄大項。檢驗、處置、藥品依這個順序；特材排在藥品後面。 */
-export const DRUG_RAIL_SECTIONS = ["檢查", "處置", "用藥", "材料"] as const;
+/** 右欄大項。檢驗、治療、藥品依這個順序；特材、行政費用排在後面。 */
+export const DRUG_RAIL_SECTIONS = ["檢查", "處置", "用藥", "材料", "行政"] as const;
 export type DrugRailSection = (typeof DRUG_RAIL_SECTIONS)[number];
 
 export const DRUG_RAIL_SECTION_LABEL: Record<DrugRailSection, string> = {
   檢查: "檢驗",
-  處置: "處置",
+  處置: "治療",
   用藥: "藥品",
   材料: "材料",
+  行政: "行政費用",
 };
 
-/** 藥品、材料可以同一張看診出現兩次。檢驗和處置不行。 */
+/** 藥品主檔沒有行政分類。名稱或虛擬醫令一看就是費用的，才歸這裡。 */
+const ADMIN_FEE_TEXT =
+  /行政|診療費|診察費|藥事費|藥事服務|診斷書|證明書|轉診費|工本費|掛號費|複印|運費|寄件費/;
+
+function adminFeeText(drug: {
+  name?: string;
+  customName?: string;
+  shortName?: string;
+  alias?: string;
+  generic?: string;
+}): string {
+  return [drug.customName, drug.name, drug.shortName, drug.alias, drug.generic]
+    .filter(Boolean)
+    .join(" ");
+}
+
+/** 藥品、材料可以同一張看診出現兩次。檢驗、治療、行政費用不行。 */
 export function orderMayRepeat(row: {
   route?: string;
   cast?: string;
@@ -96,6 +113,7 @@ export function chartOrderKey(row: { nhiCode?: string; name?: string; shortName?
 export function drugRailSection(drug: CatalogDrug): DrugRailSection {
   const cast = `${drug.cast || ""} ${drug.typeName || ""}`;
   const route = `${drug.route || ""} ${drug.useType || ""}`.toLowerCase();
+  if (cast.includes("虛擬") || ADMIN_FEE_TEXT.test(adminFeeText(drug))) return "行政";
   if (cast.includes("檢查") || route.includes("exam")) return "檢查";
   if (
     cast.includes("治療") ||

@@ -5,12 +5,35 @@
 import { useMemo, useState } from "react";
 import type { CatalogDiagnosis, CatalogDrug, CatalogPackage } from "@/types/clinicCatalog";
 import type { DiagnosisRow, RxLine } from "@/mocks/clinicMocks";
-import { browseDiagnoses, browseDrugs, DRUG_RAIL_SECTION_LABEL, drugRailSection } from "@/utils/catalogSearch";
+import {
+  browseDiagnoses,
+  browseDrugs,
+  DRUG_RAIL_SECTION_LABEL,
+  drugRailSection,
+  type DrugRailSection,
+} from "@/utils/catalogSearch";
 import { catalogDrugToRxLine, resolvePackageLines } from "@/utils/catalogRx";
 import { HIS, HIS_FONT } from "@/lib/hisTheme";
 
 export type ChartEditFocus = "cc" | "dx" | "rx" | "history";
 export type ChartRailMode = "common" | "full" | "oral";
+
+/** 病名淺粉紅、治療淺綠、檢驗淺藍、藥名淺黃、行政費用更淺的綠。材料另用淺杏。 */
+const RAIL_ROW_BG: Record<DrugRailSection, string> = {
+  檢查: "#D2EAFF",
+  處置: "#C8EFC4",
+  用藥: "#FFF4C2",
+  材料: "#F6E4D2",
+  行政: "#D2ECD0",
+};
+const RAIL_HEAD_BG: Record<DrugRailSection, string> = {
+  檢查: "#A9D4F7",
+  處置: "#9ED99A",
+  用藥: "#F0DC8A",
+  材料: "#E4CDB4",
+  行政: "#B5DFAE",
+};
+const DX_ROW_BG = "#FFD4E5";
 
 type Props = {
   focus: ChartEditFocus;
@@ -199,10 +222,11 @@ export function ChartContextRail({
           ))}
         {listFocus === "dx" &&
           dxHits.map((d, i) => (
-            <li key={`${d.icd10}-${d.text}-${i}`} className="border-b" style={{ borderColor: "#D0E8D0" }}>
+            <li key={`${d.icd10}-${d.text}-${i}`} className="border-b" style={{ borderColor: "#F0C0D0", background: DX_ROW_BG }}>
               <button
                 type="button"
-                className="flex w-full gap-1 px-1 py-0.5 text-left hover:bg-[#FFFF80]"
+                className="flex w-full gap-1 px-1 py-0.5 text-left hover:shadow-[inset_0_0_0_2px_#404040]"
+                style={{ background: DX_ROW_BG }}
                 title="雙擊帶入"
                 onDoubleClick={() => pickDx(d)}
               >
@@ -216,19 +240,21 @@ export function ChartContextRail({
           drugHits.map((d, i) => {
             const section = drugRailSection(d);
             const showSection = railMode !== "oral" && (i === 0 || drugRailSection(drugHits[i - 1]) !== section);
+            const rowBg = RAIL_ROW_BG[section];
             return (
-              <li key={`${section}-${d.nhiCode}-${d.drugNo}-${i}`} className="border-b" style={{ borderColor: "#E0E8F0" }}>
+              <li key={`${section}-${d.nhiCode}-${d.drugNo}-${i}`} className="border-b" style={{ borderColor: "#E0E8F0", background: rowBg }}>
                 {showSection ? (
                   <div
                     className="sticky top-0 px-1 py-1 text-[15px] font-bold text-[#003C74]"
-                    style={{ background: "#E0DCD0" }}
+                    style={{ background: RAIL_HEAD_BG[section] }}
                   >
                     {DRUG_RAIL_SECTION_LABEL[section]}
                   </div>
                 ) : null}
                 <button
                   type="button"
-                  className="flex w-full gap-1 px-1 py-0.5 text-left hover:bg-[#FFFF80]"
+                  className="flex w-full gap-1 px-1 py-0.5 text-left hover:shadow-[inset_0_0_0_2px_#404040]"
+                  style={{ background: rowBg }}
                   title="雙擊帶入"
                   onDoubleClick={() => {
                     onAddRx([catalogDrugToRxLine(d)]);
