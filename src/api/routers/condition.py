@@ -79,6 +79,13 @@ def update_condition(condition_id: str, body: ConditionBody) -> dict[str, Any]:
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     payload["id"] = condition_id
+    home = _store().condition_encounter_id(condition_id)
+    incoming = ""
+    enc = payload.get("encounter")
+    if isinstance(enc, dict) and enc.get("reference"):
+        incoming = str(enc["reference"]).split("/")[-1]
+    if home and incoming and home != incoming:
+        raise HTTPException(status_code=409, detail="這筆病名屬於另一筆看診，不能改掛到這次")
     # Lean import keeps the diagnosis on condition_index without a cache row.
     # Saving the chart must create that row. Do not 404, and do not delete it.
     updated = repo.update_resource("Condition", condition_id, payload)

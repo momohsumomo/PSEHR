@@ -2294,6 +2294,20 @@ class SqliteShadowStore(ShadowStore):
             ).fetchall()
         return [json.loads(r[0]) for r in rows]
 
+    def condition_encounter_id(self, condition_id: str) -> str | None:
+        cid = (condition_id or "").split("/")[-1]
+        if not cid:
+            return None
+        with self._connect() as conn:
+            row = conn.execute(
+                "SELECT encounter_id FROM condition_index WHERE resource_id = ?",
+                (cid,),
+            ).fetchone()
+        if row is None:
+            return None
+        home = str(row[0] or "").strip()
+        return home or None
+
     def list_conditions(
         self,
         patient_id: str | None = None,

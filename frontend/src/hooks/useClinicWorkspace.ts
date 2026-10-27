@@ -1211,7 +1211,14 @@ export function useClinicWorkspace(options?: {
       if (chiefComplaint.trim()) {
         await persistChiefComplaint(chiefComplaint, assessment);
       }
-      const keptDx = dxRows.filter((dx) => dx.id && !isDraftId(dx.id)).map((dx) => dx.id as string);
+      const ownDxIds = new Set(
+        (workspaceLive?.diagnoses ?? [])
+          .map((dx) => dx.id)
+          .filter((id): id is string => Boolean(id) && !isDraftId(id)),
+      );
+      const keptDx = dxRows
+        .filter((dx) => dx.id && !isDraftId(dx.id) && ownDxIds.has(dx.id))
+        .map((dx) => dx.id as string);
       await retainQuiet(selectedEncounterId, { conditionIds: keptDx });
       if (patientId) {
         for (const old of workspaceLive?.diagnoses ?? []) {
@@ -1231,7 +1238,7 @@ export function useClinicWorkspace(options?: {
       );
       for (const dx of [...dxRows].reverse()) {
         const key = `${dx.icd10}|${dx.text}`;
-        if (!isDraftId(dx.id) && dx.id && patientId) {
+        if (!isDraftId(dx.id) && dx.id && patientId && ownDxIds.has(dx.id)) {
           await updateConditionResource(dx.id, {
             subject: { reference: `Patient/${patientId}` },
             encounter: { reference: `Encounter/${selectedEncounterId}` },

@@ -1591,7 +1591,8 @@ export function ClinicOutpatientPage() {
   const dittoDx = useCallback(
     (rows: DiagnosisRow[], force?: boolean) => {
       if (!force && !prefs.dittoDx) return;
-      for (const row of rows) addDiagnosis(row);
+      // 轉入是另寫一筆。沿用原來的病名 id 會在存檔時把上一筆看診的病名改掛過來。
+      for (const row of rows) addDiagnosis({ ...row, id: undefined });
     },
     [addDiagnosis, prefs.dittoDx],
   );
