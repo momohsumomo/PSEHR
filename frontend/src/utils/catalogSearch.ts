@@ -133,6 +133,69 @@ export function searchDrugs(drugs: CatalogDrug[], query: string, limit = 12): Ca
   return rankDrugs(pool, query, limit);
 }
 
+function codePoints(value: string): string[] {
+  return Array.from(value);
+}
+
+/** 整段只差一個字（多、少或換一個）。 */
+function withinOneEdit(a: string[], b: string[]): boolean {
+  if (a.length === b.length && a.every((ch, i) => ch === b[i])) return true;
+  if (Math.abs(a.length - b.length) > 1) return false;
+  let i = 0;
+  let j = 0;
+  let edits = 0;
+  while (i < a.length && j < b.length) {
+    if (a[i] === b[j]) {
+      i += 1;
+      j += 1;
+      continue;
+    }
+    edits += 1;
+    if (edits > 1) return false;
+    if (a.length === b.length) {
+      i += 1;
+      j += 1;
+    } else if (a.length > b.length) i += 1;
+    else j += 1;
+  }
+  if (i < a.length || j < b.length) edits += 1;
+  return edits <= 1;
+}
+
+/** 名稱裡有這段，或只錯一個字。給調閱病歷的輸入提示用。 */
+export function looseLabelHits(labels: string[], query: string, limit = 8): string[] {
+  const q = query.trim();
+  if (q.length < 2) return [];
+  const needle = codePoints(q.toLowerCase());
+  const out: string[] = [];
+  const seen = new Set<string>();
+  const widths = [needle.length - 1, needle.length, needle.length + 1].filter((w) => w >= 2);
+  for (const raw of labels) {
+    const label = raw.trim();
+    if (!label || seen.has(label)) continue;
+    const hay = codePoints(label.toLowerCase());
+    const joined = hay.join("");
+    let hit = joined.includes(needle.join(""));
+    if (!hit) {
+      for (const width of widths) {
+        if (hay.length < width) continue;
+        for (let i = 0; i <= hay.length - width; i += 1) {
+          if (withinOneEdit(needle, hay.slice(i, i + width))) {
+            hit = true;
+            break;
+          }
+        }
+        if (hit) break;
+      }
+    }
+    if (!hit) continue;
+    seen.add(label);
+    out.push(label);
+    if (out.length >= limit) break;
+  }
+  return out;
+}
+
 function hasCjk(value: string): boolean {
   return /[\u3400-\u9fff]/.test(value);
 }

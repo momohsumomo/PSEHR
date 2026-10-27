@@ -1186,22 +1186,39 @@ class SqliteShadowStore(ShadowStore):
             token = like(cc_text)
             params.extend([token, token, token])
         if dx_text:
-            where.append(
-                "EXISTS (SELECT 1 FROM condition_index ci WHERE ci.encounter_id = ei.resource_id "
-                "AND (IFNULL(ci.summary_text, '') LIKE ? ESCAPE '\\' "
-                "OR IFNULL(ci.icd10_code, '') LIKE ? ESCAPE '\\' "
-                "OR IFNULL(ci.nhi_icd10_code, '') LIKE ? ESCAPE '\\'))"
-            )
-            token = like(dx_text)
-            params.extend([token, token, token])
+            parts: list[str] = []
+            for token in [piece.strip() for piece in dx_text.split("|") if piece.strip()][:12]:
+                parts.append(
+                    "(IFNULL(ci.summary_text, '') LIKE ? ESCAPE '\\' "
+                    "OR IFNULL(ci.icd10_code, '') LIKE ? ESCAPE '\\' "
+                    "OR REPLACE(IFNULL(ci.icd10_code, ''), '.', '') LIKE ? ESCAPE '\\' "
+                    "OR IFNULL(ci.nhi_icd10_code, '') LIKE ? ESCAPE '\\' "
+                    "OR REPLACE(IFNULL(ci.nhi_icd10_code, ''), '.', '') LIKE ? ESCAPE '\\')"
+                )
+                plain = like(token)
+                compact = like(token.replace(".", ""))
+                params.extend([plain, plain, compact, plain, compact])
+            if parts:
+                where.append(
+                    "EXISTS (SELECT 1 FROM condition_index ci WHERE ci.encounter_id = ei.resource_id AND ("
+                    + " OR ".join(parts)
+                    + "))"
+                )
         if drug_text:
-            where.append(
-                "EXISTS (SELECT 1 FROM medication_request_index mi WHERE mi.encounter_id = ei.resource_id "
-                "AND (IFNULL(mi.drug_text, '') LIKE ? ESCAPE '\\' "
-                "OR IFNULL(mi.nhi_code, '') LIKE ? ESCAPE '\\'))"
-            )
-            token = like(drug_text)
-            params.extend([token, token])
+            parts = []
+            for token in [piece.strip() for piece in drug_text.split("|") if piece.strip()][:12]:
+                parts.append(
+                    "(IFNULL(mi.drug_text, '') LIKE ? ESCAPE '\\' "
+                    "OR IFNULL(mi.nhi_code, '') LIKE ? ESCAPE '\\')"
+                )
+                plain = like(token)
+                params.extend([plain, plain])
+            if parts:
+                where.append(
+                    "EXISTS (SELECT 1 FROM medication_request_index mi WHERE mi.encounter_id = ei.resource_id AND ("
+                    + " OR ".join(parts)
+                    + "))"
+                )
         sql = f"SELECT ei.resource_id FROM encounter_index ei WHERE {' AND '.join(where)}"
         with self._connect() as conn:
             return {str(row[0]) for row in conn.execute(sql, tuple(params)) if row[0]}

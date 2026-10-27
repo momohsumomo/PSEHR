@@ -18,6 +18,10 @@ import { takeClaimsEmr } from "@/lib/claimsEmr";
 import { useEscLayer } from "@/hooks/useEscLayer";
 import { useListNav } from "@/hooks/useListNav";
 import { compareEmrRows, type SortDir, type SortKey } from "@/lib/emrLookupSort";
+import { isFirstVisit } from "@/lib/visitListMark";
+import { useClinicCatalog } from "@/hooks/useClinicCatalog";
+import { looseLabelHits, searchDiagnoses, searchDrugs } from "@/utils/catalogSearch";
+import type { CatalogDiagnosis, CatalogDrug } from "@/types/clinicCatalog";
 
 /**
  * 對醫聖「調閱病歷系統」：
@@ -32,6 +36,12 @@ function shiftFromSlot(slot: string | undefined): string {
   return "晚上";
 }
 
+const EMR_FONT = 16;
+const EMR_HINT = 14;
+const EMR_FIELD_H = 34;
+const EMR_ROW_H = 34;
+const EMR_GAP = 8;
+
 type DxRow = { indexMeta?: Record<string, unknown> };
 type MedRow = {
   resource?: {
@@ -44,9 +54,11 @@ type MedRow = {
 function EmrDxList({
   rows,
   fallback,
+  fontSize = EMR_FONT,
 }: {
   rows: DxRow[];
   fallback: string;
+  fontSize?: number;
 }) {
   const [sel, setSel] = useState(0);
   const listRef = useRef<HTMLDivElement>(null);
@@ -60,11 +72,11 @@ function EmrDxList({
   });
   if (!rows.length) {
     return (
-      <div className="border border-[#808080] bg-[#E8FFE8] px-2 py-1 text-slate-600">{fallback}</div>
+      <div className="border border-[#808080] bg-[#E8FFE8] text-slate-600" style={{ fontSize, padding: EMR_GAP }}>{fallback}</div>
     );
   }
   return (
-    <div ref={listRef} tabIndex={0} data-list-scope="" className="border border-[#808080] bg-white outline-none">
+    <div ref={listRef} tabIndex={0} data-list-scope="" className="border border-[#808080] bg-white outline-none" style={{ fontSize }}>
       {rows.map((d, i) => {
         const meta = d.indexMeta || {};
         const code = String(meta.icd10Code || meta.nhiIcd10Code || "");
@@ -74,10 +86,11 @@ function EmrDxList({
           <div
             key={i}
             data-list-row=""
-            className="cursor-pointer border-b border-[#D0D0D0] px-2 py-0.5"
+            className="cursor-pointer border-b border-[#D0D0D0]"
             style={{
               background: active ? HIS.rowSelected : HIS.dxBg,
               color: "#000",
+              padding: `${EMR_GAP / 2}px ${EMR_GAP}px`,
             }}
             onClick={() => setSel(i)}
           >
@@ -92,9 +105,11 @@ function EmrDxList({
 function EmrRxTable({
   medList,
   loading,
+  fontSize = EMR_FONT,
 }: {
   medList: MedRow[];
   loading: boolean;
+  fontSize?: number;
 }) {
   const [sel, setSel] = useState(0);
   const listRef = useRef<HTMLDivElement>(null);
@@ -108,20 +123,20 @@ function EmrRxTable({
   });
   return (
     <div ref={listRef} tabIndex={0} data-list-scope="" className="outline-none">
-    <table className="w-full border-collapse text-[11px]">
+    <table className="w-full border-collapse" style={{ fontSize }}>
       <thead style={{ background: HIS.headerBg }}>
         <tr>
-          <th className="border border-[#808080] px-1 text-left">處置名稱</th>
-          <th className="border border-[#808080] px-1 text-left">健保碼</th>
-          <th className="border border-[#808080] px-1">數量</th>
-          <th className="border border-[#808080] px-1">用法</th>
-          <th className="border border-[#808080] px-1">天數</th>
+          <th className="border border-[#808080] text-left" style={{ padding: EMR_GAP }}>處置名稱</th>
+          <th className="border border-[#808080] text-left" style={{ padding: EMR_GAP }}>健保碼</th>
+          <th className="border border-[#808080]" style={{ padding: EMR_GAP }}>數量</th>
+          <th className="border border-[#808080]" style={{ padding: EMR_GAP }}>用法</th>
+          <th className="border border-[#808080]" style={{ padding: EMR_GAP }}>天數</th>
         </tr>
       </thead>
       <tbody>
         {medList.length === 0 && (
           <tr>
-            <td className="border border-[#D0D0A0] bg-[#FFF8C0] px-2 py-2 text-slate-500" colSpan={5}>
+            <td className="border border-[#D0D0A0] bg-[#FFF8C0] text-slate-500" style={{ padding: EMR_GAP }} colSpan={5}>
               {loading ? "載入中…" : "— 無處方明細"}
             </td>
           </tr>
@@ -145,13 +160,13 @@ function EmrRxTable({
               }}
               onClick={() => setSel(i)}
             >
-              <td className="border border-[#D0D0A0] px-1">{name}</td>
-              <td className="border border-[#D0D0A0] px-1 font-mono">{code}</td>
-              <td className="border border-[#D0D0A0] px-1 text-center">
+              <td className="border border-[#D0D0A0]" style={{ padding: EMR_GAP }}>{name}</td>
+              <td className="border border-[#D0D0A0] font-mono" style={{ padding: EMR_GAP }}>{code}</td>
+              <td className="border border-[#D0D0A0] text-center" style={{ padding: EMR_GAP }}>
                 {meta.quantity ?? "—"}
               </td>
-              <td className="border border-[#D0D0A0] px-1">{usage}</td>
-              <td className="border border-[#D0D0A0] px-1 text-center">
+              <td className="border border-[#D0D0A0]" style={{ padding: EMR_GAP }}>{usage}</td>
+              <td className="border border-[#D0D0A0] text-center" style={{ padding: EMR_GAP }}>
                 {meta.daysSupply ?? "—"}
               </td>
             </tr>
@@ -166,20 +181,203 @@ function EmrRxTable({
 const chrome = HIS.chrome;
 const border = HIS.chromeDark;
 const inputCls =
-  "border border-[#808080] bg-white px-1 py-0 leading-none outline-none focus:border-[#000080]";
+  "border border-[#808080] bg-white px-2 outline-none focus:border-[#000080]";
 const lab = "font-bold";
 
 const labStyle: CSSProperties = {
-  fontSize: HIS.fs.secondary,
+  fontSize: EMR_FONT,
   color: HIS.labelText,
   fontFamily: HIS_FONT,
+  lineHeight: 1.35,
 };
 
 const inputStyle: CSSProperties = {
-  fontSize: HIS.fs.body,
-  height: HIS.row.formField,
+  fontSize: EMR_FONT,
+  height: EMR_FIELD_H,
   fontFamily: HIS_FONT,
+  paddingLeft: EMR_GAP,
+  paddingRight: EMR_GAP,
 };
+
+const hintStyle: CSSProperties = {
+  fontSize: EMR_HINT,
+  lineHeight: 1.35,
+};
+
+type VisitKind = "全部" | "初診" | "複診";
+type SuggestHit = { label: string; token: string };
+
+function uniqueHits(rows: SuggestHit[], limit: number): SuggestHit[] {
+  const seen = new Set<string>();
+  const out: SuggestHit[] = [];
+  for (const row of rows) {
+    const label = row.label.trim();
+    if (!label || seen.has(label)) continue;
+    seen.add(label);
+    out.push({ label, token: row.token });
+    if (out.length >= limit) break;
+  }
+  return out;
+}
+
+function dxSuggest(items: CatalogDiagnosis[], query: string): SuggestHit[] {
+  const q = query.trim();
+  if (!q || (q.length < 2 && !/[\u3400-\u9fff]/.test(q))) return [];
+  const ranked = searchDiagnoses(items, q, 8).map((d) => {
+    const zh = (d.nameZh || "").trim();
+    const text = (d.text || "").trim();
+    const en = (d.nameEn || "").trim();
+    const code = (d.nhiIcd10 || d.icd10 || "").replace(/\./g, "").toUpperCase();
+    const label = zh || text || en || code;
+    const token = [...new Set([code, en, text, zh].filter(Boolean))].join("|");
+    return { label, token };
+  });
+  const hits = uniqueHits(ranked, 8);
+  if (hits.length) return hits;
+  const labels = items.map((d) => (d.nameZh || d.text || "").trim()).filter(Boolean);
+  const byLabel = new Map(items.map((d) => [(d.nameZh || d.text || "").trim(), d]));
+  return uniqueHits(
+    looseLabelHits(labels, q, 8).map((label) => {
+      const d = byLabel.get(label);
+      const code = (d?.nhiIcd10 || d?.icd10 || "").replace(/\./g, "").toUpperCase();
+      const text = (d?.text || d?.nameEn || "").trim();
+      return { label, token: [...new Set([code, text, label].filter(Boolean))].join("|") };
+    }),
+    8,
+  );
+}
+
+function drugSuggest(items: CatalogDrug[], query: string): SuggestHit[] {
+  const q = query.trim();
+  if (!q || (q.length < 2 && !/[\u3400-\u9fff]/.test(q))) return [];
+  const ranked = searchDrugs(items, q, 8).map((d) => {
+    const custom = (d.customName || "").trim();
+    const trade = (d.name || "").trim();
+    const short = (d.shortName || "").trim();
+    const code = (d.nhiCode || "").trim().toUpperCase();
+    const label = custom || trade || short || code;
+    return { label, token: [...new Set([custom, trade, short, code].filter(Boolean))].join("|") };
+  });
+  const hits = uniqueHits(ranked, 8);
+  if (hits.length) return hits;
+  const labels = items.map((d) => (d.customName || d.name || "").trim()).filter(Boolean);
+  const byLabel = new Map(items.map((d) => [(d.customName || d.name || "").trim(), d]));
+  return uniqueHits(
+    looseLabelHits(labels, q, 8).map((label) => {
+      const code = (byLabel.get(label)?.nhiCode || "").trim().toUpperCase();
+      return { label, token: [...new Set([label, code].filter(Boolean))].join("|") };
+    }),
+    8,
+  );
+}
+
+function searchToken(text: string, hits: SuggestHit[]): string {
+  const q = text.trim();
+  if (!q) return "";
+  const exact = hits.find(
+    (hit) => hit.label === q || hit.token.split("|").some((part) => part.toLowerCase() === q.toLowerCase()),
+  );
+  if (exact) return exact.token;
+  const contained = hits.filter((hit) => hit.label.includes(q));
+  if (contained.length) {
+    const tokens = new Set<string>([q]);
+    for (const hit of contained) {
+      for (const part of hit.token.split("|")) if (part) tokens.add(part);
+    }
+    return [...tokens].slice(0, 12).join("|");
+  }
+  if (hits.length === 1) return hits[0].token;
+  return q;
+}
+
+function SuggestField({
+  value,
+  onChange,
+  hits,
+  style,
+  placeholder,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  hits: SuggestHit[];
+  style: CSSProperties;
+  placeholder: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const [hi, setHi] = useState(0);
+  const boxRef = useRef<HTMLDivElement>(null);
+  useEffect(() => setHi(0), [value]);
+  useEffect(() => {
+    const onDoc = (event: MouseEvent) => {
+      if (!boxRef.current?.contains(event.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", onDoc);
+    return () => document.removeEventListener("mousedown", onDoc);
+  }, []);
+  const show = open && value.trim().length > 0 && hits.length > 0;
+  return (
+    <div ref={boxRef} className="relative min-w-0">
+      <input
+        className={`${inputCls} w-full`}
+        style={style}
+        value={value}
+        placeholder={placeholder}
+        onChange={(e) => {
+          onChange(e.target.value);
+          setOpen(true);
+        }}
+        onFocus={() => setOpen(true)}
+        onBlur={() => {
+          if (hits.length === 1 && value.trim() && value.trim() !== hits[0].label) onChange(hits[0].label);
+        }}
+        onKeyDown={(e) => {
+          if (!show) return;
+          if (e.key === "ArrowDown") {
+            e.preventDefault();
+            setHi((i) => Math.min(hits.length - 1, i + 1));
+          } else if (e.key === "ArrowUp") {
+            e.preventDefault();
+            setHi((i) => Math.max(0, i - 1));
+          } else if (e.key === "Enter") {
+            e.preventDefault();
+            onChange(hits[Math.min(hi, hits.length - 1)].label);
+            setOpen(false);
+          } else if (e.key === "Escape") {
+            e.preventDefault();
+            setOpen(false);
+          }
+        }}
+      />
+      {show ? (
+        <ul
+          className="absolute left-0 right-0 z-30 overflow-auto border border-[#404040] bg-white shadow"
+          style={{ top: "100%", maxHeight: EMR_ROW_H * 8 }}
+        >
+          {hits.map((hit, i) => (
+            <li key={hit.label}>
+              <button
+                type="button"
+                className="block w-full text-left font-bold"
+                style={{
+                  background: i === hi ? "#FFFF80" : "#fff",
+                  fontSize: EMR_FONT,
+                  padding: `${EMR_GAP / 2}px ${EMR_GAP}px`,
+                }}
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  onChange(hit.label);
+                  setOpen(false);
+                }}
+              >
+                {hit.label}
+              </button>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+    </div>
+  );
+}
 
 function feeInRange(value: number, fromRaw: string, toRaw: string): boolean {
   const from = Number(fromRaw);
@@ -213,6 +411,7 @@ type EmrHold = {
   ccText: string;
   dxText: string;
   drugText: string;
+  visitKind: VisitKind;
   sameDay: boolean;
   hasImage: boolean;
   txFeeFrom: string;
@@ -258,6 +457,8 @@ export function EmrLookupPage() {
   const [ccText, setCcText] = useState("");
   const [dxText, setDxText] = useState("");
   const [drugText, setDrugText] = useState("");
+  const [visitKind, setVisitKind] = useState<VisitKind>("全部");
+  const { catalog } = useClinicCatalog();
   const [status, setStatus] = useState("請設看診日起訖後按確定。");
   const [busy, setBusy] = useState(false);
   const [resultOpen, setResultOpen] = useState(false);
@@ -338,6 +539,7 @@ export function EmrLookupPage() {
     setCcText(hold.ccText);
     setDxText(hold.dxText);
     setDrugText(hold.drugText);
+    setVisitKind(hold.visitKind || "全部");
     setTxFeeFrom(hold.txFeeFrom);
     setTxFeeTo(hold.txFeeTo);
     setDrugFeeFrom(hold.drugFeeFrom);
@@ -434,8 +636,8 @@ export function EmrLookupPage() {
         hasImage: opts.hasImage,
         sameDay: opts.sameDay,
         cc: ccText,
-        dx: dxText,
-        drug: drugText,
+        dx: searchToken(dxText, dxSuggest(catalog.diagnoses, dxText)),
+        drug: searchToken(drugText, drugSuggest(catalog.drugs, drugText)),
       });
       let list = bundle.entry;
 
@@ -451,6 +653,8 @@ export function EmrLookupPage() {
         const drugFee = Number(meta?.drugFee || 0);
         return feeInRange(treat, txFeeFrom, txFeeTo) && feeInRange(drugFee, drugFeeFrom, drugFeeTo);
       });
+      if (visitKind === "初診") list = list.filter((e) => isFirstVisit(e.queueMeta?.regCc));
+      if (visitKind === "複診") list = list.filter((e) => !isFirstVisit(e.queueMeta?.regCc));
 
       const qFrom = isoToRoc(bundle.dateFrom) || fromNorm;
       const qTo = isoToRoc(bundle.dateTo) || toNorm;
@@ -526,6 +730,7 @@ export function EmrLookupPage() {
       ccText,
       dxText,
       drugText,
+      visitKind,
       sameDay: opts.sameDay,
       hasImage: opts.hasImage,
       txFeeFrom,
@@ -568,7 +773,7 @@ export function EmrLookupPage() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [resultOpen, finderOpen, selected, dateFrom, dateTo, queriedFrom, queriedTo, shift, room, patientId, patientKey, patientLabel, ccText, dxText, drugText, opts.sameDay, opts.hasImage, txFeeFrom, txFeeTo, drugFeeFrom, drugFeeTo, rows, status, sortKey, sortDir, navigate]);
+  }, [resultOpen, finderOpen, selected, dateFrom, dateTo, queriedFrom, queriedTo, shift, room, patientId, patientKey, patientLabel, ccText, dxText, drugText, visitKind, opts.sameDay, opts.hasImage, txFeeFrom, txFeeTo, drugFeeFrom, drugFeeTo, rows, status, sortKey, sortDir, navigate]);
 
   const qm = selected?.queueMeta;
   const visitIso = String(qm?.encounterDate || detail?.visitDate || "");
@@ -578,11 +783,12 @@ export function EmrLookupPage() {
   return (
     <div
       className="flex h-screen flex-col overflow-hidden"
-      style={{ background: "#808080", fontFamily: HIS_FONT, fontSize: HIS.fs.body }}
+      style={{ background: "#808080", fontFamily: HIS_FONT, fontSize: EMR_FONT }}
     >
       <div
-        className="relative mx-auto my-2 flex min-h-0 w-[min(960px,98vw)] flex-1 flex-col overflow-hidden border-2"
+        className="relative mx-auto flex min-h-0 w-[min(1100px,98vw)] flex-1 flex-col overflow-hidden border-2"
         style={{
+          margin: EMR_GAP,
           borderColor: "#404040",
           background: chrome,
           boxShadow: "4px 4px 0 rgba(0,0,0,.35)",
@@ -590,11 +796,13 @@ export function EmrLookupPage() {
         }}
       >
         <HisWinTitle
+          fontSize={EMR_FONT}
           title="調閱病歷系統"
           trailing={
             <button
               type="button"
-              className="border border-white/40 bg-white/15 px-1 text-[10px] font-bold hover:bg-white/25"
+              className="border border-white/40 bg-white/15 font-bold hover:bg-white/25"
+              style={{ fontSize: EMR_HINT, padding: `${EMR_GAP / 2}px ${EMR_GAP}px` }}
               onClick={() => navigate("/")}
             >
               X
@@ -602,27 +810,27 @@ export function EmrLookupPage() {
           }
         />
 
-        <div className="min-h-0 flex-1 space-y-1 overflow-auto p-1.5">
-          <div className="grid grid-cols-2 gap-2 lg:grid-cols-[1.4fr_1fr]">
-            <div className="space-y-1">
-              <div className="grid grid-cols-[5rem_1fr_5rem_1fr] items-center gap-1">
+        <div className="min-h-0 flex-1 overflow-auto" style={{ padding: EMR_GAP, display: "flex", flexDirection: "column", gap: EMR_GAP }}>
+          <div className="grid grid-cols-2 lg:grid-cols-[1.4fr_1fr]" style={{ gap: EMR_GAP }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: EMR_GAP }}>
+              <div className="grid grid-cols-[6.5rem_1fr_6.5rem_1fr] items-center" style={{ gap: EMR_GAP }}>
                 <span className={lab} style={labStyle}>
                   起始日期
                 </span>
-                <HisRocDateField value={dateFrom} onChange={onDateFromChange} />
+                <HisRocDateField value={dateFrom} onChange={onDateFromChange} fontSize={EMR_FONT} height={EMR_FIELD_H} />
                 <span className={lab} style={labStyle}>
                   截止日期
                 </span>
-                <HisRocDateField value={dateTo} onChange={onDateToChange} />
-                <span className="col-span-4 text-[10px] text-[#404080]">
+                <HisRocDateField value={dateTo} onChange={onDateToChange} fontSize={EMR_FONT} height={EMR_FIELD_H} />
+                <span className="col-span-4 text-[#404080]" style={hintStyle}>
                   預設今天；改日期後一定要再按「確定／查詢」。截止不可早於起始。
                 </span>
               </div>
-              <div className="flex flex-wrap items-center gap-1">
+              <div className="flex flex-wrap items-center" style={{ gap: EMR_GAP }}>
                 <button
                   type="button"
-                  className="border px-1.5 py-0.5 text-[11px] font-bold"
-                  style={{ borderColor: border, background: chrome }}
+                  className="border font-bold"
+                  style={{ borderColor: border, background: chrome, fontSize: EMR_HINT, padding: `${EMR_GAP / 2}px ${EMR_GAP}px` }}
                   onClick={() => {
                     const d = todayRoc();
                     setDateFrom(d);
@@ -634,8 +842,8 @@ export function EmrLookupPage() {
                 </button>
                 <button
                   type="button"
-                  className="border px-1.5 py-0.5 text-[11px] font-bold"
-                  style={{ borderColor: border, background: chrome }}
+                  className="border font-bold"
+                  style={{ borderColor: border, background: chrome, fontSize: EMR_HINT, padding: `${EMR_GAP / 2}px ${EMR_GAP}px` }}
                   onClick={() => {
                     const y = addDaysRoc(todayRoc(), -1);
                     setDateFrom(y);
@@ -645,9 +853,9 @@ export function EmrLookupPage() {
                 >
                   昨日
                 </button>
-                <span className="text-[11px] text-[#404040]">改日期後必須再按確定；10/5 與 10/6 筆數應不同</span>
+                <span className="text-[#404040]" style={hintStyle}>改日期後必須再按確定；10/5 與 10/6 筆數應不同</span>
               </div>
-              <div className="grid grid-cols-[5rem_1fr_5rem_1fr] items-center gap-1">
+              <div className="grid grid-cols-[6.5rem_1fr_6.5rem_1fr] items-center" style={{ gap: EMR_GAP }}>
                 <span className={lab} style={labStyle}>
                   費用年月
                 </span>
@@ -664,11 +872,11 @@ export function EmrLookupPage() {
                 <input className={inputCls} style={inputStyle} value={room} onChange={(e) => setRoom(e.target.value)} />
               </div>
 
-              <fieldset className="border p-1" style={{ borderColor: border }}>
+              <fieldset className="border" style={{ borderColor: border, padding: EMR_GAP }}>
                 <legend className={`px-1 ${lab}`} style={labStyle}>
                   條件選擇
                 </legend>
-                <div className="mb-1 flex items-center gap-1">
+                <div className="flex items-center" style={{ gap: EMR_GAP, marginBottom: EMR_GAP }}>
                   <span className={lab} style={labStyle}>
                     病歷號生日
                   </span>
@@ -719,8 +927,8 @@ export function EmrLookupPage() {
                   />
                   <button
                     type="button"
-                    className="border px-1 font-bold"
-                    style={{ borderColor: border, background: "#C0C0C0", fontSize: HIS.fs.secondary }}
+                    className="border font-bold"
+                    style={{ borderColor: border, background: "#C0C0C0", fontSize: EMR_FONT, height: EMR_FIELD_H, padding: `0 ${EMR_GAP}px` }}
                     onClick={() => setFinderOpen(true)}
                     title="找人"
                   >
@@ -734,15 +942,27 @@ export function EmrLookupPage() {
                     placeholder="選定病患（可略）"
                   />
                 </div>
-                <div className="mb-1 grid grid-cols-[5.5rem_1fr] items-center gap-1">
+                <div className="grid grid-cols-[6.5rem_1fr] items-center" style={{ gap: EMR_GAP, marginBottom: EMR_GAP }}>
                   <span className={lab} style={labStyle}>{"\u4e3b\u8ff0\u5167\u542b\u5b57"}</span>
                   <input className={inputCls} style={inputStyle} value={ccText} onChange={(e) => setCcText(e.target.value)} />
                   <span className={lab} style={labStyle}>{"\u8a3a\u65b7\u75c5\u540d"}</span>
-                  <input className={inputCls} style={inputStyle} value={dxText} onChange={(e) => setDxText(e.target.value)} />
+                  <SuggestField
+                    value={dxText}
+                    onChange={setDxText}
+                    hits={dxSuggest(catalog.diagnoses, dxText)}
+                    style={inputStyle}
+                    placeholder="打幾個字就會帶出病名"
+                  />
                   <span className={lab} style={labStyle}>{"\u85e5\u54c1\u540d\u7a31"}</span>
-                  <input className={inputCls} style={inputStyle} value={drugText} onChange={(e) => setDrugText(e.target.value)} />
+                  <SuggestField
+                    value={drugText}
+                    onChange={setDrugText}
+                    hits={drugSuggest(catalog.drugs, drugText)}
+                    style={inputStyle}
+                    placeholder="打幾個字就會帶出藥名"
+                  />
                 </div>
-                <div className="grid grid-cols-[auto_1fr_auto_1fr] items-center gap-1">
+                <div className="grid grid-cols-[auto_1fr_auto_1fr] items-center" style={{ gap: EMR_GAP }}>
                   <span className={lab} style={labStyle}>
                     診療費
                   </span>
@@ -785,8 +1005,8 @@ export function EmrLookupPage() {
               </fieldset>
             </div>
 
-            <div className="space-y-1">
-              <div className="grid grid-cols-[5rem_1fr] gap-1">
+            <div>
+              <div className="grid grid-cols-[6.5rem_1fr] items-center" style={{ gap: EMR_GAP }}>
                 <span className={lab} style={labStyle}>
                   就醫科別
                 </span>
@@ -828,6 +1048,19 @@ export function EmrLookupPage() {
                   <option>全部</option>
                 </select>
                 <span className={lab} style={labStyle}>
+                  初複診
+                </span>
+                <select
+                  className={inputCls}
+                  style={inputStyle}
+                  value={visitKind}
+                  onChange={(e) => setVisitKind(e.target.value as VisitKind)}
+                >
+                  <option>全部</option>
+                  <option>初診</option>
+                  <option>複診</option>
+                </select>
+                <span className={lab} style={labStyle}>
                   時段
                 </span>
                 <select
@@ -856,11 +1089,11 @@ export function EmrLookupPage() {
             </div>
           </div>
 
-          <fieldset className="border p-1" style={{ borderColor: border }}>
+          <fieldset className="border" style={{ borderColor: border, padding: EMR_GAP }}>
             <legend className={`px-1 ${lab}`} style={labStyle}>
               調閱選項
             </legend>
-            <div className="flex flex-wrap gap-x-4 gap-y-0.5">
+            <div className="flex flex-wrap" style={{ columnGap: EMR_GAP * 2, rowGap: EMR_GAP }}>
               {(
                 [
                   ["sameDay", "含當日掛號"],
@@ -871,6 +1104,7 @@ export function EmrLookupPage() {
                   <input
                     type="checkbox"
                     checked={opts[k]}
+                    style={{ width: EMR_FONT, height: EMR_FONT }}
                     onChange={(e) => setOpts((o) => ({ ...o, [k]: e.target.checked }))}
                   />
                   {t}
@@ -879,20 +1113,20 @@ export function EmrLookupPage() {
             </div>
           </fieldset>
 
-          <div className="flex justify-end gap-2 pt-1">
+          <div className="flex justify-end" style={{ gap: EMR_GAP }}>
             <button
               type="button"
               disabled={busy}
-              className="flex min-w-[6rem] items-center justify-center gap-1 border px-3 py-2 text-[13px] font-bold disabled:opacity-50"
-              style={{ borderColor: border, background: chrome }}
+              className="flex min-w-[7rem] items-center justify-center border font-bold disabled:opacity-50"
+              style={{ borderColor: border, background: chrome, fontSize: EMR_FONT, gap: EMR_GAP, padding: `${EMR_GAP}px ${EMR_GAP * 2}px` }}
               onClick={() => void runConfirm()}
             >
               <span className="text-sky-700">✓</span> 確定
             </button>
             <button
               type="button"
-              className="flex min-w-[6rem] items-center justify-center gap-1 border px-3 py-2 text-[13px] font-bold"
-              style={{ borderColor: border, background: chrome }}
+              className="flex min-w-[7rem] items-center justify-center border font-bold"
+              style={{ borderColor: border, background: chrome, fontSize: EMR_FONT, gap: EMR_GAP, padding: `${EMR_GAP}px ${EMR_GAP * 2}px` }}
               onClick={() => navigate("/")}
             >
               <span className="text-red-600">✕</span> 離開
@@ -901,8 +1135,8 @@ export function EmrLookupPage() {
         </div>
 
         <div
-          className="shrink-0 border-t px-2 py-0.5"
-          style={{ borderColor: HIS.chromeBorder, background: HIS.chrome, fontSize: HIS.fs.secondary }}
+          className="shrink-0 border-t"
+          style={{ borderColor: HIS.chromeBorder, background: HIS.chrome, fontSize: EMR_HINT, padding: `${EMR_GAP / 2}px ${EMR_GAP}px` }}
         >
           {status}
         </div>
@@ -914,30 +1148,34 @@ export function EmrLookupPage() {
           style={{ fontFamily: HIS_FONT, background: HIS.chrome, borderColor: "#404040" }}
         >
           <HisWinTitle
+            fontSize={EMR_FONT}
             title="F2 調閱病歷"
             trailing={
-              <div className="flex flex-wrap items-center gap-1 font-normal">
-                <span style={{ fontSize: HIS.fs.tertiary }}>
+              <div className="flex flex-wrap items-center font-normal" style={{ gap: EMR_GAP }}>
+                <span style={{ fontSize: EMR_HINT }}>
                   {queriedFrom || "—"}～{queriedTo || "—"}（{sortedRows.length}）
                 </span>
                 <button
                   type="button"
                   disabled={busy}
-                  className="border border-white/40 bg-white/15 px-1 text-[10px] font-bold disabled:opacity-50"
+                  className="border border-white/40 bg-white/15 font-bold disabled:opacity-50"
+                  style={{ fontSize: EMR_HINT, padding: `${EMR_GAP / 2}px ${EMR_GAP}px` }}
                   onClick={() => void runConfirm()}
                 >
                   {busy ? "…" : "查詢"}
                 </button>
                 <button
                   type="button"
-                  className="border border-white/40 bg-white/15 px-1 text-[10px] font-bold"
+                  className="border border-white/40 bg-white/15 font-bold"
+                  style={{ fontSize: EMR_HINT, padding: `${EMR_GAP / 2}px ${EMR_GAP}px` }}
                   onClick={() => setResultOpen(false)}
                 >
                   條件
                 </button>
                 <button
                   type="button"
-                  className="border border-white/40 bg-white/15 px-1 text-[10px] font-bold"
+                  className="border border-white/40 bg-white/15 font-bold"
+                  style={{ fontSize: EMR_HINT, padding: `${EMR_GAP / 2}px ${EMR_GAP}px` }}
                   onClick={() => navigate("/")}
                 >
                   X
@@ -946,17 +1184,17 @@ export function EmrLookupPage() {
             }
           />
           <div
-            className="flex shrink-0 flex-wrap items-center gap-2 border-b px-2 py-0.5"
-            style={{ borderColor: HIS.chromeBorder, background: HIS.chrome, fontSize: HIS.fs.secondary }}
+            className="flex shrink-0 flex-wrap items-center border-b"
+            style={{ borderColor: HIS.chromeBorder, background: HIS.chrome, fontSize: EMR_FONT, gap: EMR_GAP, padding: `${EMR_GAP / 2}px ${EMR_GAP}px` }}
           >
             <span className="font-bold">起</span>
-            <HisRocDateField value={dateFrom} onChange={onDateFromChange} />
+            <HisRocDateField value={dateFrom} onChange={onDateFromChange} fontSize={EMR_FONT} height={EMR_FIELD_H} />
             <span className="font-bold">迄</span>
-            <HisRocDateField value={dateTo} onChange={onDateToChange} />
+            <HisRocDateField value={dateTo} onChange={onDateToChange} fontSize={EMR_FONT} height={EMR_FIELD_H} />
             <button
               type="button"
-              className="border px-1.5 py-0.5 font-bold"
-              style={{ borderColor: HIS.chromeBorder, background: "#D4D0C8" }}
+              className="border font-bold"
+              style={{ borderColor: HIS.chromeBorder, background: "#D4D0C8", fontSize: EMR_FONT, padding: `${EMR_GAP / 2}px ${EMR_GAP}px` }}
               onClick={() => {
                 setPatientId(null);
                 setPatientKey("");
@@ -968,14 +1206,15 @@ export function EmrLookupPage() {
           </div>
 
           {patientLabel ? (
-            <div className="shrink-0 bg-[#FFF8C0] px-2 py-0.5 text-[11px] text-[#404000]">
+            <div className="shrink-0 bg-[#FFF8C0] text-[#404000]" style={{ fontSize: EMR_HINT, padding: `${EMR_GAP / 2}px ${EMR_GAP}px` }}>
               {"\u5df2\u7be9\u75c5\u60a3\uff1a"}
               {patientLabel}
             </div>
           ) : null}
-          {ccText.trim() || dxText.trim() || drugText.trim() || opts.hasImage || !opts.sameDay ? (
-            <div className="shrink-0 bg-[#FFF8C0] px-2 py-0.5 text-[11px] text-[#404000]">
+          {ccText.trim() || dxText.trim() || drugText.trim() || visitKind !== "全部" || opts.hasImage || !opts.sameDay ? (
+            <div className="shrink-0 bg-[#FFF8C0] text-[#404000]" style={{ fontSize: EMR_HINT, padding: `${EMR_GAP / 2}px ${EMR_GAP}px` }}>
               {[
+                visitKind !== "全部" ? visitKind : "",
                 ccText.trim() ? `\u4e3b\u8ff0\u300c${ccText.trim()}\u300d` : "",
                 dxText.trim() ? `\u8a3a\u65b7\u300c${dxText.trim()}\u300d` : "",
                 drugText.trim() ? `\u85e5\u300c${drugText.trim()}\u300d` : "",
@@ -989,13 +1228,13 @@ export function EmrLookupPage() {
 
           <div className="flex min-h-0 flex-1">
             <div
-              className="flex min-h-0 w-[min(22rem,38%)] flex-col border-r"
+              className="flex min-h-0 w-[min(28rem,42%)] flex-col border-r"
               style={{ borderColor: HIS.chromeBorder, background: HIS.chrome }}
             >
               <div ref={resultListRef} className="min-h-0 flex-1 overflow-auto bg-white">
-                <table className="w-full border-collapse" style={{ fontSize: HIS.fs.secondary }}>
+                <table className="w-full border-collapse" style={{ fontSize: EMR_FONT }}>
                   <thead className="sticky top-0 z-10" style={{ background: HIS.headerBg }}>
-                    <tr style={{ height: HIS.row.listHeader }}>
+                    <tr style={{ height: EMR_ROW_H }}>
                       {(
                         [
                           ["name", "姓名", "text-left"],
@@ -1011,10 +1250,11 @@ export function EmrLookupPage() {
                         return (
                           <th
                             key={key}
-                            className={`cursor-pointer select-none border px-1 py-0.5 ${align}`}
+                            className={`cursor-pointer select-none border ${align}`}
                             style={{
                               borderColor: HIS.chromeBorder,
                               background: active ? "#C8D8F0" : undefined,
+                              padding: `${EMR_GAP / 2}px ${EMR_GAP}px`,
                             }}
                             title="按一下依這個欄位排序，再按一次反過來"
                             onClick={() => chooseSort(key)}
@@ -1036,7 +1276,7 @@ export function EmrLookupPage() {
                           data-list-row=""
                           className="cursor-pointer"
                           style={{
-                            height: HIS.row.list,
+                            height: EMR_ROW_H,
                             background: active ? HIS.rowSelected : idx % 2 ? HIS.rowAlt : "#fff",
                             color: "#000",
                           }}
@@ -1046,25 +1286,25 @@ export function EmrLookupPage() {
                             enterChart(row);
                           }}
                         >
-                          <td className="border px-1 py-0.5 font-bold" style={{ borderColor: "#B0B0B0" }}>
+                          <td className="border font-bold" style={{ borderColor: "#B0B0B0", padding: `${EMR_GAP / 2}px ${EMR_GAP}px` }}>
                             {q.patientDisplay || "—"}
                           </td>
-                          <td className="border border-[#A0C0D0] px-1 py-0.5 font-mono">
+                          <td className="border border-[#A0C0D0] font-mono" style={{ padding: `${EMR_GAP / 2}px ${EMR_GAP}px` }}>
                             {isoToRoc(String(q.encounterDate || "")) || "—"}
                           </td>
-                          <td className="border border-[#A0C0D0] px-1 py-0.5 text-right font-mono">
+                          <td className="border border-[#A0C0D0] text-right font-mono" style={{ padding: `${EMR_GAP / 2}px ${EMR_GAP}px` }}>
                             {q.queueNumber ?? "—"}
                           </td>
-                          <td className="border border-[#A0C0D0] px-1 py-0.5 font-mono">
+                          <td className="border border-[#A0C0D0] font-mono" style={{ padding: `${EMR_GAP / 2}px ${EMR_GAP}px` }}>
                             {q.caseNo || "—"}
                           </td>
-                          <td className="border border-[#A0C0D0] px-1 py-0.5 text-center">
+                          <td className="border border-[#A0C0D0] text-center" style={{ padding: `${EMR_GAP / 2}px ${EMR_GAP}px` }}>
                             {q.cardWritten ? "✓" : ""}
                           </td>
-                          <td className="border border-[#A0C0D0] px-1 py-0.5 text-center">
+                          <td className="border border-[#A0C0D0] text-center" style={{ padding: `${EMR_GAP / 2}px ${EMR_GAP}px` }}>
                             {String(q.afterCheck) === "2" ? "✓" : ""}
                           </td>
-                          <td className="border border-[#A0C0D0] px-1 py-0.5 text-center">
+                          <td className="border border-[#A0C0D0] text-center" style={{ padding: `${EMR_GAP / 2}px ${EMR_GAP}px` }}>
                             {q.queueStatus === "finished" || q.fhirStatus === "finished" ? "✓" : ""}
                           </td>
                         </tr>
@@ -1073,7 +1313,7 @@ export function EmrLookupPage() {
                   </tbody>
                 </table>
                 {!sortedRows.length && !busy && (
-                  <p className="px-3 py-8 text-center text-xs text-slate-700">
+                  <p className="text-center text-slate-700" style={{ fontSize: EMR_FONT, padding: `${EMR_GAP * 4}px ${EMR_GAP * 2}px` }}>
                     {queriedFrom
                       ? `${queriedFrom}～${queriedTo} 無就醫。請改上方日期後按「查詢」。`
                       : "尚無結果。"}
@@ -1083,14 +1323,14 @@ export function EmrLookupPage() {
             </div>
 
             <div
-              className="flex min-h-0 min-w-0 flex-1 flex-col overflow-auto p-1.5"
-              style={{ background: HIS.chrome, fontSize: HIS.fs.body }}
+              className="flex min-h-0 min-w-0 flex-1 flex-col overflow-auto"
+              style={{ background: HIS.chrome, fontSize: EMR_FONT, padding: EMR_GAP, display: "flex", flexDirection: "column", gap: EMR_GAP }}
             >
               {!selected ? (
                 <p className="p-4 text-slate-500">請由左欄選一筆。</p>
               ) : (
                 <>
-                  <div className="mb-1 grid grid-cols-2 gap-x-3 gap-y-0.5 border border-[#808080] bg-white p-1 md:grid-cols-3">
+                  <div className="grid grid-cols-2 border border-[#808080] bg-white md:grid-cols-3" style={{ columnGap: EMR_GAP * 2, rowGap: EMR_GAP / 2, padding: EMR_GAP }}>
                     <div>
                       費用年月：
                       <b className="font-mono">{feeYm || feeYmFromIso(visitIso) || "—"}</b>
@@ -1121,17 +1361,18 @@ export function EmrLookupPage() {
                     </div>
                   </div>
 
-                  <div className="mb-1">
-                    <div className="font-bold text-[#004080]">主訴</div>
+                  <div>
+                    <div className="font-bold text-[#004080]" style={{ marginBottom: EMR_GAP / 2 }}>主訴</div>
                     <pre
-                      className="min-h-[3rem] whitespace-pre-wrap border border-[#C08080] bg-[#FFE8E8] p-1 text-[12px]"
+                      className="min-h-[4rem] whitespace-pre-wrap border border-[#C08080] bg-[#FFE8E8]"
+                      style={{ fontSize: EMR_FONT, padding: EMR_GAP }}
                     >
                       {detailLoading ? "載入中…" : detail?.chiefComplaint || qm?.reasonText || "—"}
                     </pre>
                   </div>
 
-                  <div className="mb-1">
-                    <div className="font-bold text-[#004080]">診斷（點列選中）</div>
+                  <div>
+                    <div className="font-bold text-[#004080]" style={{ marginBottom: EMR_GAP / 2 }}>診斷（點列選中）</div>
                     <EmrDxList
                       fallback={
                         qm?.icdCode && qm.icdCode !== "—"
@@ -1143,28 +1384,31 @@ export function EmrLookupPage() {
                   </div>
 
                   <div className="min-h-0 flex-1">
-                    <div className="font-bold text-[#004080]">處方／處置（點列選中）</div>
+                    <div className="font-bold text-[#004080]" style={{ marginBottom: EMR_GAP / 2 }}>處方／處置（點列選中）</div>
                     <EmrRxTable loading={detailLoading} medList={medList} />
                   </div>
 
-                  <div className="mt-1 flex flex-wrap gap-1 border-t border-[#808080] pt-1">
+                  <div className="flex flex-wrap border-t border-[#808080]" style={{ gap: EMR_GAP, paddingTop: EMR_GAP }}>
                     <button
                       type="button"
-                      className="border border-[#808080] bg-[#E0E0E0] px-2 py-0.5 font-bold"
+                      className="border border-[#808080] bg-[#E0E0E0] font-bold"
+                      style={{ fontSize: EMR_FONT, padding: `${EMR_GAP / 2}px ${EMR_GAP}px` }}
                       onClick={() => enterChart()}
                     >
                       進入病歷
                     </button>
                     <button
                       type="button"
-                      className="border border-[#808080] bg-[#E0E0E0] px-2 py-0.5 font-bold"
+                      className="border border-[#808080] bg-[#E0E0E0] font-bold"
+                      style={{ fontSize: EMR_FONT, padding: `${EMR_GAP / 2}px ${EMR_GAP}px` }}
                       onClick={() => setResultOpen(false)}
                     >
                       條件
                     </button>
                     <button
                       type="button"
-                      className="border border-[#808080] bg-[#E0E0E0] px-2 py-0.5 font-bold"
+                      className="border border-[#808080] bg-[#E0E0E0] font-bold"
+                      style={{ fontSize: EMR_FONT, padding: `${EMR_GAP / 2}px ${EMR_GAP}px` }}
                       onClick={() => navigate("/")}
                     >
                       離開

@@ -366,6 +366,8 @@ type FieldProps = {
   value: string;
   onChange: (roc: string) => void;
   className?: string;
+  fontSize?: number;
+  height?: number;
 };
 
 /**
@@ -373,7 +375,13 @@ type FieldProps = {
  * 游標在年 → 右側上下改年；在月 → 改月；沒選或在日 → 改日。
  * 再右邊打開日曆選單（不是瀏覽器內建日期框）。
  */
-export function HisRocDateField({ value, onChange, className = "" }: FieldProps) {
+export function HisRocDateField({
+  value,
+  onChange,
+  className = "",
+  fontSize = HIS.fs.body,
+  height = HIS.row.formField,
+}: FieldProps) {
   const [open, setOpen] = useState(false);
   const [text, setText] = useState(value);
   const [part, setPart] = useState<RocDatePart>("day");
@@ -421,14 +429,21 @@ export function HisRocDateField({ value, onChange, className = "" }: FieldProps)
     });
   };
 
-  const fieldH = HIS.row.formField;
+  const fieldH = height;
+  const spinFs = Math.max(10, Math.round(fontSize * 0.7));
 
   return (
     <span className={`inline-flex items-stretch ${className}`}>
       <input
         ref={inputEl}
-        className="w-[6.5rem] border border-[#808080] bg-white px-1 font-mono outline-none focus:border-[#000080]"
-        style={{ height: fieldH, fontSize: HIS.fs.body, fontFamily: HIS_FONT, color: HIS.inputBlue }}
+        className="border border-[#808080] bg-white px-1 font-mono outline-none focus:border-[#000080]"
+        style={{
+          height: fieldH,
+          width: Math.round(fontSize * 7.2),
+          fontSize,
+          fontFamily: HIS_FONT,
+          color: HIS.inputBlue,
+        }}
         value={text}
         onChange={(e) => {
           setText(e.target.value);
@@ -462,10 +477,11 @@ export function HisRocDateField({ value, onChange, className = "" }: FieldProps)
         placeholder="115.10.05"
         title={"\u5e74.\u6708.\u65e5\uff1b\u6e38\u6a19\u5728\u54ea\u4e00\u6bb5\uff0c\u53f3\u5074\u4e0a\u4e0b\u5c31\u6539\u90a3\u4e00\u6bb5\u3002\u6c92\u9078\u6642\u6539\u65e5\u3002"}
       />
-      <span className="flex flex-col" style={{ width: 16 }}>
+      <span className="flex flex-col" style={{ width: Math.max(16, Math.round(fontSize)) }}>
         <button
           type="button"
-          className="flex flex-1 items-center justify-center border border-l-0 border-[#808080] bg-[#F0F0F0] text-[8px] leading-none"
+          className="flex flex-1 items-center justify-center border border-l-0 border-[#808080] bg-[#F0F0F0] leading-none"
+          style={{ fontSize: spinFs }}
           title={part === "year" ? "\u6539\u5e74" : part === "month" ? "\u6539\u6708" : "\u6539\u65e5"}
           onMouseDown={(e) => {
             e.preventDefault();
@@ -476,7 +492,8 @@ export function HisRocDateField({ value, onChange, className = "" }: FieldProps)
         </button>
         <button
           type="button"
-          className="flex flex-1 items-center justify-center border border-l-0 border-t-0 border-[#808080] bg-[#F0F0F0] text-[8px] leading-none"
+          className="flex flex-1 items-center justify-center border border-l-0 border-t-0 border-[#808080] bg-[#F0F0F0] leading-none"
+          style={{ fontSize: spinFs }}
           title={part === "year" ? "\u6539\u5e74" : part === "month" ? "\u6539\u6708" : "\u6539\u65e5"}
           onMouseDown={(e) => {
             e.preventDefault();
@@ -488,8 +505,8 @@ export function HisRocDateField({ value, onChange, className = "" }: FieldProps)
       </span>
       <button
         type="button"
-        className="border border-l-0 border-[#808080] bg-[#ECE9D8] px-1 text-[11px] font-bold leading-none"
-        style={{ height: fieldH }}
+        className="border border-l-0 border-[#808080] bg-[#ECE9D8] px-1 font-bold leading-none"
+        style={{ height: fieldH, fontSize: spinFs }}
         title={"\u65e5\u671f\u9078\u55ae"}
         onClick={() => setOpen(true)}
       >

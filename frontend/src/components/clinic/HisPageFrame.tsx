@@ -17,20 +17,29 @@ type Props = {
 export function HisWinTitle({
   title,
   trailing,
+  fontSize = HIS.fs.title,
 }: {
   title: string;
   trailing?: ReactNode;
+  fontSize?: number;
 }) {
+  const scaled = fontSize !== HIS.fs.title;
   return (
     <div
-      className="flex shrink-0 items-center gap-2 px-2 py-0.5 text-white"
+      className={scaled ? "flex shrink-0 items-center text-white" : "flex shrink-0 items-center gap-2 px-2 py-0.5 text-white"}
       style={{
         background: `linear-gradient(180deg,${HIS.titleBarFrom},${HIS.titleBarTo} 40%,${HIS.titleBarFrom})`,
         borderBottom: `1px solid ${HIS.titleBarBorder}`,
         fontFamily: HIS_FONT,
-        fontSize: HIS.fs.title,
+        fontSize,
         fontWeight: 700,
-        minHeight: 22,
+        minHeight: scaled ? Math.round(fontSize * 1.9) : 22,
+        ...(scaled
+          ? {
+              gap: Math.round(fontSize * 0.5),
+              padding: `${Math.round(fontSize * 0.15)}px ${Math.round(fontSize * 0.5)}px`,
+            }
+          : {}),
       }}
     >
       <span className="truncate">{title}</span>
