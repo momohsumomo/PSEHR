@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useLayoutEffect, useState, useRef } from "react";
 import { HIS, HIS_FONT } from "@/lib/hisTheme";
 import { hisTextareaStyle } from "@/components/clinic/HisPageFrame";
 import { fetchCcSuggest } from "@/api/clinicApi";
@@ -13,6 +13,24 @@ interface ChiefComplaintWidgetProps {
   saveCc?: () => void;
   active?: boolean;
   onActivate?: () => void;
+}
+
+/** 游標那一行超出可見範圍時，捲動量。四個邊界都是視窗座標。 */
+export function nextCaretScrollTop(
+  scrollTop: number,
+  viewTop: number,
+  viewBottom: number,
+  caretTop: number,
+  caretBottom: number,
+): number {
+  if (caretBottom > viewBottom) return scrollTop + (caretBottom - viewBottom);
+  if (caretTop < viewTop) return Math.max(0, scrollTop - (viewTop - caretTop));
+  return scrollTop;
+}
+
+/** 結尾的換行在畫面上要佔一排，游標才有空白行可閃。 */
+function mirrorBody(text: string): string {
+  return text.endsWith("\n") ? `${text}\u200b` : text;
 }
 
 /** CC box: purple border; no blur auto-save (F9 persists) */
@@ -66,11 +84,83 @@ export function ChiefComplaintWidget({
     pre.scrollTop = area.scrollTop;
   };
 
+  /** 游標在哪一排，那一排就要完整出現在框裡。第幾排都一樣。 */
+  const revealCaretLine = () => {
+    const area = areaRef.current;
+    const pre = preRef.current;
+    if (!area || !pre) return;
+    pre.style.width = `${area.clientWidth}px`;
+    pre.scrollTop = area.scrollTop;
+    const pos = area.selectionStart ?? 0;
+    const node = pre.firstChild;
+    let next = area.scrollTop;
+    if (node && node.nodeType === Node.TEXT_NODE && node.textContent) {
+      const text = node.textContent;
+      const len = text.length;
+      const cs = window.getComputedStyle(area);
+      const fontPx = Number.parseFloat(cs.fontSize) || 16;
+      const lineHeight = Number.parseFloat(cs.lineHeight) || fontPx * 1.25;
+      const box = area.getBoundingClientRect();
+      const viewTop = box.top + (Number.parseFloat(cs.paddingTop) || 0);
+      const viewBottom = box.bottom - (Number.parseFloat(cs.paddingBottom) || 0);
+      const glyph = (index: number) => {
+        if (index < 0 || index >= len || text[index] === "\n") return null;
+        const range = document.createRange();
+        range.setStart(node, index);
+        range.setEnd(node, index + 1);
+        const rect = range.getBoundingClientRect();
+        return rect.height > 0 ? rect : null;
+      };
+      const at = Math.min(pos, len);
+      let caretTop: number | null = null;
+      let caretBottom: number | null = null;
+      const here = at < len ? glyph(at) : null;
+      if (here) {
+        caretTop = here.top;
+        caretBottom = here.bottom;
+      } else {
+        let prev = at - 1;
+        while (prev >= 0 && text[prev] === "\n") prev -= 1;
+        const steps = at - (prev + 1);
+        const prevRect = glyph(prev);
+        if (prevRect) {
+          caretTop = prevRect.top + steps * lineHeight;
+          caretBottom = caretTop + lineHeight;
+        } else {
+          const origin =
+            pre.getBoundingClientRect().top +
+            (Number.parseFloat(window.getComputedStyle(pre).paddingTop) || 0) -
+            pre.scrollTop;
+          caretTop = origin + steps * lineHeight;
+          caretBottom = caretTop + lineHeight;
+        }
+      }
+      if (caretTop != null && caretBottom != null) {
+        next = nextCaretScrollTop(area.scrollTop, viewTop, viewBottom, caretTop, caretBottom);
+      }
+    }
+    if (pos >= area.value.length) {
+      const limit = Math.max(0, area.scrollHeight - area.clientHeight);
+      if (next < limit) next = limit;
+    }
+    if (area.scrollTop !== next) area.scrollTop = next;
+    pre.scrollTop = area.scrollTop;
+  };
+
+  useLayoutEffect(() => {
+    revealCaretLine();
+    const frame = window.requestAnimationFrame(() => revealCaretLine());
+    return () => window.cancelAnimationFrame(frame);
+  }, [ccText, caret, suffix]);
+
   useEffect(() => {
     const area = areaRef.current;
     if (!area) return;
     syncMirror();
-    const watch = new ResizeObserver(() => syncMirror());
+    const watch = new ResizeObserver(() => {
+      syncMirror();
+      revealCaretLine();
+    });
     watch.observe(area);
     return () => watch.disconnect();
   }, [ccText, suffix]);
@@ -122,8 +212,7 @@ export function ChiefComplaintWidget({
     window.requestAnimationFrame(() => {
       area.selectionStart = next.length;
       area.selectionEnd = next.length;
-      area.scrollTop = area.scrollHeight;
-      syncMirror();
+      revealCaretLine();
     });
   }
 
@@ -153,19 +242,19 @@ const textStyle = {
         areaRef.current?.focus();
       }}
     >
-      <div className="relative h-full min-h-0 flex-1">
+      <div className="relative min-h-0 flex-1">
         <pre
           ref={preRef}
           aria-hidden
-          className="pointer-events-none absolute left-0 top-0 m-0 h-full overflow-hidden whitespace-pre-wrap break-words p-0.5"
+          className="pointer-events-none absolute inset-0 m-0 overflow-hidden whitespace-pre-wrap break-words p-0.5"
           style={{ ...textStyle, color: HIS.ccText }}
         >
-          {ccText}
+          {mirrorBody(ccText)}
           <span style={{ color: "#9a86b0", fontWeight: 500 }}>{suffix}</span>
         </pre>
         <textarea
           ref={areaRef}
-          className="relative h-full w-full min-h-0 flex-1 resize-none border-0 bg-transparent p-0.5 focus:outline-none"
+          className="absolute inset-0 h-full w-full resize-none border-0 bg-transparent p-0.5 focus:outline-none"
           style={{
             ...textStyle,
             background: "transparent",
@@ -200,8 +289,7 @@ const textStyle = {
               if (!area) return;
               area.selectionStart = next.length;
               area.selectionEnd = next.length;
-              area.scrollTop = area.scrollHeight;
-              syncMirror();
+              revealCaretLine();
             });
           }}
           placeholder=""

@@ -3367,8 +3367,9 @@ export function ClinicOutpatientPage() {
             >
               {/* 醫聖：主訴+vitals → 病名 → 藥名 → 數量鍵盤 → 底列 */}
               <div className="flex min-h-0 flex-1 flex-col gap-0">
-                <div className="flex h-auto min-h-[4.25rem] max-h-[6rem] shrink-0 gap-0.5 px-0.5 pt-0.5">
-                  <div className="min-w-0 flex-1">
+                <div className="flex h-[6rem] min-h-[4.25rem] max-h-[6rem] shrink-0 gap-0.5 px-0.5 pt-0.5">
+                  <div className="relative h-full min-h-[4.25rem] max-h-[6rem] min-w-0 flex-1 self-stretch overflow-hidden">
+                    <div className="absolute inset-0">
                     <ChiefComplaintWidget
                       key={selectedEncounterId || "none"}
                       apiMode={apiMode}
@@ -3384,6 +3385,7 @@ export function ClinicOutpatientPage() {
                       active={chartFocus === "cc"}
                       onActivate={() => activateChartZone("cc")}
                     />
+                    </div>
                   </div>
                   <ChartVitalsColumn
                     value={chartVitals}
