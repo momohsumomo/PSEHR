@@ -1,7 +1,7 @@
 # Hub：健保用藥 Pack 發布
 
-一人維運的中央端：排程拉官方開放資料 → diff → 閘門 →（可選）LLM 核對 → Publish 到 `data/hub_packages/`。  
-診所 Spoke 只下載已發布 Pack；**人只被事件叫醒**，不做月例行審核。
+每台主機自己拉官方開放資料 → 正規化 → 和上一版對照 → 壞檔就擋下 → 通過才寫進 `data/hub_packages/`，再對檢查碼裝進查價。  
+不靠 GitHub 藥價檔，也不需要 LLM API。人只在檔案被擋下或這個月沒抓成時看到通知。
 
 契約：`docs/Hub-Spoke無感更新與人力介入契約.md`
 
@@ -15,11 +15,10 @@ scripts\tools\啟動-Hub-健保用藥Pack發布.bat
 
 ```powershell
 $env:HUB_FETCH_LIMIT="3000"              # 煙測；正式設 0 或不設＝全量
-$env:HUB_LLM_REQUIRED_ON_MATERIAL="0"    # 首次／無 API Key 時允許發布
 python -m hub.run
 ```
 
-正式有實質出入時：設 `OPENAI_API_KEY`（或 `HUB_LLM_API_KEY`），並保持 `HUB_LLM_REQUIRED_ON_MATERIAL=1`。
+主機平常不用手動跑。服務起來之後，這個月還沒對過官方藥價，就會自己抓。
 
 藥價與**管制藥品分級**都走開放資料進 Pack，**不經診所健保 VPN**。
 

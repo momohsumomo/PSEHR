@@ -12,11 +12,8 @@ from src.app.bootstrap import get_shadow_store
 from src.core import app_update, clinic_reports, db_backup
 from src.core.appearance import load_appearance
 from src.core.desktop_window import open_desktop_window
-from src.core.drug_pack_fetch import download_latest
-from src.spoke.drug_price import clear_price_cache
-from src.spoke.hydrator import PackHydrator
-from src.spoke.local_hub import hub_packages_dir
-from src.spoke.pack_store import PackStore
+from src.core.drug_price_refresh import describe as describe_drug_price
+from src.core.drug_price_refresh import start_refresh
 
 router = APIRouter(prefix="/maintenance", tags=["Maintenance"])
 
@@ -68,23 +65,14 @@ def appearance_saved() -> dict:
     return load_appearance()
 
 
-@router.post("/drug-pack", summary="Download the published drug pack and hydrate")
-async def drug_pack_apply() -> dict:
-    try:
-        got = download_latest(hub_packages_dir())
-    except RuntimeError as exc:
-        raise HTTPException(status_code=502, detail=str(exc)) from exc
-    result = await PackHydrator(PackStore()).run_once()
-    body = result.to_dict()
-    clear_price_cache()
-    store = PackStore()
-    store.initialize()
-    return {
-        "ok": body.get("status") == "success",
-        "tag": got.get("tag") or "",
-        "version": store.latest_active_version(),
-        "diagnosis": body.get("diagnosis") or body.get("error_message") or "",
-    }
+@router.get("/drug-pack", summary="Whether this host has refreshed official drug prices")
+def drug_pack_status() -> dict:
+    return describe_drug_price()
+
+
+@router.post("/drug-pack", summary="Fetch the official catalog on this host and install it")
+def drug_pack_apply() -> dict:
+    return start_refresh(force=True)
 
 
 @router.get("/backup", summary="備份設定、現有備份、目前是否在備份")

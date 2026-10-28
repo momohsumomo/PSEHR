@@ -38,9 +38,29 @@ export function LobbyPage() {
   const [claimsOpen, setClaimsOpen] = useState(false);
   const [uploadOpen, setUploadOpen] = useState(false);
   const [updateOpen, setUpdateOpen] = useState(false);
+  const [drugNotice, setDrugNotice] = useState("");
   const [lookBusy, setLookBusy] = useState(false);
   const [searchParams, setSearchParams] = useSearchParams();
   const clinicLine = useMemo(() => clinicCaption(), []);
+
+  useEffect(() => {
+    let stop = false;
+    const pull = () => {
+      void request<{ notice?: string }>("/maintenance/drug-pack")
+        .then((body) => {
+          if (!stop) setDrugNotice(body.notice || "");
+        })
+        .catch(() => {
+          if (!stop) setDrugNotice("");
+        });
+    };
+    pull();
+    const timer = window.setInterval(pull, 60_000);
+    return () => {
+      stop = true;
+      window.clearInterval(timer);
+    };
+  }, [updateOpen]);
 
   useEffect(() => {
     const open = searchParams.get("open");
@@ -379,6 +399,11 @@ export function LobbyPage() {
 
       <footer className="relative z-20 flex shrink-0 items-center justify-end border-t border-white/10 px-8 py-2 text-[12px] text-[#8EA0BA]">
         <span className="flex items-center gap-3">
+          {drugNotice ? (
+            <span className="max-w-[28rem] truncate text-[#E7D7A8]" title={drugNotice}>
+              {drugNotice}
+            </span>
+          ) : null}
           <button
             type="button"
             className="rounded border border-white/15 px-2 py-0.5 text-[12px] text-[#E7D7A8] hover:bg-white/10"
