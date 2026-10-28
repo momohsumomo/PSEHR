@@ -35,7 +35,14 @@ export type LabSlipInput = {
   fontSizePx?: number;
 };
 
-/** 檢驗單「卡」是四碼就醫序號（0010、W012），不是十二碼健保卡號。 */
+/** 存檔格是空白或橫線時，用這筆看診已取到的就醫序號。 */
+export function slipVisitSeq(draftSeq: string | undefined, chartSeq: string | undefined): string {
+  const draft = String(draftSeq || "").trim();
+  if (draft && draft !== "\u2014" && draft !== "-") return draft;
+  return String(chartSeq || "").trim();
+}
+
+/** 檢驗單「卡」是四碼就醫序號（0010、W001），不是十二碼健保卡號。 */
 export function labCardSeq(raw: string): string {
   const text = String(raw || "").trim().toUpperCase();
   if (!text || text === "\u2014" || text === "-") return "";

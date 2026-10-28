@@ -91,7 +91,7 @@ import { isDepositHold } from "@/lib/registerModes";
 import { openPrintBatch, openPrintPreview, type PrintJob } from "@/lib/printJob";
 import { depositPrintOptions, findPrintSetup, loadPrintSettings, partOn } from "@/lib/printSettings";
 import { releaseRxPrintJob } from "@/lib/releaseRx";
-import { giveDaysBesideLabs, labSlipLines, labSlipPrintJob, openDelegateLabSlip } from "@/lib/delegateLabSlip";
+import { giveDaysBesideLabs, labSlipLines, labSlipPrintJob, openDelegateLabSlip, slipVisitSeq } from "@/lib/delegateLabSlip";
 import { openDepositSlip } from "@/lib/visitReceiptPrint";
 import { VisitPrintDialog } from "@/components/clinic/VisitPrintDialog";
 import { buildSimpleSlipHtml, storedSelfPayText, visitCashParts } from "@/lib/simpleSlip";
@@ -1448,7 +1448,7 @@ export function ClinicOutpatientPage() {
         copayCode: saveDraft.copayCode,
         dept: saveDraft.dept || clinicNow.mainDept || "",
         visitDate: currentDate,
-        cardNo: saveDraft.treatSeq,
+        cardNo: slipVisitSeq(saveDraft.treatSeq, selected?.treatSeq),
         queueNo: selected ? String(selected.queueNumber) : "",
         doctorId: selected?.doctorId || saveDraft.doctor || "",
         diagnoses: displayDiagnoses.map((row) => ({
@@ -1526,7 +1526,7 @@ export function ClinicOutpatientPage() {
       copayCode: saveDraft.copayCode,
       dept: saveDraft.dept || clinic.mainDept || "",
       visitDate: currentDate,
-      cardNo: saveDraft.treatSeq,
+      cardNo: slipVisitSeq(saveDraft.treatSeq, selected?.treatSeq),
       queueNo: selected ? String(selected.queueNumber) : "",
       doctorId: selected?.doctorId || saveDraft.doctor || "",
       diagnoses: dx,
