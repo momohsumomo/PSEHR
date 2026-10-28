@@ -505,7 +505,12 @@ function Watch-ClinicEdges {
     $closed = $true
     Write-Log ("closed " + $name)
   }
-  if ($closed -and -not (Test-AnyClinicEdgeVisible)) { Stop-LocalCard6 }
+    if ($closed -and -not (Test-AnyClinicEdgeVisible)) {
+      Stop-LocalCard6
+      Get-Process -Name "csfsim" -ErrorAction SilentlyContinue | ForEach-Object {
+        try { Stop-Process -Id $_.Id -Force -ErrorAction SilentlyContinue } catch {}
+      }
+    }
 }
 
 function Stop-LocalCard6 {
@@ -713,7 +718,7 @@ function Start-LocalPrinterListener {
   }
   $ps = [PowerShell]::Create()
   [void]$ps.AddScript({
-    param($tcp)
+    param($tcp, $clientDir)
     function Send-Bytes($client, [byte[]]$Bytes) {
       $stream = $client.GetStream()
       $stream.Write($Bytes, 0, $Bytes.Length)
@@ -770,6 +775,74 @@ public class PsehrTrustAll : ICertificatePolicy {
         }
       } catch {}
       return ($bits -join ",")
+    }
+    function Invoke-CoexistProbe {
+      $card6 = Test-CardPort
+      $samStatus = -1
+      $hpcStatus = -1
+      $readerCount = 0
+      if ($card6) {
+        try {
+          $st = Invoke-CshisProxy "GET" "/api/common/v1/Status" "" | ConvertFrom-Json
+          if ($null -ne $st.status.sam.status) { $samStatus = [int]$st.status.sam.status }
+          if ($null -ne $st.status.hpc.status) { $hpcStatus = [int]$st.status.hpc.status }
+        } catch {}
+        try {
+          $rd = Invoke-CshisProxy "GET" "/api/settings/v1/PcscReader/Readers" "" | ConvertFrom-Json
+          $list = @($rd.readers)
+          if ($list.Count -eq 0) { $list = @($rd.Readers) }
+          $readerCount = @($list | Where-Object { "$_".Trim() }).Count
+        } catch {}
+      }
+      $five = @(Get-Process -Name "csfsim" -ErrorAction SilentlyContinue)
+      $fiveRunning = $five.Count -gt 0
+      $fiveBlocked = $false
+      if ($fiveRunning) {
+        $ps32 = Join-Path $env:SystemRoot "SysWOW64\WindowsPowerShell\v1.0\powershell.exe"
+        $pid5 = [int]$five[0].Id
+        $mod = & $ps32 -NoProfile -Command "(Get-Process -Id $pid5).Modules | Where-Object { `$_.ModuleName -eq 'WinSCard.dll' } | Select-Object -ExpandProperty FileName"
+        if ("$mod".Trim().ToLower() -eq "c:\nhi\bin\winscard.dll") { $fiveBlocked = $true }
+      }
+      $samFile = @(Get-ChildItem "C:\NHI\SAM\COMX1" -File -ErrorAction SilentlyContinue).Count -gt 0
+      $cloudCode = -1
+      $dll = "Z:\SC\DLL\nhi_eiiapi.dll"
+      if ($samFile -and (Test-Path -LiteralPath $dll)) {
+        $ps32 = Join-Path $env:SystemRoot "SysWOW64\WindowsPowerShell\v1.0\powershell.exe"
+        $work = "C:\Temp\psehr-qlab"
+        New-Item -ItemType Directory -Force -Path $work | Out-Null
+        $call = Join-Path $work "call-testb.ps1"
+        $dir = Split-Path -Parent $dll
+        $body = @(
+          "`$ErrorActionPreference = 'Stop'",
+          "Set-Location '$dir'",
+          "`$env:PATH = '$dir;' + `$env:PATH",
+          "Add-Type -TypeDefinition @'",
+          "using System.Runtime.InteropServices;",
+          "using System.Text;",
+          "public class CloudTest {",
+          "  [DllImport(@`"$dll`", CallingConvention=CallingConvention.StdCall, CharSet=CharSet.Ansi)]",
+          "  public static extern int NHI_TestB(StringBuilder localId);",
+          "}",
+          "'@",
+          "`$local = New-Object System.Text.StringBuilder 64",
+          "`$code = [CloudTest]::NHI_TestB(`$local)",
+          "Write-Output ('code=' + `$code)"
+        ) -join "`r`n"
+        [IO.File]::WriteAllText($call, $body, (New-Object System.Text.UTF8Encoding $false))
+        $text = & $ps32 -NoProfile -ExecutionPolicy Bypass -File $call
+        foreach ($row in @($text)) {
+          $trim = "$row".Trim()
+          if ($trim.StartsWith("code=")) {
+            $parsed = 0
+            if ([int]::TryParse($trim.Substring(5).Trim(), [ref]$parsed)) { $cloudCode = $parsed }
+          }
+        }
+      }
+      $c6 = "false"; if ($card6) { $c6 = "true" }
+      $fr = "false"; if ($fiveRunning) { $fr = "true" }
+      $fb = "false"; if ($fiveBlocked) { $fb = "true" }
+      $sf = "false"; if ($samFile) { $sf = "true" }
+      return '{"ok":true,"card6":' + $c6 + ',"samStatus":' + $samStatus + ',"hpcStatus":' + $hpcStatus + ',"readerCount":' + $readerCount + ',"fiveRunning":' + $fr + ',"fiveBlocked":' + $fb + ',"samFile":' + $sf + ',"cloudCode":' + $cloudCode + '}'
     }
     function Invoke-CshisProxy([string]$Method, [string]$Path, [string]$JsonBody) {
       $allowed = @(
@@ -877,6 +950,24 @@ public class PsehrTrustAll : ICertificatePolicy {
           Send-Json $client ('{"ok":true,"printers":[' + $printers + '],"card6":{"installed":' + $flag + ',"running":' + $run + "}}") 200
           continue
         }
+        if ($verb -eq "POST" -and $target -eq "/tools/card-pair") {
+          $action = "ensure"
+          if ($line -match "action=(ensure|restart6|restart5)") { $action = $Matches[1] }
+          if ($text -match '"action"\s*:\s*"(ensure|restart6|restart5)"') { $action = $Matches[1] }
+          $pair = Join-Path $clientDir "card_pair.ps1"
+          $raw = ""
+          if (Test-Path -LiteralPath $pair) {
+            $raw = (& $pair -Action $action | Out-String).Trim()
+          }
+          $json = ""
+          foreach ($row in @($raw -split "`r?`n")) {
+            $trim = "$row".Trim()
+            if ($trim.StartsWith("{")) { $json = $trim }
+          }
+          if (-not $json) { $json = '{"ok":false,"action":"fail"}' }
+          Send-Json $client $json 200
+          continue
+        }
         if ($verb -eq "POST" -and $target -eq "/tools/card") {
           $exe = Get-CardExe
           if (-not (Test-Path -LiteralPath $exe)) {
@@ -889,6 +980,11 @@ public class PsehrTrustAll : ICertificatePolicy {
           }
           Start-Process -FilePath $exe -WorkingDirectory (Split-Path -Parent $exe) | Out-Null
           Send-Json $client '{"ok":true,"code":"started"}' 200
+          continue
+        }
+        if ($verb -eq "POST" -and $target -eq "/tools/coexist-test") {
+          $note = Invoke-CoexistProbe
+          Send-Json $client $note 200
           continue
         }
         if ($verb -eq "POST" -and $target -eq "/tools/cshis") {
@@ -940,7 +1036,7 @@ public class PsehrTrustAll : ICertificatePolicy {
         if ($client) { $client.Close() }
       }
     }
-  }).AddArgument($tcp)
+  }).AddArgument($tcp).AddArgument($Here)
   [void]$ps.BeginInvoke()
   Write-Log "printer list on 5310"
 }
@@ -1039,7 +1135,9 @@ if ($Intake) {
 
 if ($Open -or $Install -or $Register) {
   Request-Release5066
-  Start-LocalCard6
+  $pair = Join-Path $Here "card_pair.ps1"
+  if (Test-Path -LiteralPath $pair) { & $pair -Action ensure | Out-Null }
+  else { Start-LocalCard6 }
   $ps = Join-Path $env:SystemRoot "System32\WindowsPowerShell\v1.0\powershell.exe"
   Start-Process -FilePath $ps -ArgumentList "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$PSCommandPath`"" -WindowStyle Hidden
   if ($Register) { Open-ClinicEdge -Page "kiosk/register" -ProfileName "edge-register" }

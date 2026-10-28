@@ -1,11 +1,11 @@
 import { useState } from "react";
 import { assignHealthCardReader, DeskCardError } from "@/lib/localCard";
+import { useFlashNote } from "@/components/clinic/useFlashNote";
 
 /** Designates this computer's one reader. Does not read the card. */
 export function AssignHcReaderButton() {
-  const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [note, setNote] = useState("");
+  const [note, setNote] = useFlashNote();
 
   const assign = async () => {
     setBusy(true);
@@ -26,13 +26,12 @@ export function AssignHcReaderButton() {
         disabled={busy}
         className="rounded border border-sky-700 bg-white px-2 py-0.5 text-[12px] font-bold text-sky-950 disabled:opacity-60"
         onClick={() => {
-          setOpen(true);
           void assign();
         }}
       >
         {"\u6307\u5b9a\u5065\u4fdd\u5361"}
       </button>
-      {open && note ? (
+      {note ? (
         <div className="absolute right-0 z-50 mt-1 w-72 rounded border border-sky-700 bg-white p-2 text-[12px] leading-snug text-black shadow-lg">
           {note}
         </div>

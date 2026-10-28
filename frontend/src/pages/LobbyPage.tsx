@@ -5,7 +5,7 @@ import { IcDailyUploadDialog } from "@/components/clinic/IcDailyUploadDialog";
 import { API_ENABLED, SANDBOX_ID } from "@/config/sandbox";
 import { request, prefetchPatientRoster, syncLookNames } from "@/api/clinicApi";
 import { AppUpdateDialog } from "@/components/clinic/AppUpdateDialog";
-import { CardConsoleDebugButton } from "@/components/clinic/CardConsoleDebugButton";
+import { CardDeskTools } from "@/components/clinic/CardDeskTools";
 import { DeskStatusLamps } from "@/components/clinic/DeskStatusLamps";
 import { readLocalClinicBundle } from "@/lib/clinicProfile";
 
@@ -137,6 +137,7 @@ export function LobbyPage() {
         { label: "\u5c0d\u9f4a\u7167\u7247\u6a94\u540d", path: "look-sync" },
         { label: "影像管理", path: "/img-manager" },
         { label: "載入當日照護線上", path: "/register?care=today" },
+        { label: "\u8b80\u5361\u4e26\u5b58\u6e2c\u8a66", path: "coexist-test" },
         { label: "電子轉診", path: "/referral" },
         { label: "候診預問診", path: "/kiosk/intake" },
         { label: "自助掛號", path: "/kiosk/register" },
@@ -164,6 +165,48 @@ export function LobbyPage() {
 
   const openModule = (path: string) => {
     setActiveMenu(null);
+    if (path === "coexist-test") {
+      void fetch("http://127.0.0.1:5310/tools/coexist-test", {
+        method: "POST",
+        signal: AbortSignal.timeout(80000),
+      })
+        .then(async (res) => {
+          const data = (await res.json()) as {
+            card6?: boolean;
+            samStatus?: number;
+            hpcStatus?: number;
+            readerCount?: number;
+            fiveRunning?: boolean;
+            fiveBlocked?: boolean;
+            samFile?: boolean;
+            cloudCode?: number;
+          };
+          const sam =
+            data.samStatus === 2
+              ? "\u0036\u002e\u0030 \u7684 SAM \u5df2\u8a8d\u8b49\u3002"
+              : "\u0036\u002e\u0030 \u7684 SAM \u72c0\u614b\u662f " + String(data.samStatus) + "\uff0c\u9084\u6c92\u8a8d\u8b49\u3002";
+          const reader =
+            (data.readerCount || 0) > 0
+              ? "\u8b80\u5361\u6a5f\u6709 " + String(data.readerCount) + " \u53f0\u5728 \u0036\u002e\u0030 \u624b\u4e0a\u3002\u91ab\u4e8b\u4eba\u54e1\u5361\u72c0\u614b " + String(data.hpcStatus) + "\uff0c\u4e0d\u5f37\u6c42\u8a8d\u8b49\u3002"
+              : "\u0036\u002e\u0030 \u6c92\u770b\u5230\u8b80\u5361\u6a5f\u3002";
+          const five = !data.fiveRunning
+            ? "\u0035\u002e\u0031\u002e\u0037 \u6c92\u958b\u3002"
+            : data.fiveBlocked
+              ? "\u95a9\u904e\u7684 \u0035\u002e\u0031\u002e\u0037 \u6b63\u5728\u8dd1\uff0c\u770b\u4e0d\u5230\u8b80\u5361\u6a5f\u3002"
+              : "\u0035\u002e\u0031\u002e\u0037 \u958b\u8457\uff0c\u4f46\u9084\u770b\u5f97\u5230\u8b80\u5361\u6a5f\u3002";
+          const cloud =
+            data.cloudCode === 0
+              ? "\u96f2\u7aef\u5143\u4ef6\u6e2c\u8a66\u6210\u529f\u3002\u8f49\u8a3a\u4e0b\u8f09\u8207\u8ad6\u8cea\u4e0a\u50b3\u7528\u7684\u662f\u540c\u4e00\u652f\u3002"
+              : "\u96f2\u7aef\u5143\u4ef6\u6e2c\u8a66\u56de " + String(data.cloudCode) + "\u3002";
+          const six = data.card6 ? "\u0036\u002e\u0030 \u958b\u8457\u3002" : "\u0036\u002e\u0030 \u6c92\u958b\u3002";
+          const file = data.samFile ? "COMX1 \u6709 SAM \u6a94\u3002" : "COMX1 \u6c92\u6709 SAM \u6a94\u3002";
+          window.alert([six, sam, reader, five, file, cloud, "\u6e2c\u8a66\u6c92\u6709\u9001\u51fa\u75c5\u4eba\u8cc7\u6599\u3002"].join("\n"));
+        })
+        .catch(() => {
+          window.alert("\u9019\u53f0\u7684\u9580\u8a3a\u5de5\u5177\u6c92\u6709\u56de\u61c9\u3002\u8acb\u91cd\u958b\u958b\u555f\u9580\u8a3a\u3002");
+        });
+      return;
+    }
     if (path === "look-sync") {
       if (lookBusy) return;
       setLookBusy(true);
@@ -279,7 +322,7 @@ export function LobbyPage() {
           </div>
         ))}
         <span className="ml-auto text-[12px] text-[#8EA0BA]">鍵盤 1–9、0、A、B、C、E</span>
-        <CardConsoleDebugButton compact variant="dark" align="end" label={"\u91cd\u65b0\u6574\u7406\u8b80\u5361\u6a5f"} scope="local" />
+        <CardDeskTools variant="dark" />
       </nav>
 
       <header className="relative z-10 flex shrink-0 items-end gap-6 px-8 pb-2 pt-6">
