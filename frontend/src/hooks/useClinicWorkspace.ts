@@ -652,6 +652,24 @@ export function useClinicWorkspace(options?: {
     }));
   }, []);
 
+  const ensureOutboundReferralOrder = useCallback(async (encounterId: string) => {
+    if (!encounterId) return;
+    const ws = await fetchWorkspace(encounterId, { historyLimit: 0 });
+    const has = mapRxFromWorkspace(ws.currentMedications || []).some((row) => {
+      return (row.nhiCode || "").toUpperCase() === "01036C";
+    });
+    if (has) return;
+    await registerMedication({
+      encounterId,
+      drugText: "\u8fa6\u7406\u8f49\u8a3a\u8cbb-\u96fb\u5b50\u8f49\u8a3a",
+      nhiCode: "01036C",
+      sig: "\u4f9d\u91ab\u56d1",
+      daysSupply: 1,
+      quantity: 1,
+    });
+    if (selectedEncounterId === encounterId) await refreshWorkspace(encounterId);
+  }, [refreshWorkspace, selectedEncounterId]);
+
   const ensureAcceptReferralOrder = useCallback(async (encounterId: string) => {
     if (!encounterId || acceptOrderFlight.current.has(encounterId)) return;
     acceptOrderFlight.current.add(encounterId);
@@ -1492,6 +1510,7 @@ export function useClinicWorkspace(options?: {
     registerPatientAndEncounter,
     submitRegisterEdit,
     ensureAcceptReferralOrder,
+    ensureOutboundReferralOrder,
     persistCondition,
     persistMedication,
     persistMedications,

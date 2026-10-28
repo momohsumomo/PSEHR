@@ -308,6 +308,8 @@ export function RegisterConfirmDialog({
   depositLive.current = form.deposit;
   const exceptionLive = useRef(form.icException);
   exceptionLive.current = form.icException;
+  const heldException = useRef<IcException>(form.icException === "selfPay" ? "deposit" : form.icException || "deposit");
+  if (form.icException && form.icException !== "selfPay") heldException.current = form.icException;
   const dialogOpen = useRef(false);
   if (open && !dialogOpen.current) depositTouched.current = false;
   dialogOpen.current = open;
@@ -700,7 +702,9 @@ export function RegisterConfirmDialog({
       next.afterCheck = q.icException === "afterCheck" ? "2" : "1";
       if (q.icException === "selfPay") next.caseNo = "9X";
     } else if (isSelfPay(form.icException, form.caseNo) && q.kind !== "appointment") {
-      next.icException = "ic";
+      const back = heldException.current && heldException.current !== "selfPay" ? heldException.current : "deposit";
+      next.icException = back;
+      if (back === "deposit" && !String(form.deposit || "").trim()) next.deposit = defaults.depositAmount;
       if (form.payType === "4") next.payType = "";
     }
     if (q.copayCode !== undefined && q.icException !== "selfPay") next.copayCode = q.copayCode;
@@ -816,7 +820,9 @@ export function RegisterConfirmDialog({
                       next.prebook = false;
                       next.deposit = "";
                     } else if (form.icException === "selfPay") {
-                      next.icException = "ic";
+                      const back = heldException.current && heldException.current !== "selfPay" ? heldException.current : "deposit";
+                      next.icException = back;
+                      if (back === "deposit" && !String(form.deposit || "").trim()) next.deposit = defaults.depositAmount;
                       if (form.payType === "4") next.payType = "";
                     }
                     onChange(withFee(next));

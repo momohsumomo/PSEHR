@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { fetchSavedQualityLab, saveQualityLab } from "@/api/clinicApi";
+import { fetchSavedQualityLab, saveQualityLab, uploadSavedQualityLab } from "@/api/clinicApi";
 import { HIS_FONT } from "@/lib/hisTheme";
 import type { RxLine } from "@/mocks/clinicMocks";
 
@@ -164,9 +164,13 @@ export function QualityLabPanel({
     setBusy(true);
     setNote("");
     try {
+      if (!report.trim()) {
+        setNote("\u8acb\u5148\u586b\u5831\u544a\u5167\u5bb9\u3002\u6c92\u6709\u5b58\uff0c\u4e5f\u6c92\u6709\u4e0a\u50b3\u3002");
+        return;
+      }
       const doctorName = people.find((person) => (person.id || person.name) === physician)?.name || physician;
       const reportOn = day ? `${day.y}${day.m}${day.d}` : "";
-      await saveQualityLab({
+      const saved = await saveQualityLab({
         encounterId,
         orderCode: line.nhiCode,
         orderName: line.name || line.nhiCode,
@@ -178,7 +182,13 @@ export function QualityLabPanel({
         slipNo: slip,
         reportOn,
       });
-      setNote("\u5df2\u5b58\u9032\u4e3b\u6a5f\u3002\u9019\u53f0\u4e0d\u4e0a\u50b3\u3002\u8acb\u5230\u6c92\u6709\u958b 6.0 \u7684\u96fb\u8166\uff0c\u958b\u555f 5.1.7 \u5f8c\u7528\u8ad6\u8cea\u4e0a\u50b3\u5de5\u5177\u9001\u51fa\u3002");
+      try {
+        await uploadSavedQualityLab(saved.id);
+        setNote("\u5df2\u5b58\u9032\u672c\u6a5f\uff0c\u4e26\u5df2\u9001\u51fa\u3002");
+      } catch (err) {
+        const why = err instanceof Error ? err.message : "\u4e0a\u50b3\u5931\u6557";
+        setNote("\u5df2\u5b58\u9032\u672c\u6a5f\u3002\u4e0a\u50b3\u6c92\u6709\u9001\u51fa\uff1a" + why);
+      }
     } catch (err) {
       setNote(err instanceof Error ? err.message : "\u6c92\u6709\u5b58\u9032\u4e3b\u6a5f\u3002");
     } finally {

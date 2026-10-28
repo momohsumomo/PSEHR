@@ -139,6 +139,13 @@ export function ReferralPage() {
     });
   }, [items, filter, fromDay, toDay]);
 
+  const acceptedWithoutReply = (status: string) => {
+    const text = status || "";
+    return text.includes("\u5df2\u53d7\u7406") && !text.includes("\u5df2\u56de\u5fa9") && !text.includes("\u5df2\u56de\u8986");
+  };
+  const downQuiet = mode === "down" ? shown.filter((row) => acceptedWithoutReply(row.status || "")) : [];
+  const downOpen = mode === "down" ? shown.filter((row) => !acceptedWithoutReply(row.status || "")) : shown;
+
   const current = items.find((row) => row.id === picked) || null;
   const today = useMemo(() => {
     const seen = new Set<string>();
@@ -361,10 +368,11 @@ export function ReferralPage() {
             </label>
           </div>
           <ul className="min-h-0 flex-1 overflow-auto text-[12px]">
-            {shown.length === 0 ? (
+            {downOpen.length === 0 && downQuiet.length === 0 ? (
               <li className="px-2 py-2 text-[#606060]">{"\u9019\u6bb5\u6c92\u6709\u5b58\u6a94\u3002\u62ff\u6389\u65e5\u671f\u5c31\u662f\u5168\u90e8\u7d00\u9304\u3002"}</li>
             ) : (
-              shown.map((row) => (
+              <>
+              {downOpen.map((row) => (
                 <li key={row.id}>
                   <button
                     type="button"
@@ -387,7 +395,33 @@ export function ReferralPage() {
                     </div>
                   </button>
                 </li>
-              ))
+              ))}
+              {mode === "down" && downQuiet.length > 0 ? (
+                <li className="border-t bg-[#F4F1EA] px-2 py-1 text-[12px] font-bold" style={{ borderColor: "#808080" }}>
+                  {`\u5df2\u53d7\u7406\u672a\u56de\u8986\uff08${downQuiet.length}\uff09`}
+                </li>
+              ) : null}
+              {downQuiet.map((row) => (
+                <li key={row.id}>
+                  <button
+                    type="button"
+                    className="block w-full px-2 py-1 text-left"
+                    style={{ background: row.id === picked ? "#FFF2A8" : "transparent" }}
+                    onClick={() => {
+                      setPicked(row.id);
+                      setSlipOpen(false);
+                    }}
+                  >
+                    <div className="font-bold">{rocDay(row.openedOn)} {row.patientName || "\u2014"} {row.medicalNo}</div>
+                    <div className="text-[11px] text-[#404040]">
+                      {row.status || "\u2014"}
+                      {row.destHosp ? ` \u00b7 ${row.destHosp}` : ""}
+                      {row.serial ? ` \u00b7 ${row.serial}` : ""}
+                    </div>
+                  </button>
+                </li>
+              ))}
+              </>
             )}
           </ul>
           {mode === "down" ? null : (

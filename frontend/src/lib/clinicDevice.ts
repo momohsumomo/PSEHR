@@ -28,6 +28,8 @@ export type LocalDeviceMeta = {
   uploadCloudOnSave?: boolean;
   /** 這台電腦存檔後要不要跳出列印。沒設過時，看診和藥局要跳，掛號台不跳。 */
   printOnSave?: boolean;
+  /** 看診裡轉診存檔要不要順便上傳。沒設過時預設要上傳。 */
+  uploadReferralOnSave?: boolean;
 };
 
 function randomId(): string {
@@ -65,6 +67,8 @@ export function loadLocalDeviceMeta(): LocalDeviceMeta {
         uploadCloudOnSave:
           typeof parsed.uploadCloudOnSave === "boolean" ? parsed.uploadCloudOnSave : undefined,
         printOnSave: typeof parsed.printOnSave === "boolean" ? parsed.printOnSave : undefined,
+        uploadReferralOnSave:
+          typeof parsed.uploadReferralOnSave === "boolean" ? parsed.uploadReferralOnSave : undefined,
       };
     }
   } catch {
@@ -81,6 +85,7 @@ export function saveLocalDeviceMeta(meta: Omit<LocalDeviceMeta, "id"> & { id?: s
     role: meta.role || "other",
     uploadCloudOnSave: meta.uploadCloudOnSave,
     printOnSave: meta.printOnSave,
+    uploadReferralOnSave: meta.uploadReferralOnSave,
   };
   localStorage.setItem(DEVICE_ID_KEY, id);
   localStorage.setItem(DEVICE_META_KEY, JSON.stringify(next));
@@ -95,6 +100,12 @@ export function thisPcUploadsCloudOnSave(meta: LocalDeviceMeta = loadLocalDevice
 }
 
 /** 看診、藥局預設存檔後跳列印。掛號台預設只存檔。本機工作站勾過就以勾選為準。 */
+/** 沒勾過時，轉診存檔預設要上傳。 */
+export function thisPcUploadsReferralOnSave(meta: LocalDeviceMeta = loadLocalDeviceMeta()): boolean {
+  if (typeof meta.uploadReferralOnSave === "boolean") return meta.uploadReferralOnSave;
+  return true;
+}
+
 export function thisPcPrintsOnSave(meta: LocalDeviceMeta = loadLocalDeviceMeta()): boolean {
   if (typeof meta.printOnSave === "boolean") return meta.printOnSave;
   return meta.role === "outpatient" || meta.role === "pharmacy";

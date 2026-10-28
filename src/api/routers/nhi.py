@@ -1230,6 +1230,15 @@ def card_seq_next(body: NhiSeqNextRequest) -> dict[str, Any]:
         body.noCardReason or ""
     ).strip():
         raise HTTPException(status_code=422, detail="您未使用押單方式建檔，所以請輸入無卡原因")
+    from src.core.nhi_seq_bridge import NOCARD_EXCEPTIONS, reject_other_card
+
+    if mode not in {"selfPay", "deposit"} and mode not in NOCARD_EXCEPTIONS:
+        mismatch = reject_other_card(
+            body.patientIdNo,
+            str((body.deskSign or {}).get("hcIdNo") or ""),
+        )
+        if mismatch:
+            raise HTTPException(status_code=422, detail=mismatch)
     result = request_visit_number(
         ic_exception=mode,
         treatment_item=body.treatmentItem,

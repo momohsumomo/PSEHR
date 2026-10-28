@@ -3,7 +3,8 @@ import { HIS, HIS_FONT } from "@/lib/hisTheme";
 import { openPrintPreview } from "@/lib/printJob";
 import { buildReferralSlipHtml } from "@/lib/clinicPrintDocs";
 import { doctorDisplayName, pickClinicDoctor } from "@/lib/doctorName";
-import { fetchStaff, saveReferralSlip } from "@/api/clinicApi";
+import { fetchStaff, saveReferralSlip, uploadReferralSlip } from "@/api/clinicApi";
+import { thisPcUploadsReferralOnSave } from "@/lib/clinicDevice";
 import { readLocalClinicBundle } from "@/lib/clinicProfile";
 import { HospitalLookupDialog, type NhiHospital } from "@/components/clinic/HospitalLookupDialog";
 import { useEscLayer } from "@/hooks/useEscLayer";
@@ -191,6 +192,7 @@ export function ReferralSlipDialog({ open, seed, onClose, encounterId, slipId, a
   const [copy2, setCopy2] = useState(false);
   const [copy3, setCopy3] = useState(false);
   const [writeDa, setWriteDa] = useState(false);
+  const [uploadOnSave, setUploadOnSave] = useState(true);
   const [note, setNote] = useState("");
   const [settingsOpen, setSettingsOpen] = useState(false);
   useEscLayer([
@@ -206,6 +208,7 @@ export function ReferralSlipDialog({ open, seed, onClose, encounterId, slipId, a
   useEffect(() => {
     if (!open) return;
     setLocalSlipId(slipId || "");
+    setUploadOnSave(thisPcUploadsReferralOnSave());
     const saved = loadReferralSettings();
     setSettings(saved);
     const named = doctorDisplayName(seed.doctorName) || seed.doctorName || "";
@@ -287,6 +290,20 @@ export function ReferralSlipDialog({ open, seed, onClose, encounterId, slipId, a
       return;
     }
     const dx = seed.diagnoses.split(/\n/).map((line) => line.trim()).filter(Boolean)[0] || "";
+    if (uploadOnSave) {
+      const missing: string[] = [];
+      if (!seed.name.trim()) missing.push("\u59d3\u540d");
+      if (!seed.idNo.trim()) missing.push("\u8eab\u5206\u8b49");
+      if (!seed.phone.trim()) missing.push("\u96fb\u8a71");
+      if (!chiefOut.trim()) missing.push("\u75c5\u60c5\u6458\u8981");
+      if (!dx) missing.push("\u4e3b\u8a3a\u65b7");
+      if (!hospCode.trim()) missing.push("\u8f49\u5165\u9662\u6240\u4ee3\u78bc");
+      if (!doctor.trim()) missing.push("\u8ca0\u8cac\u91ab\u5e2b");
+      if (missing.length) {
+        setNote("\u9084\u7f3a\uff1a" + missing.join("\u3001") + "\u3002\u6c92\u6709\u5b58\u6a94\uff0c\u4e5f\u6c92\u6709\u4e0a\u50b3\u3002");
+        return;
+      }
+    }
     void saveReferralSlip({
       id: localSlipId || undefined,
       kind: "out",
@@ -318,10 +335,20 @@ export function ReferralSlipDialog({ open, seed, onClose, encounterId, slipId, a
       treatText: seed.meds,
       historyText: seed.exam || "",
       ourDept: ourDept.slice(0, 2),
-    }).then((row) => {
+    }).then(async (row) => {
       setLocalSlipId(row.id);
       onSaved?.();
-      setNote("\u5df2\u8a18\u5165\u8f49\u51fa\u540d\u55ae\u3002\u4e0a\u50b3\u8acb\u5230\u53e6\u4e00\u53f0\u96fb\u8166\u7528\u8f49\u8a3a\u4e0a\u50b3\u5de5\u5177\u3002");
+      if (!uploadOnSave) {
+        setNote("\u5df2\u8a18\u5165\u8f49\u51fa\u540d\u55ae\u3002\u9019\u6b21\u6c92\u6709\u4e0a\u50b3\u3002");
+        return;
+      }
+      try {
+        const text = await uploadReferralSlip(row.id, "\u5df2\u4e0a\u50b3");
+        setNote(text);
+      } catch (err: unknown) {
+        const why = err instanceof Error ? err.message : "\u4e0a\u50b3\u5931\u6557";
+        setNote("\u5df2\u5b58\u9032\u540d\u55ae\u3002" + why);
+      }
     }).catch((err: unknown) => {
       setNote(err instanceof Error ? err.message : "\u8f49\u51fa\u540d\u55ae\u5b58\u6a94\u5931\u6557");
     });
@@ -442,6 +469,7 @@ export function ReferralSlipDialog({ open, seed, onClose, encounterId, slipId, a
             <label className="mr-3"><input type="checkbox" checked={copy2} onChange={(e) => setCopy2(e.target.checked)} /> {"\u7b2c\u4e8c\u806f\uff1a\u63a5\u53d7\u8f49\u8a3a\u91ab\u9662\u3001\u8a3a\u6240\u56de\u8986\u8f49\u51fa\u91ab\u9662\u3001\u8a3a\u6240\uff08\u7d05\u8272\uff09"}</label>
             <label className="mr-3"><input type="checkbox" checked={copy3} onChange={(e) => setCopy3(e.target.checked)} /> {"\u7b2c\u4e09\u806f\uff1a\u539f\u8a3a\u7642\u91ab\u9662\u3001\u8a3a\u6240\u7559\u5b58\uff08\u767d\u8272\uff09"}</label>
             <label><input type="checkbox" checked={writeDa} onChange={(e) => setWriteDa(e.target.checked)} /> {"\u5b58\u6a94\u6642\u5beb\u5165\u5c31\u91ab\u985e\u5225 DA \u65bcIC\u5361"}</label>
+            <label className="ml-3"><input type="checkbox" checked={uploadOnSave} onChange={(e) => setUploadOnSave(e.target.checked)} /> {"\u5b58\u6a94\u5f8c\u4e0a\u50b3"}</label>
           </div>
           {note ? <p className="mt-1 text-[12px] text-[#004000]">{note}</p> : null}
         </div>

@@ -935,6 +935,14 @@ export async function fetchSeqNext(body: {
 }): Promise<SeqNextResult> {
   const mode = body.icException || (body.paperCard ? "paper" : "ic");
   const noCard = mode === "noCard" || mode === "childNoCard" || mode === "pregnantNoCard" || mode === "badCard" || mode === "paper";
+  if (!noCard && mode !== "selfPay" && mode !== "deposit") {
+    const basic = await readLocalHcBasic();
+    const cardNo = String(basic.idNo || "").trim().toUpperCase();
+    const want = (body.patientIdNo || "").trim().toUpperCase();
+    if (want && cardNo !== want) {
+      throw new Error("\u63d2\u8457\u7684\u5065\u4fdd\u5361\u4e0d\u662f\u9019\u4f4d\u75c5\u4eba\uff0c\u6c92\u6709\u53d6\u865f\uff0c\u4e5f\u6c92\u6709\u639b\u865f\u3002");
+    }
+  }
   let deskSign: DeskSign | undefined;
   if (mode !== "selfPay" && mode !== "deposit") {
     deskSign = noCard ? await signLocalSam("03") : await signLocalHc("03");
@@ -2619,6 +2627,21 @@ export async function fetchSavedQualityLab(
     doctor: String(row.doctor || ""),
     status: String(row.status || ""),
   };
+}
+
+export async function uploadSavedQualityLab(id: string): Promise<string> {
+  const packed = await request<{ ok?: boolean; fileName?: string; fileB64?: string }>("/nhi/v1/quality-lab/file", {
+    method: "POST",
+    body: JSON.stringify({ id }),
+  });
+  if (!packed.fileB64 || !packed.fileName) throw new Error("\u6c92\u6709\u7d44\u51fa\u4e0a\u50b3\u6a94\u3002");
+  const sent = await postReferralIo({ op: "send", name: packed.fileName, type: "26", b64: packed.fileB64 });
+  if (!sent.ok || !sent.localId) throw new Error(sent.reason || "\u4e0a\u50b3\u6c92\u6709\u9001\u51fa\u3002");
+  await request("/nhi/v1/quality-lab/result", {
+    method: "POST",
+    body: JSON.stringify({ id, localId: sent.localId, nhiId: sent.nhiId || "" }),
+  });
+  return "\u5df2\u9001\u51fa";
 }
 
 export async function saveQualityLab(body: {

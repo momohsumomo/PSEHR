@@ -908,6 +908,20 @@ export function ClinicProfilePage() {
                 </span>
               </span>
             </label>
+            <label className="flex items-start gap-2 text-[13px] font-bold max-w-xl border px-2 py-2" style={{ borderColor: "#808080", background: "#E8F4FF" }}>
+              <input
+                type="checkbox"
+                className="mt-0.5"
+                checked={deviceMeta.uploadReferralOnSave ?? true}
+                onChange={(e) => setDeviceMeta({ ...deviceMeta, uploadReferralOnSave: e.target.checked })}
+              />
+              <span>
+                {"\u8f49\u8a3a\u5b58\u6a94\u9810\u8a2d\u4e0a\u50b3"}
+                <span className="mt-1 block text-[11px] font-normal leading-relaxed">
+                  {"\u770b\u8a3a\u88e1\u958b\u8f49\u8a3a\u55ae\uff0c\u5b58\u6a94\u6642\u9019\u500b\u52fe\u9078\u662f\u5426\u9810\u8a2d\u6253\u52fe\u3002\u5fc5\u586b\u4e0d\u9f4a\u5c31\u4e0d\u6703\u5b58\u3001\u4e5f\u4e0d\u6703\u9001\u3002\u6c92\u52fe\u904e\u6642\u9810\u8a2d\u8981\u4e0a\u50b3\u3002"}
+                </span>
+              </span>
+            </label>
             <p className="text-[11px]">
               {"\u6309\u4e0a\u65b9\u300c\u5b58\u6a94 [F9]\u300d\u6703\u5beb\u5165\u672c\u6a5f\u4e26\u540c\u6b65\u5230\u4f3a\u670d\u5668\u88dd\u7f6e\u8868\u3002\u5176\u4ed6\u53c3\u6578\u82e5\u9078\u300c\u672c\u6a5f\u8986\u5beb\u300d\uff0c\u4e5f\u639b\u5728\u6b64\u88dd\u7f6e ID \u4e0b\u3002"}
             </p>

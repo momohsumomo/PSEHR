@@ -254,6 +254,7 @@ export function ClinicOutpatientPage() {
     readCardRegisterPatient,
     submitRegisterEdit,
     ensureAcceptReferralOrder,
+    ensureOutboundReferralOrder,
     currentDate,
     setCurrentDate,
     queueHints,
@@ -3756,6 +3757,9 @@ export function ClinicOutpatientPage() {
         open={referralOpen}
         encounterId={selectedEncounterId || ""}
         onClose={() => setReferralOpen(false)}
+        onSaved={() => {
+          if (selectedEncounterId) void ensureOutboundReferralOrder(selectedEncounterId);
+        }}
         seed={{
           name: selected?.patientDisplay || "",
           sex: selected?.sex === "M" ? "男" : selected?.sex === "F" ? "女" : selected?.sex || "",

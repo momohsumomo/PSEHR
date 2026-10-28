@@ -87,6 +87,17 @@ def _sign_sam(*, console_base: str, service_type: str = "03") -> dict[str, Any]:
 NOCARD_EXCEPTIONS = frozenset({"noCard", "childNoCard", "pregnantNoCard", "badCard", "paper"})
 
 
+def reject_other_card(patient_id_no: str | None, signed_id_no: str | None) -> str | None:
+    """A visit sequence belongs to the card in the reader. Refuse a different person."""
+    wanted = (patient_id_no or "").strip().upper()
+    signed = (signed_id_no or "").strip().upper()
+    if not wanted:
+        return None
+    if not signed or signed != wanted:
+        return "\u63d2\u8457\u7684\u5065\u4fdd\u5361\u4e0d\u662f\u9019\u4f4d\u75c5\u4eba\uff0c\u6c92\u6709\u53d6\u865f\u3002"
+    return None
+
+
 def request_visit_number(
     *,
     ic_exception: str = "ic",
