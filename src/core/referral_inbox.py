@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 """Keep referral notices downloaded from the bureau.
 
-Reader 6.0 GetRefData is one person at a time and needs that person's card
-signature. Each successful read is stored here. A night job cannot sign for
-people who are not here, so it does not call the bureau by itself.
+A card read stores one person's notices. The list download (type 27) stores
+the clinic's outbound and inbound rows. Neither path decides whether a row
+may be deleted.
 """
 
 from __future__ import annotations
@@ -253,6 +253,59 @@ def _lane(kind: str, status: str) -> str:
         if kind in {"1", "3"}:
             return "\u5c0d\u65b9\u56de\u8986"
     return _KIND_LABEL.get(kind, kind)
+
+
+def _cell(row: dict[str, Any], *names: str) -> str:
+    for name in names:
+        value = row.get(name)
+        if value is None:
+            continue
+        text = str(value).strip()
+        if text:
+            return text
+    return ""
+
+
+def _digits(text: str) -> str:
+    found = re.sub(r"\D", "", text or "")
+    return found
+
+
+def apply_list_rows(rows: list[dict[str, Any]], query_kind: str) -> int:
+    """Align a downloaded list onto the local download table and self numbers."""
+    from src.core.referral_desk import attach_bureau_serial
+
+    kind = query_kind if query_kind in {"1", "2", "3", "4"} else "1"
+    kept = 0
+    for raw in rows:
+        if not isinstance(raw, dict):
+            continue
+        serial = _digits(_cell(raw, "\u8f49\u8a3a\u55ae\u5e8f\u865f", "serial"))
+        if len(serial) != 16:
+            continue
+        self_seq = _cell(raw, "\u9662\u6240\u81ea\u7de8\u5e8f\u865f", "selfSeq")
+        patient = _cell(raw, "\u8eab\u5206\u8b49\u865f", "\u8eab\u5206\u8b49", "idNo").upper()
+        slip = ReferralSlip(
+            serial=serial,
+            hosp_seq=self_seq,
+            open_date=_digits(_cell(raw, "\u958b\u55ae\u65e5\u671f", "openDate"))[:8],
+            kind=kind,
+            summary="",
+            deleted=False,
+            hosp_id=_cell(raw, "\u5efa\u8b70\u8f49\u8a3a\u9662\u6240\u4ee3\u78bc", "hospId"),
+            hosp_name=_cell(raw, "\u5efa\u8b70\u8f49\u8a3a\u9662\u6240", "hospName"),
+            status=_cell(raw, "\u72c0\u614b", "status"),
+            contact=_cell(raw, "\u9023\u7e6b\u8655\u7406\u8a3b\u8a18", "contact"),
+            valid_until=_digits(_cell(raw, "\u6709\u6548\u671f\u9650", "validUntil"))[:8],
+        )
+        if patient:
+            name = _cell(raw, "\u59d3\u540d", "patientName")
+            if name and not slip.summary:
+                slip.summary = name
+            remember_download(patient, [slip])
+        attach_bureau_serial(self_seq, serial)
+        kept += 1
+    return kept
 
 
 def list_downloads() -> list[dict[str, Any]]:

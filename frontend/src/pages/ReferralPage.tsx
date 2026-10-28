@@ -1,9 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
+  deleteReferralSlip,
   fetchReferralDownloads,
   fetchReferralSlips,
+  pullReferralNow,
   saveReferralSlip,
+  uploadReferralSlip,
   type ReferralSlipRow,
 } from "@/api/clinicApi";
 import { ReferralReplyForm } from "@/components/clinic/ReferralReplyForm";
@@ -235,12 +238,81 @@ export function ReferralPage() {
         {tab("out", "\u8f49\u51fa")}
         {tab("reply", "\u56de\u8986")}
         {tab("down", "\u4e0b\u8f09")}
+        <button
+          type="button"
+          className="border border-[#808080] bg-[#C8F0C8] px-2 py-1 text-[13px] font-bold"
+          disabled={busy || mode === "down" || !current}
+          onClick={() => {
+            if (!current) return;
+            void (async () => {
+              setBusy(true);
+              setNote("");
+              try {
+                const text = await uploadReferralSlip(current.id, mode === "reply" ? "\u5df2\u56de\u8986" : "\u5df2\u4e0a\u50b3");
+                setNote(text);
+                await load(mode);
+              } catch (err: unknown) {
+                setNote(err instanceof Error ? err.message : "\u4e0a\u50b3\u5931\u6557");
+              } finally {
+                setBusy(false);
+              }
+            })();
+          }}
+        >
+          {"\u4e0a\u50b3\u9019\u4e00\u7b46"}
+        </button>
+        <button
+          type="button"
+          className="border border-[#808080] bg-[#F0C8C8] px-2 py-1 text-[13px] font-bold"
+          disabled={busy || mode === "down" || !current}
+          onClick={() => {
+            if (!current) return;
+            void (async () => {
+              setBusy(true);
+              setNote("");
+              try {
+                const text = await deleteReferralSlip(current.id);
+                setNote(text);
+                setPicked("");
+                await load(mode);
+              } catch (err: unknown) {
+                setNote(err instanceof Error ? err.message : "\u4e0d\u80fd\u522a\u9664");
+              } finally {
+                setBusy(false);
+              }
+            })();
+          }}
+        >
+          {"\u522a\u9664\u9019\u4e00\u7b46"}
+        </button>
+        <button
+          type="button"
+          className="border border-[#808080] bg-[#D4D0C8] px-2 py-1 text-[13px] font-bold"
+          disabled={busy}
+          onClick={() => {
+            void (async () => {
+              setBusy(true);
+              setNote("");
+              try {
+                const text = await pullReferralNow();
+                setNote(text);
+                if (mode === "down") await load("down");
+              } catch (err: unknown) {
+                setNote(err instanceof Error ? err.message : "\u4e0b\u8f09\u5931\u6557");
+              } finally {
+                setBusy(false);
+              }
+            })();
+          }}
+        >
+          {"\u73fe\u5728\u4e0b\u8f09"}
+        </button>
         <span className="text-[12px]">
           {mode === "out"
-            ? "\u5de6\u908a\u662f\u5168\u90e8\u8f49\u51fa\u5b58\u6a94\uff0c\u4e0d\u9650\u4eca\u5929\u3002\u8981\u65b0\u958b\u4e00\u5f35\uff0c\u518d\u5f9e\u770b\u8a3a\u52a0\u5165\u3002"
+            ? "\u9084\u6c92\u9001\u51fa\u7684\uff0c\u9000\u639b\u6642\u4e00\u4f75\u522a\u3002\u4e0a\u50b3\u672a\u6eff\u4e00\u5c0f\u6642\u53ef\u4ee5\u522a\u9664\u958b\u7acb\u3002\u8d85\u904e\u5c31\u7559\u8457\u3002"
             : mode === "reply"
-              ? "\u5de6\u908a\u662f\u5168\u90e8\u56de\u8986\u5b58\u6a94\uff0c\u4e0d\u9650\u4eca\u5929\u3002\u5e8f\u865f\u8207\u5167\u5bb9\u90fd\u7559\u5728\u9019\u4efd\u7d00\u9304\u88e1\u3002"
-              : "\u8b80\u5361\u6642\u5f9e\u5065\u4fdd\u7f72\u4e0b\u8f09\u4e26\u7559\u4e0b\u4f86\u3002\u5225\u4eba\u8f49\u4f86\u7684\u3001\u5c0d\u65b9\u56de\u8986\u6211\u5011\u7684\uff0c\u90fd\u5728\u9019\u88e1\u3002\u5df2\u7d93\u63a5\u53d7\u904e\u7684\uff0c\u8b80\u5361\u6642\u4e0d\u6703\u518d\u554f\u3002"}
+              ? "\u7576\u5929\u9000\u639b\u53ef\u4ee5\u522a\u9664\u9019\u7b46\u56de\u5fa9\u3002\u4e0d\u662f\u7576\u5929\u7684\u5c31\u7559\u8457\u3002"
+              : "\u6bcf\u5929 07:10 \u4e0b\u8f09\u4e00\u6b21\u3002\u73fe\u5728\u4e0b\u8f09\u662f\u984d\u5916\u518d\u505a\u3002\u53d6\u56de\u4ee5\u5f8c\u5c0d\u9f4a\u8f49\u51fa\u8207\u8f49\u5165\uff0c\u4e0d\u62ff\u4f86\u6c7a\u5b9a\u80fd\u4e0d\u80fd\u522a\u3002"}
         </span>
       </div>
       <div className="flex min-h-0 flex-1">

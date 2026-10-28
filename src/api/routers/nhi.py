@@ -1371,6 +1371,29 @@ def _cancel_local_encounter(store: SqliteShadowStore, encounter_id: str) -> dict
     return repo.update_resource("Encounter", encounter_id, payload)
 
 
+def _referral_cancel_block(encounter_id: str) -> str:
+    """Uploaded rows that cannot be withdrawn stop the registration from leaving."""
+    from src.core.referral_desk import slips_for_encounter
+    from src.core.referral_guard import classify
+
+    for slip in slips_for_encounter(encounter_id):
+        verdict = classify(slip)
+        if verdict["action"] == "keep":
+            return verdict["reason"] + "\u639b\u865f\u6c92\u6709\u522a\u3002"
+        if verdict["action"] in {"delete-open", "delete-reply"}:
+            return "\u9019\u7b46\u639b\u865f\u7684\u8f49\u8a3a\u55ae\u9084\u5728\u3002\u8acb\u5148\u5230\u96fb\u5b50\u8f49\u8a3a\u522a\u9664\uff0c\u518d\u9000\u639b\u3002"
+    return ""
+
+
+def _drop_referral_drafts(encounter_id: str) -> None:
+    from src.core.referral_desk import remove_slip, slips_for_encounter
+    from src.core.referral_guard import classify
+
+    for slip in slips_for_encounter(encounter_id):
+        if classify(slip)["action"] == "draft":
+            remove_slip(str(slip.get("id") or ""))
+
+
 @router.post(
     "/v1/encounter/cancel",
     summary="刪除掛號（本機 cancelled；退 IC 走 SequelNumber/Rollback）",
@@ -1379,6 +1402,11 @@ def cancel_register(body: NhiCancelRegisterRequest) -> dict[str, Any]:
     mode = (body.mode or "").strip().lower()
     if mode not in {"local", "ic", "both"}:
         raise HTTPException(status_code=422, detail="mode 必須是 local（刪除）、ic（退IC）、both（刪除+退IC）")
+
+    if mode in {"local", "both"}:
+        blocked = _referral_cancel_block(body.encounterId)
+        if blocked:
+            raise HTTPException(status_code=422, detail=blocked)
 
     store = _store()
     encounter = store.get_cached_resource("Encounter", body.encounterId)
@@ -1425,6 +1453,7 @@ def cancel_register(body: NhiCancelRegisterRequest) -> dict[str, Any]:
 
     local_ok = False
     if mode in {"local", "both"}:
+        _drop_referral_drafts(body.encounterId)
         _cancel_local_encounter(store, body.encounterId)
         local_ok = True
 

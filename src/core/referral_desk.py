@@ -49,6 +49,8 @@ def _ensure(conn) -> None:
         conn.execute("ALTER TABLE referral_slip ADD COLUMN local_id TEXT NOT NULL DEFAULT ''")
     if "nhi_id" not in cols:
         conn.execute("ALTER TABLE referral_slip ADD COLUMN nhi_id TEXT NOT NULL DEFAULT ''")
+    if "uploaded_at" not in cols:
+        conn.execute("ALTER TABLE referral_slip ADD COLUMN uploaded_at TEXT NOT NULL DEFAULT ''")
 
 
 def list_slips(kind: str = "") -> list[dict[str, Any]]:
@@ -165,6 +167,7 @@ _SHEET_KEYS = (
     ("handoff", "handoff"),
     ("drugs", "drugs"),
     ("aux", "aux"),
+    ("selfSeq", "selfSeq"),
 )
 
 
@@ -224,14 +227,84 @@ def mark_uploaded(slip_id: str, *, local_id: str, nhi_id: str, status: str) -> N
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     with get_shadow_store()._connect() as conn:
         _ensure(conn)
+        prior = conn.execute(
+            "SELECT uploaded_at FROM referral_slip WHERE id=?",
+            (slip,),
+        ).fetchone()
+        uploaded_at = str(prior[0] or "") if prior and prior[0] else now
         conn.execute(
             """
             UPDATE referral_slip
-            SET status=?, local_id=?, nhi_id=?, updated_at=?
+            SET status=?, local_id=?, nhi_id=?, uploaded_at=?, updated_at=?
             WHERE id=?
             """,
-            (status, local_id or "", nhi_id or "", now, slip),
+            (status, local_id or "", nhi_id or "", uploaded_at, now, slip),
         )
+
+
+def get_slip(slip_id: str) -> dict[str, Any] | None:
+    slip = (slip_id or "").strip()
+    if not slip:
+        return None
+    with get_shadow_store()._connect() as conn:
+        _ensure(conn)
+        row = conn.execute("SELECT * FROM referral_slip WHERE id=?", (slip,)).fetchone()
+    if row is None:
+        return None
+    return _public(dict(row))
+
+
+def slips_for_encounter(encounter_id: str) -> list[dict[str, Any]]:
+    encounter = (encounter_id or "").strip()
+    if not encounter:
+        return []
+    with get_shadow_store()._connect() as conn:
+        _ensure(conn)
+        rows = conn.execute(
+            "SELECT * FROM referral_slip WHERE encounter_id=?",
+            (encounter,),
+        ).fetchall()
+    return [_public(dict(row)) for row in rows]
+
+
+def remove_slip(slip_id: str) -> None:
+    slip = (slip_id or "").strip()
+    if not slip:
+        return
+    with get_shadow_store()._connect() as conn:
+        _ensure(conn)
+        conn.execute("DELETE FROM referral_slip WHERE id=?", (slip,))
+
+
+def remember_self_seq(slip_id: str, self_seq: str) -> None:
+    slip = (slip_id or "").strip()
+    token = (self_seq or "").strip()
+    if not slip or not token:
+        return
+    with get_shadow_store()._connect() as conn:
+        _ensure(conn)
+        _write_slip_extra(conn, slip, {"selfSeq": token})
+
+
+def attach_bureau_serial(self_seq: str, serial: str) -> None:
+    """Write the bureau serial onto the local row that used this self number."""
+    token = (self_seq or "").strip()
+    bureau = (serial or "").strip()
+    if not token or len(bureau) != 16 or not bureau.isdigit():
+        return
+    with get_shadow_store()._connect() as conn:
+        _ensure(conn)
+        rows = conn.execute(
+            "SELECT id, serial, sheet_json FROM referral_slip WHERE sheet_json LIKE ?",
+            ("%" + token + "%",),
+        ).fetchall()
+        for row in rows:
+            if str(row[1] or "").strip():
+                continue
+            blob = str(row[2] or "")
+            if token not in blob:
+                continue
+            conn.execute("UPDATE referral_slip SET serial=? WHERE id=?", (bureau, row[0]))
 
 
 def _sheet(fields: dict[str, Any]) -> dict[str, Any]:
@@ -268,6 +341,8 @@ def _public(fields: dict[str, Any]) -> dict[str, Any]:
         "status": fields["status"],
         "localId": fields.get("local_id") or "",
         "nhiId": fields.get("nhi_id") or "",
+        "uploadedAt": fields.get("uploaded_at") or "",
+        "selfSeq": extra.get("selfSeq") or "",
         "openedOn": fields.get("opened_on") or "",
         "updatedAt": fields["updated_at"],
         "sex": extra.get("sex") or "",

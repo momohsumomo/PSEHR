@@ -982,6 +982,30 @@ public class PsehrTrustAll : ICertificatePolicy {
           Send-Json $client '{"ok":true,"code":"started"}' 200
           continue
         }
+        if ($verb -eq "POST" -and $target -eq "/tools/referral-io") {
+          $splitAt = $text.IndexOf("`r`n`r`n")
+          $rawBody = ""
+          if ($splitAt -ge 0) { $rawBody = $text.Substring($splitAt + 4) }
+          $box = Join-Path $env:LOCALAPPDATA "PSEHR"
+          New-Item -ItemType Directory -Force -Path $box | Out-Null
+          $req = Join-Path $box ("ref-" + [guid]::NewGuid().ToString("n") + ".json")
+          [IO.File]::WriteAllText($req, $rawBody, (New-Object System.Text.UTF8Encoding $false))
+          $exe32 = Join-Path $env:SystemRoot "SysWOW64\WindowsPowerShell\v1.0\powershell.exe"
+          $script = Join-Path $clientDir "referral_io.ps1"
+          $raw = ""
+          if ((Test-Path -LiteralPath $script) -and (Test-Path -LiteralPath $exe32)) {
+            $raw = (& $exe32 -NoProfile -ExecutionPolicy Bypass -File $script -RequestFile $req | Out-String).Trim()
+          }
+          Remove-Item -LiteralPath $req -ErrorAction SilentlyContinue
+          $json = ""
+          foreach ($row in @($raw -split "`r?`n")) {
+            $trim = "$row".Trim()
+            if ($trim.StartsWith("{")) { $json = $trim }
+          }
+          if (-not $json) { $json = '{"ok":false,"reason":"referral io failed"}' }
+          Send-Json $client $json 200
+          continue
+        }
         if ($verb -eq "POST" -and $target -eq "/tools/coexist-test") {
           $note = Invoke-CoexistProbe
           Send-Json $client $note 200
@@ -1055,6 +1079,7 @@ function Start-DeskLoop {
     Start-LocalPrinterListener
     Request-Release5066
     $nextSide = [datetime]::MinValue
+    $nextReferral = [datetime]::MinValue
     while ($true) {
       try {
         $box = Join-Path $Root "print-box"
@@ -1100,6 +1125,21 @@ function Start-DeskLoop {
           }
           try { Watch-ClinicEdges } catch { Write-Log $_.Exception.Message }
           try { Stop-IdlePrintEdge } catch { Write-Log $_.Exception.Message }
+          if ((Get-Date) -ge $nextReferral) {
+            $nextReferral = (Get-Date).AddMinutes(15)
+            try {
+              $daily = Join-Path $Here "referral_daily.ps1"
+              $mark = Join-Path $env:LOCALAPPDATA "PSEHR\ref-daily.txt"
+              $today = Get-Date -Format "yyyy-MM-dd"
+              $state = ""
+              if (Test-Path -LiteralPath $mark) { $state = [IO.File]::ReadAllText($mark).Trim() }
+              $due = ((Get-Date).TimeOfDay -ge [TimeSpan]::Parse("07:10:00")) -and ($state -ne ($today + " done"))
+              if ($due -and (Test-Path -LiteralPath $daily)) {
+                $ps = Join-Path $env:SystemRoot "System32\WindowsPowerShell\v1.0\powershell.exe"
+                Start-Process -FilePath $ps -ArgumentList "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$daily`"" -WindowStyle Hidden
+              }
+            } catch { Write-Log $_.Exception.Message }
+          }
         }
       } catch { Write-Log $_.Exception.Message }
       Start-Sleep -Milliseconds 250

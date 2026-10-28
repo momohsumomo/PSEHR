@@ -1026,9 +1026,132 @@ export type ReferralSlipRow = {
   serial: string;
   validUntil: string;
   status: string;
+  localId?: string;
+  nhiId?: string;
+  uploadedAt?: string;
+  selfSeq?: string;
   openedOn?: string;
   updatedAt: string;
 };
+
+const REFERRAL_DESK = "http://127.0.0.1:5310";
+
+async function postReferralIo(body: Record<string, unknown>): Promise<{
+  ok: boolean;
+  reason?: string;
+  localId?: string;
+  nhiId?: string;
+  code?: number;
+  rows?: Array<Record<string, string>>;
+}> {
+  const ctrl = new AbortController();
+  const timer = window.setTimeout(() => ctrl.abort(), 90000);
+  try {
+    const res = await fetch(`${REFERRAL_DESK}/tools/referral-io`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+      signal: ctrl.signal,
+    });
+    return (await res.json()) as {
+      ok: boolean;
+      reason?: string;
+      localId?: string;
+      nhiId?: string;
+      code?: number;
+      rows?: Array<Record<string, string>>;
+    };
+  } catch (err) {
+    if (err instanceof DOMException && err.name === "AbortError") {
+      return { ok: false, reason: "\u9001\u51fa\u7b49\u592a\u4e45\u3002" };
+    }
+    return { ok: false, reason: "\u9019\u53f0\u6c92\u6709\u56de\u5831\u8f49\u8a3a\u50b3\u8f38\u3002" };
+  } finally {
+    window.clearTimeout(timer);
+  }
+}
+
+export async function uploadReferralSlip(id: string, status: string): Promise<string> {
+  const packed = await request<{ ok: boolean; reason?: string; name?: string; type?: string; b64?: string }>(
+    "/nhi/v1/referral/pack",
+    { method: "POST", body: JSON.stringify({ id }) },
+  );
+  if (!packed.ok || !packed.b64 || !packed.name || !packed.type) {
+    throw new Error(packed.reason || "\u6c92\u6709\u9001\u51fa");
+  }
+  const sent = await postReferralIo({ op: "send", name: packed.name, type: packed.type, b64: packed.b64 });
+  if (!sent.ok || !sent.localId) {
+    throw new Error(sent.reason || `\u4e0a\u50b3\u51fd\u5f0f\u56de ${sent.code ?? ""}`);
+  }
+  await request("/nhi/v1/referral/result", {
+    method: "POST",
+    body: JSON.stringify({ id, localId: sent.localId, nhiId: sent.nhiId || "", status }),
+  });
+  return "\u5df2\u9001\u51fa";
+}
+
+export async function deleteReferralSlip(id: string): Promise<string> {
+  const packed = await request<{
+    ok: boolean;
+    localOnly?: boolean;
+    reason?: string;
+    name?: string;
+    type?: string;
+    b64?: string;
+  }>("/nhi/v1/referral/delete-pack", { method: "POST", body: JSON.stringify({ id }) });
+  if (!packed.ok) throw new Error(packed.reason || "\u4e0d\u80fd\u522a\u9664");
+  if (!packed.localOnly) {
+    const sent = await postReferralIo({ op: "send", name: packed.name, type: packed.type, b64: packed.b64 });
+    if (!sent.ok || !sent.localId) {
+      throw new Error(sent.reason || "\u522a\u9664\u6a94\u6c92\u6709\u9001\u51fa\uff0c\u7d00\u9304\u7559\u8457\u3002");
+    }
+    const dropped = await request<{ ok: boolean; reason?: string }>("/nhi/v1/referral/drop", {
+      method: "POST",
+      body: JSON.stringify({ id, sent: true, localId: sent.localId }),
+    });
+    if (!dropped.ok) throw new Error(dropped.reason || "\u7d00\u9304\u7559\u8457");
+    return "\u5df2\u9001\u51fa\u522a\u9664";
+  }
+  const dropped = await request<{ ok: boolean; reason?: string }>("/nhi/v1/referral/drop", {
+    method: "POST",
+    body: JSON.stringify({ id }),
+  });
+  if (!dropped.ok) throw new Error(dropped.reason || "\u4e0d\u80fd\u522a\u9664");
+  return "\u5df2\u522a\u9664";
+}
+
+export async function pullReferralNow(): Promise<string> {
+  const plan = await request<{
+    ok: boolean;
+    step?: string;
+    reason?: string;
+    files?: Array<{ kind: string; name: string; type: string; b64: string }>;
+    jobs?: Array<{ kind: string; localId: string; nhiId: string }>;
+  }>("/nhi/v1/referral/pull", { method: "POST", body: "{}" });
+  if (!plan.ok) throw new Error(plan.reason || "\u4e0b\u8f09\u6c92\u6709\u958b\u59cb");
+  if (plan.step === "wait") return plan.reason || "\u4e0b\u8f09\u9084\u5728\u8655\u7406\u3002";
+  if (plan.step === "send") {
+    for (const file of plan.files || []) {
+      const sent = await postReferralIo({ op: "send", name: file.name, type: file.type, b64: file.b64 });
+      if (!sent.ok || !sent.localId) throw new Error(sent.reason || "\u4e0b\u8f09\u8981\u6c42\u6c92\u6709\u9001\u51fa");
+      await request("/nhi/v1/referral/pull-sent", {
+        method: "POST",
+        body: JSON.stringify({ kind: file.kind, name: file.name, localId: sent.localId, nhiId: sent.nhiId || "" }),
+      });
+    }
+    return "\u5df2\u9001\u51fa\u4e0b\u8f09\u8981\u6c42\u3002\u5927\u7d04\u5341\u5206\u9418\u5f8c\u518d\u6309\u4e00\u6b21\uff0c\u5c31\u6703\u53d6\u56de\u4e26\u5c0d\u9f4a\u3002";
+  }
+  let count = 0;
+  for (const job of plan.jobs || []) {
+    const got = await postReferralIo({ op: "fetch", localId: job.localId, nhiId: job.nhiId });
+    const applied = await request<{ ok: boolean; count?: number }>("/nhi/v1/referral/pull-apply", {
+      method: "POST",
+      body: JSON.stringify({ localId: job.localId, kind: job.kind, rows: got.rows || [] }),
+    });
+    count += applied.count || 0;
+  }
+  return `\u5df2\u5c0d\u9f4a ${count} \u7b46\u3002`;
+}
 
 export async function fetchReferralSlips(kind: "out" | "reply"): Promise<{ items: ReferralSlipRow[] }> {
   return request(`/nhi/v1/referral/slips?kind=${kind}`);
@@ -1156,6 +1279,28 @@ export async function cancelRegister(body: {
   icRolledBack: boolean;
   reason: string;
 }> {
+  if (body.mode !== "ic") {
+    const hold = await request<{
+      ok: boolean;
+      reason?: string;
+      jobs?: Array<{ id: string; name: string; type: string; b64: string }>;
+    }>("/nhi/v1/referral/hold", {
+      method: "POST",
+      body: JSON.stringify({ encounterId: body.encounterId }),
+    });
+    if (!hold.ok) throw new Error(hold.reason || "\u9019\u7b46\u639b\u865f\u7684\u8f49\u8a3a\u4e0d\u80fd\u522a");
+    for (const job of hold.jobs || []) {
+      const sent = await postReferralIo({ op: "send", name: job.name, type: job.type, b64: job.b64 });
+      if (!sent.ok || !sent.localId) {
+        throw new Error(sent.reason || "\u522a\u9664\u6a94\u6c92\u6709\u9001\u51fa\uff0c\u639b\u865f\u6c92\u6709\u522a");
+      }
+      const dropped = await request<{ ok: boolean; reason?: string }>("/nhi/v1/referral/drop", {
+        method: "POST",
+        body: JSON.stringify({ id: job.id, sent: true, localId: sent.localId }),
+      });
+      if (!dropped.ok) throw new Error(dropped.reason || "\u639b\u865f\u6c92\u6709\u522a");
+    }
+  }
   const deskSign = body.mode === "local" ? undefined : await signLocalHc("03");
   const ctrl = new AbortController();
   const timer = window.setTimeout(() => ctrl.abort(), 35000);

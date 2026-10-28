@@ -27,6 +27,11 @@ QUERY_URL = "https://medws.nhi.gov.tw/IPI/API/IPIE0001/GetRefData_rc6"
 TEST_PATIENT_ID = "A000000005"
 OPEN_TYPE_CODE = "10"
 REPLY_TYPE_CODE = "04"
+# IPR_ETG_API and IPR_ETH_API both say NHI_DownloadB type 10.
+# The file itself says which delete: ETG h2=1, ETH h2=2.
+DELETE_TYPE_CODE = "10"
+# IPR_ETC_API: referral list download is type 27.
+LIST_TYPE_CODE = "27"
 # serial, self-seq, open date, kind, type name, hosp id, hosp name, status, contact, valid
 _FULL = re.compile(
     r"(\d{16}),([^,]*),(\d{8}),([1-4]),([^,]*),([^,]*),([^,]*),([^,]*),([^,]*),(\d{0,8})"
@@ -377,6 +382,7 @@ def build_open_xml(
     our_dept: str = "11",
     fax: str = "",
     email: str = "",
+    self_seq: str = "",
 ) -> bytes:
     """ETA open slip. Required tags follow the 2025/8/5 batch format."""
     sex_code = "1" if sex.strip() in {"1", "M", "\u7537"} else "2" if sex.strip() in {"2", "F", "\u5973"} else ""
@@ -411,9 +417,55 @@ def build_open_xml(
             ("h32", dest_phone),
             ("h33", handoff),
             ("h34", _ymd(valid_until)),
+            ("h36", self_seq),
         ],
         header=[("hospaddr", address), ("hospfax", fax), ("hospemail", email)],
     )
+
+
+def build_delete_xml(
+    *,
+    kind: str,
+    hosp: str,
+    serial: str,
+    self_seq: str,
+    doctor_id: str,
+    reason: str,
+) -> bytes:
+    """ETG deletes an open slip (h2=1). ETH deletes a reply (h2=2)."""
+    root = "ethhosp" if kind == "reply" else "etghosp"
+    body = "ethdata" if kind == "reply" else "etgdata"
+    bureau = serial if len(serial) == 16 and serial.isdigit() else ""
+    return _xml_bytes(
+        root,
+        hosp,
+        "",
+        body,
+        [
+            ("h1", bureau),
+            ("h2", "2" if kind == "reply" else "1"),
+            ("h3", (reason or "\u7576\u65e5\u9000\u639b")[:20]),
+            ("h4", doctor_id),
+            ("h5", self_seq),
+        ],
+    )
+
+
+def build_list_request(start_ymd: str, end_ymd: str) -> bytes:
+    """TXT body from IPR_ETC_API. Dates are western YYYYMMDD."""
+    return ("UPLOAD_S_DATE=%s\r\nUPLOAD_E_DATE=%s\r\n" % (start_ymd, end_ymd)).encode("ascii")
+
+
+def referral_upload_name(prefix: str, hosp: str, seq: str, on: date | None = None) -> str:
+    day = on or date.today()
+    roc = "%03d%02d%02d%s" % (day.year - 1911, day.month, day.day, seq)
+    return "%s%s-%s.xml" % (prefix, hosp, roc)
+
+
+def referral_list_name(hosp: str, query_kind: str, seq: str, on: date | None = None) -> str:
+    day = on or date.today()
+    roc = "%03d%02d%02d%s" % (day.year - 1911, day.month, day.day, seq)
+    return "%s-%s-%s.txt" % (hosp, query_kind, roc)
 
 
 def build_open_test_xml(*, on: date | None = None, hosp: str = DEFAULT_HOSPITAL_ID) -> bytes:
