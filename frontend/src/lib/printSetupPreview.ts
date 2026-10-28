@@ -356,7 +356,7 @@ function definedPages(
       copayCode: "D12",
       dept: "\u76ae\u819a\u79d1",
       visitDate: "2026-10-24",
-      cardNo: "0001",
+      cardNo: "W001",
       queueNo: "1",
       doctorId: "A000",
       diagnoses: [{ code: "L309", text: "\u76ae\u819a\u708e" }],
