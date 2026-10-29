@@ -84,6 +84,8 @@ export function buildVisitSaveDraft(args: {
   currentRx: RxLine[];
   doctor?: string;
   doctorId?: string;
+  /** Pharmacist chosen on this computer before the chart was opened. */
+  pharmacist?: string;
   consultFeeDefault?: string;
   drugs?: CatalogDrug[];
   usages?: CatalogUsage[];
@@ -150,10 +152,7 @@ export function buildVisitSaveDraft(args: {
     aCode: DASH,
     doctor: doctorLabel,
     doctorId: args.doctorId || "",
-    pharmacist:
-      args.selected?.pharmacist && args.selected.pharmacist !== DASH
-        ? String(args.selected.pharmacist)
-        : "",
+    pharmacist: (args.pharmacist || "").trim(),
     dept: "皮膚科",
     dxText: dx0?.text || DASH,
     icd10: dx0?.icd10 || dx0?.nhiIcd10 || DASH,

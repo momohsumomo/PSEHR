@@ -15,7 +15,7 @@ import { ageYearsFromRoc, applyAgeFees, policyFromFees } from "@/lib/ageFee";
 import { loadClinicBundle, loadClinicRegisterDefaults, readLocalClinicBundle } from "@/lib/clinicProfile";
 import { cardIdentityBenefit } from "@/lib/cardIdentity";
 import { identityVisitFees, matchIdCategory } from "@/lib/idCategory";
-import { lastPharmacist, shiftForClock } from "@/lib/clinicSession";
+import { shiftForClock } from "@/lib/clinicSession";
 import { mapApiPatientToHit, type PatientHit } from "@/lib/patientSearch";
 import { shiftQueueNumbers, takeSmallestQueueNumber } from "@/lib/queueOrder";
 import { AssignHcReaderButton } from "@/components/clinic/AssignHcReaderButton";
@@ -291,7 +291,6 @@ export function SelfRegisterKioskPage() {
       hcId: args.cardId,
       hcIdNo: args.idNo,
       shift,
-      pharmacist: lastPharmacist() || defaults.defaultPharmacistId || undefined,
       doctorId: defaults.defaultDoctorId || undefined,
       encounterDate: day,
       visitClock: nowClock(),
@@ -410,8 +409,8 @@ export function SelfRegisterKioskPage() {
     >
       <header className="relative shrink-0 border-b border-[#d7e3e8] bg-white/70 px-8 pb-4 pt-5 text-center backdrop-blur-sm">
         <div className="absolute right-3 top-3 z-20 flex items-start gap-2">
+          <CardDeskTools variant="light" registerOnly />
           <AssignHcReaderButton />
-          <CardDeskTools variant="light" />
         </div>
         <p className="text-[1.7rem] font-semibold tracking-wide text-[#12324a]">{clinicName || "\u81ea\u52a9\u639b\u865f"}</p>
         <h1 className="mt-1 text-5xl font-bold tracking-[0.18em] text-[#12324a]">

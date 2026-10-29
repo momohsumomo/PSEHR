@@ -29,7 +29,7 @@ export function AssignHcReaderButton() {
           void assign();
         }}
       >
-        {"\u6307\u5b9a\u5065\u4fdd\u5361"}
+        {"\u6307\u5b9a\u5065\u4fdd\u5361\u8b80\u5361\u6a5f"}
       </button>
       {note ? (
         <div className="absolute right-0 z-50 mt-1 w-72 rounded border border-sky-700 bg-white p-2 text-[12px] leading-snug text-black shadow-lg">

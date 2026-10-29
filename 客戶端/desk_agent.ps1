@@ -952,8 +952,8 @@ public class PsehrTrustAll : ICertificatePolicy {
         }
         if ($verb -eq "POST" -and $target -eq "/tools/card-pair") {
           $action = "ensure"
-          if ($line -match "action=(ensure|restart6|restart5)") { $action = $Matches[1] }
-          if ($text -match '"action"\s*:\s*"(ensure|restart6|restart5)"') { $action = $Matches[1] }
+          if ($line -match "action=(ensure6|ensure|restart6|restart5)") { $action = $Matches[1] }
+          if ($text -match '"action"\s*:\s*"(ensure6|ensure|restart6|restart5)"') { $action = $Matches[1] }
           $pair = Join-Path $clientDir "card_pair.ps1"
           $raw = ""
           if (Test-Path -LiteralPath $pair) {
@@ -1176,7 +1176,9 @@ if ($Intake) {
 if ($Open -or $Install -or $Register) {
   Request-Release5066
   $pair = Join-Path $Here "card_pair.ps1"
-  if (Test-Path -LiteralPath $pair) { & $pair -Action ensure | Out-Null }
+  $pairAction = "ensure"
+  if ($Register) { $pairAction = "ensure6" }
+  if (Test-Path -LiteralPath $pair) { & $pair -Action $pairAction | Out-Null }
   else { Start-LocalCard6 }
   $ps = Join-Path $env:SystemRoot "System32\WindowsPowerShell\v1.0\powershell.exe"
   Start-Process -FilePath $ps -ArgumentList "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$PSCommandPath`"" -WindowStyle Hidden

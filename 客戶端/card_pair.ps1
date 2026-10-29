@@ -1,5 +1,5 @@
 param(
-  [ValidateSet("ensure", "restart6", "restart5", "status")]
+  [ValidateSet("ensure", "ensure6", "restart6", "restart5", "status")]
   [string]$Action = "status"
 )
 
@@ -50,11 +50,14 @@ function Install-Shield {
   $orig = Join-Path $destDir "WinSCard_orig.dll"
   $sys = Join-Path $env:SystemRoot "SysWOW64\WinSCard.dll"
   $packed = Join-Path $PSScriptRoot "reader-block\WinSCard.dll"
-  if (-not (Test-Path -LiteralPath $destDir)) { return $false }
-  if (-not (Test-Path -LiteralPath $packed)) { return (Test-ShieldFile $dest) }
+  if (-not (Test-Path -LiteralPath $destDir)) { return "nobin" }
+  if (-not (Test-Path -LiteralPath $packed)) {
+    if (Test-ShieldFile $dest) { return "ok" }
+    return "nopack"
+  }
   $alive = @(Get-Process -Name "csfsim" -ErrorAction SilentlyContinue)
   if ($alive.Count -gt 0) {
-    if (Test-FiveBlocked) { return $true }
+    if (Test-FiveBlocked) { return "ok" }
     Stop-FiveProcess
   }
   try {
@@ -64,23 +67,26 @@ function Install-Shield {
     if (-not (Test-Path -LiteralPath $orig) -and (Test-Path -LiteralPath $sys)) {
       Copy-Item -LiteralPath $sys -Destination $orig -Force
     }
-  } catch { return $false }
-  return (Test-ShieldFile $dest)
+  } catch { return "copy" }
+  if (Test-ShieldFile $dest) { return "ok" }
+  return "copy"
 }
 
 function Start-FiveChecked {
   $exe = "C:\NHI\BIN\csfsim.exe"
   if (-not (Test-Path -LiteralPath $exe)) { return "missing" }
-  if (-not (Install-Shield)) { return "shield" }
+  $shield = Install-Shield
+  if ($shield -ne "ok") { return ("shield-" + $shield) }
   $alive = @(Get-Process -Name "csfsim" -ErrorAction SilentlyContinue)
   if ($alive.Count -gt 0 -and (Test-FiveBlocked)) { return "running" }
   if ($alive.Count -gt 0) { Stop-FiveProcess }
-  if (-not (Install-Shield)) { return "shield" }
+  $shield = Install-Shield
+  if ($shield -ne "ok") { return ("shield-" + $shield) }
   Start-Process -FilePath $exe -WorkingDirectory "C:\NHI\BIN" | Out-Null
   Start-Sleep -Seconds 2
   if (-not (Test-FiveBlocked)) {
     Stop-FiveProcess
-    return "shield"
+    return "shield-load"
   }
   return "started"
 }
@@ -123,22 +129,25 @@ function Restart-FiveChecked {
   $exe = "C:\NHI\BIN\csfsim.exe"
   if (-not (Test-Path -LiteralPath $exe)) { return "missing" }
   Stop-FiveProcess
-  if (-not (Install-Shield)) { return "shield" }
+  $shield = Install-Shield
+  if ($shield -ne "ok") { return ("shield-" + $shield) }
   Start-Process -FilePath $exe -WorkingDirectory "C:\NHI\BIN" | Out-Null
   Start-Sleep -Seconds 2
   if (-not (Test-FiveBlocked)) {
     Stop-FiveProcess
-    return "shield"
+    return "shield-load"
   }
   return "started"
 }
 
 $sixResult = ""
 $fiveResult = ""
-if ($Action -eq "ensure" -or $Action -eq "status") {
+if ($Action -eq "ensure" -or $Action -eq "ensure6" -or $Action -eq "status") {
   if ($Action -eq "ensure") {
     $sixResult = Start-SixChecked
     $fiveResult = Start-FiveChecked
+  } elseif ($Action -eq "ensure6") {
+    $sixResult = Start-SixChecked
   }
 } elseif ($Action -eq "restart6") {
   $sixResult = Restart-SixChecked

@@ -1135,6 +1135,7 @@ export function ClinicOutpatientPage() {
       currentRx,
       doctor: doctorLabel,
       doctorId,
+      pharmacist: session?.pharmacist || lastPharmacist(),
       consultFeeDefault: defaults.consultFeeDefault,
       drugs: catalog.drugs,
       usages: catalog.usages,
@@ -1153,7 +1154,7 @@ export function ClinicOutpatientPage() {
     }
     setSaveDraft(draft);
     setSaveLayerOpen(true);
-  }, [isChart, selectedEncounterId, selected, displayDiagnoses, currentRx, liveCase, catalog.drugs, catalog.usages]);
+  }, [isChart, selectedEncounterId, selected, displayDiagnoses, currentRx, liveCase, catalog.drugs, catalog.usages, session?.pharmacist]);
 
   useEffect(() => {
     if (!cloudAgainAsk) return;
@@ -1198,7 +1199,7 @@ export function ClinicOutpatientPage() {
           payType: saveDraft.payType !== "—" ? saveDraft.payType : undefined,
           dispense: saveDraft.dispense !== "—" ? saveDraft.dispense : undefined,
           treatSeq: saveDraft.treatSeq !== "—" ? saveDraft.treatSeq : undefined,
-          pharmacist: saveDraft.pharmacist || selected?.pharmacist,
+          pharmacist: saveDraft.pharmacist || session?.pharmacist || lastPharmacist() || undefined,
           doctorId,
           doctorName: doctorDisplayName(saveDraft.doctor, doctorId) || undefined,
           regFee: saveDraft.regFee !== "—" ? saveDraft.regFee : undefined,
@@ -1361,6 +1362,7 @@ export function ClinicOutpatientPage() {
     visitFingerprint,
     selected,
     handleStatusChange,
+    session?.pharmacist,
   ]);
 
   const printVisitReceipt = useCallback(() => {
@@ -1377,7 +1379,7 @@ export function ClinicOutpatientPage() {
         people = [];
       }
       const pharmacistName = pharmacistDisplayName(
-        selected?.pharmacist,
+        saveDraft.pharmacist || session?.pharmacist,
         people,
         session?.pharmacist,
       );
@@ -2233,7 +2235,7 @@ export function ClinicOutpatientPage() {
       referralHospId: entry.referralHospId || "",
       referralHospName: entry.referralHospName || "",
       referralDate: entry.referralDate || "",
-      pharmacist: entry.pharmacist || session?.pharmacist || lastPharmacist(),
+      pharmacist: session?.pharmacist || lastPharmacist(),
       doctorId: entry.doctorId || "",
       doctorName: entry.doctorName || "",
       paperCard: Boolean(entry.paperCard),
@@ -2913,11 +2915,7 @@ export function ClinicOutpatientPage() {
     診察費: selected?.consultFee || confirmForm.consultFee || "",
     押金: selected?.deposit || confirmForm.deposit || "",
     目前藥師:
-      pharmacistDisplayName(
-        selected?.pharmacist || confirmForm.pharmacist,
-        staffPeople,
-        selected?.pharmacist || confirmForm.pharmacist,
-      ) || "",
+      pharmacistDisplayName(session?.pharmacist, staffPeople, session?.pharmacist) || "",
     病患: selected?.patientDisplay || "",
   };
 
