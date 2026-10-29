@@ -6,6 +6,7 @@ import { doctorDisplayName, pickClinicDoctor } from "@/lib/doctorName";
 import { fetchStaff, saveReferralSlip, uploadReferralSlip } from "@/api/clinicApi";
 import { thisPcUploadsReferralOnSave } from "@/lib/clinicDevice";
 import { readLocalClinicBundle } from "@/lib/clinicProfile";
+import { referralDeptOptions } from "@/lib/referralDepts";
 import { HospitalLookupDialog, type NhiHospital } from "@/components/clinic/HospitalLookupDialog";
 import { useEscLayer } from "@/hooks/useEscLayer";
 import { formatBirthdayRoc } from "@/lib/patientSearch";
@@ -44,16 +45,7 @@ export type ReferralArchive = {
   openedOn?: string;
 };
 
-const DEPTS = [
-  "11 \u76ae\u819a\u79d1",
-  "10 \u5bb6\u91ab\u79d1",
-  "01 \u5167\u79d1",
-  "02 \u5916\u79d1",
-  "03 \u5c0f\u5152\u79d1",
-  "04 \u5a66\u7522\u79d1",
-  "06 \u5fa9\u5065\u79d1",
-  "14 \u6574\u578b\u5916\u79d1",
-];
+const DEPTS = referralDeptOptions();
 const PURPOSES: Array<[string, string]> = [
   ["1", "\u6025\u8a3a\u6cbb\u7642"],
   ["2", "\u4f4f\u9662\u6cbb\u7642"],
@@ -118,7 +110,7 @@ type Props = {
   encounterId?: string;
   slipId?: string;
   archive?: ReferralArchive | null;
-  onSaved?: () => void;
+  onSaved?: (info: { hosp: string; uploaded: boolean }) => void;
 };
 
 function rocToday(): string {
@@ -156,9 +148,9 @@ function plusDays(roc: string, days: number): string {
 }
 
 function deptChoice(code: string, fallback: string): string {
-  const key = code.trim();
-  const hit = DEPTS.find((item) => item === key || item.startsWith(key));
-  return hit || (key && key !== "\u2014" ? key : fallback);
+  const key = code.trim().toUpperCase();
+  const hit = DEPTS.find((item) => item.slice(0, 2).toUpperCase() === key || item === code.trim());
+  return hit || (code.trim() && code.trim() !== "\u2014" ? code.trim() : fallback);
 }
 
 function markedPurpose(raw: string): string {
@@ -337,13 +329,15 @@ export function ReferralSlipDialog({ open, seed, onClose, encounterId, slipId, a
       ourDept: ourDept.slice(0, 2),
     }).then(async (row) => {
       setLocalSlipId(row.id);
-      onSaved?.();
+      const hospName = hosp.trim();
+      onSaved?.({ hosp: hospName, uploaded: false });
       if (!uploadOnSave) {
         setNote("\u5df2\u8a18\u5165\u8f49\u51fa\u540d\u55ae\u3002\u9019\u6b21\u6c92\u6709\u4e0a\u50b3\u3002");
         return;
       }
       try {
         const text = await uploadReferralSlip(row.id, "\u5df2\u4e0a\u50b3");
+        onSaved?.({ hosp: hospName, uploaded: true });
         setNote(text);
       } catch (err: unknown) {
         const why = err instanceof Error ? err.message : "\u4e0a\u50b3\u5931\u6557";

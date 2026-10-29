@@ -635,11 +635,12 @@ export async function searchIcd10Book(query: string, primary = false): Promise<I
   return res.hits || [];
 }
 
-export async function registerMedication(body: Record<string, unknown>): Promise<void> {
-  await request("/nhi/v1/medication/register", {
+export async function registerMedication(body: Record<string, unknown>): Promise<string> {
+  const res = await request<{ medicationRequestId?: string }>("/nhi/v1/medication/register", {
     method: "POST",
     body: JSON.stringify(body),
   });
+  return String(res.medicationRequestId || "");
 }
 
 export async function retainEncounterChart(

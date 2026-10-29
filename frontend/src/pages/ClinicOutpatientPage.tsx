@@ -13,6 +13,7 @@ import { CertificateDialog } from "@/components/clinic/CertificateDialog";
 import { OutpatientSidebarQueue } from "@/components/clinic/OutpatientSidebarQueue";
 import { PatientLookDialog } from "@/components/clinic/PatientLookDialog";
 import { ReferralSlipDialog } from "@/components/clinic/ReferralSlipDialog";
+import { referralChiefLead } from "@/lib/referralDepts";
 import { IcCardInfoDialog } from "@/components/clinic/IcCardInfoDialog";
 import {
   pendingDuplicateHits,
@@ -3757,8 +3758,53 @@ export function ClinicOutpatientPage() {
         open={referralOpen}
         encounterId={selectedEncounterId || ""}
         onClose={() => setReferralOpen(false)}
-        onSaved={() => {
-          if (selectedEncounterId) void ensureOutboundReferralOrder(selectedEncounterId);
+        onSaved={(info) => {
+          const eid = selectedEncounterId;
+          if (!eid) return;
+          void (async () => {
+            try {
+              const medId = await ensureOutboundReferralOrder(eid);
+              if (medId) {
+                const line: RxLine = {
+                  id: medId,
+                  name: "\u8fa6\u7406\u8f49\u8a3a\u8cbb-\u96fb\u5b50\u8f49\u8a3a",
+                  sig: "\u4f9d\u91ab\u56d1",
+                  days: 1,
+                  qty: 1,
+                  nhiCode: "01036C",
+                  route: "treatment",
+                };
+                setApiRxOverlay((prev) => {
+                  const base = prev ?? apiCurrentRx ?? [];
+                  if (base.some((row) => (row.nhiCode || "").toUpperCase() === "01036C")) return prev ?? base;
+                  return [...base, line];
+                });
+                setVisitDrafts((prev) => {
+                  const draft = prev[eid];
+                  if (!draft || draft.rx.some((row) => (row.nhiCode || "").toUpperCase() === "01036C")) return prev;
+                  return { ...prev, [eid]: { ...draft, rx: [...draft.rx, line] } };
+                });
+                markChartDirty();
+              }
+            } catch (err: unknown) {
+              setActionError(err instanceof Error ? err.message : "\u8fa6\u7406\u8f49\u8a3a\u8cbb\u6c92\u6709\u52a0\u9032\u8655\u7f6e");
+            }
+            if (!info.uploaded) return;
+            const next = referralChiefLead(ccText, info.hosp);
+            if (next === ccText) return;
+            setCcText(next);
+            setVisitDrafts((prev) => {
+              const draft = prev[eid];
+              if (!draft || draft.cc === next) return prev;
+              return { ...prev, [eid]: { ...draft, cc: next } };
+            });
+            markChartDirty();
+            try {
+              await persistChiefComplaint(next);
+            } catch (err: unknown) {
+              setActionError(err instanceof Error ? err.message : "\u4e3b\u8ff0\u6c92\u6709\u5beb\u5165\u8f49\u8a3a\u8aaa\u660e");
+            }
+          })();
         }}
         seed={{
           name: selected?.patientDisplay || "",

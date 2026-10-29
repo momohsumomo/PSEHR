@@ -443,6 +443,7 @@ export function useClinicWorkspace(options?: {
   /** 後到的舊查詢不能蓋掉較新的病名／處置。 */
   const wsGen = useRef(0);
   const acceptOrderFlight = useRef<Set<string>>(new Set());
+  const outboundOrderFlight = useRef<Map<string, Promise<string>>>(new Map());
 
   const refreshQueue = useCallback(async (targetDate?: string) => {
     if (!apiMode) return;
@@ -652,22 +653,42 @@ export function useClinicWorkspace(options?: {
     }));
   }, []);
 
-  const ensureOutboundReferralOrder = useCallback(async (encounterId: string) => {
-    if (!encounterId) return;
-    const ws = await fetchWorkspace(encounterId, { historyLimit: 0 });
-    const has = mapRxFromWorkspace(ws.currentMedications || []).some((row) => {
-      return (row.nhiCode || "").toUpperCase() === "01036C";
-    });
-    if (has) return;
-    await registerMedication({
-      encounterId,
-      drugText: "\u8fa6\u7406\u8f49\u8a3a\u8cbb-\u96fb\u5b50\u8f49\u8a3a",
-      nhiCode: "01036C",
-      sig: "\u4f9d\u91ab\u56d1",
-      daysSupply: 1,
-      quantity: 1,
-    });
-    if (selectedEncounterId === encounterId) await refreshWorkspace(encounterId);
+  const ensureOutboundReferralOrder = useCallback(async (encounterId: string): Promise<string> => {
+    if (!encounterId) return "";
+    const running = outboundOrderFlight.current.get(encounterId);
+    if (running) return running;
+    const job = (async () => {
+      const ws = await fetchWorkspace(encounterId, { historyLimit: 0 });
+      const hit = mapRxFromWorkspace(ws.currentMedications || []).find((row) => {
+        return (row.nhiCode || "").toUpperCase() === "01036C";
+      });
+      if (hit?.id && !isDraftId(hit.id)) {
+        if (selectedEncounterId === encounterId) await refreshWorkspace(encounterId);
+        return hit.id;
+      }
+      let medId = await registerMedication({
+        encounterId,
+        drugText: "\u8fa6\u7406\u8f49\u8a3a\u8cbb-\u96fb\u5b50\u8f49\u8a3a",
+        nhiCode: "01036C",
+        sig: "\u4f9d\u91ab\u56d1",
+        daysSupply: 1,
+        quantity: 1,
+      });
+      if (!medId) {
+        const again = await fetchWorkspace(encounterId, { historyLimit: 0 });
+        medId = mapRxFromWorkspace(again.currentMedications || []).find((row) => {
+          return (row.nhiCode || "").toUpperCase() === "01036C" && row.id && !isDraftId(row.id);
+        })?.id || "";
+      }
+      if (selectedEncounterId === encounterId) await refreshWorkspace(encounterId);
+      return medId;
+    })();
+    outboundOrderFlight.current.set(encounterId, job);
+    try {
+      return await job;
+    } finally {
+      outboundOrderFlight.current.delete(encounterId);
+    }
   }, [refreshWorkspace, selectedEncounterId]);
 
   const ensureAcceptReferralOrder = useCallback(async (encounterId: string) => {

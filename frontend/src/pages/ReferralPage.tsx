@@ -14,6 +14,7 @@ import { ReferralSlipDialog, type ReferralSeed } from "@/components/clinic/Refer
 import { useClinicWorkspace } from "@/hooks/useClinicWorkspace";
 import { useEscLayer } from "@/hooks/useEscLayer";
 import { readLocalClinicBundle } from "@/lib/clinicProfile";
+import { referralDeptName } from "@/lib/referralDepts";
 import { HIS, HIS_FONT } from "@/lib/hisTheme";
 import type { QueueEntry } from "@/mocks/clinicMocks";
 
@@ -28,50 +29,10 @@ const OUT_PURPOSE: Array<[string, string]> = [
   ["6", "\u5176\u4ed6\u76ee\u7684"],
 ];
 
-const NHI_DEPT: Record<string, string> = {
-  "00": "\u4e0d\u5206\u79d1",
-  "01": "\u5bb6\u91ab\u79d1",
-  "02": "\u5167\u79d1",
-  "03": "\u5916\u79d1",
-  "04": "\u5c0f\u5152\u79d1",
-  "05": "\u5a66\u7522\u79d1",
-  "06": "\u9aa8\u79d1",
-  "07": "\u795e\u7d93\u5916\u79d1",
-  "08": "\u6ccc\u5c3f\u79d1",
-  "09": "\u8033\u9f3b\u5589\u79d1",
-  "10": "\u773c\u79d1",
-  "11": "\u76ae\u819a\u79d1",
-  "12": "\u795e\u7d93\u79d1",
-  "13": "\u7cbe\u795e\u79d1",
-  "14": "\u5fa9\u5065\u79d1",
-  "15": "\u6574\u578b\u5916\u79d1",
-  "16": "\u8077\u696d\u91ab\u5b78\u79d1",
-  "22": "\u6025\u8a3a\u91ab\u5b78\u79d1",
-  "2A": "\u7d50\u6838\u79d1",
-  "2B": "\u6d17\u814e\u79d1",
-  "40": "\u7259\u79d1",
-  AA: "\u6d88\u5316\u5167\u79d1",
-  AB: "\u5fc3\u81df\u8840\u7ba1\u5167\u79d1",
-  AC: "\u80f8\u8154\u5167\u79d1",
-  AD: "\u814e\u81df\u5167\u79d1",
-  AE: "\u98a8\u6fd5\u514d\u75ab\u79d1",
-  AF: "\u8840\u6db2\u816b\u7624\u79d1",
-  AG: "\u5167\u5206\u6ccc\u79d1",
-  AH: "\u611f\u67d3\u79d1",
-  BA: "\u76f4\u8178\u5916\u79d1",
-  BB: "\u5fc3\u81df\u8840\u7ba1\u5916\u79d1",
-  BC: "\u80f8\u8154\u5916\u79d1",
-  BD: "\u6d88\u5316\u5916\u79d1",
-  CA: "\u5c0f\u5152\u5916\u79d1",
-  CB: "\u65b0\u751f\u5152\u79d1",
-  DA: "\u75bc\u75db\u79d1",
-  EA: "\u5c45\u5bb6\u8b77\u7406",
-};
-
 function deptLabel(code: string | undefined): string {
   const key = (code || "").trim();
   if (!key) return "\u2014";
-  const name = NHI_DEPT[key];
+  const name = referralDeptName(key);
   return name ? `${key} ${name}` : key;
 }
 
@@ -282,8 +243,15 @@ export function ReferralPage() {
                 setNote(text);
                 setPicked("");
                 await load(mode);
+                if (text === "\u5df2\u9001\u51fa\u522a\u9664") {
+                  window.alert("\u5df2\u6210\u529f\u9001\u51fa\u53d6\u6d88\uff0c\u4e26\u522a\u9664\u9019\u5f35\u8f49\u8a3a\u55ae\u3002");
+                } else {
+                  window.alert("\u9019\u5f35\u9084\u6c92\u4e0a\u50b3\uff0c\u5df2\u5f9e\u540d\u55ae\u522a\u9664\u3002\u6c92\u6709\u9001\u53d6\u6d88\u3002");
+                }
               } catch (err: unknown) {
-                setNote(err instanceof Error ? err.message : "\u4e0d\u80fd\u522a\u9664");
+                const why = err instanceof Error ? err.message : "\u4e0d\u80fd\u522a\u9664";
+                setNote(why);
+                window.alert(why);
               } finally {
                 setBusy(false);
               }
