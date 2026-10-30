@@ -8,7 +8,7 @@ from typing import Any
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-from src.core.visit_certificate import find_for_visit, save_for_visit
+from src.core.visit_certificate import find_for_visit, next_serial, save_for_visit
 
 router = APIRouter(prefix="/clinic/certificate", tags=["Certificate"])
 
@@ -29,7 +29,7 @@ class CertificateBody(BaseModel):
 
 @router.get("")
 def saved(encounterId: str = "") -> dict[str, Any]:
-    return {"certificate": find_for_visit(encounterId)}
+    return {"certificate": find_for_visit(encounterId), "nextDocNo": next_serial()}
 
 
 @router.put("")

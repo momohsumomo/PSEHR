@@ -2612,10 +2612,12 @@ export type VisitCertificate = {
   updatedAt?: string;
 };
 
-export async function fetchVisitCertificate(encounterId: string): Promise<VisitCertificate | null> {
+export async function fetchVisitCertificate(
+  encounterId: string,
+): Promise<{ certificate: VisitCertificate | null; nextDocNo: string }> {
   const q = new URLSearchParams({ encounterId });
-  const body = await request<{ certificate: VisitCertificate | null }>(`/clinic/certificate?${q}`);
-  return body.certificate || null;
+  const body = await request<{ certificate: VisitCertificate | null; nextDocNo?: string }>(`/clinic/certificate?${q}`);
+  return { certificate: body.certificate || null, nextDocNo: body.nextDocNo || "" };
 }
 
 export async function saveVisitCertificate(body: VisitCertificate): Promise<VisitCertificate> {

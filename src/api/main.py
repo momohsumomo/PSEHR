@@ -132,6 +132,9 @@ def on_startup() -> None:
     from src.core.cc_learn import start_cc_learner
 
     start_cc_learner(store.db_path)
+    from src.core.visit_certificate import start_certificate_import
+
+    start_certificate_import()
 
 
 @app.on_event("shutdown")

@@ -37,6 +37,9 @@ function esc(s: string): string {
     .replace(/>/g, "&gt;");
 }
 
+const NO_VISIT =
+  "\u9019\u4f4d\u75c5\u4eba\u9084\u6c92\u6709\u9019\u6b21\u770b\u8a3a\uff0c\u4e0d\u80fd\u5b58\u6a94\u3002\u5148\u639b\u865f\u6216\u9078\u5b9a\u4e00\u7b46\u770b\u8a3a\u3002";
+
 function show(v: string | undefined): string {
   const s = String(v ?? "").trim();
   return s || "\u2014";
@@ -56,6 +59,7 @@ export function CertificateDialog({ open, onClose, seed, onOpenReferral }: Props
   const [clinicDoctor, setClinicDoctor] = useState("");
   const [saving, setSaving] = useState(false);
   const [savedAt, setSavedAt] = useState("");
+  const [nextDocNo, setNextDocNo] = useState("");
 
   const encounterId = String(seed?.encounterId || "").trim();
 
@@ -73,13 +77,16 @@ export function CertificateDialog({ open, onClose, seed, onOpenReferral }: Props
     setEnglish(false);
     setNote(null);
     setSavedAt("");
+    setNextDocNo("");
     setCertTab("c");
     const named = doctorDisplayName(seed?.doctorName) || seed?.doctorName || "";
     let cancel = false;
     if (encounterId) {
       void fetchVisitCertificate(encounterId)
-        .then((row) => {
-          if (cancel || !row) return;
+        .then(({ certificate: row, nextDocNo: next }) => {
+          if (cancel) return;
+          setNextDocNo(next);
+          if (!row) return;
           setDocNo(row.docNo || "");
           if (row.visitDate) setVisitDate(row.visitDate);
           if (row.printDate) setPrintDate(row.printDate);
@@ -134,14 +141,8 @@ export function CertificateDialog({ open, onClose, seed, onOpenReferral }: Props
     else setOrderText(text);
   };
 
-  const onSave = () => {
-    if (!encounterId) {
-      setNote("\u9019\u4f4d\u75c5\u4eba\u9084\u6c92\u6709\u9019\u6b21\u770b\u8a3a\uff0c\u4e0d\u80fd\u5b58\u6a94\u3002\u5148\u639b\u865f\u6216\u9078\u5b9a\u4e00\u7b46\u770b\u8a3a\u3002");
-      return;
-    }
-    setSaving(true);
-    setNote(null);
-    void saveVisitCertificate({
+  const saveNow = () =>
+    saveVisitCertificate({
       encounterId,
       medicalNo: seed?.medicalNo || "",
       patientName: name,
@@ -153,9 +154,21 @@ export function CertificateDialog({ open, onClose, seed, onOpenReferral }: Props
       appointment: appointmentText,
       doctor,
       english,
-    })
-      .then((row) => {
-        setSavedAt(row?.updatedAt || "");
+    }).then((row) => {
+      if (row?.docNo) setDocNo(row.docNo);
+      setSavedAt(row?.updatedAt || "");
+      return row;
+    });
+
+  const onSave = () => {
+    if (!encounterId) {
+      setNote(NO_VISIT);
+      return;
+    }
+    setSaving(true);
+    setNote(null);
+    void saveNow()
+      .then(() => {
         setNote("\u5df2\u5b58\u6a94\u3002\u4e0b\u6b21\u6253\u958b\u9019\u6b21\u770b\u8a3a\u7684\u8a3a\u65b7\u66f8\u6703\u5e36\u56de\u9019\u4e9b\u5167\u5bb9\u3002");
       })
       .catch((err: unknown) => {
@@ -164,13 +177,13 @@ export function CertificateDialog({ open, onClose, seed, onOpenReferral }: Props
       .finally(() => setSaving(false));
   };
 
-  const printCertificate = () => {
+  const printCertificate = (number: string = docNo) => {
     const html = buildCertificateHtml({
       clinicCode: clinic.clinicCode,
       clinicName: clinic.clinicName,
       licenseNo: clinic.licenseNo,
       clinicAddress: clinic.address,
-      docNo,
+      docNo: number,
       name,
       sex,
       medicalNo: seed?.medicalNo || "",
@@ -222,8 +235,22 @@ export function CertificateDialog({ open, onClose, seed, onOpenReferral }: Props
       onOpenReferral?.();
       return;
     }
-    if (kind === "appointment") printAppointment();
-    else printCertificate();
+    if (kind === "appointment") {
+      printAppointment();
+      return;
+    }
+    if (docNo.trim() || !encounterId) {
+      printCertificate();
+      return;
+    }
+    setSaving(true);
+    setNote(null);
+    void saveNow()
+      .then((row) => printCertificate(row?.docNo || ""))
+      .catch((err: unknown) => {
+        setNote(err instanceof Error ? err.message : "\u5b58\u6a94\u5931\u6557\uff0c\u6c92\u6709\u53d6\u5f97\u6587\u865f\u3002");
+      })
+      .finally(() => setSaving(false));
   };
 
   const btn = "border border-[#808080] bg-[#E8E8E8] px-2 py-1 text-[12px] font-bold";
@@ -264,7 +291,7 @@ export function CertificateDialog({ open, onClose, seed, onOpenReferral }: Props
         ) : (
           <div className="flex min-h-0 flex-1 flex-col gap-1 p-2">
             <div className="flex flex-wrap items-center gap-3 text-[13px] font-bold">
-              <label>{"\u8a3a\u65b7\u6587\u865f"} <input className="w-36 border border-[#808080] bg-white px-1 font-normal" value={docNo} onChange={(e) => setDocNo(e.target.value)} /></label>
+              <label>{"\u8a3a\u65b7\u6587\u865f"} <input className="w-36 border border-[#808080] bg-white px-1 font-normal" value={docNo} placeholder={nextDocNo ? `\u4e0b\u4e00\u865f ${nextDocNo}` : ""} onChange={(e) => setDocNo(e.target.value)} /></label>
               <label>{"\u5c31\u8a3a\u65e5"} <input className="w-28 border border-[#808080] bg-white px-1 font-normal" value={visitDate} onChange={(e) => setVisitDate(e.target.value)} /></label>
               <label>{"\u5217\u5370\u65e5"} <input className="w-28 border border-[#808080] bg-white px-1 font-normal" value={printDate} onChange={(e) => setPrintDate(e.target.value)} /></label>
               <span className="font-normal text-[#333]">{name} {seed?.medicalNo || ""}</span>
