@@ -118,7 +118,7 @@ const emptyForm = (): DrugForm => ({
 
 export function DrugCatalogPage() {
   const navigate = useNavigate();
-  const { catalog, loaded, notice: loadNotice, upsertDrug, removeDrug } = useClinicCatalog();
+  const { catalog, loaded, notice: loadNotice, keyOfDrug, upsertDrug, removeDrug } = useClinicCatalog();
   const [drugForms, setDrugForms] = useState<string[]>([]);
   const [search, setSearch] = useState("");
   const [filterOpen, setFilterOpen] = useState(true);
@@ -177,8 +177,7 @@ export function DrugCatalogPage() {
       setForm(emptyForm());
       return;
     }
-    const key = d.drugNo || d.alias || d.nhiCode;
-    setSelectedCode(key);
+    setSelectedCode(keyOfDrug(d));
     setForm({
       ...emptyForm(),
       drugNo: d.drugNo || "",
@@ -256,10 +255,12 @@ export function DrugCatalogPage() {
     }
     const num = (raw: string) => (raw.trim() === "" ? null : Number(raw));
     const existing =
-      catalog.drugs.find((d) => (d.drugNo || d.alias || d.name || d.nhiCode) === drugNo) || {};
+      (selectedCode && catalog.drugs.find((d) => keyOfDrug(d) === selectedCode)) ||
+      catalog.drugs.find((d) => (d.drugNo || d.alias || d.name || d.nhiCode) === drugNo) ||
+      {};
     setBusy(true);
     try {
-      await upsertDrug({
+      const saved = {
         ...existing,
         drugNo,
         alias: form.alias.trim(),
@@ -311,8 +312,9 @@ export function DrugCatalogPage() {
         warning: form.bagCc,
         adapt: form.adapt,
         patientRemind: form.patientRemind.trim(),
-      });
-      setSelectedCode(drugNo);
+      };
+      await upsertDrug(saved);
+      setSelectedCode(keyOfDrug(saved));
       setNotice("\u85e5\u54c1\u5df2\u5b58\u5165\u9662\u6240\u76ee\u9304\u8986\u5beb\uff08\u5f71\u5b50\u5eab\uff09\u3002");
     } catch (e) {
       setNotice(e instanceof Error ? e.message : "\u5b58\u6a94\u5931\u6557");
@@ -332,7 +334,7 @@ export function DrugCatalogPage() {
     try {
       await removeDrug(code);
       setNotice(`\u5df2\u522a\u9664\uff0f\u96b1\u85cf ${code}`);
-      const next = catalog.drugs.find((d) => (d.drugNo || d.alias) !== code);
+      const next = catalog.drugs.find((d) => keyOfDrug(d) !== code);
       loadDrug(next ?? null);
     } catch (e) {
       setNotice(e instanceof Error ? e.message : "\u522a\u9664\u5931\u6557");
@@ -355,7 +357,7 @@ export function DrugCatalogPage() {
               label: "\u4fee\u6539",
               color: HIS_FBAR_COLORS.F3,
               onClick: () => {
-                const d = catalog.drugs.find((x) => (x.drugNo || x.alias) === selectedCode);
+                const d = catalog.drugs.find((x) => keyOfDrug(x) === selectedCode);
                 if (!d) {
                   setNotice("\u8acb\u5148\u5728\u53f3\u5074\u9078\u4e00\u7b46");
                   return;
@@ -552,7 +554,7 @@ export function DrugCatalogPage() {
             { key: "indexFlag", label: "\u9078\u7528", width: "3rem", mono: true },
           ]}
           rows={displayList}
-          rowKey={(d) => d.drugNo || d.alias || d.nhiCode}
+          rowKey={(d) => keyOfDrug(d)}
           selectedKey={selectedCode}
           onSelect={loadDrug}
           cell={(d, key) =>

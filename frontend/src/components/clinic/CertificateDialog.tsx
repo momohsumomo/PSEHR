@@ -17,6 +17,7 @@ export type CertificateSeed = {
   address?: string;
   dept?: string;
   diagnosesText?: string;
+  diagnosesTextEn?: string;
   doctorName?: string;
   visitDate?: string;
 };
@@ -309,9 +310,16 @@ export function CertificateDialog({ open, onClose, seed, onOpenReferral }: Props
                     {saving ? "\u5b58\u6a94\u4e2d\u2026" : "\u5b58\u6a94"}
                   </button>
                   <button type="button" className={btn} onClick={onPrint}>{"\u5217\u5370\uff08\u8a2d\u5b9a\uff09"}</button>
-                  <button type="button" className={btn} onClick={() => setDiagnosis(seed?.diagnosesText || diagnosis)}>{"T \u5f9e\u7576\u65e5\u75c5\u6b77\u8f49\u5165"}</button>
+                  <button type="button" className={btn} onClick={() => setDiagnosis((english ? seed?.diagnosesTextEn : seed?.diagnosesText) || diagnosis)}>{"T \u5f9e\u7576\u65e5\u75c5\u6b77\u8f49\u5165"}</button>
                   <label className="text-[12px] font-normal">
-                    <input type="checkbox" checked={english} onChange={(e) => setEnglish(e.target.checked)} /> {"\u5217\u5370\u82f1\u6587\u683c\u5f0f\u8a3a\u65b7\u66f8"}
+                    <input type="checkbox" checked={english} onChange={(e) => {
+                      const on = e.target.checked;
+                      setEnglish(on);
+                      const zh = seed?.diagnosesText || "";
+                      const en = seed?.diagnosesTextEn || "";
+                      if (on && en && diagnosis === zh) setDiagnosis(en);
+                      if (!on && zh && diagnosis === en) setDiagnosis(zh);
+                    }} /> {"\u5217\u5370\u82f1\u6587\u683c\u5f0f\u8a3a\u65b7\u66f8"}
                   </label>
                 </div>
               </section>

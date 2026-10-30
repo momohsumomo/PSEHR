@@ -52,6 +52,7 @@ import {
 } from "@/components/clinic/ChartContextRail";
 import { useI18n } from "@/i18n/I18nContext";
 import { useClinicCatalog } from "@/hooks/useClinicCatalog";
+import type { CatalogDiagnosis } from "@/types/clinicCatalog";
 import { useClinicWorkspace } from "@/hooks/useClinicWorkspace";
 import { useDefaultUiConfig } from "@/hooks/useDefaultUiConfig";
 import type { DiagnosisRow, HistoryVisit, RxLine } from "@/mocks";
@@ -125,6 +126,27 @@ const PLACEHOLDER_CC = new Set(["門診掛號", "門診登記", "預掛", "預�
 function visibleComplaint(value: string | null | undefined): string {
   const text = (value || "").trim();
   return PLACEHOLDER_CC.has(text) ? "" : text;
+}
+
+function dxCodeKey(raw: string | undefined): string {
+  return String(raw || "").toUpperCase().replace(/[^0-9A-Z]/g, "");
+}
+
+/** 診斷書照醫聖寫中文病名；同一 ICD 有多個中文名時，用英文名對到看診選的那一個。 */
+function chineseDxName(row: DiagnosisRow, catalog: CatalogDiagnosis[]): string {
+  const text = String(row.text || "").trim();
+  if (/[\u4e00-\u9fff]/.test(text)) return text;
+  const code = dxCodeKey(row.icd10 || row.nhiIcd10);
+  if (!code) return "";
+  const hits = catalog.filter(
+    (d) => String(d.nameZh || "").trim() && (dxCodeKey(d.icd10) === code || dxCodeKey(d.nhiIcd10) === code),
+  );
+  const lower = text.toLowerCase();
+  const pick =
+    hits.find((d) => String(d.nameEn || d.text || "").trim().toLowerCase() === lower) ||
+    hits.find((d) => d.enabled === "Y") ||
+    hits[0];
+  return String(pick?.nameZh || "").trim();
 }
 
 const CHART_DRAFT_KEY = "psehr.chartDrafts.v1";
@@ -2998,6 +3020,14 @@ export function ClinicOutpatientPage() {
 
   const certificateSeed = useMemo(() => {
     const dx = displayDiagnoses
+      .map((d) => {
+        const name = chineseDxName(d, catalog.diagnoses) || `${d.icd10 || d.nhiIcd10 || ""} ${d.text}`.trim();
+        const site = String(d.site || "").trim();
+        return name && site ? `${name}(${site})` : name;
+      })
+      .filter(Boolean)
+      .join("\n");
+    const dxEn = displayDiagnoses
       .map((d) => `${d.icd10 || d.nhiIcd10 || ""} ${d.text}`.trim())
       .filter(Boolean)
       .join("\n");
@@ -3014,8 +3044,9 @@ export function ClinicOutpatientPage() {
       doctorName: selected?.doctorName,
       visitDate: currentDate,
       diagnosesText: dx,
+      diagnosesTextEn: dxEn,
     };
-  }, [selected, selectedEncounterId, patientEditSeed?.birthday, currentDate, displayDiagnoses]);
+  }, [selected, selectedEncounterId, patientEditSeed?.birthday, currentDate, displayDiagnoses, catalog.diagnoses]);
 
   const historyRxPanel = (
     <HistoryRxPanel

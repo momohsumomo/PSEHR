@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { ClinicCatalog } from "@/types/clinicCatalog";
 import {
   fetchCatalogOverrides,
@@ -78,9 +78,31 @@ function attachDrugTypes(catalog: ClinicCatalog, rows: DrugTypeRow[]): ClinicCat
   };
 }
 
-function drugKey(d: { nhiCode?: string; drugNo?: string; name?: string; alias?: string }): string {
+type DrugKeyFields = { nhiCode?: string; drugNo?: string; name?: string; alias?: string };
+
+function plainDrugKey(d: DrugKeyFields): string {
   // 必須用 drugNo／alias，不能用 nhiCode：同健保碼可有多筆診所自定名（如 條 vs 條涼）
   return String(d.drugNo || d.alias || d.name || d.nhiCode || "").trim();
+}
+
+/** 醫聖有藥碼重複（001 Cetia 與 01急診治療起始時間），只有這些藥碼再用簡稱分開。 */
+function clashingDrugNos(drugs: DrugKeyFields[]): Set<string> {
+  const seen = new Set<string>();
+  const clash = new Set<string>();
+  for (const d of drugs) {
+    const k = plainDrugKey(d);
+    if (!k) continue;
+    if (seen.has(k)) clash.add(k);
+    seen.add(k);
+  }
+  return clash;
+}
+
+function drugKey(d: DrugKeyFields, clash?: Set<string>): string {
+  const k = plainDrugKey(d);
+  if (!k || !clash?.has(k)) return k;
+  const extra = String(d.alias || d.nhiCode || d.name || "").trim();
+  return extra ? `${k}|${extra}` : k;
 }
 
 function dxKey(d: { short?: string; icd10?: string; nhiIcd10?: string; text?: string; name?: string }): string {
@@ -115,13 +137,14 @@ function mergeCatalog(base: ClinicCatalog, ov: CatalogOverrides): ClinicCatalog 
   const delDx = new Set(ov.deletedDxKeys || []);
   const delPkg = new Set(ov.deletedPackageKeys || []);
 
+  const clash = clashingDrugNos(base.drugs);
   const drugMap = new Map<string, any>();
   for (const d of base.drugs) {
-    const k = drugKey(d);
-    if (k && !delDrug.has(k)) drugMap.set(k, d);
+    const k = drugKey(d, clash);
+    if (k && !delDrug.has(k) && !delDrug.has(plainDrugKey(d))) drugMap.set(k, d);
   }
   for (const d of ov.drugs || []) {
-    const k = drugKey(d as any);
+    const k = drugKey(d as any, clash);
     if (!k) continue;
     const prev = drugMap.get(k) || {};
     drugMap.set(k, { ...prev, ...d, adapt: fullAdapt(prev.adapt, (d as any).adapt) });
@@ -236,27 +259,30 @@ export function useClinicCatalog() {
     [base],
   );
 
+  const drugClash = useMemo(() => clashingDrugNos(base.drugs), [base]);
+  const keyOfDrug = useCallback((d: DrugKeyFields) => drugKey(d, drugClash), [drugClash]);
+
   const upsertDrug = useCallback(
     async (drug: Record<string, unknown>) => {
-      const k = drugKey(drug as any);
+      const k = keyOfDrug(drug as any);
       if (!k) throw new Error("藥品需有健保代碼或藥碼");
       const drugs = [
-        ...(overrides.drugs || []).filter((d) => drugKey(d as any) !== k),
+        ...(overrides.drugs || []).filter((d) => keyOfDrug(d as any) !== k),
         drug,
       ];
       const deletedDrugKeys = (overrides.deletedDrugKeys || []).filter((x) => x !== k);
       await persistOverrides({ ...overrides, drugs, deletedDrugKeys });
     },
-    [overrides, persistOverrides],
+    [overrides, persistOverrides, keyOfDrug],
   );
 
   const removeDrug = useCallback(
     async (key: string) => {
-      const drugs = (overrides.drugs || []).filter((d) => drugKey(d as any) !== key);
+      const drugs = (overrides.drugs || []).filter((d) => keyOfDrug(d as any) !== key);
       const deletedDrugKeys = Array.from(new Set([...(overrides.deletedDrugKeys || []), key]));
       await persistOverrides({ ...overrides, drugs, deletedDrugKeys });
     },
-    [overrides, persistOverrides],
+    [overrides, persistOverrides, keyOfDrug],
   );
 
   const upsertDiagnosis = useCallback(
@@ -338,6 +364,7 @@ export function useClinicCatalog() {
     notice,
     overrides,
     reload,
+    keyOfDrug,
     upsertDrug,
     removeDrug,
     upsertDiagnosis,
