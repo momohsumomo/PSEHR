@@ -3002,6 +3002,7 @@ export function ClinicOutpatientPage() {
       .filter(Boolean)
       .join("\n");
     return {
+      encounterId: selectedEncounterId || selected?.encounterId || "",
       patientDisplay: selected?.patientDisplay,
       idNo: selected?.idNo,
       birthday: patientEditSeed?.birthday || selected?.birthday,
@@ -3014,7 +3015,7 @@ export function ClinicOutpatientPage() {
       visitDate: currentDate,
       diagnosesText: dx,
     };
-  }, [selected, patientEditSeed?.birthday, currentDate, displayDiagnoses]);
+  }, [selected, selectedEncounterId, patientEditSeed?.birthday, currentDate, displayDiagnoses]);
 
   const historyRxPanel = (
     <HistoryRxPanel

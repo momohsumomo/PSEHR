@@ -3,10 +3,11 @@ import { HIS_FONT } from "@/lib/hisTheme";
 import { openPrintPreview } from "@/lib/printJob";
 import { buildCertificateHtml } from "@/lib/clinicPrintDocs";
 import { doctorDisplayName, pickClinicDoctor } from "@/lib/doctorName";
-import { fetchStaff } from "@/api/clinicApi";
+import { fetchStaff, fetchVisitCertificate, saveVisitCertificate } from "@/api/clinicApi";
 import { readLocalClinicBundle } from "@/lib/clinicProfile";
 
 export type CertificateSeed = {
+  encounterId?: string;
   patientDisplay?: string;
   idNo?: string;
   birthday?: string;
@@ -46,12 +47,17 @@ export function CertificateDialog({ open, onClose, seed, onOpenReferral }: Props
   const [visitDate, setVisitDate] = useState("");
   const [printDate, setPrintDate] = useState("");
   const [diagnosis, setDiagnosis] = useState("");
-  const [order, setOrder] = useState("");
+  const [orderText, setOrderText] = useState("");
+  const [appointmentText, setAppointmentText] = useState("");
   const [kind, setKind] = useState<DocKind>("certificate");
   const [english, setEnglish] = useState(false);
   const [note, setNote] = useState<string | null>(null);
   const [certTab, setCertTab] = useState<"a" | "b" | "c" | "d" | "e">("c");
   const [clinicDoctor, setClinicDoctor] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [savedAt, setSavedAt] = useState("");
+
+  const encounterId = String(seed?.encounterId || "").trim();
 
   useEffect(() => {
     if (!open) return;
@@ -61,13 +67,33 @@ export function CertificateDialog({ open, onClose, seed, onOpenReferral }: Props
     setVisitDate(seed?.visitDate || roc);
     setPrintDate(roc);
     setDiagnosis(seed?.diagnosesText || "");
-    setOrder("");
+    setOrderText("");
+    setAppointmentText("");
     setKind("certificate");
     setEnglish(false);
     setNote(null);
+    setSavedAt("");
     setCertTab("c");
     const named = doctorDisplayName(seed?.doctorName) || seed?.doctorName || "";
     let cancel = false;
+    if (encounterId) {
+      void fetchVisitCertificate(encounterId)
+        .then((row) => {
+          if (cancel || !row) return;
+          setDocNo(row.docNo || "");
+          if (row.visitDate) setVisitDate(row.visitDate);
+          if (row.printDate) setPrintDate(row.printDate);
+          setDiagnosis(row.diagnosis || "");
+          setOrderText(row.order || "");
+          setAppointmentText(row.appointment || "");
+          setEnglish(Boolean(row.english));
+          setSavedAt(row.updatedAt || "");
+          setNote("\u5df2\u5e36\u5165\u9019\u6b21\u770b\u8a3a\u5b58\u904e\u7684\u8a3a\u65b7\u66f8\u3002");
+        })
+        .catch((err: unknown) => {
+          if (!cancel) setNote(err instanceof Error ? err.message : "\u8b80\u4e0d\u5230\u5b58\u904e\u7684\u8a3a\u65b7\u66f8\u3002");
+        });
+    }
     if (named) {
       setClinicDoctor(named);
     } else {
@@ -82,7 +108,7 @@ export function CertificateDialog({ open, onClose, seed, onOpenReferral }: Props
     return () => {
       cancel = true;
     };
-  }, [open, seed]);
+  }, [open, seed, encounterId]);
 
   useEffect(() => {
     if (!open) return;
@@ -102,6 +128,41 @@ export function CertificateDialog({ open, onClose, seed, onOpenReferral }: Props
   const name = seed?.patientDisplay || "";
   const sex = seed?.sex || "";
   const doctor = doctorDisplayName(seed?.doctorName) || seed?.doctorName || clinicDoctor;
+  const order = kind === "appointment" ? appointmentText : orderText;
+  const setOrder = (text: string) => {
+    if (kind === "appointment") setAppointmentText(text);
+    else setOrderText(text);
+  };
+
+  const onSave = () => {
+    if (!encounterId) {
+      setNote("\u9019\u4f4d\u75c5\u4eba\u9084\u6c92\u6709\u9019\u6b21\u770b\u8a3a\uff0c\u4e0d\u80fd\u5b58\u6a94\u3002\u5148\u639b\u865f\u6216\u9078\u5b9a\u4e00\u7b46\u770b\u8a3a\u3002");
+      return;
+    }
+    setSaving(true);
+    setNote(null);
+    void saveVisitCertificate({
+      encounterId,
+      medicalNo: seed?.medicalNo || "",
+      patientName: name,
+      docNo,
+      visitDate,
+      printDate,
+      diagnosis,
+      order: orderText,
+      appointment: appointmentText,
+      doctor,
+      english,
+    })
+      .then((row) => {
+        setSavedAt(row?.updatedAt || "");
+        setNote("\u5df2\u5b58\u6a94\u3002\u4e0b\u6b21\u6253\u958b\u9019\u6b21\u770b\u8a3a\u7684\u8a3a\u65b7\u66f8\u6703\u5e36\u56de\u9019\u4e9b\u5167\u5bb9\u3002");
+      })
+      .catch((err: unknown) => {
+        setNote(err instanceof Error ? err.message : "\u5b58\u6a94\u5931\u6557\u3002");
+      })
+      .finally(() => setSaving(false));
+  };
 
   const printCertificate = () => {
     const html = buildCertificateHtml({
@@ -217,6 +278,9 @@ export function CertificateDialog({ open, onClose, seed, onOpenReferral }: Props
                   onChange={(e) => setDiagnosis(e.target.value)}
                 />
                 <div className="mt-1 flex flex-wrap items-center gap-2">
+                  <button type="button" className={btn} disabled={saving} onClick={onSave}>
+                    {saving ? "\u5b58\u6a94\u4e2d\u2026" : "\u5b58\u6a94"}
+                  </button>
                   <button type="button" className={btn} onClick={onPrint}>{"\u5217\u5370\uff08\u8a2d\u5b9a\uff09"}</button>
                   <button type="button" className={btn} onClick={() => setDiagnosis(seed?.diagnosesText || diagnosis)}>{"T \u5f9e\u7576\u65e5\u75c5\u6b77\u8f49\u5165"}</button>
                   <label className="text-[12px] font-normal">
@@ -255,6 +319,7 @@ export function CertificateDialog({ open, onClose, seed, onOpenReferral }: Props
               </section>
             </div>
             {note ? <p className="text-[12px] text-[#004000]">{note}</p> : null}
+            {savedAt ? <p className="text-[11px] text-[#333]">{"\u4e0a\u6b21\u5b58\u6a94 " + savedAt}</p> : null}
           </div>
         )}
       </div>

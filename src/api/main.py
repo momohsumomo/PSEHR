@@ -21,6 +21,7 @@ from src.api.routers import (
     address_book,
     auth,
     allergy_intolerance,
+    certificate,
     claims,
     clinic_settings,
     desk,
@@ -111,6 +112,7 @@ app.include_router(sandbox.router)
 app.include_router(staff.router)
 app.include_router(clinic_settings.router)
 app.include_router(desk.router)
+app.include_router(certificate.router)
 app.include_router(address_book.router)
 app.include_router(claims.router)
 app.include_router(ic_upload.router)

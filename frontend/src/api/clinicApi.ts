@@ -2597,6 +2597,35 @@ export async function saveBackupSettings(body: { dir: string; keep: number }): P
   return request<BackupInfo>(`/maintenance/backup/settings`, { method: "PUT", body: JSON.stringify(body) });
 }
 
+export type VisitCertificate = {
+  encounterId: string;
+  medicalNo: string;
+  patientName: string;
+  docNo: string;
+  visitDate: string;
+  printDate: string;
+  diagnosis: string;
+  order: string;
+  appointment: string;
+  doctor: string;
+  english: boolean;
+  updatedAt?: string;
+};
+
+export async function fetchVisitCertificate(encounterId: string): Promise<VisitCertificate | null> {
+  const q = new URLSearchParams({ encounterId });
+  const body = await request<{ certificate: VisitCertificate | null }>(`/clinic/certificate?${q}`);
+  return body.certificate || null;
+}
+
+export async function saveVisitCertificate(body: VisitCertificate): Promise<VisitCertificate> {
+  const res = await request<{ certificate: VisitCertificate }>(`/clinic/certificate`, {
+    method: "PUT",
+    body: JSON.stringify(body),
+  });
+  return res.certificate;
+}
+
 export async function fetchQualityLabOrders(): Promise<Record<string, string>> {
   const body = await request<{ orders: { code: string; category: string }[] }>("/nhi/v1/quality-lab/orders");
   const out: Record<string, string> = {};
