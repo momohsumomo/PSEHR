@@ -3,9 +3,10 @@
 
 from __future__ import annotations
 
+import json
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 
 from src.app.bootstrap import get_shadow_store
@@ -51,9 +52,18 @@ def app_update_status() -> dict:
 
 
 @router.post("/app-update", summary="Replace the program from GitHub, keep data/")
-def app_update_apply() -> dict:
+async def app_update_apply(request: Request) -> dict:
+    chosen = ""
+    raw = await request.body()
+    if raw.strip():
+        try:
+            data = json.loads(raw)
+        except json.JSONDecodeError:
+            data = {}
+        if isinstance(data, dict):
+            chosen = str(data.get("version") or "").strip()[:80]
     try:
-        return app_update.begin_apply()
+        return app_update.begin_apply(version=chosen)
     except RuntimeError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     except Exception as exc:

@@ -1,6 +1,14 @@
 import { useEffect, useState } from "react";
 import { request } from "@/api/clinicApi";
 
+type RollbackChoice = {
+  version?: string;
+  label?: string;
+  stepsBack?: number;
+  installed?: boolean;
+  canApply?: boolean;
+};
+
 type SoftwareStatus = {
   localCommit?: string;
   localVersion?: string;
@@ -9,6 +17,7 @@ type SoftwareStatus = {
   updateAvailable?: boolean;
   devTree?: boolean;
   canApply?: boolean;
+  rollback?: RollbackChoice[];
   detail?: string;
 };
 
@@ -65,10 +74,13 @@ export function AppUpdateDialog({ open, onClose }: { open: boolean; onClose: () 
 
   if (!open) return null;
 
-  const applySoftware = () => {
-    setBusy("software");
+  const applySoftware = (version?: string) => {
+    setBusy(version || "software");
     setNote("");
-    void request<{ detail?: string; already?: boolean }>("/maintenance/app-update", { method: "POST" })
+    void request<{ detail?: string; already?: boolean }>("/maintenance/app-update", {
+      method: "POST",
+      body: JSON.stringify({ version: version || "" }),
+    })
       .then((body) => {
         setNote(
           body.already
@@ -140,10 +152,38 @@ export function AppUpdateDialog({ open, onClose }: { open: boolean; onClose: () 
             type="button"
             disabled={!software?.canApply || busy !== ""}
             className="mt-2 rounded border border-[#E7D7A8]/60 px-3 py-1 text-[13px] disabled:opacity-40"
-            onClick={applySoftware}
+            onClick={() => applySoftware()}
           >
             {busy === "software" ? "\u4e0b\u8f09\u4e2d\u2026" : "\u66f4\u65b0\u8edf\u9ad4"}
           </button>
+          {(software?.rollback || []).length > 0 ? (
+            <div className="mt-3 border-t border-white/10 pt-2">
+              <p className="text-[12px] leading-relaxed text-[#A9B8CE]">
+                {"\u56de\u6efe\u63db\u6210\u8f03\u65e9\u7684\u7a0b\u5f0f\u3002\u5169\u500b\u7248\u672c\u524d\u3001\u4e09\u500b\u7248\u672c\u524d\u90fd\u5728\u9019\u88e1\u3002\u75c5\u6b77\u7559\u5728\u539f\u4f86\u7684\u4f4d\u7f6e\u3002"}
+              </p>
+              {(software?.rollback || []).map((row) => (
+                <div key={row.version} className="mt-2 flex items-center justify-between gap-2">
+                  <span className="text-[12px] text-[#E7EEF8]">
+                    {row.label || ""}
+                    {" "}
+                    {row.version || ""}
+                  </span>
+                  {row.installed ? (
+                    <span className="text-[12px] text-[#8EA0BA]">{"\u76ee\u524d\u9019\u7248"}</span>
+                  ) : (
+                    <button
+                      type="button"
+                      disabled={!row.canApply || busy !== ""}
+                      className="rounded border border-[#E7D7A8]/60 px-3 py-1 text-[13px] disabled:opacity-40"
+                      onClick={() => applySoftware(row.version)}
+                    >
+                      {busy === row.version ? "\u4e0b\u8f09\u4e2d\u2026" : "\u56de\u6efe\u5230\u9019\u500b"}
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          ) : null}
         </section>
         <section className="rounded border border-white/10 p-3">
           <div className="text-[13px] font-medium">{"\u85e5\u50f9"}</div>
