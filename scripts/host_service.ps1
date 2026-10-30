@@ -208,6 +208,8 @@ function Register-HostAutostart {
 function Start-HostPair {
   if (Test-Listen 5000) { Write-HostLog "api port already up" } else { Start-Api; Write-HostLog "api launched" }
   if (Test-Listen 3010) { Write-HostLog "ui port already up" } else { Start-Ui; Write-HostLog "ui launched" }
+  Start-PrintAgent
+  Write-HostLog "print agent checked"
   Start-Beacon
   Allow-Lan
   if (-not (Wait-Ready)) {

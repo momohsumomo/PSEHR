@@ -441,8 +441,14 @@ function Test-ClinicEdgeVisible([string]$Profile) {
   return $false
 }
 
+function Get-ClinicWindowNames {
+  # window and kiosk are the Edge profiles opened by the host service.
+  # edge-app is the profile opened by the workstation launcher.
+  return @("edge-app", "edge-register", "edge-intake", "window", "kiosk", "intake")
+}
+
 function Test-AnyClinicEdgeVisible {
-  foreach ($name in @("edge-app", "edge-register", "edge-intake")) {
+  foreach ($name in (Get-ClinicWindowNames)) {
     if (Test-ClinicEdgeVisible (Join-Path $Root $name)) { return $true }
   }
   return $false
@@ -473,7 +479,7 @@ function Watch-ClinicEdges {
   if (-not $script:ClinicEdgeSeen) { $script:ClinicEdgeSeen = @{} }
   if (-not $script:ClinicEdgeGone) { $script:ClinicEdgeGone = @{} }
   $closed = $false
-  foreach ($name in @("edge-app", "edge-register", "edge-intake")) {
+  foreach ($name in (Get-ClinicWindowNames)) {
     $profile = Join-Path $Root $name
     $procs = @(Get-ClinicEdge $profile)
     if (Test-ClinicEdgeVisible $profile) {
