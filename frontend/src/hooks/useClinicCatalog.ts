@@ -91,6 +91,25 @@ function pkgKey(p: { id?: string; code?: string }): string {
   return String(p.id || p.code || "").trim();
 }
 
+/** 舊匯入把適應症及備註截在 4000 字，存過的藥若帶著截短版，要接回醫聖完整的進貨紀錄。 */
+const OLD_ADAPT_CUT = 4000;
+
+function fullAdapt(base: unknown, saved: unknown): string | undefined {
+  const full = typeof base === "string" ? base : "";
+  if (typeof saved !== "string") return full || undefined;
+  if (full.length <= OLD_ADAPT_CUT || saved.length < OLD_ADAPT_CUT - 200) return saved;
+  const head = full.slice(0, full.lastIndexOf("\n", OLD_ADAPT_CUT - 200) + 1);
+  if (head.length < 1000 || !saved.startsWith(head)) return saved;
+  const known = full.split("\n").map((line) => line.trim());
+  const knownSet = new Set(known);
+  const added = saved
+    .slice(head.length)
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => line && !knownSet.has(line) && !known.some((k) => k.startsWith(line)));
+  return added.length ? `${full}\n${added.join("\n")}` : full;
+}
+
 function mergeCatalog(base: ClinicCatalog, ov: CatalogOverrides): ClinicCatalog {
   const delDrug = new Set(ov.deletedDrugKeys || []);
   const delDx = new Set(ov.deletedDxKeys || []);
@@ -103,7 +122,9 @@ function mergeCatalog(base: ClinicCatalog, ov: CatalogOverrides): ClinicCatalog 
   }
   for (const d of ov.drugs || []) {
     const k = drugKey(d as any);
-    if (k) drugMap.set(k, { ...(drugMap.get(k) || {}), ...d });
+    if (!k) continue;
+    const prev = drugMap.get(k) || {};
+    drugMap.set(k, { ...prev, ...d, adapt: fullAdapt(prev.adapt, (d as any).adapt) });
   }
 
   const dxMap = new Map<string, any>();

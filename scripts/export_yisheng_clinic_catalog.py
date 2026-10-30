@@ -101,12 +101,11 @@ def _memo_text(handle, block: int, token: str) -> str:
     if len(meta) < 8:
         return ""
     length = int.from_bytes(meta[4:8], "big")
-    if length <= 0 or length > 8000:
+    if length <= 0 or length > 1_000_000:
         return ""
     raw = handle.read(length)
     cleaned = raw.decode("cp950", errors="ignore").replace("\x00", "")
-    cleaned = cleaned.replace("\r\n", "\n").replace("\r", "\n").strip()
-    return cleaned[:4000]
+    return cleaned.replace("\r\n", "\n").replace("\r", "\n").strip()
 
 
 def _opt_num(row: dict[str, str], key: str):
