@@ -103,13 +103,21 @@ function Convert-SlipForFeed([string]$Html, [double]$Width, [double]$Height, [st
   return @{ Html = $Html; Width = $Width; Height = $Height; Feed = $chosen }
 }
 
+function Get-PrintEdgeProfile {
+  return (Join-Path $env:LOCALAPPDATA "PSEHR\print-edge")
+}
+
 function Stop-PrintEdge {
   if ($script:PrintWs) { try { $script:PrintWs.Dispose() } catch {} }
   $script:PrintWs = $null
-  if ($script:PrintEdge -and -not $script:PrintEdge.HasExited) {
-    try { Stop-Process -Id $script:PrintEdge.Id -Force -ErrorAction SilentlyContinue } catch {}
+  $script:PrintPort = 0
+  if ($script:PrintEdge) {
+    try { if (-not $script:PrintEdge.HasExited) { Stop-Process -Id $script:PrintEdge.Id -Force -ErrorAction SilentlyContinue } } catch {}
   }
   $script:PrintEdge = $null
+  # Edge started from an administrator process hands itself to a normal-rights copy,
+  # so the PID started here may already be gone. Close everything on the profile.
+  try { Stop-ProfileEdge (Get-PrintEdgeProfile) } catch {}
   if ($script:PrintOut) { try { $script:PrintOut.Dispose() } catch {} }
   if ($script:PrintErr) { try { $script:PrintErr.Dispose() } catch {} }
   $script:PrintOut = $null
@@ -160,11 +168,10 @@ function Call-PrintCdp([string]$Method, [string]$ParamsJson) {
 }
 
 function Ensure-PrintEdge([string]$Edge) {
-  if ($script:PrintEdge -and -not $script:PrintEdge.HasExited -and $script:PrintWs -and $script:PrintWs.State -eq [System.Net.WebSockets.WebSocketState]::Open) { return }
+  if ($script:PrintWs -and $script:PrintWs.State -eq [System.Net.WebSockets.WebSocketState]::Open) { return }
   Stop-PrintEdge
   if (-not $Edge) { throw "Edge is not installed" }
-  $profile = Join-Path $env:LOCALAPPDATA "PSEHR\print-edge"
-  Stop-ProfileEdge $profile
+  $profile = Get-PrintEdgeProfile
   New-Item -ItemType Directory -Force -Path $profile | Out-Null
   $marker = Join-Path $profile "DevToolsActivePort"
   if (Test-Path -LiteralPath $marker) { Remove-Item -LiteralPath $marker -Force -ErrorAction SilentlyContinue }
@@ -185,14 +192,17 @@ function Ensure-PrintEdge([string]$Edge) {
   $deadline = (Get-Date).AddSeconds(15)
   $port = 0
   while ((Get-Date) -lt $deadline) {
-    if ($proc.HasExited) { throw "edge exited" }
     if (Test-Path -LiteralPath $marker) {
       $line = @(Get-Content -LiteralPath $marker -ErrorAction SilentlyContinue)[0]
       if ($line -match "^\d+$") { $port = [int]$line; break }
     }
     Start-Sleep -Milliseconds 50
   }
-  if ($port -le 0) { throw "edge debug port missing" }
+  if ($port -le 0) {
+    if ($proc.HasExited -and @(Get-ClinicEdge $profile).Count -eq 0) { throw "edge exited" }
+    throw "edge debug port missing"
+  }
+  $script:PrintPort = $port
   $wsUrl = ""
   $lookUntil = (Get-Date).AddSeconds(8)
   while ((Get-Date) -lt $lookUntil -and -not $wsUrl) {
@@ -531,12 +541,10 @@ function Stop-LocalCard6 {
 
 function Stop-IdlePrintEdge {
   if (Test-AnyClinicEdgeVisible) { return }
-  $profile = Join-Path $env:LOCALAPPDATA "PSEHR\print-edge"
-  $alive = @(Get-ClinicEdge $profile).Count -gt 0
-  if ($script:PrintEdge -and -not $script:PrintEdge.HasExited) { $alive = $true }
+  $alive = @(Get-ClinicEdge (Get-PrintEdgeProfile)).Count -gt 0
+  if ($script:PrintWs) { $alive = $true }
   if (-not $alive) { return }
   Stop-PrintEdge
-  Stop-ProfileEdge $profile
   Write-Log "closed print-edge"
 }
 
@@ -1073,7 +1081,12 @@ public class PsehrTrustAll : ICertificatePolicy {
 
 function Start-DeskLoop {
   Stop-OldAgent
-  $mutex = New-Object System.Threading.Mutex($false, "Local\PSEHR-desk-agent")
+  try {
+    $mutex = New-Object System.Threading.Mutex($false, "Local\PSEHR-desk-agent")
+  } catch {
+    if (-not (Test-AdminHeld5310)) { Write-Log ("desk mutex: " + $_.Exception.Message) }
+    return
+  }
   $owned = $false
   try {
     $owned = $mutex.WaitOne(0)
@@ -1172,6 +1185,22 @@ function Stop-OldAgent {
   foreach ($id in $ids) {
     try { Wait-Process -Id $id -Timeout 3 -ErrorAction SilentlyContinue } catch {}
   }
+  [void](Test-AdminHeld5310)
+}
+
+function Test-AdminHeld5310 {
+  # An administrator copy hides its command line and cannot be stopped from here.
+  $owner = 0
+  try {
+    $row = @(Get-NetTCPConnection -LocalPort 5310 -State Listen -ErrorAction SilentlyContinue)[0]
+    if ($row) { $owner = [int]$row.OwningProcess }
+  } catch {}
+  if ($owner -le 0 -or $owner -eq $PID) { return $false }
+  $codes = @(0x0035,0x0033,0x0031,0x0030,0x0020,0x88AB,0x7CFB,0x7D71,0x7BA1,0x7406,0x54E1,0x6B0A,0x9650,0x7684,0x9580,0x8A3A,0x5DE5,0x5177,0x5360,0x7528,0x3002,0x8ACB,0x7528,0x7CFB,0x7D71,0x7BA1,0x7406,0x54E1,0x6B0A,0x9650,0x95DC,0x6389,0x820A,0x7684,0x9580,0x8A3A,0x5DE5,0x5177,0xFF0C,0x6216,0x91CD,0x65B0,0x958B,0x6A5F,0x3002)
+  $text = -join ($codes | ForEach-Object { [char]$_ })
+  $line = (Get-Date -Format "HH:mm:ss") + " " + $text + " (pid " + $owner + ")" + "`r`n"
+  try { [IO.File]::AppendAllText($Log, $line, (New-Object System.Text.UTF8Encoding $false)) } catch {}
+  return $true
 }
 
 if ($Intake) {
