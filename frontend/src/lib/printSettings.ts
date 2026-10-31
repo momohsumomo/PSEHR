@@ -27,7 +27,8 @@ export type PrintSetupId =
   | "referral"
   | "deposit"
   | "releaseRx"
-  | "labSlip";
+  | "labSlip"
+  | "report";
 
 /** 進紙方向，跟紙張長寬分開記。 */
 export type PrinterFeed = "portrait" | "landscape";
@@ -160,6 +161,17 @@ export const DEFAULT_PRINT_SETUPS: PrintSetup[] = [
     footer: "",
     layoutFixed: false,
     fontSizePx: 9,
+  },
+  {
+    id: "report",
+    label: "\u7d71\u8a08\u5831\u8868",
+    widthMm: 297,
+    heightMm: 210,
+    feed: "landscape",
+    insetMm: 10,
+    printerName: "",
+    footer: "",
+    layoutFixed: false,
   },
 ];
 

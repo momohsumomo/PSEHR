@@ -2,11 +2,19 @@ import { cloneElement, isValidElement, useEffect, useLayoutEffect, useRef, useSt
 import { createPortal } from "react-dom";
 import { fetchThisPcPrinters, printToNamedPrinter } from "@/api/clinicApi";
 import { HIS_FONT } from "@/lib/hisTheme";
-import { loadPrinterFeed, savePrinterFeed, type PrinterFeed } from "@/lib/printSettings";
+import {
+  loadPrinterFeed,
+  savePrinterFeed,
+  setupFeed,
+  setupPageCss,
+  type PrinterFeed,
+  type PrintSetup,
+} from "@/lib/printSettings";
 import {
   coerceHisPaperId,
   resolveHisPaper,
   type HisPaperId,
+  type HisPaperProfile,
 } from "@/lib/hisPaper";
 
 export type HisPrintToolAction =
@@ -40,6 +48,8 @@ type Props = {
    * 舊值 "A4"|"A5"|"slip" 仍可傳。
    */
   paper?: HisPaperKind;
+  /** A row from the clinic print settings. Its size, margin, direction and printer replace `paper`. */
+  setup?: PrintSetup;
   statusText?: string;
   disabledActions?: Partial<Record<HisPrintToolAction, boolean>>;
   /**
@@ -95,6 +105,7 @@ export function HisPrintToolShell({
   fileBaseName = "wundadi-print",
   size = "wide",
   paper = "a4",
+  setup,
   statusText,
   disabledActions,
   pages,
@@ -105,7 +116,9 @@ export function HisPrintToolShell({
   const printRootRef = useRef<HTMLDivElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
   const paperId = coerceHisPaperId(paper);
-  const profile = resolveHisPaper(paperId);
+  const profile = setup ? setupProfile(setup, resolveHisPaper(paperId)) : resolveHisPaper(paperId);
+  const setupPrinter = setup?.printerName.trim() || "";
+  const setupFeedValue = setup ? setupFeed(setup) : "";
   const landscape = profile.widthMm > profile.heightMm;
   const [zoom, setZoom] = useState(profile.defaultZoom);
   const [page, setPage] = useState(0);
@@ -135,11 +148,11 @@ export function HisPrintToolShell({
         rows.find((row) => row.default && row.device !== false && row.name) ||
         rows.find((row) => row.default && row.name) ||
         rows.find((row) => row.device && row.name);
-      const name = named?.name || "";
+      const name = setupPrinter || named?.name || "";
       setPrinterName(name);
-      setFeed(name ? loadPrinterFeed(name) : "");
+      setFeed(setupFeedValue || (name ? loadPrinterFeed(name) : ""));
     });
-  }, [open, title, profile.defaultZoom, paperId]);
+  }, [open, title, profile.defaultZoom, paperId, setupPrinter, setupFeedValue]);
 
   useEffect(() => {
     if (!open) return;
@@ -464,6 +477,23 @@ export function HisPrintToolShell({
     </div>,
     document.body,
   );
+}
+
+function setupProfile(setup: PrintSetup, base: HisPaperProfile): HisPaperProfile {
+  const widthMm = Number(setup.widthMm) || base.widthMm;
+  const heightMm = Number(setup.heightMm) || base.heightMm;
+  const inset = Number(setup.insetMm);
+  const pad = Number.isFinite(inset) && inset >= 0 ? inset : base.padXMm;
+  return {
+    ...base,
+    label: setup.label,
+    widthMm,
+    heightMm,
+    padXMm: pad,
+    padYMm: pad,
+    pageCss: setupPageCss({ widthMm, heightMm }),
+    defaultZoom: widthMm > heightMm ? 80 : base.defaultZoom,
+  };
 }
 
 function escapeHtml(s: string): string {

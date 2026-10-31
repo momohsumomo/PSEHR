@@ -14,6 +14,7 @@ import { HisWinTitle } from "@/components/clinic/HisPageFrame";
 import { HIS, HIS_FONT } from "@/lib/hisTheme";
 import { HisPrintToolShell } from "@/components/clinic/HisPrintToolShell";
 import { DrugPickDialog } from "@/components/clinic/DrugPickDialog";
+import { findPrintSetup, loadPrintSettings } from "@/lib/printSettings";
 import { HisRegisterBookPaper } from "@/components/clinic/HisRegisterBookPaper";
 import { cashDetailPageElements } from "@/components/clinic/HisCashDetailPaper";
 import {
@@ -729,7 +730,8 @@ export function BillingPage() {
         exportText={statReport ? reportToExportText(statReport.report, statReport.range) : ""}
         fileBaseName={statReport ? statReport.report.title.replace(/[（）()\s]/g, "_") : "統計"}
         size="wide"
-        paper="a4"
+        paper="a4_landscape"
+        setup={statReport ? findPrintSetup(loadPrintSettings(), "report") : undefined}
       >
         {statReport ? (
           <HisReportPaper

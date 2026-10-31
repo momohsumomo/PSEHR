@@ -331,6 +331,18 @@ function otherPage(id: PrintSetupId, face: Face): string {
       ${line(face, "warning", face.footer || "\u8868\u5c3e\u5099\u8a3b")}
     </div>`;
   }
+  if (id === "report") {
+    const cells = ["\u81ea\u7533\u985e\u5225", "\u85e5\u54c1\u540d\u7a31", "\u7e3d\u7528\u91cf", "\u85e5\u8cbb", "\u9032\u8ca8\u7e3d\u50f9", "\u5229\u6f64"];
+    const head = cells.map((c) => `<th style="border-bottom:2px solid #000;text-align:left;padding:1mm;">${c}</th>`).join("");
+    const body = ["\u81ea\u8cbb", "\u7bc4\u4f8b\u85e5\u54c1", "100", "10,000", "6,000", "4,000"]
+      .map((c) => `<td style="padding:1mm;">${esc(c)}</td>`)
+      .join("");
+    return `<div style="${font}padding:4mm;">
+      <div style="text-align:center;font-weight:bold;font-size:1.3em;">&lt;&lt; ${esc("\u85e5\u54c1\u8cbb\u7528\u7d71\u8a08")} &gt;&gt;</div>
+      <div style="text-align:center;margin-bottom:2mm;">${esc(face.clinic.name)}</div>
+      <table style="width:100%;border-collapse:collapse;"><tr>${head}</tr><tr>${body}</tr></table>
+    </div>`;
+  }
   return "";
 }
 
