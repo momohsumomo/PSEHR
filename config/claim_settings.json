@@ -1,0 +1,18 @@
+{
+  "acute_chronic_to_09": false,
+  "outside_dispense_to_09": true,
+  "outside_dispense_on_quota": true,
+  "repeat_dx_month_only": false,
+  "repeat_dx_days": 0,
+  "max_lines_warn": 20,
+  "same_day_include_a3": true,
+  "same_day_include_rehab": false,
+  "card_missing_silent": true,
+  "qty_less_than_dose": true,
+  "compare_month_price": true,
+  "simple_table_exclude_order": "P4701C",
+  "pharmacist_warn_count": 0,
+  "material_shape_warn": false,
+  "dispense_mismatch_warn": true,
+  "long_course_cheap_stays_01": false
+}

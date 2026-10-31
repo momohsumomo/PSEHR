@@ -238,7 +238,7 @@ def clear_case_rules_cache() -> None:
 
 
 def claim_case_rules() -> CaseRules:
-    """Monthly filing uses the clinic claim switches converted from Sc.ini."""
+    """Monthly filing uses the clinic claim switches in config/claim_settings.json."""
     from src.claims.claim_settings import load_claim_settings
 
     base = load_case_rules()

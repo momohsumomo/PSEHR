@@ -237,7 +237,4 @@ def check_media(records: list[ClaimEncounterRecord], settings: Any = None) -> di
         "blocks": blocks[:_DETAIL_LIMIT],
         "warnings": warns[:_DETAIL_LIMIT],
         "claimable": len(claimable),
-        "settingsSource": str(getattr(cfg, "source", "")),
-        "acuteChronicTo09": bool(cfg.acute_chronic_to_09),
-        "repeatDxMany": _REPEAT_DX_MANY,
     }

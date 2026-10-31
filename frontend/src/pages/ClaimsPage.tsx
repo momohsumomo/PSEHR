@@ -456,11 +456,6 @@ export function ClaimsPage() {
                   必要修正 {preview.check.blockCount ?? 0}　提醒 {preview.check.warnCount ?? 0}
                   {preview.check.canExport === false ? "　現在不能產檔" : "　可以產檔"}
                 </p>
-                <p className="text-[10px] text-slate-500">
-                  規則來自 {preview.check.settingsSource || "院所申報設定"}。
-                  急性加慢性轉 09：{preview.check.acuteChronicTo09 ? "開" : "關"}。
-                  {"\u540c\u4e00\u4eba\u540c\u4e00\u4e3b\u75c5\u540d\u672c\u6708\u6eff " + String(preview.check.repeatDxMany ?? 6) + " \u6b21\u624d\u63d0\u9192\u3002"}
-                </p>
                 <div className="overflow-auto max-h-40">
                   <table className="w-full text-[11px] text-left">
                     <thead className="text-slate-500 border-b">

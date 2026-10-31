@@ -2418,9 +2418,6 @@ export type ApiClaimsPreview = ApiClaimsStatistics & {
     warnCount?: number;
     blocks?: ClaimCheckRow[];
     warnings?: ClaimCheckRow[];
-    settingsSource?: string;
-    acuteChronicTo09?: boolean;
-    repeatDxMany?: number;
   };
   caseCounts?: Record<string, number>;
   totalSheet?: {
