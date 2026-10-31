@@ -321,7 +321,7 @@ export function SelfRegisterKioskPage() {
       name: card.validation?.patientName || "",
       birthdayRoc: card.validation?.birthdayRoc || "",
       kind: "ic",
-      identityStatus: card.validation?.identityStatus || "",
+      identityStatus: card.validation?.identityStatus || seq.cardIdentity || "",
       cardId: seq.hcId || card.validation?.cardId,
       treatSeq: seq.sequenceNumber || undefined,
       treatmentNumber: seq.treatmentNumber || undefined,

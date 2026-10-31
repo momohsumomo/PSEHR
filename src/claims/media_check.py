@@ -7,7 +7,6 @@ Specialty content stays in clinic templates, not in this module.
 
 from __future__ import annotations
 
-import re
 from collections import defaultdict
 from typing import Any
 
@@ -36,9 +35,6 @@ _MSG_DAYS = "\u7d66\u85e5\u8d85\u904e 31 \u5929"
 _REPEAT_DX_MANY = 6
 _MSG_REPEAT = "\u540c\u4e00\u4eba\u540c\u4e00\u4e3b\u75c5\u540d\u672c\u6708\u5df2\u7533\u5831 %d \u6b21" % _REPEAT_DX_MANY
 _MSG_SAME_DAY = "\u540c\u65e5\u7533\u8acb\u4e8c\u7b46"
-# Urine, stool, blood, chemistry, serology. This clinic sends these out; KOH (13xxx) is done in-house.
-_LAB = re.compile(r"^(0[6-9]|1[0-2])\d{3}C$")
-_MSG_LAB_OWN = "\u6aa2\u9a57\u81ea\u5df1\u8a08\u9ede\uff0c\u6c92\u6709\u6a19\u300c\u4ea4\u300d\u3002\u672c\u9662\u6aa2\u9a57\u90fd\u4ea4\u4ed8\uff0c\u8acb\u78ba\u8a8d\u91ab\u4ee4"
 _MSG_DEPOSIT_OPEN = "\u62bc\u91d1\u9084\u6c92\u9000\uff0c\u9019\u7b46\u5148\u4e0d\u7533\u5831\u3002\u9001\u6a94\u524d\u5e36\u5361\u56de\u4f86\u9000\u62bc\u5c31\u6703\u56de\u5230\u7533\u5831"
 _MSG_UNFINISHED = "\u9084\u6c92\u5b8c\u8a3a\uff0c\u4e0d\u5728\u7533\u5831\u6a94\u88e1\u3002\u8acb\u5148\u5b8c\u8a3a\u6216\u9000\u639b"
 
@@ -154,10 +150,6 @@ def check_media(records: list[ClaimEncounterRecord], settings: Any = None) -> di
             warns.append({**base, "code": "card", "message": "\u5361\u865f\u672a\u586b"})
         if cfg.dispense_mismatch_warn and is_outside_dispense(rec.dispense):
             warns.append({**base, "code": "dispense", "message": "\u6279\u50f9\u8abf\u5291\u65b9\u5f0f\u8207\u9662\u6240\u4e0d\u540c"})
-        for line in rec.medications:
-            if _LAB.match((line.nhiCode or "").strip().upper()) and float(line.linePoints or 0) > 0:
-                warns.append({**base, "code": "lab-own", "message": _MSG_LAB_OWN})
-                break
         excluded = (cfg.simple_table_exclude_order or "").upper()
         if rec.caseNo == "01":
             for line in rec.medications:

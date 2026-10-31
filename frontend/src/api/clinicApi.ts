@@ -925,7 +925,14 @@ type SeqNextResult = {
   isSameDay?: boolean | null;
   hvExpire?: boolean | null;
   treatmentLimit?: number | null;
+  /** Identity mark read off the card on this desk. 1 low-income, 2 veteran, 3 ordinary, 4 lower-middle, 8 disaster. */
+  cardIdentity?: string;
 };
+
+function cardMark(basic: Record<string, unknown>): string {
+  const mark = String(basic.identityStatus ?? "").trim();
+  return ["1", "2", "3", "4", "8"].includes(mark) ? mark : "";
+}
 
 export async function fetchSeqNext(body: {
   treatmentItem?: string;
@@ -937,8 +944,10 @@ export async function fetchSeqNext(body: {
 }): Promise<SeqNextResult> {
   const mode = body.icException || (body.paperCard ? "paper" : "ic");
   const noCard = mode === "noCard" || mode === "childNoCard" || mode === "pregnantNoCard" || mode === "badCard" || mode === "paper";
+  let identity = "";
   if (!noCard && mode !== "selfPay" && mode !== "deposit") {
     const basic = await readLocalHcBasic();
+    identity = cardMark(basic);
     const cardNo = String(basic.idNo || "").trim().toUpperCase();
     const want = (body.patientIdNo || "").trim().toUpperCase();
     if (want && cardNo !== want) {
@@ -959,7 +968,7 @@ export async function fetchSeqNext(body: {
     }).finally(() => window.clearTimeout(timer));
   };
   try {
-    return await post(deskSign);
+    return { ...(await post(deskSign)), cardIdentity: identity };
   } catch (e) {
     const code = e && typeof e === "object" && "statusCode" in e ? (e as { statusCode?: number }).statusCode : undefined;
     const refreshable = !noCard && mode !== "selfPay" && mode !== "deposit" && (code === 3201 || code === 3213);
@@ -987,7 +996,8 @@ export async function fetchSeqNext(body: {
       window.clearTimeout(updateTimer);
     }
     try {
-      return await post(await signLocalHc("03"));
+      identity = cardMark(await readLocalHcBasic().catch(() => ({}))) || identity;
+      return { ...(await post(await signLocalHc("03"))), cardIdentity: identity };
     } catch (again) {
       if (again instanceof DOMException && again.name === "AbortError") {
         throw new Error("健保局取號逾時。未編造就醫序號，本筆尚未掛進清單。");

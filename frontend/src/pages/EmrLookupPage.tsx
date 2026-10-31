@@ -256,7 +256,9 @@ function drugSuggest(items: CatalogDrug[], query: string): SuggestHit[] {
     const short = (d.shortName || "").trim();
     const code = (d.nhiCode || "").trim().toUpperCase();
     const label = custom || trade || short || code;
-    return { label, token: [...new Set([custom, trade, short, code].filter(Boolean))].join("|") };
+    // The search matches inside drug names, so a two-letter shortcut like "AC" would hit nearly every visit.
+    const typed = code || short.length < 4 ? "" : short;
+    return { label, token: [...new Set([custom, trade, typed, code].filter(Boolean))].join("|") || label };
   });
   const hits = uniqueHits(ranked, 8);
   if (hits.length) return hits;

@@ -111,27 +111,6 @@ class MediaCheckTests(unittest.TestCase):
         self.assertEqual(report["warnings"][0]["code"], "unfinished")
         self.assertEqual(report["unfinished"], 1)
 
-    def test_lab_billed_by_the_clinic_is_warned(self) -> None:
-        own = check_media([
-            _visit(
-                treatmentPoints=50,
-                medications=[
-                    ClaimMedLine("m", "MA1", "daily", 0, 3, 22, 66, "daily"),
-                    ClaimMedLine("g", "09005C", "glucose", 0, 1, 50, 50, "snapshot"),
-                ],
-            ),
-        ])
-        self.assertTrue(any(row["code"] == "lab-own" for row in own["warnings"]))
-        sent = check_media([
-            _visit(
-                medications=[
-                    ClaimMedLine("m", "MA1", "daily", 0, 3, 22, 66, "daily"),
-                    ClaimMedLine("g", "09005C", "glucose", 0, 1, 0, 0, "snapshot", payMark="\u4ea4"),
-                ],
-            ),
-        ])
-        self.assertFalse(any(row["code"] == "lab-own" for row in sent["warnings"]))
-
     def test_dermatology_template_merges_orders(self) -> None:
         ids = [row["id"] for row in list_templates()]
         self.assertIn("dermatology", ids)

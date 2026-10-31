@@ -881,6 +881,7 @@ export function useClinicWorkspace(options?: {
       let securitySign = form.securitySign || "";
       let samId = "";
       let seqNote = "";
+      let cardIdentity = form.cardIdentity || "";
 
       if (!alreadyHas && form.prebook) {
         seqNote = "";
@@ -907,6 +908,7 @@ export function useClinicWorkspace(options?: {
           cardId = seq.hcId || cardId;
           securitySign = seq.signature || securitySign;
           samId = seq.samId || samId;
+          cardIdentity = seq.cardIdentity || cardIdentity;
           const hints: string[] = [];
           if (seq.skipped) hints.push(seq.reason);
           else if (noCard && treatmentNumber) {
@@ -1008,6 +1010,7 @@ export function useClinicWorkspace(options?: {
         securitySign,
         samId,
         cardId,
+        cardIdentity,
         paperCard: mode === "paper",
         reasonText: form.reasonText.trim(),
         copayAmt: form.copayAmt ? String(Math.max(0, gross - disc)) : form.copayAmt,
@@ -1061,7 +1064,7 @@ export function useClinicWorkspace(options?: {
           drugFee: payload.drugFee,
           materialFee: payload.materialFee,
           burdenFee: payload.burdenFee,
-          cardIdentity: form.cardIdentity,
+          cardIdentity,
           totalFee,
           prebook: Boolean(form.prebook),
           queueNumber: form.queueNumber ? Number(form.queueNumber) : undefined,
