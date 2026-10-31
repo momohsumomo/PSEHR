@@ -79,6 +79,8 @@ export interface QueueEntry {
   note?: string;
   /** 完診且健保卡已寫入 */
   cardWritten?: boolean;
+  /** 有一台正開著這本病歷 */
+  chartOpen?: boolean;
   /** 掛號記號第 4 碼 $ 才是初診 */
   regCc?: string;
   /** 這一筆有轉出單 */

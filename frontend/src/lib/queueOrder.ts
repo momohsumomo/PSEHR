@@ -4,6 +4,8 @@ export type QueueBandEntry = {
   queueStatus: string;
   queueNumber?: number;
   cardWritten?: boolean;
+  /** Another screen has this chart open right now. */
+  chartOpen?: boolean;
   prebook?: boolean;
   icException?: string;
   caseNo?: string;
@@ -42,6 +44,7 @@ export function clinicQueueBand(entry: QueueBandEntry): number {
   if (status === "finished" || status === "no_show") {
     return showsUploadCircle(entry) ? 0 : 1;
   }
+  if (entry.chartOpen) return 1.5;
   if (status === "in_progress") return 2;
   if (entry.prebook && status === "waiting") return 4;
   return 3;
@@ -79,6 +82,43 @@ export function compareClinicQueue(a: QueueBandEntry, b: QueueBandEntry): number
   const band = clinicQueueBand(a) - clinicQueueBand(b);
   if (band !== 0) return band;
   return (Number(a.queueNumber) || 0) - (Number(b.queueNumber) || 0);
+}
+
+const PICK_KEY = "clinic_registered_pick";
+const PICK_TTL_MS = 10 * 60 * 1000;
+
+/** The visit just registered or checked in. The clinic list lands on it, even after switching pages. */
+export function rememberRegisteredPick(encounterId: string): void {
+  if (!encounterId) return;
+  try {
+    sessionStorage.setItem(PICK_KEY, JSON.stringify({ id: encounterId, at: Date.now() }));
+  } catch {
+    /* no storage: the hook already selected it on this page */
+  }
+}
+
+export function takeRegisteredPick(listedIds: string[]): string | null {
+  let raw: string | null = null;
+  try {
+    raw = sessionStorage.getItem(PICK_KEY);
+  } catch {
+    return null;
+  }
+  if (!raw) return null;
+  let pick: { id?: string; at?: number } = {};
+  try {
+    pick = JSON.parse(raw);
+  } catch {
+    sessionStorage.removeItem(PICK_KEY);
+    return null;
+  }
+  if (!pick.id || !pick.at || Date.now() - pick.at > PICK_TTL_MS) {
+    sessionStorage.removeItem(PICK_KEY);
+    return null;
+  }
+  if (!listedIds.includes(pick.id)) return null;
+  sessionStorage.removeItem(PICK_KEY);
+  return pick.id;
 }
 
 export function clockForShift(shift: string): string {

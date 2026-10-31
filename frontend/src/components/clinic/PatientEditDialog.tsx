@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { fetchIdCategorySettings, fetchPatient, updatePatient, type IdCategorySetting } from "@/api/clinicApi";
 import { PatientMasterForm } from "@/components/clinic/PatientMasterForm";
@@ -88,10 +88,19 @@ export function PatientEditDialog({ open, onClose, seed, onSaved }: Props) {
     }
   }, []);
 
+  const seedRef = useRef(seed);
+  seedRef.current = seed;
+  const loadedFor = useRef("");
   useEffect(() => {
-    if (!open || !seed?.patientId) return;
-    void load(seed);
-  }, [open, seed, load]);
+    if (!open) {
+      loadedFor.current = "";
+      return;
+    }
+    const current = seedRef.current;
+    if (!current?.patientId || loadedFor.current) return;
+    loadedFor.current = current.patientId;
+    void load(current);
+  }, [open, seed?.patientId, load]);
 
   if (!open) return null;
 

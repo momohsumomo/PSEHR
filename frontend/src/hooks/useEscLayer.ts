@@ -12,6 +12,7 @@ let listening = false;
 
 function onEscape(ev: KeyboardEvent) {
   if (ev.key !== "Escape") return;
+  if (ev.isComposing || ev.keyCode === 229) return;
   if (document.querySelector("[data-print-preview]")) return;
   let best: OpenLayer | null = null;
   for (const entry of stack) {

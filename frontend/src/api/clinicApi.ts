@@ -193,6 +193,7 @@ export type ApiQueueEntry = {
     forespeak?: string;
     prebook?: boolean;
     cardWritten?: boolean;
+    chartOpen?: boolean;
     referralSeq?: string;
     referralHospId?: string;
     referralHospName?: string;

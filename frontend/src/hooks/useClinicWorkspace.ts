@@ -42,6 +42,7 @@ import type { RegisterEditForm } from "@/components/clinic/RegisterEditDialog";
 import type { IncomingChoice } from "@/components/clinic/ReferralAcceptDialogs";
 import { BAD_CARD_REASON, claimSeqFor } from "@/lib/nocardClaim";
 import { roomNumber } from "@/lib/roomMark";
+import { rememberRegisteredPick } from "@/lib/queueOrder";
 import {
   buildConditionIntake,
   buildMedicationIntake,
@@ -81,6 +82,7 @@ function queueStamp(date: string, rows: QueueEntry[]): string {
         row.queueNumber,
         row.queueStatus,
         row.cardWritten ? 1 : 0,
+        row.chartOpen ? 1 : 0,
         row.shift,
         row.slotTime,
         row.room,
@@ -148,6 +150,7 @@ function mapApiQueue(entries: ApiQueueEntry[]): QueueEntry[] {
     paperCard: e.queueMeta.paperCard,
     note: e.queueMeta.noteMark || e.queueMeta.note || undefined,
     cardWritten: Boolean(e.queueMeta.cardWritten),
+    chartOpen: Boolean(e.queueMeta.chartOpen),
     // Yu: live appointment only (API already hides after check-in)
     prebook: Boolean(e.queueMeta.prebook),
     regCc: e.queueMeta.regCc,
@@ -836,6 +839,7 @@ export function useClinicWorkspace(options?: {
         referralHospName: form.referralHospName,
         referralDate: form.referralDate,
       });
+      rememberRegisteredPick(enc.encounterId);
       await refreshQueue(encDate);
       setSelectedEncounterId(enc.encounterId);
       return enc;
@@ -1073,7 +1077,10 @@ export function useClinicWorkspace(options?: {
         if ((payload.acceptReferral || "").trim() === "1" || fromSlip) {
           await ensureAcceptReferralOrder(form.encounterId);
         }
+        const checkedIn = Boolean(prior?.prebook) || (mode === "ic" && (prior?.icException || "ic") !== "ic");
+        if (checkedIn) rememberRegisteredPick(form.encounterId);
         await refreshQueue();
+        if (checkedIn) setSelectedEncounterId(form.encounterId);
         return { encounterId: form.encounterId, patientId };
       }
       const created = await registerPatientAndEncounter(payload);

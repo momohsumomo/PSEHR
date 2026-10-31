@@ -35,6 +35,8 @@ type Parts = {
 };
 
 const DEFAULT_CITY = "\u53f0\u5357\u5e02";
+/** zh-Hant orders by stroke count, then by the next character. */
+const byStroke = new Intl.Collator("zh-Hant-TW").compare;
 
 function parseAddress(full: string): Parts {
   const empty: Parts = {
@@ -125,7 +127,7 @@ function ListBox({
           key={item}
           type="button"
           data-jump={item.slice(0, 1)}
-          className="block w-full truncate px-1 text-left text-[13px]"
+          className="block w-full truncate px-1 text-left text-[16px]"
           style={{ background: item === selected ? "#1d4ed8" : "#fff", color: item === selected ? "#fff" : "#000" }}
           onClick={() => onPick(item)}
         >
@@ -230,21 +232,21 @@ export function AddressEditorDialog({ open, address, postalCode, onClose, onSave
 
   const cityHit = cities.find((item) => item.name === city);
   const districts = cityHit?.districts || [];
-  const filtered = useMemo(() => roads.filter((name) => roadKind(name, kind)), [roads, kind]);
+  const filtered = useMemo(() => roads.filter((name) => roadKind(name, kind)).sort(byStroke), [roads, kind]);
   const initials = useMemo(() => {
     const chars = new Set<string>();
-    roads.filter((name) => roadKind(name, kind)).forEach((name) => {
+    filtered.forEach((name) => {
       if (name) chars.add(name.slice(0, 1));
     });
     return Array.from(chars);
-  }, [roads, kind]);
+  }, [filtered]);
 
   if (!open) return null;
 
   const parts = (): Parts => ({ city, district, road: road.trim(), lane, alley, no, floor, zhi, note: note.trim() });
 
   const go = (ev: React.KeyboardEvent, el: HTMLElement | null) => {
-    if (ev.key !== "Enter") return;
+    if (ev.key !== "Enter" || ev.nativeEvent.isComposing) return;
     ev.preventDefault();
     el?.focus();
   };
@@ -274,14 +276,14 @@ export function AddressEditorDialog({ open, address, postalCode, onClose, onSave
     onClose();
   };
 
-  const box = "h-7 border border-[#808080] bg-white px-1 text-[14px]";
+  const box = "h-7 border border-[#808080] bg-white px-1 text-[16px]";
 
   return createPortal(
     <div className="fixed inset-0 z-[98] flex items-center justify-center bg-slate-900/45 p-2" style={{ fontFamily: HIS_FONT }}>
-      <div className="flex max-h-[96vh] w-[min(72rem,98vw)] flex-col border-2 border-[#808080] bg-[#f3f3f3] shadow-xl">
-        <header className="flex items-center justify-between bg-[#e4e4e4] px-2 py-1 text-[14px] font-bold">
+      <div className="flex max-h-[96vh] w-[min(78rem,98vw)] flex-col border-2 border-[#808080] bg-[#f3f3f3] shadow-xl">
+        <header className="flex items-center justify-between bg-[#e4e4e4] px-2 py-1 text-[16px] font-bold">
           <span>{"\u4e2d\u83ef\u6c11\u570b\u5730\u5740\u4e00\u89bd\u8868"}</span>
-          <span className="text-[12px] font-normal">
+          <span className="text-[16px] font-normal">
             {updated ? `\u8def\u540d\u8cc7\u6599 ${updated}` : ""}
             <button
               type="button"
@@ -303,12 +305,12 @@ export function AddressEditorDialog({ open, address, postalCode, onClose, onSave
             </button>
           </span>
         </header>
-        <div className="grid min-h-0 gap-2 p-2" style={{ gridTemplateColumns: "16rem 8.5rem 3.2rem 12rem 1fr" }}>
+        <div className="grid min-h-0 gap-2 p-2" style={{ gridTemplateColumns: "17rem 9rem 3.6rem 14rem 1fr" }}>
           <div>
-            <div className="mb-1 text-center text-[12px]">{"\u7e23\uff0f\u5e02\uff0f\u9109\uff0f"}</div>
+            <div className="mb-1 text-center text-[16px]">{"\u7e23\uff0f\u5e02\uff0f\u9109\uff0f"}</div>
             <div className="grid h-52 grid-cols-2 content-start gap-x-2 overflow-auto border border-[#808080] bg-white px-1 py-1">
               {cities.map((item) => (
-                <label key={item.name} className="flex items-center gap-1 text-[13px]">
+                <label key={item.name} className="flex items-center gap-1 text-[16px]">
                   <input
                     type="radio"
                     name="addr-city"
@@ -323,14 +325,14 @@ export function AddressEditorDialog({ open, address, postalCode, onClose, onSave
                 </label>
               ))}
             </div>
-            <label className="mt-1 flex items-center gap-1 text-[13px]">
+            <label className="mt-1 flex items-center gap-1 text-[16px]">
               {"\u90f5\u905e\u5340\u865f"}
               <input className={`${box} w-16 font-mono`} value={zip} onChange={(e) => setZip(e.target.value)} />
             </label>
           </div>
           <div>
             <ListBox
-              items={districts.map((item) => item.name)}
+              items={districts.map((item) => item.name).sort(byStroke)}
               selected={district}
               onPick={(name) => {
                 setDistrict(name);
@@ -349,7 +351,7 @@ export function AddressEditorDialog({ open, address, postalCode, onClose, onSave
             />
           </div>
           <div>
-            <div className="mb-1 flex justify-center gap-2 text-[12px]">
+            <div className="mb-1 flex justify-center gap-2 text-[16px]">
               {(
                 [
                   ["all", "\u5168"],
@@ -370,7 +372,7 @@ export function AddressEditorDialog({ open, address, postalCode, onClose, onSave
             <div className="mb-1 flex gap-1">
               <button
                 type="button"
-                className="border border-[#808080] bg-white px-2 text-[12px]"
+                className="border border-[#808080] bg-white px-2 text-[16px]"
                 onClick={() => {
                   if (!road.trim()) return;
                   void addAddressFavorite(city, district, road.trim()).then((res) => setFavorites(res.favorites || []));
@@ -380,7 +382,7 @@ export function AddressEditorDialog({ open, address, postalCode, onClose, onSave
               </button>
               <button
                 type="button"
-                className="border border-[#808080] bg-white px-2 text-[12px]"
+                className="border border-[#808080] bg-white px-2 text-[16px]"
                 onClick={() => {
                   const hit = favorites.find((item) => `${item.city}|${item.district}|${item.road}` === favKey);
                   if (!hit) return;
@@ -401,7 +403,7 @@ export function AddressEditorDialog({ open, address, postalCode, onClose, onSave
                   <button
                     key={key}
                     type="button"
-                    className="block w-full truncate px-1 text-left text-[13px]"
+                    className="block w-full truncate px-1 text-left text-[16px]"
                     style={{ background: on ? "#1d4ed8" : "#fff", color: on ? "#fff" : "#1d4ed8" }}
                     onClick={() => {
                       setFavKey(key);
@@ -419,7 +421,7 @@ export function AddressEditorDialog({ open, address, postalCode, onClose, onSave
             </div>
           </div>
         </div>
-        <div className="flex flex-wrap items-end gap-1 px-2 pb-1 text-[13px]">
+        <div className="flex flex-wrap items-end gap-1 px-2 pb-1 text-[16px]">
           <label>
             {"\u7e23\uff0f\u5e02"}
             <input className={`${box} w-24`} value={city} onChange={(e) => setCity(e.target.value.replace(/\u81fa/g, "\u53f0"))} />
@@ -478,11 +480,11 @@ export function AddressEditorDialog({ open, address, postalCode, onClose, onSave
             {"\u522a\u9664"}
           </button>
         </div>
-        <div className="border-t border-[#c0c0c0] px-2 py-1 text-[14px]">
+        <div className="border-t border-[#c0c0c0] px-2 py-1 text-[16px]">
           {"\u4f4f\u5740\u3000"}
           {compose(parts())}
         </div>
-        {busy ? <p className="bg-amber-50 px-2 py-1 text-[12px] text-amber-950">{busy}</p> : null}
+        {busy ? <p className="bg-amber-50 px-2 py-1 text-[16px] text-amber-950">{busy}</p> : null}
       </div>
     </div>,
     document.body,

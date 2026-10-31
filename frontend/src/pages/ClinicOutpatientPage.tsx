@@ -110,7 +110,7 @@ import {
 } from "@/components/clinic/VisitSaveConfirmPanel";
 import { HIS, HIS_FONT, hisFontStyle } from "@/lib/hisTheme";
 import { findCardCheckIn, findWaitingAppointment, otherShiftAppointmentNote } from "@/lib/appointmentCheckIn";
-import { compareClinicQueue, normalizeClock, nowClock, planQueueNumber, shiftQueueNumbers, skipsCloudWrite } from "@/lib/queueOrder";
+import { compareClinicQueue, normalizeClock, nowClock, planQueueNumber, shiftQueueNumbers, skipsCloudWrite, takeRegisteredPick } from "@/lib/queueOrder";
 import { depositInTotal } from "@/lib/visitFee";
 import { AppointmentCheckInDialog, InsertNumberDialog, PrebookArriveDialog, PrebookNoCardDialog } from "@/components/clinic/InsertNumberDialog";
 import { useEscLayer } from "@/hooks/useEscLayer";
@@ -588,6 +588,14 @@ export function ClinicOutpatientPage() {
       }
       return;
     }
+    if (clinicTab === "list") {
+      const pick = takeRegisteredPick(shiftQueue.map((e) => e.encounterId));
+      if (pick) {
+        if (pick !== selectedEncounterId) setSelectedEncounterId(pick);
+        requestAnimationFrame(() => queuePanelRef.current?.focus());
+        return;
+      }
+    }
     const stillThere = shiftQueue.some((e) => e.encounterId === selectedEncounterId);
     if (stillThere) {
       if (preferAfterDeleteRef.current && preferAfterDeleteRef.current === selectedEncounterId) {
@@ -610,7 +618,7 @@ export function ClinicOutpatientPage() {
     );
     setSelectedEncounterId(last.encounterId);
     requestAnimationFrame(() => queuePanelRef.current?.focus());
-  }, [entered, shiftQueue, selectedEncounterId, setSelectedEncounterId, searchParams, queue, session?.shift]);
+  }, [entered, shiftQueue, selectedEncounterId, setSelectedEncounterId, searchParams, queue, session?.shift, clinicTab]);
   const committedFpRef = useRef<Record<string, string>>({});
 
   const queuePanelRef = useRef<HTMLElement>(null);
@@ -827,6 +835,15 @@ export function ClinicOutpatientPage() {
       window.removeEventListener("pointerdown", pull);
     };
   }, [entered, apiMode, refreshQueue]);
+
+  useEffect(() => {
+    if (!entered || !apiMode || !isList) return;
+    const id = window.setInterval(() => {
+      if (document.visibilityState !== "visible") return;
+      void refreshQueue().catch(() => undefined);
+    }, 15000);
+    return () => window.clearInterval(id);
+  }, [entered, apiMode, isList, refreshQueue]);
 
   const runAction = useCallback(async (fn: () => Promise<void>) => {
     setSaving(true);

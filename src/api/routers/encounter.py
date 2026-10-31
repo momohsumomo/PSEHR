@@ -9,6 +9,7 @@ from fastapi import APIRouter, HTTPException, Query
 
 from src.api.schemas.encounter import EncounterBody, QueueStatusTransition
 from src.app.bootstrap import get_fhir_repository, get_shadow_store
+from src.core.chart_presence import held_encounter_ids
 from src.core.encounter_extensions import QUEUE_EXTENSION_URL
 from src.core.encounter_queue import fhir_status_from_queue
 from src.infrastructure.sqlite_shadow_store import SqliteShadowStore
@@ -24,6 +25,15 @@ def _resolve_date(value: str | None) -> str:
     if not value or value.lower() == "today":
         return _today_str()
     return value[:10]
+
+
+def _mark_open_charts(entries: list[dict[str, Any]]) -> None:
+    ids = [str((e.get("resource") or {}).get("id") or "") for e in entries]
+    held = held_encounter_ids(ids)
+    for entry, eid in zip(entries, ids):
+        meta = entry.get("queueMeta")
+        if isinstance(meta, dict):
+            meta["chartOpen"] = eid in held
 
 
 def _patient_ref(patient_id: str) -> str:
@@ -233,6 +243,7 @@ def list_encounters(
             or e["resource"].get("subject", {}).get("reference") == patient_ref
         ]
 
+    _mark_open_charts(entries)
     nearest = store.nearest_encounter_dates(requested)
     span = store.encounter_date_span()
     return {
