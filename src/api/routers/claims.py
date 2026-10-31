@@ -11,8 +11,8 @@ from fastapi.responses import Response
 from src.app.bootstrap import get_shadow_store
 from src.claims import build_claims_summary, render_claims_xml
 from src.claims.case_rules import assign_case, claim_case_rules
-from src.claims.media_check import check_media
-from src.claims.engine import clinic_dept_code, clinic_dispense_code
+from src.claims.media_check import add_unfinished, check_media
+from src.claims.engine import clinic_dept_code, clinic_dispense_code, unfinished_visits
 from src.claims.xml_export_nhi import (
     DEFAULT_CONSULT_FEE_CODE,
     nhi_total_sheet,
@@ -91,7 +91,7 @@ def preview_claims(
         if rec.claimable:
             case = str(rec.caseNo or "01")
             case_counts[case] = case_counts.get(case, 0) + 1
-    report = check_media(summary.records)
+    report = add_unfinished(check_media(summary.records), unfinished_visits(get_shadow_store(), date_month))
     if report["claimable"] == 0:
         report["ok"] = False
         report["canExport"] = False

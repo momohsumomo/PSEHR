@@ -2,7 +2,7 @@
 import unittest
 
 from src.claims.engine import ClaimEncounterRecord, ClaimMedLine
-from src.claims.media_check import check_media
+from src.claims.media_check import add_unfinished, check_media
 from src.claims.specialty_templates import list_templates, merge_order_rules
 
 
@@ -38,19 +38,25 @@ class MediaCheckTests(unittest.TestCase):
         self.assertEqual(report["blockCount"], 0)
         self.assertTrue(report["canExport"])
 
-    def test_missing_birthday_blocks_and_repeat_dx_only_warns(self) -> None:
-        first = _visit(encounterId="a", encounterDate="2026-01-02")
-        second = _visit(
-            encounterId="b",
-            encounterDate="2026-01-20",
-            birthdayRoc="",
-            birthDate="",
-            medicalNo="099002",
-        )
-        report = check_media([first, second])
+    def test_missing_birthday_blocks(self) -> None:
+        report = check_media([_visit(birthdayRoc="", birthDate="")])
         self.assertFalse(report["canExport"])
         self.assertTrue(any(row["code"] == "birthday" for row in report["blocks"]))
-        self.assertTrue(any(row["code"] == "dx-repeat" for row in report["warnings"]))
+
+    def test_same_diagnosis_warns_only_when_the_month_is_heavy(self) -> None:
+        visits = [
+            _visit(encounterId=f"v{n}", encounterDate=f"2026-01-{3 * n + 1:02d}") for n in range(6)
+        ]
+        five = check_media(visits[:5])
+        self.assertFalse(any(row["code"] == "dx-repeat" for row in five["warnings"]))
+        six = check_media(visits)
+        self.assertEqual(sum(1 for row in six["warnings"] if row["code"] == "dx-repeat"), 1)
+
+    def test_liquid_quantity_below_dose_is_not_warned(self) -> None:
+        report = check_media([
+            _visit(medications=[ClaimMedLine("m", "MA1", "syrup", 0, 1, 22, 66, "daily", doseEach=2.0)]),
+        ])
+        self.assertFalse(any(row["code"] == "qty" for row in report["warnings"]))
 
     def test_external_cause_cannot_be_the_primary_diagnosis(self) -> None:
         blocked = check_media([
@@ -86,6 +92,45 @@ class MediaCheckTests(unittest.TestCase):
         ])
         self.assertFalse(any(row["code"] == "drug-sum" for row in report["blocks"]))
         self.assertTrue(report["canExport"])
+
+    def test_open_deposit_is_listed_first_and_left_out(self) -> None:
+        held = _visit(encounterId="d", claimable=False, depositOpen=True, medicalNo="099003")
+        repeats = [
+            _visit(encounterId=f"r{n}", encounterDate=f"2026-01-{n + 2:02d}") for n in range(3)
+        ]
+        report = check_media([*repeats, held])
+        self.assertEqual(report["claimable"], 3)
+        self.assertEqual(report["warnings"][0]["code"], "deposit-open")
+
+    def test_unfinished_visits_are_warned_on_top(self) -> None:
+        report = add_unfinished(
+            check_media([_visit()]),
+            [{"medicalNo": "099004", "encounterDate": "2026-01-31", "status": "waiting"}],
+        )
+        self.assertTrue(report["canExport"])
+        self.assertEqual(report["warnings"][0]["code"], "unfinished")
+        self.assertEqual(report["unfinished"], 1)
+
+    def test_lab_billed_by_the_clinic_is_warned(self) -> None:
+        own = check_media([
+            _visit(
+                treatmentPoints=50,
+                medications=[
+                    ClaimMedLine("m", "MA1", "daily", 0, 3, 22, 66, "daily"),
+                    ClaimMedLine("g", "09005C", "glucose", 0, 1, 50, 50, "snapshot"),
+                ],
+            ),
+        ])
+        self.assertTrue(any(row["code"] == "lab-own" for row in own["warnings"]))
+        sent = check_media([
+            _visit(
+                medications=[
+                    ClaimMedLine("m", "MA1", "daily", 0, 3, 22, 66, "daily"),
+                    ClaimMedLine("g", "09005C", "glucose", 0, 1, 0, 0, "snapshot", payMark="\u4ea4"),
+                ],
+            ),
+        ])
+        self.assertFalse(any(row["code"] == "lab-own" for row in sent["warnings"]))
 
     def test_dermatology_template_merges_orders(self) -> None:
         ids = [row["id"] for row in list_templates()]

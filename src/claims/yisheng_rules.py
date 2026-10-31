@@ -16,7 +16,7 @@ from datetime import date
 from functools import lru_cache
 from pathlib import Path
 
-from src.claims.case_rules import is_outside_dispense, load_case_rules
+from src.claims.case_rules import is_outside_dispense
 
 _ORDER = re.compile(r"^\d{5}[A-Z]$")
 _NOT_A_DRUG = re.compile(r"^(R00[1-8]|S00[1-4]|MA[1-4])$")
@@ -375,12 +375,6 @@ def pharmacy_for(days: int, dispense: str) -> tuple[str, int]:
 
 def visit_notes(*, days: int, chronic: bool, drug_points: float, case: str) -> list[str]:
     notes: list[str] = []
-    minimum = load_case_rules().core.official_chronic_min_days
-    if chronic and days < minimum:
-        notes.append(
-            "\u6709\u6162\u6027\u75c5\u540d\u4f46\u7d66\u85e5\u672a\u6eff %d \u5929\uff0c\u4e0d\u6539\u6210 04"
-            % minimum
-        )
     if days > 31:
         notes.append("\u7d66\u85e5\u8d85\u904e 31 \u5929")
     return notes

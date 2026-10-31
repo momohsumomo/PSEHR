@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import asdict, dataclass, field
+from datetime import date
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
@@ -13,6 +14,97 @@ from src.spoke.drug_price import lookup_drug_price
 
 # 門診診察費暫時常數；日後可由 Pack／院所設定取代
 DEFAULT_CONSULTATION_POINTS = 250.0
+
+DEPOSIT_OPEN_REASON = (
+    "\u62bc\u91d1\u9084\u6c92\u9000\uff0c\u6c92\u6709\u5c31\u91ab\u5e8f\u865f\uff0c\u5148\u4e0d\u7533\u5831\u3002"
+    "\u9001\u6a94\u524d\u75c5\u4eba\u5e36\u5361\u56de\u4f86\u9000\u62bc\uff0c\u91cd\u65b0\u6aa2\u67e5\u5c31\u6703\u56de\u5230\u7533\u5831\u3002"
+)
+
+
+def _money(value: Any) -> float:
+    try:
+        return float(str(value or "0").replace(",", "") or 0)
+    except ValueError:
+        return 0.0
+
+
+COPAY_NOTE = "\u90e8\u5206\u8ca0\u64d4\u4ee3\u865f\u7a7a\u767d\uff0c\u8acb\u5728\u639b\u865f\u88dc\u4e0a"
+BASIC_COPAY_POINTS = 50
+# d15 is required. Primary-care codes from 2023-07: D12 plain visit, D24 visit with a drug copay.
+_GENERAL_COPAY = frozenset({"D10", "D12", "D20", "D24"})
+
+
+def _filed_copay_code(
+    stored: str,
+    *,
+    paid: float,
+    drug_copay: int,
+    card_mark: str,
+    under_three: bool,
+    case_no: str,
+) -> str:
+    """Code for d15 when the desk left it blank.
+
+    004 and 003 follow the card mark only; the bureau checks them against enrolment.
+    A clinic discount is not an exemption, so it files as an ordinary visit.
+    """
+    code = (stored or "").strip().upper()
+    if code or (case_no or "").strip().upper() not in {"01", "04", "09"}:
+        return code
+    if paid <= drug_copay:
+        if under_three:
+            return "902"
+        mark = (card_mark or "").strip()
+        if mark == "2":
+            return "004"
+        if mark == "1":
+            return "003"
+    return "D24" if drug_copay > 0 else "D12"
+
+
+def _under_three(birth: str, visit: str) -> bool:
+    try:
+        b = date.fromisoformat((birth or "")[:10])
+        v = date.fromisoformat((visit or "")[:10])
+    except ValueError:
+        return False
+    return (v.year - b.year - ((v.month, v.day) < (b.month, b.day))) < 3
+
+
+def unfinished_visits(store: Any, date_month: str) -> list[dict[str, str]]:
+    """Visits this month still waiting or in the room. The monthly file only takes finished ones.
+
+    A booking nobody checked in for (no sequence) is left out.
+    """
+    out: list[dict[str, str]] = []
+    with store._connect() as conn:
+        rows = conn.execute(
+            """
+            SELECT ei.encounter_date, ei.queue_status, pi.medical_no, rc.payload_json
+            FROM encounter_index ei
+            LEFT JOIN patient_index pi ON pi.resource_id = ei.patient_id
+            LEFT JOIN resource_cache rc
+              ON rc.resource_type = 'Encounter' AND rc.resource_id = ei.resource_id
+            WHERE ei.encounter_date LIKE ?
+              AND ei.queue_status IN ('waiting', 'in_progress')
+            ORDER BY ei.encounter_date, ei.queue_number
+            """,
+            (f"{date_month}%",),
+        ).fetchall()
+    from src.core.encounter_extensions import extract_reg_meta
+
+    for day, status, chart, payload in rows:
+        try:
+            enc = json.loads(payload) if payload else {}
+        except json.JSONDecodeError:
+            enc = {}
+        reg = extract_reg_meta(enc if isinstance(enc, dict) else {})
+        if reg.get("prebook") and not str(reg.get("treatSeq") or "").strip():
+            continue
+        out.append(
+            {"medicalNo": str(chart or ""), "encounterDate": str(day or "")[:10], "status": str(status or "")}
+        )
+    return out
 
 
 @dataclass
@@ -91,6 +183,8 @@ class ClaimEncounterRecord:
     referralOutHosp: str = ""
     # 特定治療項目。第一個若是 G8，來自該次掛號；其餘來自病名主檔的 SPECIAL。
     specTreatCodes: list[str] = field(default_factory=list)
+    # 收了押金、還沒帶卡回來退押：沒有就醫序號，不進月申報。
+    depositOpen: bool = False
 
 
 @dataclass
@@ -436,6 +530,14 @@ def build_claims_summary(
         treatment_id = str(reg.get("treatmentNumber") or "").strip()
         if len(treatment_id) != 20:
             treatment_id = ""
+        deposit_open = (
+            not treat_seq.strip()
+            and not treatment_id
+            and (
+                str(reg.get("icException") or "").strip() == "deposit"
+                or _money(reg.get("deposit")) > 0
+            )
+        )
         ic_remark = str(reg.get("icRemark") or "").strip()[:1]
         actual_treat = str(reg.get("actualTreatId") or "").strip()
         if ic_remark not in {"2", "3", "4"} or len(actual_treat) != 20 or actual_treat == treatment_id:
@@ -469,6 +571,16 @@ def build_claims_summary(
         dispense = str(reg.get("dispense") or dispense_default or "")
         # 申報就醫日用掛號看診日。醫聖 O_DATE 有時是慢箋原處方日，和這次看診日不同。
         visit_day = str(enc_date or date_month)[:10]
+        copay_code = _filed_copay_code(
+            copay_code,
+            paid=copay_pts,
+            drug_copay=drug_copay,
+            card_mark=str(reg.get("cardIdentity") or ""),
+            under_three=_under_three(str(birth_date or ""), visit_day),
+            case_no=case_no,
+        )
+        if copay_code in _GENERAL_COPAY and copay_pts < BASIC_COPAY_POINTS + drug_copay:
+            copay_pts = float(BASIC_COPAY_POINTS + drug_copay)
 
         from src.claims.yisheng_rules import half_up_points, is_order_code
 
@@ -586,6 +698,7 @@ def build_claims_summary(
                 referralInHosp=referral_hosp,
                 referralOutHosp=outbound.get(encounter_id, ""),
                 specTreatCodes=spec_codes,
+                depositOpen=deposit_open,
             )
         )
 
@@ -633,6 +746,9 @@ def _price_claims(records: list[ClaimEncounterRecord]) -> None:
     )
     active_rules = claim_case_rules()
     clinic_rules = active_rules.clinic
+    from src.claims.claim_settings import load_claim_settings
+
+    simple_table_free = (load_claim_settings().simple_table_exclude_order or "").strip().upper()
     for rec in ordered:
         drug_lines = [m for m in rec.medications if not is_order_code(m.nhiCode)]
         order_lines = [m for m in rec.medications if is_order_code(m.nhiCode)]
@@ -691,6 +807,13 @@ def _price_claims(records: list[ClaimEncounterRecord]) -> None:
             rec.caseReason = (
                 "\u9662\u6240\u8a2d\u5b9a\uff1a\u7d66\u85e5 4 \u5230 6 \u5929\u4e14\u85e5\u8cbb\u4f4e\u65bc\u5c08\u6848\u5e95\u9650\uff0c\u6539\u5831 09"
             )
+        if case == "01" and any(
+            float(m.linePoints or 0) > 0 and (m.nhiCode or "").strip().upper() != simple_table_free
+            for m in order_lines
+        ):
+            case = "09"
+            rec.caseNo = case
+            rec.caseReason = "01 \u7c21\u8868\u4e0d\u80fd\u5e36\u6aa2\u9a57\u6216\u8655\u7f6e\uff0c\u6539\u5831 09"
         rec.claimable = case != "9X"
         empty_shell = (
             rec.claimable
@@ -701,6 +824,9 @@ def _price_claims(records: list[ClaimEncounterRecord]) -> None:
         if empty_shell:
             rec.claimable = False
             rec.caseReason = "\u6c92\u6709\u91ab\u5e2b\u3001\u5c31\u91ab\u5e8f\u865f\u3001\u8a3a\u65b7\u4e5f\u6c92\u6709\u85e5\uff0c\u4e0d\u9032\u6708\u7533\u5831"
+        if rec.claimable and rec.depositOpen:
+            rec.claimable = False
+            rec.caseReason = DEPOSIT_OPEN_REASON
         rec.daysSupply = ph_days
         drug_pts = apply_daily_drug_fee(rec, days=days, case=case)
         rec.drugPoints = drug_pts
@@ -721,10 +847,8 @@ def _price_claims(records: list[ClaimEncounterRecord]) -> None:
         )
         rec.applyPoints = round(max(rec.totalPoints - float(rec.copayPoints or 0), 0), 2)
         notes = visit_notes(days=days, chronic=chronic, drug_points=drug_pts, case=case)
-        if rec.claimable and not rec.diagnosisCodes:
-            notes.append("\u7f3a\u4e3b\u8a3a\u65b7")
-        if rec.claimable and float(rec.copayPoints or 0) <= 0 and not (rec.copayCode or "").strip():
-            notes.append("\u90e8\u5206\u8ca0\u64d4\u672a\u586b\uff0c\u7533\u8acb\u9ede\u5148\u4e0d\u6263\u8ca0\u64d4")
+        if rec.claimable and not (rec.copayCode or "").strip():
+            notes.append(COPAY_NOTE)
         rec.claimNotes = notes
     _apply_consult_volume(ordered)
     _apply_pharmacy_day_cap(ordered)

@@ -7,10 +7,11 @@ Specialty content stays in clinic templates, not in this module.
 
 from __future__ import annotations
 
+import re
 from collections import defaultdict
 from typing import Any
 
-from src.claims.engine import ClaimEncounterRecord
+from src.claims.engine import COPAY_NOTE, ClaimEncounterRecord
 from src.claims.yisheng_rules import is_order_code
 
 _CASES = {
@@ -31,8 +32,35 @@ _MSG_PRICE = "\u6c92\u6709\u55ae\u50f9\u6216\u55ae\u50f9\u4e0d\u7b26"
 _MSG_DX_DUP = "\u540c\u4e00\u7b46\u75c5\u540d\u91cd\u8907"
 _MSG_A3 = "\u4e3b\u75c5\u540d\u4f46\u672a\u639b A3 \u6216 B9 \u6848\u4ef6"
 _MSG_DAYS = "\u7d66\u85e5\u8d85\u904e 31 \u5929"
-_MSG_REPEAT = "\u75c5\u540d\u91cd\u8907"
+# Returning every few days with the same diagnosis is normal. Only a month this heavy is worth a look.
+_REPEAT_DX_MANY = 6
+_MSG_REPEAT = "\u540c\u4e00\u4eba\u540c\u4e00\u4e3b\u75c5\u540d\u672c\u6708\u5df2\u7533\u5831 %d \u6b21" % _REPEAT_DX_MANY
 _MSG_SAME_DAY = "\u540c\u65e5\u7533\u8acb\u4e8c\u7b46"
+# Urine, stool, blood, chemistry, serology. This clinic sends these out; KOH (13xxx) is done in-house.
+_LAB = re.compile(r"^(0[6-9]|1[0-2])\d{3}C$")
+_MSG_LAB_OWN = "\u6aa2\u9a57\u81ea\u5df1\u8a08\u9ede\uff0c\u6c92\u6709\u6a19\u300c\u4ea4\u300d\u3002\u672c\u9662\u6aa2\u9a57\u90fd\u4ea4\u4ed8\uff0c\u8acb\u78ba\u8a8d\u91ab\u4ee4"
+_MSG_DEPOSIT_OPEN = "\u62bc\u91d1\u9084\u6c92\u9000\uff0c\u9019\u7b46\u5148\u4e0d\u7533\u5831\u3002\u9001\u6a94\u524d\u5e36\u5361\u56de\u4f86\u9000\u62bc\u5c31\u6703\u56de\u5230\u7533\u5831"
+_MSG_UNFINISHED = "\u9084\u6c92\u5b8c\u8a3a\uff0c\u4e0d\u5728\u7533\u5831\u6a94\u88e1\u3002\u8acb\u5148\u5b8c\u8a3a\u6216\u9000\u639b"
+
+
+def add_unfinished(report: dict[str, Any], visits: list[dict[str, str]]) -> dict[str, Any]:
+    """Visits still waiting or in the room are left out of the file. Say so on the list."""
+    if not visits:
+        return report
+    extra = [
+        {
+            "medicalNo": v.get("medicalNo", ""),
+            "encounterDate": v.get("encounterDate", ""),
+            "caseNo": "",
+            "code": "unfinished",
+            "message": _MSG_UNFINISHED,
+        }
+        for v in visits
+    ]
+    report["warnings"] = (extra + list(report.get("warnings") or []))[:_DETAIL_LIMIT]
+    report["warnCount"] = int(report.get("warnCount") or 0) + len(extra)
+    report["unfinished"] = len(extra)
+    return report
 _MSG_EXT_PRIMARY = "\u4e3b\u8a3a\u65b7\u4e0d\u80fd\u653e\u5916\u56e0\u78bc\uff0c\u8acb\u6539\u653e\u53d7\u50b7\u90e8\u4f4d\uff0c\u5916\u56e0\u78bc\u62ff\u6389"
 _MSG_EXT_SECOND = "\u6b21\u8a3a\u65b7\u6709\u5916\u56e0\u78bc\u3002\u9580\u8a3a\u7533\u5831\u6c92\u6709\u7368\u7acb\u5916\u56e0\u6b04\uff0c\u9019\u78bc\u6703\u9032\u6b21\u8a3a\u65b7\u3002\u53ea\u7559\u53d7\u50b7\u90e8\u4f4d\u5373\u53ef"
 
@@ -46,17 +74,6 @@ def _drug_line(code: str) -> bool:
     if len(text) >= 4 and text[0] in {"R", "S"} and text[1:4].isdigit():
         return False
     return True
-
-
-def _day_gap(left: str, right: str) -> int:
-    from datetime import date
-
-    try:
-        a = date.fromisoformat(left[:10])
-        b = date.fromisoformat(right[:10])
-    except ValueError:
-        return 9999
-    return abs((a - b).days)
 
 
 def _external_cause(code: str) -> bool:
@@ -81,7 +98,7 @@ def check_media(records: list[ClaimEncounterRecord], settings: Any = None) -> di
     blocks: list[dict[str, str]] = []
     warns: list[dict[str, str]] = []
     by_person_day: dict[tuple[str, str], int] = defaultdict(int)
-    primary_seen: dict[tuple[str, str], str] = {}
+    primary_count: dict[tuple[str, str], int] = defaultdict(int)
 
     ordered = sorted(
         claimable,
@@ -133,16 +150,14 @@ def check_media(records: list[ClaimEncounterRecord], settings: Any = None) -> di
             warns.append({**base, "code": "days", "message": _MSG_DAYS})
         if cfg.max_lines_warn and len(rec.medications) > int(cfg.max_lines_warn):
             warns.append({**base, "code": "too-many-lines", "message": "\u85e5\u54c1\u6216\u8655\u7f6e\u8d85\u904e %d \u7b46" % int(cfg.max_lines_warn)})
-        if cfg.qty_less_than_dose:
-            for line in rec.medications:
-                dose = line.doseEach
-                if dose is not None and float(line.quantity or 0) < float(dose):
-                    warns.append({**base, "code": "qty", "message": "\u7e3d\u91cf\u5c0f\u65bc\u6b21\u91cf"})
-                    break
         if not cfg.card_missing_silent and not (rec.treatSeq or "").strip():
             warns.append({**base, "code": "card", "message": "\u5361\u865f\u672a\u586b"})
         if cfg.dispense_mismatch_warn and is_outside_dispense(rec.dispense):
             warns.append({**base, "code": "dispense", "message": "\u6279\u50f9\u8abf\u5291\u65b9\u5f0f\u8207\u9662\u6240\u4e0d\u540c"})
+        for line in rec.medications:
+            if _LAB.match((line.nhiCode or "").strip().upper()) and float(line.linePoints or 0) > 0:
+                warns.append({**base, "code": "lab-own", "message": _MSG_LAB_OWN})
+                break
         excluded = (cfg.simple_table_exclude_order or "").upper()
         if rec.caseNo == "01":
             for line in rec.medications:
@@ -171,7 +186,8 @@ def check_media(records: list[ClaimEncounterRecord], settings: Any = None) -> di
                     warns.append({**base, "code": "pack-price", "message": "\u55ae\u50f9\u8207\u7576\u6708\u5065\u4fdd\u85e5\u50f9\u4e0d\u7b26"})
                     break
         for note in rec.claimNotes:
-            warns.append({**base, "code": "note", "message": note})
+            code = "copay" if note == COPAY_NOTE else "note"
+            warns.append({**base, "code": code, "message": note})
 
         count_same_day = True
         if rec.caseNo == "A3" and not cfg.same_day_include_a3:
@@ -180,20 +196,21 @@ def check_media(records: list[ClaimEncounterRecord], settings: Any = None) -> di
             by_person_day[(ident, day)] += 1
         if ident and primary:
             key = (ident, primary)
-            first = primary_seen.get(key)
-            gap = int(cfg.repeat_dx_days or 0)
-            repeat = False
-            if first and first != day:
-                if cfg.repeat_dx_month_only:
-                    repeat = first[:7] == day[:7]
-                elif gap <= 0:
-                    repeat = True
-                else:
-                    repeat = _day_gap(first, day) <= gap
-            if repeat:
+            primary_count[key] += 1
+            if primary_count[key] == _REPEAT_DX_MANY:
                 warns.append({**base, "code": "dx-repeat", "message": _MSG_REPEAT})
-            elif not first:
-                primary_seen[key] = day
+
+    deposits: list[dict[str, str]] = []
+    for rec in records:
+        if rec.claimable or not getattr(rec, "depositOpen", False):
+            continue
+        deposits.append({
+            "medicalNo": rec.medicalNo or "",
+            "encounterDate": (rec.encounterDate or "")[:10],
+            "caseNo": rec.caseNo or "",
+            "code": "deposit-open",
+            "message": _MSG_DEPOSIT_OPEN,
+        })
 
     seen_day: set[tuple[str, str]] = set()
     for rec in ordered:
@@ -212,6 +229,7 @@ def check_media(records: list[ClaimEncounterRecord], settings: Any = None) -> di
             "message": _MSG_SAME_DAY,
         })
 
+    warns = deposits + warns
     return {
         "ok": len(blocks) == 0,
         "canExport": len(blocks) == 0 and len(claimable) > 0,
@@ -222,6 +240,5 @@ def check_media(records: list[ClaimEncounterRecord], settings: Any = None) -> di
         "claimable": len(claimable),
         "settingsSource": str(getattr(cfg, "source", "")),
         "acuteChronicTo09": bool(cfg.acute_chronic_to_09),
-        "repeatDxDays": int(cfg.repeat_dx_days or 0),
-        "repeatDxMonthOnly": bool(cfg.repeat_dx_month_only),
+        "repeatDxMany": _REPEAT_DX_MANY,
     }

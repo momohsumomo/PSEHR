@@ -417,8 +417,7 @@ export function ClaimsPage() {
                 <p className="text-[10px] text-slate-500">
                   規則來自 {preview.check.settingsSource || "院所申報設定"}。
                   急性加慢性轉 09：{preview.check.acuteChronicTo09 ? "開" : "關"}。
-                  病名重複天數：{preview.check.repeatDxDays ?? 0}
-                  {preview.check.repeatDxMonthOnly ? "，只比對當月" : "，不限當月"}。
+                  {"\u540c\u4e00\u4eba\u540c\u4e00\u4e3b\u75c5\u540d\u672c\u6708\u6eff " + String(preview.check.repeatDxMany ?? 6) + " \u6b21\u624d\u63d0\u9192\u3002"}
                 </p>
                 <div className="overflow-auto max-h-40">
                   <table className="w-full text-[11px] text-left">

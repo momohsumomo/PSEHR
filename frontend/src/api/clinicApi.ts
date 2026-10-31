@@ -2399,8 +2399,7 @@ export type ApiClaimsPreview = ApiClaimsStatistics & {
     warnings?: Array<{ medicalNo?: string; encounterDate?: string; caseNo?: string; code?: string; message: string }>;
     settingsSource?: string;
     acuteChronicTo09?: boolean;
-    repeatDxDays?: number;
-    repeatDxMonthOnly?: boolean;
+    repeatDxMany?: number;
   };
   caseCounts?: Record<string, number>;
   totalSheet?: {

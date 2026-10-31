@@ -541,6 +541,29 @@ def _pair_nocard_claim(body: NhiEncounterIntake) -> None:
         body.treatSeq = seq
 
 
+def _child_copay_code(store: SqliteShadowStore, body: NhiEncounterIntake, patient_id: str, visit_day: str) -> None:
+    """Under 3 with nothing collected files as 902. A code or an amount the desk typed stays."""
+    if body.prebook or (body.copayCode or "").strip():
+        return
+    if (body.icException or "").strip() in {"selfPay", "deposit"}:
+        return
+    if (body.caseNo or "").strip().upper() in {"9X", "\u81ea", "\u81ea\u8cbb"}:
+        return
+    try:
+        if float(str(body.copayAmt or "0").replace(",", "") or 0) > 0:
+            return
+    except ValueError:
+        return
+    resource = store.get_cached_resource("Patient", patient_id) if patient_id else None
+    try:
+        born = date.fromisoformat(str((resource or {}).get("birthDate") or "")[:10])
+        seen = date.fromisoformat((visit_day or date.today().isoformat())[:10])
+    except ValueError:
+        return
+    if seen.year - born.year - ((seen.month, seen.day) < (born.month, born.day)) < 3:
+        body.copayCode = "902"
+
+
 def _require_nhi_visit_for_register(body: NhiEncounterIntake) -> None:
     """健保掛號必須已向健保局取號；自費／預掛才可無序號。禁止只讀卡就掛進清單。"""
     if body.prebook:
@@ -633,6 +656,7 @@ def register_nhi_encounter(body: NhiEncounterIntake) -> dict[str, Any]:
 
     _pair_nocard_claim(body)
     _require_nhi_visit_for_register(body)
+    _child_copay_code(store, body, patient_id, body.encounterDate or "")
     from src.core.register_guard import duplicate_register_message
 
     day = (body.encounterDate or "")[:10]
@@ -736,6 +760,21 @@ def patch_encounter_reg(encounter_id: str, body: NhiEncounterIntake) -> dict[str
             updates["totalFee"] = str(want)
     if updates:
         body = body.model_copy(update=updates)
+    if body.copayCode is None and not str(prev.get("copayCode") or "").strip():
+        start = str((existing.get("period") or {}).get("start") or "")
+        probe = body.model_copy(
+            update={
+                "copayAmt": body.copayAmt if body.copayAmt is not None else prev.get("copayAmt"),
+                "caseNo": body.caseNo if body.caseNo is not None else prev.get("caseNo"),
+                "icException": body.icException if body.icException is not None else prev.get("icException"),
+            }
+        )
+        _child_copay_code(store, probe, body.patientId or "", start[:10])
+        if probe.copayCode:
+            body = body.model_copy(update={"copayCode": probe.copayCode})
+    elif body.copayCode is not None and not body.copayCode.strip():
+        start = str((existing.get("period") or {}).get("start") or "")
+        _child_copay_code(store, body, body.patientId or "", start[:10])
     payload = attach_reg_extension(
         dict(existing),
         {
