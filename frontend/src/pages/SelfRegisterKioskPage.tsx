@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import {
+  correctPatientName,
   fetchIdCategorySettings,
   fetchPatient,
   fetchPatients,
@@ -306,6 +307,17 @@ export function SelfRegisterKioskPage() {
 
   const finishCard = async (card: PatientRegisterResponse) => {
     const idNo = card.validation?.idNo || "";
+    const cardName = (card.validation?.cardName || "").trim();
+    const chartName = (card.validation?.patientName || "").trim();
+    if (card.patientId && cardName && cardName.replace(/\s+/g, "") !== chartName.replace(/\s+/g, "")) {
+      // Nobody at the desk to ask. The card is the bureau's record, so the chart follows it.
+      try {
+        await correctPatientName(card.patientId, cardName);
+        if (card.validation) card.validation.patientName = cardName;
+      } catch {
+        /* Registration goes on under the old name; the desk prompt catches it next time. */
+      }
+    }
     if (await alreadyToday(card.patientId, card.validation?.patientName || "")) return;
     const seq = await fetchSeqNext({
       icException: "ic",
