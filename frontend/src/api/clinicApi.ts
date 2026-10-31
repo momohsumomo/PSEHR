@@ -2346,6 +2346,17 @@ export type ApiClaimsStatistics = {
 
 export type ClaimsSubmitType = "songhe" | "bubao";
 
+export type ClaimCheckRow = {
+  medicalNo?: string;
+  encounterDate?: string;
+  caseNo?: string;
+  code?: string;
+  message: string;
+  encounterId?: string;
+  chartPatientId?: string;
+  patientName?: string;
+};
+
 export type ApiClaimsPreview = ApiClaimsStatistics & {
   records?: Array<{
     encounterId: string;
@@ -2405,8 +2416,8 @@ export type ApiClaimsPreview = ApiClaimsStatistics & {
     canExport?: boolean;
     blockCount?: number;
     warnCount?: number;
-    blocks?: Array<{ medicalNo?: string; encounterDate?: string; caseNo?: string; code?: string; message: string }>;
-    warnings?: Array<{ medicalNo?: string; encounterDate?: string; caseNo?: string; code?: string; message: string }>;
+    blocks?: ClaimCheckRow[];
+    warnings?: ClaimCheckRow[];
     settingsSource?: string;
     acuteChronicTo09?: boolean;
     repeatDxMany?: number;

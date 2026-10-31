@@ -195,7 +195,7 @@ export function ClaimSlipDialog({
           <div className="flex min-w-0 flex-1 flex-col gap-2">
             <div className="flex flex-wrap gap-x-3 gap-y-1">
               <Field label={T.ym} value={yearMonthRoc} />
-              <Field label={T.serial} value={String(current.serial)} />
+              <Field label={T.serial} value={`${record.caseNo || "01"}-${current.serial}`} />
               <Field label={T.kind} value={submitType === "bubao" ? T.bubao : T.songhe} />
               <Field label={T.caseNo} value={record.caseNo || ""} />
               <Field label={T.visit} value={isoToRoc(record.encounterDate || "") || ""} />
@@ -279,7 +279,7 @@ export function ClaimSlipDialog({
                   style={{ background: i === safe ? "#000080" : "transparent", color: i === safe ? "#fff" : "#000" }}
                   onClick={() => setIndex(i)}
                 >
-                  <span className="w-8 font-mono">{row.serial}</span>
+                  <span className="w-14 font-mono">{`${row.record.caseNo || "01"}-${row.serial}`}</span>
                   <span className="min-w-0 flex-1 truncate">{row.record.patientName || ""}</span>
                   <span className="font-mono">{row.record.medicalNo || ""}</span>
                 </button>

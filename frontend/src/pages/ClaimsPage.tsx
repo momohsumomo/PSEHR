@@ -10,7 +10,9 @@ import {
   exportClaimsXml,
   type ClaimsSubmitType,
   type ApiClaimsPreview,
+  type ClaimCheckRow,
 } from "@/api/clinicApi";
+import { stageClaimsEmr } from "@/lib/claimsEmr";
 
 const DASH = "\u2014";
 
@@ -232,6 +234,19 @@ export function ClaimsPage() {
     }
   };
 
+  const openCheckRow = (row: ClaimCheckRow) => {
+    const day = (row.encounterDate || "").slice(0, 10);
+    if (!row.encounterId || !/^\d{4}-\d{2}-\d{2}$/.test(day)) return;
+    stageClaimsEmr({
+      date: day,
+      chartPatientId: row.chartPatientId || "",
+      encounterId: row.encounterId,
+      medicalNo: row.medicalNo || "",
+      patientName: row.patientName || "",
+    });
+    navigate("/emr-lookup");
+  };
+
   const displayRocYear = parseInt(selectedMonth.split("-")[0], 10) - 1911;
   const displayMonthStr = selectedMonth.split("-")[1];
   const pts = (n: number | null) => (n === null ? DASH : `${n} \u9ede`);
@@ -432,7 +447,12 @@ export function ClaimsPage() {
                     </thead>
                     <tbody>
                       {(preview.check.blocks ?? []).map((row, idx) => (
-                        <tr key={`b-${idx}`} className="border-b border-slate-100 text-red-700 font-bold">
+                        <tr
+                          key={`b-${idx}`}
+                          className={`border-b border-slate-100 text-red-700 font-bold ${row.encounterId ? "cursor-pointer hover:bg-red-50" : ""}`}
+                          title={row.encounterId ? "\u9ede\u4e00\u4e0b\u6253\u958b\u9019\u7b46\u75c5\u6b77" : undefined}
+                          onClick={() => openCheckRow(row)}
+                        >
                           <td className="py-1 pr-2">必要</td>
                           <td className="py-1 pr-2 font-mono">{row.medicalNo || DASH}</td>
                           <td className="py-1 pr-2 font-mono">{row.encounterDate || DASH}</td>
@@ -441,7 +461,12 @@ export function ClaimsPage() {
                         </tr>
                       ))}
                       {(preview.check.warnings ?? []).map((row, idx) => (
-                        <tr key={`w-${idx}`} className="border-b border-slate-100">
+                        <tr
+                          key={`w-${idx}`}
+                          className={`border-b border-slate-100 ${row.encounterId ? "cursor-pointer hover:bg-slate-50" : ""}`}
+                          title={row.encounterId ? "\u9ede\u4e00\u4e0b\u6253\u958b\u9019\u7b46\u75c5\u6b77" : undefined}
+                          onClick={() => openCheckRow(row)}
+                        >
                           <td className="py-1 pr-2">提醒</td>
                           <td className="py-1 pr-2 font-mono">{row.medicalNo || DASH}</td>
                           <td className="py-1 pr-2 font-mono">{row.encounterDate || DASH}</td>

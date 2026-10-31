@@ -104,7 +104,14 @@ def check_media(records: list[ClaimEncounterRecord], settings: Any = None) -> di
         chart = rec.medicalNo or ""
         day = (rec.encounterDate or "")[:10]
         ident = (rec.patientId or "").strip().upper()
-        base = {"medicalNo": chart, "encounterDate": day, "caseNo": rec.caseNo or ""}
+        base = {
+            "medicalNo": chart,
+            "encounterDate": day,
+            "caseNo": rec.caseNo or "",
+            "encounterId": rec.encounterId,
+            "chartPatientId": rec.chartPatientId or "",
+            "patientName": rec.patientName or "",
+        }
 
         if len(ident) != 10:
             blocks.append({**base, "code": "id", "message": _MSG_ID})
