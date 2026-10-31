@@ -1,8 +1,8 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { HisXpDialog } from "@/components/clinic/HisPageFrame";
 import type { ApiClaimsPreview, ClaimsSubmitType } from "@/api/clinicApi";
-import { stageClaimsEmr } from "@/lib/claimsEmr";
+import { stageClaimsEmr, type ClaimSlipFilter } from "@/lib/claimsEmr";
 import { isoToRoc } from "@/components/clinic/HisRocDatePicker";
 
 export type ClaimSlipRecord = NonNullable<ApiClaimsPreview["records"]>[number];
@@ -22,8 +22,33 @@ type Line = {
 
 type Row = {
   record: ClaimSlipRecord;
+  /** 0: not in the claim file. */
   serial: number;
 };
+
+type Issues = { blocks: string[]; warns: string[] };
+
+const FILTERS: Array<[ClaimSlipFilter, string]> = [
+  ["all", "\u5168\u90e8\u75c5\u6b77"],
+  ["issue", "\u6709\u554f\u984c"],
+  ["block", "\u5fc5\u8981\u4fee\u6b63"],
+  ["warn", "\u63d0\u9192"],
+];
+
+function issueMap(check: ApiClaimsPreview["check"] | undefined): Map<string, Issues> {
+  const out = new Map<string, Issues>();
+  const at = (id: string) => {
+    let box = out.get(id);
+    if (!box) {
+      box = { blocks: [], warns: [] };
+      out.set(id, box);
+    }
+    return box;
+  };
+  for (const row of check?.blocks ?? []) if (row.encounterId) at(row.encounterId).blocks.push(row.message);
+  for (const row of check?.warnings ?? []) if (row.encounterId) at(row.encounterId).warns.push(row.message);
+  return out;
+}
 
 const T = {
   title: "\u7533\u5831\u55ae\u7b46",
@@ -65,6 +90,10 @@ const T = {
   empty: "\u9019\u500b\u6708\u6c92\u6709\u9032\u7533\u5831\u6a94\u7684\u770b\u8a3a",
   again: "\u6539\u5b8c\u75c5\u6b77\u5f8c\uff0c\u56de\u4f86\u518d\u7522\u4e00\u6b21\u7533\u5831\u6a94\u3002",
   list: "\u540d\u55ae",
+  none: "\u9019\u500b\u7be9\u9078\u6c92\u6709\u75c5\u6b77",
+  notFiled: "\u4e0d\u9032\u7533\u5831\u6a94",
+  must: "\u5fc5\u8981",
+  remind: "\u63d0\u9192",
 };
 
 function n(value: number | null | undefined): string {
@@ -146,36 +175,77 @@ export function ClaimSlipDialog({
   open,
   onClose,
   records,
+  check,
   yearMonthRoc,
   submitType,
+  filter,
+  onFilterChange,
+  focusEncounterId,
+  onLeaveForChart,
 }: {
   open: boolean;
   onClose: () => void;
   records: ClaimSlipRecord[];
+  check?: ApiClaimsPreview["check"];
   yearMonthRoc: string;
   submitType: ClaimsSubmitType;
+  filter: ClaimSlipFilter;
+  onFilterChange: (next: ClaimSlipFilter) => void;
+  /** Select this visit when the list opens. */
+  focusEncounterId?: string;
+  /** Called with the visit before going to chart lookup, so the check can come back to it. */
+  onLeaveForChart?: (encounterId: string) => void;
 }) {
   const navigate = useNavigate();
-  const rows = useMemo(() => {
+  const issues = useMemo(() => issueMap(check), [check]);
+  const allRows = useMemo(() => {
     const counters: Record<string, number> = {};
     const out: Row[] = [];
     for (const record of records) {
-      if (record.claimable === false) continue;
+      if (record.claimable === false) {
+        out.push({ record, serial: 0 });
+        continue;
+      }
       const caseNo = record.caseNo || "01";
       counters[caseNo] = (counters[caseNo] || 0) + 1;
       out.push({ record, serial: counters[caseNo] });
     }
     return out;
   }, [records]);
+  const pick = (want: ClaimSlipFilter, row: Row): boolean => {
+    const box = issues.get(row.record.encounterId);
+    if (want === "all") return row.serial > 0;
+    if (want === "block") return Boolean(box?.blocks.length);
+    if (want === "warn") return Boolean(box?.warns.length);
+    return Boolean(box && (box.blocks.length || box.warns.length));
+  };
+  const counts = useMemo(() => {
+    const out: Record<ClaimSlipFilter, number> = { all: 0, issue: 0, block: 0, warn: 0 };
+    for (const row of allRows) for (const [key] of FILTERS) if (pick(key, row)) out[key] += 1;
+    return out;
+  }, [allRows, issues]);
+  const rows = useMemo(() => allRows.filter((row) => pick(filter, row)), [allRows, issues, filter]);
   const [index, setIndex] = useState(0);
+  useEffect(() => {
+    if (!focusEncounterId) return;
+    const at = rows.findIndex((row) => row.record.encounterId === focusEncounterId);
+    if (at >= 0) setIndex(at);
+  }, [focusEncounterId, rows]);
   const safe = rows.length === 0 ? 0 : Math.min(index, rows.length - 1);
   const current = rows[safe];
   const record = current?.record;
   const grid = record ? linesOf(record) : [];
   const dx = (record?.diagnosisCodes || []).filter(Boolean).join(" ") || record?.diagnoses || "";
+  const problems = record ? issues.get(record.encounterId) : undefined;
+
+  const changeFilter = (next: ClaimSlipFilter) => {
+    setIndex(0);
+    onFilterChange(next);
+  };
 
   const openChart = () => {
     if (!record?.encounterDate) return;
+    onLeaveForChart?.(record.encounterId);
     stageClaimsEmr({
       date: record.encounterDate.slice(0, 10),
       chartPatientId: record.chartPatientId || "",
@@ -188,14 +258,17 @@ export function ClaimSlipDialog({
 
   return (
     <HisXpDialog open={open} title={T.title} onClose={onClose} width={1080}>
-      {!current || !record ? (
+      {allRows.length === 0 ? (
         <p className="px-2 py-6 text-center">{T.empty}</p>
       ) : (
         <div className="flex min-h-[28rem] gap-2 text-[12px] text-black">
+          {!current || !record ? (
+            <p className="flex-1 px-2 py-6 text-center">{T.none}</p>
+          ) : (
           <div className="flex min-w-0 flex-1 flex-col gap-2">
             <div className="flex flex-wrap gap-x-3 gap-y-1">
               <Field label={T.ym} value={yearMonthRoc} />
-              <Field label={T.serial} value={`${record.caseNo || "01"}-${current.serial}`} />
+              <Field label={T.serial} value={current.serial > 0 ? `${record.caseNo || "01"}-${current.serial}` : T.notFiled} />
               <Field label={T.kind} value={submitType === "bubao" ? T.bubao : T.songhe} />
               <Field label={T.caseNo} value={record.caseNo || ""} />
               <Field label={T.visit} value={isoToRoc(record.encounterDate || "") || ""} />
@@ -209,6 +282,16 @@ export function ClaimSlipDialog({
               <Field label={T.dx} value={dx} wide />
               <Field label={T.treat} value={record.treatmentId || ""} wide />
             </div>
+            {problems && (problems.blocks.length || problems.warns.length) ? (
+              <div className="border bg-white px-2 py-1" style={{ borderColor: "#808080" }}>
+                {problems.blocks.map((text, i) => (
+                  <p key={`b-${i}`} className="font-bold text-red-700">{`${T.must}\u3000${text}`}</p>
+                ))}
+                {problems.warns.map((text, i) => (
+                  <p key={`w-${i}`}>{`${T.remind}\u3000${text}`}</p>
+                ))}
+              </div>
+            ) : null}
             <div className="min-h-0 flex-1 overflow-auto border bg-white" style={{ borderColor: "#808080" }}>
               <table className="w-full border-collapse text-left">
                 <thead className="sticky top-0 bg-[#d4e8c8]">
@@ -268,22 +351,36 @@ export function ClaimSlipDialog({
               <span className="text-[11px]">{T.again}</span>
             </div>
           </div>
-          <div className="flex w-52 shrink-0 flex-col border bg-white" style={{ borderColor: "#808080" }}>
+          )}
+          <div className="flex w-60 shrink-0 flex-col border bg-white" style={{ borderColor: "#808080" }}>
+            <div className="border-b px-1 py-0.5" style={{ borderColor: "#808080" }}>
+              {FILTERS.map(([key, label]) => (
+                <label key={key} className="flex cursor-pointer items-center gap-1">
+                  <input type="radio" name="claim-slip-filter" checked={filter === key} onChange={() => changeFilter(key)} />
+                  <span className={key === "block" && counts.block > 0 ? "font-bold text-red-700" : ""}>{`${label}\uff08${counts[key]}\uff09`}</span>
+                </label>
+              ))}
+            </div>
             <div className="border-b px-1 py-0.5 font-bold" style={{ borderColor: "#808080" }}>{T.list}</div>
             <div className="min-h-0 flex-1 overflow-auto">
-              {rows.map((row, i) => (
-                <button
-                  key={row.record.encounterId}
-                  type="button"
-                  className="flex w-full gap-1 px-1 text-left"
-                  style={{ background: i === safe ? "#000080" : "transparent", color: i === safe ? "#fff" : "#000" }}
-                  onClick={() => setIndex(i)}
-                >
-                  <span className="w-14 font-mono">{`${row.record.caseNo || "01"}-${row.serial}`}</span>
-                  <span className="min-w-0 flex-1 truncate">{row.record.patientName || ""}</span>
-                  <span className="font-mono">{row.record.medicalNo || ""}</span>
-                </button>
-              ))}
+              {rows.map((row, i) => {
+                const box = issues.get(row.record.encounterId);
+                const red = Boolean(box?.blocks.length);
+                const chosen = i === safe;
+                return (
+                  <button
+                    key={row.record.encounterId}
+                    type="button"
+                    className="flex w-full gap-1 px-1 text-left"
+                    style={{ background: chosen ? "#000080" : "transparent", color: chosen ? "#fff" : red ? "#b91c1c" : "#000" }}
+                    onClick={() => setIndex(i)}
+                  >
+                    <span className="w-14 font-mono">{row.serial > 0 ? `${row.record.caseNo || "01"}-${row.serial}` : "\u2014"}</span>
+                    <span className="min-w-0 flex-1 truncate">{row.record.patientName || ""}</span>
+                    <span className="font-mono">{row.record.medicalNo || ""}</span>
+                  </button>
+                );
+              })}
             </div>
           </div>
         </div>

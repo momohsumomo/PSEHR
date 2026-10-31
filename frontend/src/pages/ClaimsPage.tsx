@@ -12,7 +12,13 @@ import {
   type ApiClaimsPreview,
   type ClaimCheckRow,
 } from "@/api/clinicApi";
-import { stageClaimsEmr } from "@/lib/claimsEmr";
+import {
+  peekClaimsReturn,
+  stageClaimsEmr,
+  stageClaimsReturn,
+  takeClaimsReturn,
+  type ClaimSlipFilter,
+} from "@/lib/claimsEmr";
 
 const DASH = "\u2014";
 
@@ -57,8 +63,14 @@ export function ClaimsPage() {
   const jobParam = searchParams.get("job");
   const { queue } = useClinicWorkspace();
   const apiMode = isApiMode();
-  const [selectedMonth, setSelectedMonth] = useState(defaultMonth);
-  const [submitType, setSubmitType] = useState<ClaimsSubmitType>("songhe");
+  const [resume, setResume] = useState(() => {
+    const back = peekClaimsReturn();
+    return back && back.job === jobParam ? back : null;
+  });
+  const [selectedMonth, setSelectedMonth] = useState(() => resume?.month ?? defaultMonth());
+  const [submitType, setSubmitType] = useState<ClaimsSubmitType>(() => resume?.submitType ?? "songhe");
+  const [slipFilter, setSlipFilter] = useState<ClaimSlipFilter>("all");
+  const [slipFocus, setSlipFocus] = useState("");
   const [downloading, setDownloading] = useState(false);
   const [checking, setChecking] = useState(false);
   const [step, setStep] = useState<Step>("setup");
@@ -88,6 +100,7 @@ export function ClaimsPage() {
     setStep("setup");
     setPreview(null);
     setSlipOpen(false);
+    setSlipFocus("");
   }, [selectedMonth, submitType]);
 
   useEffect(() => {
@@ -169,6 +182,20 @@ export function ClaimsPage() {
     } finally {
       setChecking(false);
     }
+  };
+
+  useEffect(() => {
+    if (!resume || !apiMode || !job) return;
+    takeClaimsReturn();
+    setResume(null);
+    setSlipFilter(resume.filter);
+    setSlipFocus(resume.encounterId);
+    void handleCheck();
+  }, [resume, apiMode, job]);
+
+  const leaveForChart = (encounterId: string) => {
+    if (!job) return;
+    stageClaimsReturn({ job, month: selectedMonth, submitType, filter: slipFilter, encounterId });
   };
 
   const handleExport = async () => {
@@ -547,8 +574,16 @@ export function ClaimsPage() {
         open={slipOpen}
         onClose={() => setSlipOpen(false)}
         records={preview?.records || []}
+        check={preview?.check}
         yearMonthRoc={preview?.yearMonth || ""}
         submitType={submitType}
+        filter={slipFilter}
+        onFilterChange={(next) => {
+          setSlipFilter(next);
+          setSlipFocus("");
+        }}
+        focusEncounterId={slipFocus}
+        onLeaveForChart={leaveForChart}
       />
     </div>
   );

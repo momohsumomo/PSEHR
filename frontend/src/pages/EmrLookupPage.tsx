@@ -14,7 +14,7 @@ import { HisRocDateField, rocToIso, todayRoc, normalizeRoc, clampRocEnd, isoToRo
 import { HisWinTitle } from "@/components/clinic/HisPageFrame";
 import { HIS, HIS_FONT } from "@/lib/hisTheme";
 import type { PatientHit } from "@/lib/patientSearch";
-import { takeClaimsEmr } from "@/lib/claimsEmr";
+import { peekClaimsReturn, takeClaimsEmr } from "@/lib/claimsEmr";
 import { useEscLayer } from "@/hooks/useEscLayer";
 import { useListNav } from "@/hooks/useListNav";
 import { compareEmrRows, type SortDir, type SortKey } from "@/lib/emrLookupSort";
@@ -433,6 +433,7 @@ let emrReplayEpoch = 0;
 
 export function EmrLookupPage() {
   const navigate = useNavigate();
+  const [claimsBack] = useState(peekClaimsReturn);
   const apiMode = isApiMode();
   /** 預設：起訖都是今天；改日期才看得出清單變。防呆只擋截止早於起始。 */
   const [dateFrom, setDateFrom] = useState(todayRoc);
@@ -1174,6 +1175,16 @@ export function EmrLookupPage() {
                 >
                   條件
                 </button>
+                {claimsBack ? (
+                  <button
+                    type="button"
+                    className="border border-white/40 bg-white/15 font-bold"
+                    style={{ fontSize: EMR_HINT, padding: `${EMR_GAP / 2}px ${EMR_GAP}px` }}
+                    onClick={() => navigate(`/claims?job=${claimsBack.job}`)}
+                  >
+                    {"\u56de\u7533\u5831\u6aa2\u67e5"}
+                  </button>
+                ) : null}
                 <button
                   type="button"
                   className="border border-white/40 bg-white/15 font-bold"
