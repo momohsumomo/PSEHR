@@ -8,7 +8,8 @@ type Tab = "all" | "oral" | "external" | "injection" | "treatment" | "other";
 
 const T = {
   title: "\u5217\u51fa\u85e5\u54c1\u6e05\u55ae\u4f5c\u696d\u7cfb\u7d71",
-  hint: "\u5de6\u908a\u6709\u85e5\u6642\uff0c\u85e5\u54c1\u7d71\u8a08\u53ea\u7b97\u5de6\u908a\u9019\u4e9b\uff1b\u5de6\u908a\u7a7a\u767d\u5c31\u7b97\u5168\u90e8\u7684\u85e5\u3002",
+  hint: "\u5de6\u908a\u7a7a\u767d\u5c31\u7b97\u5168\u90e8\u7684\u85e5\u3002\u6c92\u52fe\uff1a\u53ea\u7b97\u5de6\u908a\u9019\u4e9b\u85e5\u3002",
+  reverse: "\u52fe\u4e86\uff1a\u5de6\u908a\u9019\u4e9b\u85e5\u4e0d\u5217\u5165\u7d71\u8a08\uff0c\u5176\u4ed6\u7684\u85e5\u90fd\u7b97",
   name: "\u85e5\u54c1\u5546\u54c1\u540d\u7a31",
   shown: "\u85e5\u54c1\u5546\u54c1\u540d",
   code: "\u5065\u4fdd\u78bc",
@@ -74,7 +75,7 @@ export function DrugPickDialog({
 }: {
   open: boolean;
   onClose: () => void;
-  onSaved?: (count: number) => void;
+  onSaved?: (count: number, exclude: boolean) => void;
 }) {
   const { catalog, loaded } = useClinicCatalog();
   const [picks, setPicks] = useState<DrugPick[]>([]);
@@ -84,13 +85,17 @@ export function DrugPickDialog({
   const [query, setQuery] = useState("");
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
+  const [exclude, setExclude] = useState(false);
 
   useEffect(() => {
     if (!open) return;
     setNote("");
     setLeftAt(-1);
     void fetchDrugPicks()
-      .then(setPicks)
+      .then((list) => {
+        setPicks(list.drugs);
+        setExclude(list.exclude);
+      })
       .catch((err: unknown) => setNote(err instanceof Error ? err.message : String(err)));
   }, [open]);
 
@@ -130,11 +135,12 @@ export function DrugPickDialog({
 
   const save = () => {
     setBusy(true);
-    void saveDrugPicks(picks)
+    void saveDrugPicks({ drugs: picks, exclude })
       .then((saved) => {
-        setPicks(saved);
-        setNote(`${T.saved}\u3000${T.picked} ${saved.length} ${T.items}`);
-        onSaved?.(saved.length);
+        setPicks(saved.drugs);
+        setExclude(saved.exclude);
+        setNote(`${T.saved}\u3000${T.picked} ${saved.drugs.length} ${T.items}`);
+        onSaved?.(saved.drugs.length, saved.exclude);
       })
       .catch((err: unknown) => setNote(err instanceof Error ? err.message : String(err)))
       .finally(() => setBusy(false));
@@ -146,6 +152,10 @@ export function DrugPickDialog({
   return (
     <HisXpDialog open={open} title={T.title} onClose={onClose} width={980}>
       <div className="flex flex-col gap-2 text-[13px] text-black">
+        <label className="flex cursor-pointer items-center gap-1 font-bold">
+          <input type="checkbox" checked={exclude} onChange={(e) => setExclude(e.target.checked)} />
+          {T.reverse}
+        </label>
         <p className="text-[12px]">{T.hint}</p>
         <div className="flex h-[30rem] gap-2">
           <div className="flex min-w-0 flex-1 flex-col border bg-white" style={{ borderColor: "#808080" }}>

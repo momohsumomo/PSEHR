@@ -250,6 +250,7 @@ def drug_report(
     self_pay: str = "exclude",
     usages: dict[str, tuple[float, str]] | None = None,
     picks: list[dict[str, Any]] | None = None,
+    exclude_picks: bool = False,
     costs: DrugCosts | None = None,
 ) -> dict[str, Any]:
     """self_pay: exclude\uff08\u4e0d\u542b\u81ea\u8cbb\uff09\uff0fonly\uff08\u53ea\u7b97\u81ea\u8cbb\uff09\uff0fall\u3002picks \u6709\u503c\u6642\u53ea\u7b97\u9019\u4e9b\u85e5\u3002"""
@@ -271,7 +272,7 @@ def drug_report(
             continue
         code_u = code.strip().upper()
         text_n = _norm(text)
-        if picks and not _picked(picks, code_u, text_n):
+        if picks and _picked(picks, code_u, text_n) == exclude_picks:
             continue
         _dose, billed = _billed_quantity(
             raw_qty=float(qty or 0),
@@ -323,7 +324,9 @@ def drug_report(
     rows.sort(key=lambda r: (r["kind"] != "\u81ea\u8cbb", r["name"].upper(), r["code"]))
     label = {"exclude": "\u4e0d\u542b\u81ea\u8cbb", "only": "\u53ea\u6709\u81ea\u8cbb", "all": "\u5065\u4fdd\uff0b\u81ea\u8cbb"}.get(self_pay, "")
     note = "\u7e3d\u7528\u91cf\u4f9d\u7528\u6cd5\u63db\u7b97\uff08\u8207\u7533\u5831\u540c\u4e00\u5957\u898f\u5247\uff09\u3002\u85e5\u8cbb\uff1d\u958b\u85e5\u7576\u4e0b\u8a18\u9304\u7684\u55ae\u50f9\u00d7\u7e3d\u7528\u91cf\uff0c\u4e0d\u662f\u7533\u5831\u9ede\u6578\u3002\u9032\u8ca8\u55ae\u50f9\u53d6\u81ea\u85e5\u54c1\u4e3b\u6a94\uff0c\u7a7a\u767d\u7684\u85e5\u4e0d\u7b97\u5229\u6f64\u3002"
-    if picks:
+    if picks and exclude_picks:
+        note = f"\u6392\u9664\u85e5\u54c1 {len(picks)} \u9805\uff0c\u5176\u4ed6\u7684\u85e5\u90fd\u7b97\u3002" + note
+    elif picks:
         note = f"\u6307\u5b9a\u85e5\u54c1 {len(picks)} \u9805\u3002" + note
     return {
         "title": f"\u85e5\u54c1\u8cbb\u7528\u7d71\u8a08\uff08{label}\uff09",

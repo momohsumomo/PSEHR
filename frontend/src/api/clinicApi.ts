@@ -2589,17 +2589,20 @@ export async function fetchReport(
 /** Drugs picked for the drug report. No code means a clinic-only drug matched by name or one of its other names. */
 export type DrugPick = { code: string; name: string; alt?: string[] };
 
-export async function fetchDrugPicks(): Promise<DrugPick[]> {
-  const body = await request<{ drugs?: DrugPick[] }>("/maintenance/report-drug-picks");
-  return body.drugs || [];
+/** exclude: the listed drugs are left out and every other drug counts. */
+export type DrugPickList = { drugs: DrugPick[]; exclude: boolean };
+
+export async function fetchDrugPicks(): Promise<DrugPickList> {
+  const body = await request<Partial<DrugPickList>>("/maintenance/report-drug-picks");
+  return { drugs: body.drugs || [], exclude: Boolean(body.exclude) };
 }
 
-export async function saveDrugPicks(drugs: DrugPick[]): Promise<DrugPick[]> {
-  const body = await request<{ drugs?: DrugPick[] }>("/maintenance/report-drug-picks", {
+export async function saveDrugPicks(list: DrugPickList): Promise<DrugPickList> {
+  const body = await request<Partial<DrugPickList>>("/maintenance/report-drug-picks", {
     method: "PUT",
-    body: JSON.stringify({ drugs }),
+    body: JSON.stringify(list),
   });
-  return body.drugs || [];
+  return { drugs: body.drugs || [], exclude: Boolean(body.exclude) };
 }
 
 /** 資料備份：影子庫整份複製到指定資料夾。 */

@@ -130,21 +130,25 @@ def _catalog_drugs(store: Any) -> list[Any]:
     return rows
 
 
-def _saved_drug_picks(store: Any) -> list[dict[str, Any]]:
+def _saved_drug_picks(store: Any) -> dict[str, Any]:
+    """{"drugs", "exclude"}. exclude: the listed drugs are left out and every other drug counts."""
     raw = store.get_json_setting(clinic_reports.DRUG_PICKS_KEY) or {}
-    return clinic_reports.clean_drug_picks(raw.get("drugs") if isinstance(raw, dict) else [])
+    if not isinstance(raw, dict):
+        raw = {}
+    return {"drugs": clinic_reports.clean_drug_picks(raw.get("drugs")), "exclude": bool(raw.get("exclude"))}
 
 
 @router.get("/report-drug-picks", summary="Drugs picked for \u85e5\u54c1\u7d71\u8a08; empty means every drug")
 def drug_picks_get() -> dict[str, Any]:
-    return {"drugs": _saved_drug_picks(get_shadow_store())}
+    return _saved_drug_picks(get_shadow_store())
 
 
 @router.put("/report-drug-picks", summary="Save the drugs picked for \u85e5\u54c1\u7d71\u8a08")
 def drug_picks_put(payload: dict[str, Any]) -> dict[str, Any]:
-    drugs = clinic_reports.clean_drug_picks(payload.get("drugs") if isinstance(payload, dict) else [])
-    get_shadow_store().set_json_setting(clinic_reports.DRUG_PICKS_KEY, {"drugs": drugs})
-    return {"drugs": drugs}
+    body = payload if isinstance(payload, dict) else {}
+    saved = {"drugs": clinic_reports.clean_drug_picks(body.get("drugs")), "exclude": bool(body.get("exclude"))}
+    get_shadow_store().set_json_setting(clinic_reports.DRUG_PICKS_KEY, saved)
+    return saved
 
 
 @router.get("/reports/{kind}", summary="統計資料：disease／opdCount／drug／treatment／claim")
@@ -175,6 +179,7 @@ def report(
             from src.claims.engine import _catalog_lookup
 
             usages, _routes = _catalog_lookup(store)
+            saved = _saved_drug_picks(store)
             return clinic_reports.drug_report(
                 conn,
                 dateFrom,
@@ -183,7 +188,8 @@ def report(
                 finished_only=finished,
                 self_pay=selfPay,
                 usages=usages,
-                picks=_saved_drug_picks(store),
+                picks=saved["drugs"],
+                exclude_picks=saved["exclude"],
                 costs=clinic_reports.drug_costs(_catalog_drugs(store)),
             )
     except ValueError as exc:

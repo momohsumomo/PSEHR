@@ -743,11 +743,13 @@ export function BillingPage() {
       <DrugPickDialog
         open={drugPickOpen}
         onClose={() => setDrugPickOpen(false)}
-        onSaved={(count) =>
+        onSaved={(count, exclude) =>
           setStatus(
-            count
-              ? `\u85e5\u54c1\u7d71\u8a08\u53ea\u7b97\u6307\u5b9a\u7684 ${count} \u9805\u85e5\u3002`
-              : "\u85e5\u54c1\u7d71\u8a08\u7b97\u5168\u90e8\u7684\u85e5\u3002",
+            !count
+              ? "\u85e5\u54c1\u7d71\u8a08\u7b97\u5168\u90e8\u7684\u85e5\u3002"
+              : exclude
+                ? `\u85e5\u54c1\u7d71\u8a08\u6392\u9664\u6307\u5b9a\u7684 ${count} \u9805\u85e5\uff0c\u5176\u4ed6\u7684\u85e5\u90fd\u7b97\u3002`
+                : `\u85e5\u54c1\u7d71\u8a08\u53ea\u7b97\u6307\u5b9a\u7684 ${count} \u9805\u85e5\u3002`,
           )
         }
       />
