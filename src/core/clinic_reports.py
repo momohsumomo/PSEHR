@@ -166,6 +166,80 @@ def _is_service_code(code: str) -> bool:
     return len(c) <= 6 and (c.startswith("00") or c.startswith("05")) and c[-1:].isalpha()
 
 
+DRUG_PICKS_KEY = "report_drug_picks_v1"
+DRUG_PICKS_MAX = 2000
+
+
+def _norm(text: Any) -> str:
+    return " ".join(str(text or "").split()).upper()
+
+
+def clean_drug_picks(raw: Any) -> list[dict[str, Any]]:
+    """Picked drugs for \u85e5\u54c1\u7d71\u8a08, in the order chosen.
+
+    Each is {"code", "name", "alt"}. A drug without an NHI code is matched by name, and a visit
+    may carry the clinic's own name for it, so "alt" holds those other names.
+    """
+    out: list[dict[str, Any]] = []
+    seen: set[tuple[str, str]] = set()
+    for row in raw if isinstance(raw, list) else []:
+        if not isinstance(row, dict):
+            continue
+        code = str(row.get("code") or "").strip().upper()[:20]
+        name = " ".join(str(row.get("name") or "").split())[:80]
+        if not code and not name:
+            continue
+        mark = (code, "" if code else _norm(name))
+        if mark in seen:
+            continue
+        seen.add(mark)
+        alt: list[str] = []
+        for other in row.get("alt") if isinstance(row.get("alt"), list) else []:
+            text = " ".join(str(other or "").split())[:80]
+            if text and _norm(text) != _norm(name) and text not in alt:
+                alt.append(text)
+        out.append({"code": code, "name": name, "alt": alt[:4]})
+        if len(out) >= DRUG_PICKS_MAX:
+            break
+    return out
+
+
+DrugCosts = tuple[dict[str, float], dict[str, float]]
+
+
+def drug_costs(catalog_drugs: list[Any]) -> DrugCosts:
+    """Purchase unit cost (\u9032\u8ca8\u55ae\u50f9) by NHI code and by name. Later rows win, so pass shipped rows first, then clinic edits."""
+    by_code: dict[str, float] = {}
+    by_name: dict[str, float] = {}
+    for row in catalog_drugs:
+        if not isinstance(row, dict):
+            continue
+        try:
+            cost = float(row.get("unitCost") or row.get("cost") or 0)
+        except (TypeError, ValueError):
+            cost = 0.0
+        if cost <= 0:
+            continue
+        code = str(row.get("nhiCode") or "").strip().upper()
+        if code:
+            by_code[code] = cost
+        for field in ("name", "customName", "shortName", "alias"):
+            name = _norm(row.get(field))
+            if name:
+                by_name[name] = cost
+    return by_code, by_name
+
+
+def _picked(picks: list[dict[str, Any]], code: str, text: str) -> bool:
+    for pick in picks:
+        if pick["code"]:
+            if pick["code"] == code:
+                return True
+        elif not code and text in {_norm(pick["name"]), *(_norm(a) for a in pick.get("alt") or [])}:
+            return True
+    return False
+
+
 def drug_report(
     conn: Any,
     date_from: str,
@@ -175,24 +249,30 @@ def drug_report(
     finished_only: bool = False,
     self_pay: str = "exclude",
     usages: dict[str, tuple[float, str]] | None = None,
+    picks: list[dict[str, Any]] | None = None,
+    costs: DrugCosts | None = None,
 ) -> dict[str, Any]:
-    """self_pay: exclude（不含自費）／only（只算自費）／all。"""
+    """self_pay: exclude\uff08\u4e0d\u542b\u81ea\u8cbb\uff09\uff0fonly\uff08\u53ea\u7b97\u81ea\u8cbb\uff09\uff0fall\u3002picks \u6709\u503c\u6642\u53ea\u7b97\u9019\u4e9b\u85e5\u3002"""
     from src.claims.engine import _billed_quantity
     from src.claims.yisheng_rules import is_order_code
 
     where, args = _where(date_from, date_to, shift, finished_only)
     usages = usages or {}
-    agg: dict[str, dict[str, Any]] = {}
-    encs: dict[str, set[str]] = defaultdict(set)
-    for enc_id, code, text, qty, total_qty, days, sig, pay_mark, price in _order_lines(conn, where, args):
+    picks = picks or []
+    cost_by_code, cost_by_name = costs or ({}, {})
+    agg: dict[tuple[bool, str], dict[str, Any]] = {}
+    for _enc_id, code, text, qty, total_qty, days, sig, pay_mark, price in _order_lines(conn, where, args):
         if is_order_code(code) or _is_service_code(code):
             continue
-        is_self = pay_mark.strip() == "自"
+        is_self = pay_mark.strip() == "\u81ea"
         if self_pay == "exclude" and is_self:
             continue
         if self_pay == "only" and not is_self:
             continue
-        key = code.strip().upper() or f"#{text.strip()}"
+        code_u = code.strip().upper()
+        text_n = _norm(text)
+        if picks and not _picked(picks, code_u, text_n):
+            continue
         _dose, billed = _billed_quantity(
             raw_qty=float(qty or 0),
             qty_known=qty is not None,
@@ -202,51 +282,75 @@ def drug_report(
             usages=usages,
             total_qty=total_qty,
         )
+        key = (is_self, code_u or f"#{text_n}")
         rec = agg.setdefault(
             key,
-            {"code": code.strip(), "name": text.strip(), "times": 0, "selfTimes": 0, "days": 0, "qty": 0.0, "amount": 0.0},
+            {
+                "kind": "\u81ea\u8cbb" if is_self else "\u5065\u4fdd",
+                "name": text.strip(),
+                "code": code_u,
+                "qty": 0.0,
+                "amount": 0.0,
+                "unitCost": cost_by_name.get(text_n) or cost_by_code.get(code_u) or 0.0,
+            },
         )
         if not rec["name"] and text.strip():
             rec["name"] = text.strip()
-        rec["times"] += 1
-        rec["selfTimes"] += 1 if is_self else 0
-        rec["days"] += int(days or 0)
         rec["qty"] += float(billed or 0)
         if price is not None:
             rec["amount"] += float(price) * float(billed or 0)
-        encs[key].add(enc_id)
-    rows = []
-    for key, rec in agg.items():
-        rec["visits"] = len(encs[key])
-        rec["qty"] = round(rec["qty"], 2)
-        rec["amount"] = round(rec["amount"], 1)
-        rows.append(rec)
-    rows.sort(key=lambda r: (-r["times"], r["code"]))
-    label = {"exclude": "不含自費", "only": "只有自費", "all": "健保＋自費"}.get(self_pay, "")
+    rows: list[dict[str, Any]] = []
+    sums = {"qty": 0.0, "amount": 0.0, "costTotal": 0.0, "profit": 0.0}
+    for rec in agg.values():
+        qty_total = rec["qty"]
+        amount = rec["amount"]
+        cost = rec.pop("unitCost")
+        row = {
+            **rec,
+            "qty": round(qty_total, 2),
+            "price": round(amount / qty_total, 2) if qty_total else "",
+            "amount": round(amount),
+            "cost": round(cost, 2) if cost else "",
+            "costTotal": round(cost * qty_total) if cost else "",
+            "profit": round(amount - cost * qty_total) if cost else "",
+        }
+        sums["qty"] += qty_total
+        sums["amount"] += amount
+        if cost:
+            sums["costTotal"] += cost * qty_total
+            sums["profit"] += amount - cost * qty_total
+        rows.append(row)
+    rows.sort(key=lambda r: (r["kind"] != "\u81ea\u8cbb", r["name"].upper(), r["code"]))
+    label = {"exclude": "\u4e0d\u542b\u81ea\u8cbb", "only": "\u53ea\u6709\u81ea\u8cbb", "all": "\u5065\u4fdd\uff0b\u81ea\u8cbb"}.get(self_pay, "")
+    note = "\u7e3d\u7528\u91cf\u4f9d\u7528\u6cd5\u63db\u7b97\uff08\u8207\u7533\u5831\u540c\u4e00\u5957\u898f\u5247\uff09\u3002\u85e5\u8cbb\uff1d\u958b\u85e5\u7576\u4e0b\u8a18\u9304\u7684\u55ae\u50f9\u00d7\u7e3d\u7528\u91cf\uff0c\u4e0d\u662f\u7533\u5831\u9ede\u6578\u3002\u9032\u8ca8\u55ae\u50f9\u53d6\u81ea\u85e5\u54c1\u4e3b\u6a94\uff0c\u7a7a\u767d\u7684\u85e5\u4e0d\u7b97\u5229\u6f64\u3002"
+    if picks:
+        note = f"\u6307\u5b9a\u85e5\u54c1 {len(picks)} \u9805\u3002" + note
     return {
-        "title": f"藥品統計（{label}）",
+        "title": f"\u85e5\u54c1\u8cbb\u7528\u7d71\u8a08\uff08{label}\uff09",
         "columns": [
-            _col("code", "藥品代碼"),
-            _col("name", "藥名"),
-            _col("times", "開立筆數", "right"),
-            _col("visits", "人次", "right"),
-            _col("selfTimes", "其中自費", "right"),
-            _col("days", "天數合計", "right"),
-            _col("qty", "總量", "right"),
-            _col("amount", "金額(單價×總量)", "right"),
+            _col("kind", "\u81ea\u7533\u985e\u5225"),
+            _col("name", "\u85e5\u54c1\u540d\u7a31"),
+            _col("code", "\u5065\u4fdd\u4ee3\u78bc"),
+            _col("qty", "\u7e3d\u7528\u91cf", "right"),
+            _col("price", "\u55ae\u50f9", "right"),
+            _col("amount", "\u85e5\u8cbb", "right"),
+            _col("cost", "\u9032\u8ca8\u55ae\u50f9", "right"),
+            _col("costTotal", "\u9032\u8ca8\u7e3d\u50f9", "right"),
+            _col("profit", "\u5229\u6f64", "right"),
         ],
         "rows": rows,
         "totals": {
-            "code": "合計",
-            "name": f"{len(rows)} 項",
-            "times": sum(r["times"] for r in rows),
-            "visits": "",
-            "selfTimes": sum(r["selfTimes"] for r in rows),
-            "days": "",
-            "qty": "",
-            "amount": round(sum(r["amount"] for r in rows), 1),
+            "kind": "\u5408\u8a08",
+            "name": f"{len(rows)} \u9805",
+            "code": "",
+            "qty": round(sums["qty"], 2),
+            "price": "",
+            "amount": round(sums["amount"]),
+            "cost": "",
+            "costTotal": round(sums["costTotal"]),
+            "profit": round(sums["profit"]),
         },
-        "note": "總量依用法換算（與申報同一套規則）。金額＝開藥當下記錄的單價×總量，不是申報點數。",
+        "note": note,
     }
 
 

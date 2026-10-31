@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query, Request
@@ -113,6 +114,39 @@ def _check_range(date_from: str, date_to: str) -> None:
         raise HTTPException(status_code=422, detail="起迄日期格式要 YYYY-MM-DD，且起日不能晚於迄日。")
 
 
+_SHIPPED_CATALOG = Path(__file__).resolve().parents[3] / "frontend" / "public" / "yisheng_clinic_catalog.json"
+
+
+def _catalog_drugs(store: Any) -> list[Any]:
+    """Shipped drug catalog, then the clinic's own edits, so edited costs win."""
+    rows: list[Any] = []
+    try:
+        rows.extend(json.loads(_SHIPPED_CATALOG.read_text(encoding="utf-8")).get("drugs") or [])
+    except (OSError, ValueError, AttributeError):
+        pass
+    edits = store.get_json_setting("clinic_catalog_overrides_v1") or {}
+    if isinstance(edits, dict):
+        rows.extend(edits.get("drugs") or [])
+    return rows
+
+
+def _saved_drug_picks(store: Any) -> list[dict[str, Any]]:
+    raw = store.get_json_setting(clinic_reports.DRUG_PICKS_KEY) or {}
+    return clinic_reports.clean_drug_picks(raw.get("drugs") if isinstance(raw, dict) else [])
+
+
+@router.get("/report-drug-picks", summary="Drugs picked for \u85e5\u54c1\u7d71\u8a08; empty means every drug")
+def drug_picks_get() -> dict[str, Any]:
+    return {"drugs": _saved_drug_picks(get_shadow_store())}
+
+
+@router.put("/report-drug-picks", summary="Save the drugs picked for \u85e5\u54c1\u7d71\u8a08")
+def drug_picks_put(payload: dict[str, Any]) -> dict[str, Any]:
+    drugs = clinic_reports.clean_drug_picks(payload.get("drugs") if isinstance(payload, dict) else [])
+    get_shadow_store().set_json_setting(clinic_reports.DRUG_PICKS_KEY, {"drugs": drugs})
+    return {"drugs": drugs}
+
+
 @router.get("/reports/{kind}", summary="統計資料：disease／opdCount／drug／treatment／claim")
 def report(
     kind: str,
@@ -142,7 +176,15 @@ def report(
 
             usages, _routes = _catalog_lookup(store)
             return clinic_reports.drug_report(
-                conn, dateFrom, dateTo, shift=sh, finished_only=finished, self_pay=selfPay, usages=usages
+                conn,
+                dateFrom,
+                dateTo,
+                shift=sh,
+                finished_only=finished,
+                self_pay=selfPay,
+                usages=usages,
+                picks=_saved_drug_picks(store),
+                costs=clinic_reports.drug_costs(_catalog_drugs(store)),
             )
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc

@@ -2586,6 +2586,22 @@ export async function fetchReport(
   return request<ReportResult>(`/maintenance/reports/${kind}?${params.toString()}`);
 }
 
+/** Drugs picked for the drug report. No code means a clinic-only drug matched by name or one of its other names. */
+export type DrugPick = { code: string; name: string; alt?: string[] };
+
+export async function fetchDrugPicks(): Promise<DrugPick[]> {
+  const body = await request<{ drugs?: DrugPick[] }>("/maintenance/report-drug-picks");
+  return body.drugs || [];
+}
+
+export async function saveDrugPicks(drugs: DrugPick[]): Promise<DrugPick[]> {
+  const body = await request<{ drugs?: DrugPick[] }>("/maintenance/report-drug-picks", {
+    method: "PUT",
+    body: JSON.stringify({ drugs }),
+  });
+  return body.drugs || [];
+}
+
 /** 資料備份：影子庫整份複製到指定資料夾。 */
 export type BackupInfo = {
   settings: { dir: string; keep: number; lastOk: { at: string; file: string; bytes: number } | null };

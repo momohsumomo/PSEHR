@@ -13,6 +13,7 @@ import { HisReportPaper, reportToExportText } from "@/components/clinic/HisRepor
 import { HisWinTitle } from "@/components/clinic/HisPageFrame";
 import { HIS, HIS_FONT } from "@/lib/hisTheme";
 import { HisPrintToolShell } from "@/components/clinic/HisPrintToolShell";
+import { DrugPickDialog } from "@/components/clinic/DrugPickDialog";
 import { HisRegisterBookPaper } from "@/components/clinic/HisRegisterBookPaper";
 import { cashDetailPageElements } from "@/components/clinic/HisCashDetailPaper";
 import {
@@ -165,6 +166,7 @@ export function BillingPage() {
   const [lastCount, setLastCount] = useState(0);
   const lastRows = useRef<ApiQueueEntry[]>([]);
   const [statReport, setStatReport] = useState<{ report: ReportResult; range: string } | null>(null);
+  const [drugPickOpen, setDrugPickOpen] = useState(false);
 
   const applyQuickRange = (from: string, to: string) => {
     setDateStart(from);
@@ -597,7 +599,7 @@ export function BillingPage() {
                   type="button"
                   className="border px-2 py-0.5 font-bold"
                   style={{ borderColor: border, background: chrome, fontSize: HIS.fs.secondary * 1.6 }}
-                  onClick={() => setStatus("列出清單（殼）。")}
+                  onClick={() => setDrugPickOpen(true)}
                 >
                   列出清單
                 </button>
@@ -737,6 +739,18 @@ export function BillingPage() {
           />
         ) : null}
       </HisPrintToolShell>
+
+      <DrugPickDialog
+        open={drugPickOpen}
+        onClose={() => setDrugPickOpen(false)}
+        onSaved={(count) =>
+          setStatus(
+            count
+              ? `\u85e5\u54c1\u7d71\u8a08\u53ea\u7b97\u6307\u5b9a\u7684 ${count} \u9805\u85e5\u3002`
+              : "\u85e5\u54c1\u7d71\u8a08\u7b97\u5168\u90e8\u7684\u85e5\u3002",
+          )
+        }
+      />
     </div>
   );
 }
