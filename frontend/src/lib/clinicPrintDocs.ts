@@ -75,7 +75,7 @@ export function buildCertificateHtml(input: CertificateDocInput): string {
       <div style="margin-top:8px;font-size:16px;">\u8a3a \u6cbb \u91ab \u5e2b\uff1a${esc(show(input.doctor))}</div>
       <div>\u91ab\u5e2b\u8b49\u66f8\u5b57\u865f\uff1a${esc(show(input.licenseNo))}</div>
       <div>\u5730\u5740\uff1a${esc(show(input.clinicAddress))}</div>
-      <div style="text-align:center;margin-top:10px;">\u4e2d \u83ef \u6c11 \u570d ${esc(show(input.printDate))}</div>
+      <div style="text-align:center;margin-top:10px;">\u4e2d \u83ef \u6c11 \u570b ${esc(show(input.printDate))}</div>
     </div>`;
 }
 
