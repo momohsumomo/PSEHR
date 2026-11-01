@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { HisXpDialog } from "@/components/clinic/HisPageFrame";
 import type { ApiClaimsPreview, ClaimsSubmitType } from "@/api/clinicApi";
@@ -232,6 +232,12 @@ export function ClaimSlipDialog({
     if (at >= 0) setIndex(at);
   }, [focusEncounterId, rows]);
   const safe = rows.length === 0 ? 0 : Math.min(index, rows.length - 1);
+  const listRef = useRef<HTMLDivElement>(null);
+  const detailRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    listRef.current?.querySelector(`[data-row="${safe}"]`)?.scrollIntoView({ block: "nearest" });
+    if (detailRef.current) detailRef.current.scrollTop = 0;
+  }, [safe, rows, open]);
   const current = rows[safe];
   const record = current?.record;
   const grid = record ? linesOf(record) : [];
@@ -261,11 +267,11 @@ export function ClaimSlipDialog({
       {allRows.length === 0 ? (
         <p className="px-2 py-6 text-center">{T.empty}</p>
       ) : (
-        <div className="flex min-h-[28rem] gap-2 text-[12px] text-black">
+        <div className="flex h-[calc(90vh-4.5rem)] min-h-[20rem] gap-2 overflow-hidden text-[12px] text-black">
           {!current || !record ? (
             <p className="flex-1 px-2 py-6 text-center">{T.none}</p>
           ) : (
-          <div className="flex min-w-0 flex-1 flex-col gap-2">
+          <div ref={detailRef} className="flex min-h-0 min-w-0 flex-1 flex-col gap-2 overflow-auto">
             <div className="flex flex-wrap gap-x-3 gap-y-1">
               <Field label={T.ym} value={yearMonthRoc} />
               <Field label={T.serial} value={current.serial > 0 ? `${record.caseNo || "01"}-${current.serial}` : T.notFiled} />
@@ -362,7 +368,7 @@ export function ClaimSlipDialog({
               ))}
             </div>
             <div className="border-b px-1 py-0.5 font-bold" style={{ borderColor: "#808080" }}>{T.list}</div>
-            <div className="min-h-0 flex-1 overflow-auto">
+            <div ref={listRef} className="min-h-0 flex-1 overflow-auto">
               {rows.map((row, i) => {
                 const box = issues.get(row.record.encounterId);
                 const red = Boolean(box?.blocks.length);
@@ -371,6 +377,7 @@ export function ClaimSlipDialog({
                   <button
                     key={row.record.encounterId}
                     type="button"
+                    data-row={i}
                     className="flex w-full gap-1 px-1 text-left"
                     style={{ background: chosen ? "#000080" : "transparent", color: chosen ? "#fff" : red ? "#b91c1c" : "#000" }}
                     onClick={() => setIndex(i)}
