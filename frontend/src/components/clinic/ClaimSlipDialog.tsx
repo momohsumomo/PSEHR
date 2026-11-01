@@ -94,7 +94,54 @@ const T = {
   notFiled: "\u4e0d\u9032\u7533\u5831\u6a94",
   must: "\u5fc5\u8981",
   remind: "\u63d0\u9192",
+  number: "\u865f\u78bc",
+  date: "\u65e5\u671f",
 };
+
+type SortKey = "serial" | "name" | "chart" | "date";
+
+/** Case boxes left unticked and the list order. Kept for this tab so a trip to chart lookup keeps them. */
+type SlipView = { hideCases: string[]; sortKey: SortKey; sortDir: 1 | -1 };
+
+const VIEW_KEY = "psehr-claim-slip-view";
+const SORT_KEYS: SortKey[] = ["serial", "name", "chart", "date"];
+
+function loadView(): SlipView {
+  try {
+    const raw = JSON.parse(sessionStorage.getItem(VIEW_KEY) || "{}") as Partial<SlipView>;
+    return {
+      hideCases: Array.isArray(raw.hideCases) ? raw.hideCases.map(String) : [],
+      sortKey: SORT_KEYS.includes(raw.sortKey as SortKey) ? (raw.sortKey as SortKey) : "serial",
+      sortDir: raw.sortDir === -1 ? -1 : 1,
+    };
+  } catch {
+    return { hideCases: [], sortKey: "serial", sortDir: 1 };
+  }
+}
+
+function saveView(view: SlipView): void {
+  sessionStorage.setItem(VIEW_KEY, JSON.stringify(view));
+}
+
+function caseOf(row: Row): string {
+  return row.record.caseNo || "01";
+}
+
+function bySerial(a: Row, b: Row): number {
+  if ((a.serial > 0) !== (b.serial > 0)) return a.serial > 0 ? -1 : 1;
+  return caseOf(a).localeCompare(caseOf(b)) || a.serial - b.serial;
+}
+
+function compareRows(a: Row, b: Row, key: SortKey): number {
+  const ra = a.record;
+  const rb = b.record;
+  if (key === "name") return (ra.patientName || "").localeCompare(rb.patientName || "", "zh-Hant") || bySerial(a, b);
+  if (key === "chart") {
+    return (ra.medicalNo || "").localeCompare(rb.medicalNo || "", undefined, { numeric: true }) || bySerial(a, b);
+  }
+  if (key === "date") return (ra.encounterDate || "").localeCompare(rb.encounterDate || "") || bySerial(a, b);
+  return bySerial(a, b);
+}
 
 function n(value: number | null | undefined): string {
   if (value == null || Number.isNaN(Number(value))) return "";
@@ -224,14 +271,26 @@ export function ClaimSlipDialog({
     for (const row of allRows) for (const [key] of FILTERS) if (pick(key, row)) out[key] += 1;
     return out;
   }, [allRows, issues]);
-  const rows = useMemo(() => allRows.filter((row) => pick(filter, row)), [allRows, issues, filter]);
-  const [index, setIndex] = useState(0);
+  const [view, setView] = useState<SlipView>(loadView);
+  const changeView = (next: SlipView) => {
+    setView(next);
+    saveView(next);
+  };
+  const caseList = useMemo(() => {
+    const out = new Map<string, number>();
+    for (const row of allRows) if (pick(filter, row)) out.set(caseOf(row), (out.get(caseOf(row)) || 0) + 1);
+    return [...out.entries()].sort(([a], [b]) => a.localeCompare(b));
+  }, [allRows, issues, filter]);
+  const rows = useMemo(() => {
+    const kept = allRows.filter((row) => pick(filter, row) && !view.hideCases.includes(caseOf(row)));
+    return kept.sort((a, b) => compareRows(a, b, view.sortKey) * view.sortDir);
+  }, [allRows, issues, filter, view]);
+  const [selId, setSelId] = useState("");
   useEffect(() => {
-    if (!focusEncounterId) return;
-    const at = rows.findIndex((row) => row.record.encounterId === focusEncounterId);
-    if (at >= 0) setIndex(at);
-  }, [focusEncounterId, rows]);
-  const safe = rows.length === 0 ? 0 : Math.min(index, rows.length - 1);
+    if (focusEncounterId) setSelId(focusEncounterId);
+  }, [focusEncounterId]);
+  const found = rows.findIndex((row) => row.record.encounterId === selId);
+  const safe = found >= 0 ? found : 0;
   const listRef = useRef<HTMLDivElement>(null);
   const detailRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -245,9 +304,28 @@ export function ClaimSlipDialog({
   const problems = record ? issues.get(record.encounterId) : undefined;
 
   const changeFilter = (next: ClaimSlipFilter) => {
-    setIndex(0);
+    setSelId("");
     onFilterChange(next);
   };
+
+  const toggleCase = (caseNo: string) => {
+    const hidden = view.hideCases.includes(caseNo);
+    changeView({
+      ...view,
+      hideCases: hidden ? view.hideCases.filter((c) => c !== caseNo) : [...view.hideCases, caseNo],
+    });
+  };
+
+  const sortBy = (key: SortKey) => {
+    changeView({ ...view, sortKey: key, sortDir: view.sortKey === key ? (view.sortDir === 1 ? -1 : 1) : 1 });
+  };
+
+  const sortHead = (key: SortKey, label: string, className: string) => (
+    <button type="button" className={`${className} text-left font-bold`} onClick={() => sortBy(key)}>
+      {label}
+      {view.sortKey === key ? (view.sortDir === 1 ? "\u25b2" : "\u25bc") : ""}
+    </button>
+  );
 
   const openChart = () => {
     if (!record?.encounterDate) return;
@@ -358,7 +436,7 @@ export function ClaimSlipDialog({
             </div>
           </div>
           )}
-          <div className="flex w-60 shrink-0 flex-col border bg-white" style={{ borderColor: "#808080" }}>
+          <div className="flex w-80 shrink-0 flex-col border bg-white" style={{ borderColor: "#808080" }}>
             <div className="border-b px-1 py-0.5" style={{ borderColor: "#808080" }}>
               {FILTERS.map(([key, label]) => (
                 <label key={key} className="flex cursor-pointer items-center gap-1">
@@ -367,7 +445,21 @@ export function ClaimSlipDialog({
                 </label>
               ))}
             </div>
-            <div className="border-b px-1 py-0.5 font-bold" style={{ borderColor: "#808080" }}>{T.list}</div>
+            <div className="flex flex-wrap items-center gap-x-2 border-b px-1 py-0.5" style={{ borderColor: "#808080" }}>
+              <span className="font-bold">{T.caseNo}</span>
+              {caseList.map(([caseNo, count]) => (
+                <label key={caseNo} className="flex cursor-pointer items-center gap-0.5">
+                  <input type="checkbox" checked={!view.hideCases.includes(caseNo)} onChange={() => toggleCase(caseNo)} />
+                  <span className="font-mono">{`${caseNo}\uff08${count}\uff09`}</span>
+                </label>
+              ))}
+            </div>
+            <div className="flex gap-1 border-b bg-[#d4e8c8] px-1 py-0.5" style={{ borderColor: "#808080" }}>
+              {sortHead("serial", T.number, "w-14")}
+              {sortHead("name", T.name, "min-w-0 flex-1")}
+              {sortHead("chart", T.chart, "w-20")}
+              {sortHead("date", T.date, "w-12")}
+            </div>
             <div ref={listRef} className="min-h-0 flex-1 overflow-auto">
               {rows.map((row, i) => {
                 const box = issues.get(row.record.encounterId);
@@ -380,11 +472,12 @@ export function ClaimSlipDialog({
                     data-row={i}
                     className="flex w-full gap-1 px-1 text-left"
                     style={{ background: chosen ? "#000080" : "transparent", color: chosen ? "#fff" : red ? "#b91c1c" : "#000" }}
-                    onClick={() => setIndex(i)}
+                    onClick={() => setSelId(row.record.encounterId)}
                   >
-                    <span className="w-14 font-mono">{row.serial > 0 ? `${row.record.caseNo || "01"}-${row.serial}` : "\u2014"}</span>
+                    <span className="w-14 font-mono">{row.serial > 0 ? `${caseOf(row)}-${row.serial}` : "\u2014"}</span>
                     <span className="min-w-0 flex-1 truncate">{row.record.patientName || ""}</span>
-                    <span className="font-mono">{row.record.medicalNo || ""}</span>
+                    <span className="w-20 truncate font-mono">{row.record.medicalNo || ""}</span>
+                    <span className="w-12 font-mono">{(row.record.encounterDate || "").slice(5, 10).replace("-", "/")}</span>
                   </button>
                 );
               })}

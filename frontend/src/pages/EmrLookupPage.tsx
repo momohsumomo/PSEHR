@@ -434,6 +434,7 @@ let emrReplayEpoch = 0;
 export function EmrLookupPage() {
   const navigate = useNavigate();
   const [claimsBack] = useState(peekClaimsReturn);
+  const leave = () => navigate(claimsBack ? `/claims?job=${claimsBack.job}` : "/");
   const apiMode = isApiMode();
   /** 預設：起訖都是今天；改日期才看得出清單變。防呆只擋截止早於起始。 */
   const [dateFrom, setDateFrom] = useState(todayRoc);
@@ -482,7 +483,7 @@ export function EmrLookupPage() {
   useEscLayer([
     { open: finderOpen, close: () => setFinderOpen(false) },
     { open: resultOpen, close: () => setResultOpen(false) },
-    { open: true, close: () => navigate("/") },
+    { open: true, close: () => leave() },
   ]);
 
   const sortedRows = useMemo(() => {
@@ -806,7 +807,7 @@ export function EmrLookupPage() {
               type="button"
               className="border border-white/40 bg-white/15 font-bold hover:bg-white/25"
               style={{ fontSize: EMR_HINT, padding: `${EMR_GAP / 2}px ${EMR_GAP}px` }}
-              onClick={() => navigate("/")}
+              onClick={() => leave()}
             >
               X
             </button>
@@ -1130,7 +1131,7 @@ export function EmrLookupPage() {
               type="button"
               className="flex min-w-[7rem] items-center justify-center border font-bold"
               style={{ borderColor: border, background: chrome, fontSize: EMR_FONT, gap: EMR_GAP, padding: `${EMR_GAP}px ${EMR_GAP * 2}px` }}
-              onClick={() => navigate("/")}
+              onClick={() => leave()}
             >
               <span className="text-red-600">✕</span> 離開
             </button>
@@ -1180,7 +1181,7 @@ export function EmrLookupPage() {
                     type="button"
                     className="border border-white/40 bg-white/15 font-bold"
                     style={{ fontSize: EMR_HINT, padding: `${EMR_GAP / 2}px ${EMR_GAP}px` }}
-                    onClick={() => navigate(`/claims?job=${claimsBack.job}`)}
+                    onClick={leave}
                   >
                     {"\u56de\u7533\u5831\u6aa2\u67e5"}
                   </button>
@@ -1189,7 +1190,7 @@ export function EmrLookupPage() {
                   type="button"
                   className="border border-white/40 bg-white/15 font-bold"
                   style={{ fontSize: EMR_HINT, padding: `${EMR_GAP / 2}px ${EMR_GAP}px` }}
-                  onClick={() => navigate("/")}
+                  onClick={() => leave()}
                 >
                   X
                 </button>
@@ -1422,7 +1423,7 @@ export function EmrLookupPage() {
                       type="button"
                       className="border border-[#808080] bg-[#E0E0E0] font-bold"
                       style={{ fontSize: EMR_FONT, padding: `${EMR_GAP / 2}px ${EMR_GAP}px` }}
-                      onClick={() => navigate("/")}
+                      onClick={() => leave()}
                     >
                       離開
                     </button>

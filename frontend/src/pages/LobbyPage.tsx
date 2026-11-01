@@ -8,6 +8,7 @@ import { AppUpdateDialog } from "@/components/clinic/AppUpdateDialog";
 import { CardDeskTools } from "@/components/clinic/CardDeskTools";
 import { DeskStatusLamps } from "@/components/clinic/DeskStatusLamps";
 import { readLocalClinicBundle } from "@/lib/clinicProfile";
+import { takeClaimsReturn } from "@/lib/claimsEmr";
 
 type ModuleBtn = {
   id: string;
@@ -74,6 +75,7 @@ export function LobbyPage() {
 
   useEffect(() => {
     prefetchPatientRoster();
+    takeClaimsReturn();
   }, []);
 
   useEffect(() => {
