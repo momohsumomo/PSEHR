@@ -42,12 +42,32 @@ STATUS_HINTS: dict[int, str] = {
     1600: "預設讀卡機名稱在 PC/SC 清單裡找不到",
     1601: "自動偵測預設讀卡機失敗",
     1700: "設定類操作失敗",
+    3100: "健保署驗證簽章失敗（3100）。多半是讀卡機上的卡不是這位病人、卡在中途被拔掉，或換過新卡。請插這位病人的卡再送一次",
+    3200: "尚未驗證健保卡 PIN 碼",
     3201: "這張卡超過有效期限",
+    3203: "卡片已註銷",
+    3205: "限制就醫",
+    3208: "健保署找不到這次就醫的取號資料（3208）",
     3209: "已寫入診斷碼",
+    3210: "ICD-10 編碼失敗",
+    3211: "非同一家醫事機構",
     3213: "這張卡的就醫可用次數是零",
+    3227: "就醫日期不一致",
+    3228: "不在保",
+    3229: "已停保",
+    3230: "已退保",
     3236: "同一時間重覆上傳",
     3242: "同時就醫時間相同",
+    3501: "診斷碼不在健保署的編碼範圍",
 }
+
+
+def _range_hint(code: int) -> str | None:
+    if 3000 <= code <= 3099:
+        return f"送出的欄位格式不對（{code}）"
+    if 3300 <= code <= 3399:
+        return f"健保署資料異常（{code}）"
+    return None
 
 
 def insecure_https_context() -> ssl.SSLContext:
@@ -73,7 +93,7 @@ def parse_sam_ids_from_filename(path: Path) -> tuple[str, str]:
 def status_hint(code: int | None) -> str:
     if code is None:
         return "無狀態碼"
-    return STATUS_HINTS.get(int(code), f"狀態碼 {code}")
+    return STATUS_HINTS.get(int(code)) or _range_hint(int(code)) or f"狀態碼 {code}"
 
 
 def _ssl_context_for(url: str) -> ssl.SSLContext | None:

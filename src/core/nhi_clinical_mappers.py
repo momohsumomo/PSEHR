@@ -195,6 +195,7 @@ def nhi_encounter_to_fhir(intake: NhiEncounterIntake) -> dict[str, Any]:
             "payType": intake.payType,
             "regFee": intake.regFee,
             "copayAmt": intake.copayAmt,
+            "cardDisc": intake.cardDisc,
             "deposit": intake.deposit,
             "consultFee": intake.consultFee,
             "drugFee": intake.drugFee,

@@ -159,6 +159,7 @@ function mapApiQueue(entries: ApiQueueEntry[]): QueueEntry[] {
     depositPaid: e.queueMeta.depositPaid,
     regFee: e.queueMeta.regFee,
     copayAmt: e.queueMeta.copayAmt,
+    cardDisc: e.queueMeta.cardDisc,
     drugCopay: e.queueMeta.drugCopay,
     cardIdentity: e.queueMeta.cardIdentity,
     hcId: e.queueMeta.hcId,
@@ -765,6 +766,7 @@ export function useClinicWorkspace(options?: {
         payType?: string;
         regFee?: string;
         copayAmt?: string;
+        cardDisc?: string;
         deposit?: string;
         consultFee?: string;
         drugFee?: string;
@@ -823,6 +825,7 @@ export function useClinicWorkspace(options?: {
         payType: form.payType,
         regFee: form.regFee,
         copayAmt: form.copayAmt,
+        cardDisc: form.cardDisc,
         deposit: form.deposit,
         consultFee: form.consultFee,
         drugFee: form.drugFee,
@@ -1014,6 +1017,7 @@ export function useClinicWorkspace(options?: {
         paperCard: mode === "paper",
         reasonText: form.reasonText.trim(),
         copayAmt: form.copayAmt ? String(Math.max(0, gross - disc)) : form.copayAmt,
+        cardDisc: form.copayAmt ? String(Math.min(gross, disc)) : undefined,
       };
 
       if (form.encounterId) {
@@ -1059,6 +1063,7 @@ export function useClinicWorkspace(options?: {
           payType: payload.payType,
           regFee: payload.regFee,
           copayAmt: payload.copayAmt,
+          cardDisc: payload.cardDisc,
           deposit: payload.deposit,
           consultFee: payload.consultFee,
           drugFee: payload.drugFee,

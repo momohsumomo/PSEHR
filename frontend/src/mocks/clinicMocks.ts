@@ -59,6 +59,8 @@ export interface QueueEntry {
   totalFee?: string;
   materialFee?: string;
   burdenFee?: string;
+  /** Copay the clinic waived (REGISTER.DISCARD). copayAmt is what was collected. */
+  cardDisc?: string;
   /** REGISTER.SELF_PRICE, the visit self-pay amount already on the fee report. */
   selfPay?: string;
   primaryDx?: string;

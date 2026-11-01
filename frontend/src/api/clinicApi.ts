@@ -755,6 +755,7 @@ export type EncounterRegisterBody = {
   payType?: string;
   regFee?: string;
   copayAmt?: string;
+  cardDisc?: string;
   deposit?: string;
   consultFee?: string;
   drugFee?: string;

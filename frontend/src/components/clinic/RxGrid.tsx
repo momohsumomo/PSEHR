@@ -35,6 +35,8 @@ type Props = {
   lines: RxLine[];
   columns: UiColumnDef[];
   readonly?: boolean;
+  /** Narrow quantity, days and site so the name keeps the room. */
+  compact?: boolean;
   /** Only handle ArrowUp/Down when this pane is active */
   active?: boolean;
   fontSizePx?: number;
@@ -136,6 +138,8 @@ function isNarrowCol(key: string): boolean {
     key === "totalAmount"
   );
 }
+
+const COMPACT_WIDTH: Record<string, string> = { qty: "2.8rem", days: "2.2rem", bodySite: "2.6rem" };
 
 function isMeasureCol(key: string): boolean {
   return key === "qty" || key === "days";
@@ -333,6 +337,7 @@ export function RxGrid({
   lines,
   columns,
   readonly = false,
+  compact = false,
   active = true,
   fontSizePx = HIS.fs.body,
   onRemove,
@@ -380,6 +385,7 @@ export function RxGrid({
   const daysEditRef = useRef("");
   const [qtyMenuText, setQtyMenuText] = useState("");
   const [coverOn, setCoverOn] = useState(false);
+  const qtyTyped = useRef(false);
   const [coverText, setCoverText] = useState("");
   const editOrigin = useRef<RxLine | null>(null);
   const keepOnBlur = useRef(false);
@@ -661,10 +667,12 @@ export function RxGrid({
                 style={{
                   borderColor: HIS.chromeBorder,
                   background: HIS.rxHeader,
-                  fontSize: isMeasureCol(col.key) ? 16 : HIS.fs.secondary,
+                  fontSize: isMeasureCol(col.key) && !compact ? 16 : HIS.fs.secondary,
                   maxWidth: isMeasureCol(col.key) ? undefined : col.widthCh ? `${col.widthCh}ch` : undefined,
-                  minWidth: col.key === "qty" ? "4.8rem" : col.key === "days" ? "3.6rem" : undefined,
-                  width: isMeasureCol(col.key)
+                  minWidth: compact ? undefined : col.key === "qty" ? "4.8rem" : col.key === "days" ? "3.6rem" : undefined,
+                  width: compact && COMPACT_WIDTH[col.key]
+                    ? COMPACT_WIDTH[col.key]
+                    : isMeasureCol(col.key)
                     ? col.key === "qty"
                       ? "4.8rem"
                       : "3.6rem"
@@ -769,6 +777,7 @@ export function RxGrid({
                     }
                     if (key === "qty") {
                       if (!/[\d.]/.test(e.key)) return;
+                      qtyTyped.current = true;
                       setQtyDraft(e.key === "." ? "0." : e.key);
                       setCoverOn(false);
                       setEditCell({ id: line.id, key });
@@ -821,11 +830,14 @@ export function RxGrid({
                         borderColor: "#A0A0A0",
                         height: 30,
                         verticalAlign: "middle",
-                        fontSize: measure ? 20 : primary ? HIS.fs.body : HIS.fs.secondary,
+                        fontSize: measure && !compact ? 20 : primary || measure ? HIS.fs.body : HIS.fs.secondary,
                         fontWeight: measure || primary || pay ? 700 : 400,
-                        maxWidth: measure ? undefined : col.widthCh ? `${col.widthCh}ch` : undefined,
-                        minWidth:
-                          col.key === "qty" ? "4.8rem" : col.key === "days" ? "3.6rem" : pay || memo ? "1.4rem" : undefined,
+                        maxWidth: compact && COMPACT_WIDTH[col.key]
+                          ? COMPACT_WIDTH[col.key]
+                          : measure ? undefined : col.widthCh ? `${col.widthCh}ch` : undefined,
+                        minWidth: compact && COMPACT_WIDTH[col.key]
+                          ? undefined
+                          : col.key === "qty" ? "4.8rem" : col.key === "days" ? "3.6rem" : pay || memo ? "1.4rem" : undefined,
                         textAlign:
                           measure || pay || memo || narrow || col.key === "totalAmount" ? "center" : undefined,
                         background: cellHot ? "#C6EBC2" : pay && mark ? "#D0D0D0" : undefined,
@@ -994,7 +1006,14 @@ export function RxGrid({
                           }}
                           onFocus={(e) => {
                             onSelectIndex?.(rowIdx);
-                            if (col.key === "qty" && !coverOn) e.currentTarget.select();
+                            if (col.key !== "qty" || coverOn) return;
+                            const el = e.currentTarget;
+                            if (qtyTyped.current) {
+                              qtyTyped.current = false;
+                              el.setSelectionRange(el.value.length, el.value.length);
+                            } else {
+                              el.select();
+                            }
                           }}
                           onBlur={(e) => {
                             if (keepOnBlur.current) {

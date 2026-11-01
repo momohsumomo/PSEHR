@@ -1,24 +1,40 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 
 type Props = {
   open: boolean;
   gap: number;
+  tail: number;
   onYes: () => void;
   onNo: () => void;
 };
 
-export function InsertNumberDialog({ open, gap, onYes, onNo }: Props) {
+export function InsertNumberDialog({ open, gap, tail, onYes, onNo }: Props) {
+  const [pickYes, setPickYes] = useState(true);
+
+  useEffect(() => {
+    if (open) setPickYes(true);
+  }, [open]);
+
   useEffect(() => {
     if (!open) return;
     const onKey = (ev: KeyboardEvent) => {
+      if (ev.key === "ArrowLeft" || ev.key === "ArrowRight") {
+        ev.preventDefault();
+        ev.stopPropagation();
+        setPickYes(ev.key === "ArrowLeft");
+        return;
+      }
       if (ev.key === "Enter") {
         ev.preventDefault();
-        onYes();
+        if (pickYes) onYes();
+        else onNo();
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [open, onYes]);
+  }, [open, onYes, onNo, pickYes]);
+
+  const ring = "outline outline-2 outline-offset-1 outline-[#E08000]";
 
   if (!open) return null;
   return (
@@ -31,22 +47,24 @@ export function InsertNumberDialog({ open, gap, onYes, onNo }: Props) {
           {"\u662f\u5426\u8981\u63d2\u5165"} {gap} {"\u865f\uff1f"}
         </p>
         <p className="px-3 pb-2 text-[11px] text-[#335533]">
-          {"\u6309\u300c\u662f\u300d\u63d2\u5165\u76ee\u524d\u7a7a\u865f\u6700\u5c0f\u7684\u90a3\u4e00\u865f\u3002\u6309\u300c\u5426\u300d\u6216 Esc \u5c31\u639b\u5728\u76ee\u524d\u6700\u5927\u865f\u7684\u4e0b\u4e00\u865f\u3002\u5b58\u6a94\u524d\u4ecd\u53ef\u6539\u3002"}
+          {"\u6309\u300c\u662f\u300d\u63d2\u5165\u76ee\u524d\u7a7a\u865f\u6700\u5c0f\u7684\u90a3\u4e00\u865f\u3002\u6309\u300c\u5426\u300d\u6216 Esc \u5c31\u639b\u5728\u76ee\u524d\u6700\u5927\u865f\u7684\u4e0b\u4e00\u865f\u3002\u5de6\u53f3\u9375\u9078\u662f\u6216\u5426\uff0cEnter \u78ba\u5b9a\u3002\u5b58\u6a94\u524d\u4ecd\u53ef\u6539\u3002"}
         </p>
         <footer className="flex gap-1 border-t border-[#80C080] bg-[#C5EBC5] px-2 py-1.5">
           <button
             type="button"
-            className="rounded border border-[#004D00] bg-[#004D00] px-3 py-1 text-xs font-bold text-white"
+            className={`rounded border px-3 py-1 text-xs font-bold ${pickYes ? `border-[#004D00] bg-[#004D00] text-white ${ring}` : "border-[#80C080] bg-white text-[#004D00]"}`}
+            onMouseEnter={() => setPickYes(true)}
             onClick={onYes}
           >
             {"\u662f\uff0c\u63d2\u5165"} {gap} {"\u865f"}
           </button>
           <button
             type="button"
-            className="rounded border border-[#80C080] bg-white px-3 py-1 text-xs font-bold text-[#004D00]"
+            className={`rounded border px-3 py-1 text-xs font-bold ${pickYes ? "border-[#80C080] bg-white text-[#004D00]" : `border-[#004D00] bg-[#004D00] text-white ${ring}`}`}
+            onMouseEnter={() => setPickYes(false)}
             onClick={onNo}
           >
-            {"\u5426"}
+            {"\u5426\uff0c\u639b"} {tail} {"\u865f"}
           </button>
         </footer>
       </div>

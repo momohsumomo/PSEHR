@@ -346,6 +346,7 @@ export function HistoryRxPanel({
               lines={selected?.medications ?? []}
               columns={columns}
               readonly
+              compact
               active={false}
               fontSizePx={bodyFs}
               onDitto={(line) => onDittoRx([line])}

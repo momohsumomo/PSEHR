@@ -47,6 +47,14 @@ export function visitIdentityChoice(cardIdentity?: string, copayCode?: string): 
 
 const _OWNED_COPAY = new Set(["001", "003", "004"]);
 
+/** A saved visit keeps the collected copay and the waived part apart; the form shows the full copay and the waiver. */
+export function storedCopayFields(entry: { copayAmt?: string; cardDisc?: string }): { copayAmt: string; copayDiscAmt: string } {
+  const paid = String(entry.copayAmt || "").trim();
+  const disc = Number(entry.cardDisc) || 0;
+  if (!paid || disc <= 0) return { copayAmt: paid, copayDiscAmt: "0" };
+  return { copayAmt: String((Number(paid) || 0) + disc), copayDiscAmt: String(disc) };
+}
+
 /** Manual choice on this registration. Does not change the patient master. */
 export function applyVisitIdentity(
   choice: string,

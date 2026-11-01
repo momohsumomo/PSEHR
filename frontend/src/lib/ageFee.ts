@@ -6,7 +6,7 @@ export type AgeFeePolicy = {
   studentDiscount: number;
   /** From copayFreeUnder up to but not including this age: subtract automatically. */
   studentAutoUntil: number;
-  /** From studentAutoUntil through this age, inclusive: ask before subtracting. */
+  /** From studentAutoUntil up to but not including this age: ask before subtracting. Identity S is already a student. */
   studentAskUntil: number;
   seniorAge: number;
   seniorDiscount: number;
@@ -87,7 +87,7 @@ export function applyAgeFees(args: {
     notes.push(
       `\u6eff${p.copayFreeUnder}\u6b72\u3001\u672a\u6eff${p.studentAutoUntil}\u6b72\uff0c\u639b\u865f\u8cbb\u6e1b ${p.studentDiscount}`,
     );
-  } else if (age != null && age >= p.studentAutoUntil && age <= p.studentAskUntil) {
+  } else if (age != null && age >= p.studentAutoUntil && age < p.studentAskUntil) {
     if (args.student === true) {
       ageOff = p.studentDiscount;
       notes.push(`\u5b78\u751f\uff0c\u639b\u865f\u8cbb\u6e1b ${p.studentDiscount}`);
@@ -96,7 +96,7 @@ export function applyAgeFees(args: {
     } else {
       askStudent = true;
       notes.push(
-        `\u6eff${p.studentAutoUntil}\u6b72\u5230${p.studentAskUntil}\u6b72\uff0c\u8acb\u554f\u662f\u5426\u5b78\u751f\uff0c\u662f\u624d\u6e1b\u639b\u865f\u8cbb ${p.studentDiscount}`,
+        `\u6eff${p.studentAutoUntil}\u6b72\u3001\u672a\u6eff${p.studentAskUntil}\u6b72\uff0c\u8acb\u554f\u662f\u5426\u5b78\u751f\uff0c\u662f\u624d\u6e1b\u639b\u865f\u8cbb ${p.studentDiscount}`,
       );
     }
   }

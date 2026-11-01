@@ -41,6 +41,7 @@ class NhiEncounterIntake(BaseModel):
     payType: str | None = Field(None, max_length=8)
     regFee: str | None = Field(None, max_length=12)
     copayAmt: str | None = Field(None, max_length=12)
+    cardDisc: str | None = Field(None, max_length=12)
     deposit: str | None = Field(None, max_length=12)
     consultFee: str | None = Field(None, max_length=12)
     drugFee: str | None = Field(None, max_length=12)

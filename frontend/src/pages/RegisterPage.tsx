@@ -38,6 +38,7 @@ import { isDepositHold } from "@/lib/registerModes";
 import { HIS, HIS_FONT, hisFontStyle } from "@/lib/hisTheme";
 import { findCardCheckIn, findWaitingAppointment, otherShiftAppointmentNote } from "@/lib/appointmentCheckIn";
 import { displayCase } from "@/lib/caseMark";
+import { storedCopayFields } from "@/lib/cardIdentity";
 import { roomLabel, roomNumber } from "@/lib/roomMark";
 import { clockLabel, compareClinicQueue, normalizeClock, nowClock, planQueueNumber, shiftFromClock, shiftQueueNumbers } from "@/lib/queueOrder";
 import { depositPrintOptions, findPrintSetup, loadPrintSettings } from "@/lib/printSettings";
@@ -167,7 +168,7 @@ function seedFromEntry(entry: QueueEntry): Partial<RegisterEditForm> {
     cardId: entry.hcId || "",
     cardIdentity: entry.cardIdentity || "",
     regFee: entry.regFee || "",
-    copayAmt: entry.copayAmt || "",
+    ...storedCopayFields(entry),
     deposit: entry.deposit || "",
     acceptReferral: entry.acceptReferral || "",
     referralSeq: entry.referralSeq || "",
@@ -1391,6 +1392,7 @@ export function RegisterPage() {
       <InsertNumberDialog
         open={insertAsk != null}
         gap={insertAsk?.gap ?? 0}
+        tail={insertAsk?.tail ?? 0}
         onYes={() => answerInsert(true)}
         onNo={() => answerInsert(false)}
       />

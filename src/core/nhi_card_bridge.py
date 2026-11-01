@@ -420,6 +420,13 @@ def cloud_order_from_request(entry: dict[str, Any]) -> dict[str, Any] | None:
     return item
 
 
+OTHER_CARD_ON_WRITE = (
+    "\u8b80\u5361\u6a5f\u4e0a\u63d2\u7684\u5065\u4fdd\u5361\u4e0d\u662f\u9019\u4f4d\u75c5\u4eba\uff0c"
+    "\u6c92\u6709\u5beb\u5165\u5065\u4fdd\u96f2\u7aef\u3002\u672c\u6a5f\u75c5\u6b77\u5df2\u5b58\u3002"
+    "\u8acb\u63d2\u9019\u4f4d\u75c5\u4eba\u7684\u5361\u518d\u6309 F9 \u88dc\u5beb\u3002"
+)
+
+
 def write_visit_to_card(
     *,
     console_base: str = DEFAULT_CONSOLE_BASE,
@@ -505,8 +512,19 @@ def write_visit_to_card(
     desk_sign_rx = data.get("deskSignRx") if isinstance(data.get("deskSignRx"), dict) else None
     hc_id = str(reg.get("hcId") or "").strip()
     hc_id_no = str(reg.get("hcIdNo") or "").strip()
+    for sign in (desk_sign, desk_sign_rx):
+        signed_no = str((sign or {}).get("hcIdNo") or "").strip().upper()
+        if signed_no and hc_id_no and signed_no != hc_id_no.upper():
+            return CardWriteResult(
+                written=False,
+                reason=OTHER_CARD_ON_WRITE,
+                consoleReachable=True,
+                source="other-card",
+            )
     if desk_sign:
-        hc_id = hc_id or str(desk_sign.get("hcId") or "")
+        signed_card = str(desk_sign.get("hcId") or "").strip()
+        # NHI checks the signature against the card actually in the reader; a reissued card has a new number.
+        hc_id = signed_card or hc_id
         hc_id_no = hc_id_no or str(desk_sign.get("hcIdNo") or "")
 
     consult = _fee_int(reg.get("consultFee"))

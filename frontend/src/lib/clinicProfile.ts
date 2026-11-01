@@ -20,7 +20,7 @@ export type ClinicFees = {
   studentDiscount: number;
   /** Automatic cut applies while age is at least childFreeAge and below this. */
   studentAutoUntil: number;
-  /** Ask "student?" from studentAutoUntil through this age, inclusive. */
+  /** Ask "student?" from studentAutoUntil up to but not including this age. At this age identity S becomes D. */
   studentAskUntil: number;
   feeRulesVersion?: number;
   regFeeSelfPay: number;

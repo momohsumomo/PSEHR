@@ -63,13 +63,13 @@ export function ChartPatientHead({ selected, patientResource, visitDate }: Props
 
   return (
     <div
-      className="flex shrink-0 flex-wrap items-center gap-x-2 gap-y-0 border-b px-2 py-0 leading-none text-black"
+      className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-0 border-b px-2 py-0.5 leading-none text-black"
       style={{
         borderColor: HIS.chromeDark,
         background: "#F0F0F0",
         fontFamily: HIS_FONT,
-        fontSize: HIS.fs.tertiary,
-        minHeight: 16,
+        fontSize: HIS.fs.body,
+        minHeight: 20,
       }}
     >
       {bits.map((bit) => (

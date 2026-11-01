@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { HIS_FONT } from "@/lib/hisTheme";
 import { openPrintPreview } from "@/lib/printJob";
 import { buildCertificateHtml } from "@/lib/clinicPrintDocs";
@@ -63,9 +63,12 @@ export function CertificateDialog({ open, onClose, seed, onOpenReferral }: Props
   const [nextDocNo, setNextDocNo] = useState("");
 
   const encounterId = String(seed?.encounterId || "").trim();
+  const seedRef = useRef(seed);
+  seedRef.current = seed;
 
   useEffect(() => {
     if (!open) return;
+    const seed = seedRef.current;
     const today = new Date();
     const roc = `${today.getFullYear() - 1911}.${String(today.getMonth() + 1).padStart(2, "0")}.${String(today.getDate()).padStart(2, "0")}`;
     setDocNo("");
@@ -116,7 +119,7 @@ export function CertificateDialog({ open, onClose, seed, onOpenReferral }: Props
     return () => {
       cancel = true;
     };
-  }, [open, seed, encounterId]);
+  }, [open, encounterId]);
 
   useEffect(() => {
     if (!open) return;
@@ -240,7 +243,7 @@ export function CertificateDialog({ open, onClose, seed, onOpenReferral }: Props
       printAppointment();
       return;
     }
-    if (docNo.trim() || !encounterId) {
+    if (!encounterId) {
       printCertificate();
       return;
     }

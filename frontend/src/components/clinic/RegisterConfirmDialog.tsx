@@ -7,6 +7,7 @@ import {
   fetchStaff,
   fetchIdCategorySettings,
   fetchSameDayEncounters,
+  updatePatient,
   type ApiStaffRecord,
   type CardFaultReport,
 } from "@/api/clinicApi";
@@ -314,6 +315,7 @@ export function RegisterConfirmDialog({
   if (open && !dialogOpen.current) depositTouched.current = false;
   dialogOpen.current = open;
   const studentRef = useRef<boolean | null>(null);
+  const studentFor = useRef("");
   const personDiscRef = useRef("");
   const [askStudent, setAskStudent] = useState(false);
   const [hospPickOpen, setHospPickOpen] = useState(false);
@@ -482,10 +484,29 @@ export function RegisterConfirmDialog({
         setPhone(hit.phone || "");
         const addr = p.address?.[0]?.text || "";
         setAddress(addr);
-        const cat =
-          p.extension
-            ?.find((e) => e.url?.includes("patient-clinic-ext"))
-            ?.extension?.find((s) => s.url === "idCategory")?.valueString || "";
+        const catSub = p.extension
+          ?.find((e) => e.url?.includes("patient-clinic-ext"))
+          ?.extension?.find((s) => s.url === "idCategory");
+        let cat = catSub?.valueString || "";
+        if (studentFor.current !== form.patientId) {
+          studentFor.current = form.patientId!;
+          studentRef.current = null;
+        }
+        const age = ageYearsFromRoc(form.birthday);
+        if (canonicalIdCategory(cat) === "S" && age != null && catSub) {
+          if (age >= policyFromFees(readLocalClinicBundle().fees).studentAskUntil) {
+            catSub.valueString = "D";
+            try {
+              await updatePatient(form.patientId!, p);
+              cat = "D";
+            } catch {
+              catSub.valueString = cat;
+            }
+            if (cancelled) return;
+          } else {
+            studentRef.current = true;
+          }
+        }
         const shown = canonicalIdCategory(cat) || cat;
         const personDisc =
           p.extension

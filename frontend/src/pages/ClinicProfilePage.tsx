@@ -537,7 +537,7 @@ export function ClinicProfilePage() {
                   />
                 </div>
                 <div>
-                  <label className="block text-slate-400 mb-1">{"\u8981\u8a62\u554f\u662f\u5426\u5b78\u751f\uff0c\u5230\u5e7e\u6b72\uff08\u542b\uff09"}</label>
+                  <label className="block text-slate-400 mb-1">{"\u8981\u8a62\u554f\u662f\u5426\u5b78\u751f\uff0c\u5230\u672a\u6eff\u5e7e\u6b72\uff08\u6eff\u9019\u6b72\u8eab\u5206 S \u81ea\u52d5\u6539 D\uff09"}</label>
                   <input
                     type="number"
                     value={fees.studentAskUntil}

@@ -36,6 +36,7 @@ import {
 } from "@/lib/clinicShortcutSets";
 import { chartOrderKey, orderMayRepeat, withoutRepeatedOrders } from "@/utils/catalogSearch";
 import { rxLinesMissingFrom } from "@/lib/dittoRxLines";
+import { storedCopayFields } from "@/lib/cardIdentity";
 import { diagnosisTaken, sameDiagnosis } from "@/lib/diagnosisIdentity";
 import { splitStoppedRxLines, stoppedRxLabels } from "@/utils/catalogRx";
 import { EncounterQueuePanel } from "@/components/clinic/EncounterQueuePanel";
@@ -2286,7 +2287,7 @@ export function ClinicOutpatientPage() {
       cardId: entry.hcId || "",
       cardIdentity: entry.cardIdentity || "",
       regFee: entry.regFee || "",
-      copayAmt: entry.copayAmt || "",
+      ...storedCopayFields(entry),
       deposit: entry.deposit || "",
       consultFee: entry.consultFee || "",
       drugFee: entry.drugFee || "",
@@ -3221,7 +3222,7 @@ export function ClinicOutpatientPage() {
               style={{
                 borderColor: HIS.chromeDark,
                 background: HIS.chrome,
-                fontSize: HIS.fs.secondary,
+                fontSize: HIS.fs.primary,
                 ...hisFontStyle,
               }}
             >
@@ -4124,6 +4125,7 @@ export function ClinicOutpatientPage() {
       <InsertNumberDialog
         open={insertAsk != null}
         gap={insertAsk?.gap ?? 0}
+        tail={insertAsk?.tail ?? 0}
         onYes={() => answerInsert(true)}
         onNo={() => answerInsert(false)}
       />

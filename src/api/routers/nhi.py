@@ -799,6 +799,7 @@ def patch_encounter_reg(encounter_id: str, body: NhiEncounterIntake) -> dict[str
             "payType": body.payType,
             "regFee": body.regFee,
             "copayAmt": body.copayAmt,
+            "cardDisc": body.cardDisc,
             "deposit": body.deposit,
             "securitySign": body.securitySign,
             "samId": body.samId,

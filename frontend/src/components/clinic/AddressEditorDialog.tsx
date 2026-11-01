@@ -158,6 +158,7 @@ export function AddressEditorDialog({ open, address, postalCode, onClose, onSave
   const [zip, setZip] = useState("");
   const [favKey, setFavKey] = useState("");
   const [busy, setBusy] = useState("");
+  const roadRef = useRef<HTMLInputElement>(null);
   const laneRef = useRef<HTMLInputElement>(null);
   const alleyRef = useRef<HTMLInputElement>(null);
   const noRef = useRef<HTMLInputElement>(null);
@@ -245,10 +246,29 @@ export function AddressEditorDialog({ open, address, postalCode, onClose, onSave
 
   const parts = (): Parts => ({ city, district, road: road.trim(), lane, alley, no, floor, zhi, note: note.trim() });
 
-  const go = (ev: React.KeyboardEvent, el: HTMLElement | null) => {
-    if (ev.key !== "Enter" || ev.nativeEvent.isComposing) return;
+  const order = [roadRef, laneRef, alleyRef, noRef, floorRef, zhiRef, noteRef];
+
+  const go = (ev: React.KeyboardEvent<HTMLInputElement>, el: HTMLElement | null) => {
+    if (ev.nativeEvent.isComposing) return;
+    if (ev.key === "Enter") {
+      ev.preventDefault();
+      el?.focus();
+      return;
+    }
+    if (ev.key !== "ArrowLeft" && ev.key !== "ArrowRight") return;
+    const input = ev.currentTarget;
+    const at = order.findIndex((ref) => ref.current === input);
+    if (at < 0) return;
+    const wide = input === roadRef.current || input === noteRef.current;
+    const start = input.selectionStart ?? 0;
+    const end = input.selectionEnd ?? 0;
+    const left = ev.key === "ArrowLeft";
+    if (wide && (left ? start > 0 || end > 0 : start < input.value.length)) return;
+    const next = order[at + (left ? -1 : 1)]?.current;
+    if (!next) return;
     ev.preventDefault();
-    el?.focus();
+    next.focus();
+    next.select();
   };
 
   const pickRoad = (name: string) => {
@@ -432,27 +452,27 @@ export function AddressEditorDialog({ open, address, postalCode, onClose, onSave
           </label>
           <label>
             {"\u8def\uff0f\u8857"}
-            <input className={`${box} w-40`} value={road} onChange={(e) => setRoad(e.target.value)} onKeyDown={(e) => go(e, laneRef.current)} />
+            <input ref={roadRef} className={`${box} w-40`} value={road} onChange={(e) => setRoad(e.target.value)} onKeyDown={(e) => go(e, laneRef.current)} />
           </label>
           <label>
-            {"\u5df7"}
             <input ref={laneRef} className={`${box} w-14`} value={lane} onChange={(e) => setLane(e.target.value)} onKeyDown={(e) => go(e, alleyRef.current)} />
+            {"\u5df7"}
           </label>
           <label>
-            {"\u5f04"}
             <input ref={alleyRef} className={`${box} w-14`} value={alley} onChange={(e) => setAlley(e.target.value)} onKeyDown={(e) => go(e, noRef.current)} />
+            {"\u5f04"}
           </label>
           <label>
-            {"\u865f"}
             <input ref={noRef} className={`${box} w-14`} value={no} onChange={(e) => setNo(e.target.value)} onKeyDown={(e) => go(e, floorRef.current)} />
+            {"\u865f"}
           </label>
           <label>
-            {"\u6a13"}
             <input ref={floorRef} className={`${box} w-14`} value={floor} onChange={(e) => setFloor(e.target.value)} onKeyDown={(e) => go(e, zhiRef.current)} />
+            {"\u6a13"}
           </label>
           <label>
-            {"\u4e4b"}
             <input ref={zhiRef} className={`${box} w-14`} value={zhi} onChange={(e) => setZhi(e.target.value)} onKeyDown={(e) => go(e, noteRef.current)} />
+            {"\u4e4b"}
           </label>
           <label>
             {"\u5099\u8a3b"}
