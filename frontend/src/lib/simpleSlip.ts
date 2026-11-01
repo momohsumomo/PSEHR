@@ -2,6 +2,9 @@ import type { DiagnosisRow, RxLine } from "@/mocks/clinicMocks";
 import { formatBirthdayRoc } from "@/lib/patientSearch";
 import { ceilCashTen, rawSelfPay } from "@/lib/selfPayMoney";
 
+/** Hand cutting misses the centre line by up to 3 mm, so the right half keeps that much clear. */
+export const CUT_GUTTER_MM = 3;
+
 export type SimpleSlipInput = {
   medicalNo: string;
   name: string;
@@ -387,7 +390,7 @@ function pageHtml(
         <div style="flex:1 1 auto;min-height:6mm;border-top:1px dashed #000;margin-top:2px;padding-top:1px;">${leftTable(view, drugFont)}</div>
         ${leftMoney}
       </section>
-      <section style="${col}padding-left:1.5mm;font-size:${font}px;line-height:1.2;">
+      <section style="${col}padding-left:${1.5 + CUT_GUTTER_MM}mm;font-size:${font}px;line-height:1.2;">
         <div style="flex:0 0 auto;">${rightHead}</div>
         <div style="flex:1 1 auto;min-height:6mm;border-top:1px solid #000;margin-top:1px;">${rightTable(view, drugFont)}</div>
         ${rightTail}

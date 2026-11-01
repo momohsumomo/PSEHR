@@ -1,5 +1,7 @@
 /** The same HTML the clinic sends to the printer. Settings preview calls these too. */
 
+import { CUT_GUTTER_MM } from "@/lib/simpleSlip";
+
 function esc(s: string): string {
   return String(s)
     .replace(/&/g, "&amp;")
@@ -165,7 +167,7 @@ export function buildDepositSlipHtml(input: DepositDocInput): string {
   const right = input.singleSide ? "" : half;
   return `<div class="slip-page" style="box-sizing:border-box;height:100%;display:flex;background:#fff;color:#000;font-family:'PMingLiU','Microsoft JhengHei',serif;">
     <section style="${col}${input.singleSide ? "" : "border-right:1px dashed #222;"}">${half}</section>
-    <section style="${col}">${right}</section>
+    <section style="${col}padding-left:${2 + CUT_GUTTER_MM}mm;">${right}</section>
   </div>`;
 }
 
