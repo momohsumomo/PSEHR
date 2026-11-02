@@ -2421,6 +2421,7 @@ export type ApiClaimsPreview = ApiClaimsStatistics & {
     warnings?: ClaimCheckRow[];
   };
   caseCounts?: Record<string, number>;
+  exportHistory?: Array<{ at: string; kind: "songhe" | "bubao"; count: number; points: number }>;
   totalSheet?: {
     t1: string;
     t2: string;

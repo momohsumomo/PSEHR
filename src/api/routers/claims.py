@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+from datetime import date, timedelta
 from typing import Any, Literal
 
 from fastapi import APIRouter, HTTPException, Query
@@ -10,6 +11,7 @@ from fastapi.responses import Response
 
 from src.app.bootstrap import get_shadow_store
 from src.claims import build_claims_summary, render_claims_xml
+from src.claims import export_log
 from src.claims.case_rules import assign_case, claim_case_rules
 from src.claims.media_check import add_unfinished, check_media
 from src.claims.engine import clinic_dept_code, clinic_dispense_code, unfinished_visits
@@ -36,6 +38,44 @@ def _institution_code() -> str:
     if code:
         return code
     return str(DEFAULT_PROFILE["profile"]["clinicCode"])
+
+
+def _month_for(store: Any, date_month: str, submit_type: str) -> tuple[Any, dict[str, Any], list[str]]:
+    """The month's records, the export log, and reasons no file may be made yet."""
+    summary = build_claims_summary(store, date_month)
+    log = export_log.load(store, date_month)
+    gate: list[str] = []
+    if export_log.month_open(date_month):
+        gate.append(export_log.MONTH_OPEN)
+    if submit_type == "bubao":
+        if not export_log.has_songhe(log):
+            gate.append(export_log.NO_SONGHE)
+        summary = export_log.only_new(summary, log)
+    return summary, log, gate
+
+
+def _stale_price_note(date_month: str) -> str:
+    """Prices come from the newest catalog. One fetched before month end may miss that month's new periods."""
+    from src.spoke.pack_store import PackStore
+
+    try:
+        store = PackStore()
+        store.initialize()
+        version = store.latest_active_version()
+        pack = store.get_package(version) if version else None
+    except Exception:
+        return ""
+    if not pack:
+        return "\u672c\u6a5f\u9084\u6c92\u6709\u85e5\u50f9\u76ee\u9304\uff0c\u85e5\u8cbb\u53ea\u80fd\u7528\u75c5\u6b77\u4e0a\u7684\u55ae\u50f9\u3002\u5148\u5230\u300c\u66f4\u65b0\u300d\u6309\u66f4\u65b0\u85e5\u50f9\u3002"
+    y, m = (int(x) for x in date_month[:7].split("-"))
+    last_day = (date(y + (m == 12), m % 12 + 1, 1) - timedelta(days=1)).isoformat()
+    fetched = str(pack.get("effective_from") or "")[:10]
+    if fetched >= last_day:
+        return ""
+    return (
+        f"\u85e5\u50f9\u76ee\u9304\u662f {fetched} \u6293\u7684\uff0c\u6bd4\u9019\u500b\u6708\u5e95\u65e9\u3002"
+        "\u6708\u4e2d\u82e5\u6709\u65b0\u50f9\u671f\u53ef\u80fd\u6c92\u6709\u3002\u5148\u5230\u300c\u66f4\u65b0\u300d\u6309\u66f4\u65b0\u85e5\u50f9\uff0c\u518d\u6aa2\u67e5\u4e00\u6b21\u3002"
+    )
 
 
 @router.get("/case")
@@ -84,23 +124,37 @@ def preview_claims(
     submit_type: SubmitType = Query("songhe"),
 ) -> dict[str, Any]:
     """含醫令明細的組檔預覽（檢查用）。"""
-    summary = build_claims_summary(get_shadow_store(), date_month)
+    store = get_shadow_store()
+    summary, log, gate = _month_for(store, date_month, submit_type)
     data = summary.to_dict()
     case_counts: dict[str, int] = {}
     for rec in summary.records:
         if rec.claimable:
             case = str(rec.caseNo or "01")
             case_counts[case] = case_counts.get(case, 0) + 1
-    report = add_unfinished(check_media(summary.records), unfinished_visits(get_shadow_store(), date_month))
-    if report["claimable"] == 0:
+    report = add_unfinished(check_media(summary.records), unfinished_visits(store, date_month))
+    if report["claimable"] == 0 and not gate:
+        gate = [
+            export_log.NOTHING_NEW
+            if submit_type == "bubao"
+            else "\u672c\u6708\u6c92\u6709\u53ef\u7533\u5831\u7684\u770b\u8a3a"
+        ]
+    if gate:
         report["ok"] = False
         report["canExport"] = False
         report["blocks"] = [
-            {"medicalNo": "", "encounterDate": "", "caseNo": "", "code": "empty", "message": "本月沒有可申報的看診"},
-            *report["blocks"],
-        ]
-        report["blockCount"] = len(report["blocks"])
+            {"medicalNo": "", "encounterDate": "", "caseNo": "", "code": "month", "message": msg}
+            for msg in gate
+        ] + list(report["blocks"])
+        report["blockCount"] = int(report["blockCount"]) + len(gate)
+    stale = _stale_price_note(date_month)
+    if stale:
+        report["warnings"] = [
+            {"medicalNo": "", "encounterDate": "", "caseNo": "", "code": "pack-stale", "message": stale}
+        ] + list(report.get("warnings") or [])
+        report["warnCount"] = int(report.get("warnCount") or 0) + 1
     data["check"] = report
+    data["exportHistory"] = log["history"]
     data["caseCounts"] = case_counts
     inst = _institution_code()
     data["institutionCode"] = inst
@@ -134,7 +188,9 @@ def export_claims_xml(
 ) -> Response:
     """產出月申報檔（預設署方 outpatient schema）。"""
     store = get_shadow_store()
-    summary = build_claims_summary(store, date_month)
+    summary, _log, gate = _month_for(store, date_month, submit_type)
+    if gate:
+        raise HTTPException(status_code=400, detail=gate[0])
     report = check_media(summary.records)
     if report["claimable"] == 0 or report["blockCount"]:
         raise HTTPException(
@@ -171,6 +227,7 @@ def export_claims_xml(
             default_dispense=dispense,
             encoding="cp950",
         )
+        export_log.record(store, summary, submit_type)
         return Response(
             content=blob,
             media_type="application/zip",
@@ -192,6 +249,7 @@ def export_claims_xml(
         default_dispense=dispense,
         encoding_decl="UTF-8",
     )
+    export_log.record(store, summary, submit_type)
     return Response(
         content=xml_content.encode("utf-8"),
         media_type="application/xml; charset=utf-8",

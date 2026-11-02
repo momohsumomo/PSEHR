@@ -47,11 +47,9 @@ type Step = "setup" | "checked" | "exported";
 type ClaimJob = "check" | "build";
 
 function defaultMonth(): string {
-  const d = new Date();
-  // Clinic habit: early month files previous fee month
-  if (d.getDate() <= 7) {
-    d.setMonth(d.getMonth() - 1);
-  }
+  const now = new Date();
+  // A fee month is filed after it ends, so the default is always last month.
+  const d = new Date(now.getFullYear(), now.getMonth() - 1, 1);
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, "0");
   return `${y}-${m}`;
@@ -214,6 +212,16 @@ export function ClaimsPage() {
       setLog((prev) => [...prev, "還有必要修正，這次不產檔。提醒不用先清完。"]);
       return;
     }
+    const madeBefore = (preview?.exportHistory ?? []).filter((h) => h.kind === "songhe");
+    if (submitType === "songhe" && madeBefore.length > 0) {
+      const last = madeBefore[madeBefore.length - 1];
+      const ok = window.confirm(
+        `\u9019\u500b\u6708 ${last.at.slice(0, 16)} \u5df2\u7d93\u7522\u904e\u9001\u6838\u6a94\uff08${last.count} \u4ef6\uff09\u3002\n` +
+          "\u5982\u679c\u5df2\u7d93\u4e0a\u50b3\u5065\u4fdd\u7f72\uff0c\u4e0d\u8981\u518d\u9001\u4e00\u6b21\u9001\u6838\u3002\u6f0f\u5831\u7684\u770b\u8a3a\u6539\u9078\u300c\u88dc\u5831\u300d\u3002\n" +
+          "\u9084\u6c92\u4e0a\u50b3\u3001\u53ea\u662f\u6539\u5b8c\u8cc7\u6599\u8981\u91cd\u7522\uff0c\u6309\u78ba\u5b9a\u3002",
+      );
+      if (!ok) return;
+    }
 
     setDownloading(true);
     const rocYear = parseInt(selectedMonth.split("-")[0], 10) - 1911;
@@ -253,6 +261,9 @@ export function ClaimsPage() {
         "之後若有同月申報檔，可拿來比對欄位。",
       ]);
       setStep("exported");
+      void fetchClaimsPreview(selectedMonth, submitType)
+        .then((res) => setPreview(res))
+        .catch(() => undefined);
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err);
       setLog((prev) => [...prev, `匯出失敗: ${message}`]);
@@ -357,7 +368,7 @@ export function ClaimsPage() {
               <span>
                 <span className="font-bold">補報</span>
                 <span className="block text-[10px] text-slate-400 mt-0.5 leading-snug">
-                  僅漏報追加。核刪／申復不是這顆。補報常不暫付。
+                  送核之後才補上的看診（例如退押、晚完診）。只放之前檔案沒有的那幾筆。核刪／申復不是這顆。
                 </span>
               </span>
             </label>
@@ -437,6 +448,16 @@ export function ClaimsPage() {
             ) : (
               <p className="text-[10px] text-slate-500 leading-snug">產檔不在這裡。回選單選「製作申報格式」。</p>
             )}
+            {(preview?.exportHistory ?? []).length > 0 ? (
+              <div className="text-[10px] text-slate-600 leading-snug">
+                <p className="font-bold">{"\u9019\u500b\u6708\u7522\u904e\u7684\u6a94"}</p>
+                {(preview?.exportHistory ?? []).slice(-5).map((h) => (
+                  <p key={`${h.at}-${h.kind}`} className="font-mono">
+                    {h.at.slice(0, 16)} {h.kind === "bubao" ? "\u88dc\u5831" : "\u9001\u6838"} {h.count} {"\u4ef6"} {h.points} {"\u9ede"}
+                  </p>
+                ))}
+              </div>
+            ) : null}
             {step === "exported" ? (
               <p className="text-[10px] text-emerald-700 font-bold leading-snug">
                 檔已下載。請人上診所健保 VPN 網頁上傳並自行確認。
