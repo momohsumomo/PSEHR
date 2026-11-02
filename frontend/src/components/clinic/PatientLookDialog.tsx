@@ -365,6 +365,10 @@ export function PatientLookDialog({ open, patientId, patientName, medicalNo, onC
 
   if (!open) return null;
 
+  const bigBase = "h-14 border-2 border-[#808080] text-xl font-bold text-black";
+  const bigBtn = `${bigBase} bg-[#D4D0C8] hover:bg-[#E4E0D8]`;
+  const bigDanger = `${bigBase} bg-[#F0C0C0] hover:bg-[#F6D4D4]`;
+
   return (
     <div className="fixed inset-0 z-[80] flex bg-black/35">
       <input
@@ -401,39 +405,6 @@ export function PatientLookDialog({ open, patientId, patientName, medicalNo, onC
             {patientName || "—"}
           </span>
           <span className="font-normal">{photos.length ? `${photos.length} 張` : ""}</span>
-          <button type="button" className="ml-auto px-2 hover:underline" onClick={startAdd}>
-            新增
-          </button>
-          <button
-            type="button"
-            className="px-2 hover:underline"
-            onClick={() => {
-              if (!photos.length) {
-                setNote("沒有照片可以編輯。");
-                return;
-              }
-              showPhoto(Math.min(picked, photos.length - 1));
-            }}
-          >
-            編輯
-          </button>
-          <button
-            type="button"
-            className="px-2 hover:underline"
-            onClick={() => {
-              if (!photos.length) {
-                setNote("沒有照片可以刪除。");
-                return;
-              }
-              const index = viewer != null ? viewer : Math.min(picked, photos.length - 1);
-              void deleteCurrent(index);
-            }}
-          >
-            {armedIndex === Math.min(picked, Math.max(photos.length - 1, 0)) ? "確定刪除" : "刪除"}
-          </button>
-          <button type="button" className="px-2 hover:underline" onClick={onClose}>
-            關閉
-          </button>
         </div>
         <div className="min-h-0 flex-1 overflow-auto p-2">
           {photos.length > 0 ? (
@@ -464,6 +435,41 @@ export function PatientLookDialog({ open, patientId, patientName, medicalNo, onC
           )}
         </div>
         {note && photos.length > 0 && <div className="shrink-0 px-2 py-1 text-[11px] text-slate-600">{note}</div>}
+        <div className="grid shrink-0 grid-cols-4 gap-3 border-t px-3 py-2" style={{ borderColor: HIS.chromeDark }}>
+          <button type="button" className={bigBtn} onClick={startAdd}>
+            新增
+          </button>
+          <button
+            type="button"
+            className={bigBtn}
+            onClick={() => {
+              if (!photos.length) {
+                setNote("沒有照片可以編輯。");
+                return;
+              }
+              showPhoto(Math.min(picked, photos.length - 1));
+            }}
+          >
+            編輯
+          </button>
+          <button
+            type="button"
+            className={bigDanger}
+            onClick={() => {
+              if (!photos.length) {
+                setNote("沒有照片可以刪除。");
+                return;
+              }
+              const index = viewer != null ? viewer : Math.min(picked, photos.length - 1);
+              void deleteCurrent(index);
+            }}
+          >
+            {armedIndex === Math.min(picked, Math.max(photos.length - 1, 0)) ? "確定刪除" : "刪除"}
+          </button>
+          <button type="button" className={bigBtn} onClick={onClose}>
+            關閉
+          </button>
+        </div>
       </div>
 
 
@@ -478,7 +484,6 @@ export function PatientLookDialog({ open, patientId, patientName, medicalNo, onC
             <div className="flex shrink-0 items-center gap-2 bg-[#2060A0] px-2 py-1 text-xs font-bold text-white">
               <span>照片 {viewer + 1} / {photos.length}</span>
               <span className="font-normal">{currentPhoto.name}</span>
-              <button type="button" className="ml-auto px-2 hover:underline" onClick={() => { setViewer(null); setArmedIndex(null); }}>關閉</button>
             </div>
             <button type="button" className="flex min-h-0 flex-1 items-center justify-center bg-black" onDoubleClick={() => showPhoto((viewer + 1) % photos.length)}>
               <img src={currentPhoto.src} alt="" className="max-h-full max-w-full object-contain" />
@@ -490,7 +495,8 @@ export function PatientLookDialog({ open, patientId, patientName, medicalNo, onC
               <button type="button" className="border bg-[#D4D0C8] px-2 py-1 text-xs font-bold" disabled={photoBusy} onClick={() => void rotateCurrent(1)}>右轉</button>
               <button type="button" className="border bg-[#D4D0C8] px-2 py-1 text-xs font-bold" disabled={photoBusy} onClick={() => editRef.current?.click()}>換成別張</button>
               <button type="button" className="border bg-[#F0C0C0] px-2 py-1 text-xs font-bold" disabled={photoBusy} onClick={() => void deleteCurrent(viewer ?? picked)}>{armedIndex === viewer ? "確定刪除" : "刪除"}</button>
-              <span className="text-[11px] text-slate-700">{photoNote || "雙擊大圖看下一張。刪除會把這張移出相簿，放到本機 data\\look-removed。"}</span>
+              <span className="min-w-0 flex-1 text-[11px] text-slate-700">{photoNote || "雙擊大圖看下一張。刪除會把這張移出相簿，放到本機 data\\look-removed。"}</span>
+              <button type="button" className={`${bigBtn} w-40`} onClick={() => { setViewer(null); setArmedIndex(null); }}>關閉</button>
             </div>
           </div>
         </div>

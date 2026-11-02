@@ -23,6 +23,7 @@ import { openPrintPreview } from "@/lib/printJob";
 import { buildDepositSlipHtml } from "@/lib/clinicPrintDocs";
 import { readLocalClinicBundle } from "@/lib/clinicProfile";
 import { useEscLayer } from "@/hooks/useEscLayer";
+import { useLeaveGuard } from "@/hooks/useLeaveGuard";
 import { useListNav } from "@/hooks/useListNav";
 import {
   HisStubDialog,
@@ -754,6 +755,7 @@ export function RegisterPage() {
     }
   };
 
+  useLeaveGuard();
   useEscLayer([
     { open: newPatientQuery != null, close: () => setNewPatientQuery(null) },
     { open: checkInAsk != null, close: () => setCheckInAsk(null) },

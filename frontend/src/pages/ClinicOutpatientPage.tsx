@@ -115,6 +115,7 @@ import { compareClinicQueue, normalizeClock, nowClock, planQueueNumber, shiftQue
 import { depositInTotal } from "@/lib/visitFee";
 import { AppointmentCheckInDialog, InsertNumberDialog, PrebookArriveDialog, PrebookNoCardDialog } from "@/components/clinic/InsertNumberDialog";
 import { useEscLayer } from "@/hooks/useEscLayer";
+import { useLeaveGuard } from "@/hooks/useLeaveGuard";
 
 type ChartRailTab = "common" | "full" | "oral" | "waiting" | "history";
 
@@ -2537,6 +2538,7 @@ export function ClinicOutpatientPage() {
     if (spent) closeChartNow(true);
   }, [saveSpent, closeChartNow]);
 
+  useLeaveGuard();
   useEscLayer(
     [
       { open: retiredRxAsk != null, close: () => setRetiredRxAsk(null) },
