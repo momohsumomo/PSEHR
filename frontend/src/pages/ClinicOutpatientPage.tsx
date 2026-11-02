@@ -1441,7 +1441,7 @@ export function ClinicOutpatientPage() {
         visitDate: currentDate,
         dept: saveDraft.dept || profile.mainDept || "",
         caseNo: saveDraft.caseNo,
-        cardNo: saveDraft.cardNo,
+        cardNo: slipVisitSeq(saveDraft.treatSeq, selected?.treatSeq),
         doctor: saveDraft.doctor,
         pharmacist: pharmacistName,
         chief: ccText,

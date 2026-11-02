@@ -341,7 +341,7 @@ function pageHtml(
   const leftHead =
     pageIndex === 0
       ? `<div style="${glow("chart")}${glow("idno")}${glow("birthday")}">${who}(${esc(show(input.sex))})${idPart}${birth}</div>
-      <div>&lt;${esc(show(input.visitDate))}&gt;\u79d1\u5225:${esc(show(input.dept))}\u6848\u4ef6:${esc(show(input.caseNo))}\u5361\u865f:${esc(show(input.queueNo))}</div>
+      <div>&lt;${esc(show(input.visitDate))}&gt;\u79d1\u5225:${esc(show(input.dept))}\u6848\u4ef6:${esc(show(input.caseNo))}\u5361\u865f:${esc(show(input.cardNo))}</div>
       <div style="${glow("doctor")}${glow("pharmacist")}">${whoLine}</div>
       <div style="border:${showChief ? "1px solid #000" : "0"};min-height:12px;margin-top:1px;padding:1px;${glow("chief")}">${showChief ? esc(show(markChiefBreaks(input.chief))) : ""}</div>
       <div style="${glow("dx")}">${showDx ? dx || "\u2014" : ""}</div>`
