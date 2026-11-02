@@ -468,6 +468,7 @@ export function EmrLookupPage() {
   const [resultOpen, setResultOpen] = useState(false);
   const [rows, setRows] = useState<ApiQueueEntry[]>([]);
   const [selectedIdx, setSelectedIdx] = useState(0);
+  const [revealIdx, setRevealIdx] = useState<number | null>(null);
   const [sortKey, setSortKey] = useState<SortKey>("name");
   const [sortDir, setSortDir] = useState<SortDir>("asc");
   const [detail, setDetail] = useState<PatientVisitEntry | null>(null);
@@ -580,9 +581,21 @@ export function EmrLookupPage() {
     const idx = sortedRows.findIndex((e) => e.resource?.id === id);
     if (idx >= 0) {
       setSelectedIdx(idx);
+      setRevealIdx(idx);
       focusReturnId.current = null;
     }
   }, [rows, sortedRows]);
+
+  useEffect(() => {
+    if (revealIdx == null) return;
+    const frame = window.requestAnimationFrame(() => {
+      const row = resultListRef.current?.querySelectorAll("[data-list-row]")[revealIdx];
+      if (!(row instanceof HTMLElement)) return;
+      row.scrollIntoView({ block: "center" });
+      setRevealIdx(null);
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [revealIdx, resultOpen]);
 
   const onDateFromChange = (v: string) => {
     setDateFrom(v);
