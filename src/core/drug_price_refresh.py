@@ -21,6 +21,9 @@ SAME = "\u5b98\u65b9\u85e5\u50f9\u8ddf\u4e0a\u4e00\u7248\u4e00\u6a23\uff0c\u6cbf
 OVERDUE = "\u9019\u500b\u6708\u7684\u85e5\u50f9\u9084\u6c92\u66f4\u65b0\u6210\u3002"
 FETCH_FAIL = "\u9019\u6b21\u6c92\u6709\u6293\u6210\uff0c\u4ecd\u7528\u4e0a\u4e00\u7248\u3002"
 CHECKSUM_FAIL = "\u85e5\u50f9\u5305\u7684\u6aa2\u67e5\u78bc\u6c92\u904e\uff0c\u6c92\u6709\u88dd\u9032\u67e5\u50f9\uff0c\u4ecd\u7528\u4e0a\u4e00\u7248\u3002"
+PAST_CHANGED = "\u65b0\u7248\u6539\u5230\u5df2\u7d93\u751f\u6548\u7684\u820a\u50f9\u683c\uff0c\u6c92\u6709\u88dd\u9032\u67e5\u50f9\uff0c\u4ecd\u7528\u4e0a\u4e00\u7248\u3002"
+STOPPED = "\u5df2\u505c\u7528 {v}\uff0c\u67e5\u50f9\u6539\u7528 {now}\u3002"
+RESUMED = "\u5df2\u6062\u5fa9 {v}\uff0c\u67e5\u50f9\u7528 {now}\u3002"
 INTERRUPTED = "\u4e0a\u6b21\u6c92\u6709\u505a\u5b8c\uff0c\u4ecd\u7528\u4e0a\u4e00\u7248\u3002"
 OK_MONTH = "\u9019\u500b\u6708\u5df2\u5c0d\u904e\u5b98\u65b9\u85e5\u50f9\u3002"
 
@@ -98,7 +101,11 @@ def apply_pipeline_result(
         installed = install()
         if str(installed.get("status") or "") not in ("success", "skipped_up_to_date"):
             new["status"] = "failed"
-            new["detail"] = CHECKSUM_FAIL
+            new["detail"] = (
+                PAST_CHANGED
+                if installed.get("errorCode") == "PAST_PRICE_CHANGED"
+                else CHECKSUM_FAIL
+            )
             return new
         new["status"] = "success"
         new["lastSuccessOn"] = today.isoformat()
@@ -141,16 +148,42 @@ def save_state(state: dict[str, Any], path: Path | None = None) -> None:
 
 def describe(path: Path | None = None, today: date | None = None) -> dict[str, Any]:
     view = public_view(load_state(path), today or date.today())
-    if view["version"]:
-        return view
     try:
         from src.spoke.pack_store import PackStore
 
         store = PackStore()
         store.initialize()
-        view["version"] = store.latest_active_version() or ""
+        view["version"] = store.latest_active_version() or view["version"]
+        view["versions"] = [
+            {
+                "version": row["version"],
+                "installedAt": row.get("installed_at") or "",
+                "active": bool(row.get("active")),
+            }
+            for row in store.list_installed()[:4]
+        ]
     except Exception:
         logger.debug("installed pack version unavailable", exc_info=True)
+    return view
+
+
+def set_version_active(version: str, active: bool, path: Path | None = None) -> dict[str, Any]:
+    """Stop a bad edition so lookups fall back to the previous one, or bring it back."""
+    from src.spoke.drug_price import clear_price_cache
+    from src.spoke.pack_store import PackStore
+
+    store = PackStore()
+    store.initialize()
+    store.set_active(version, active)
+    clear_price_cache()
+    now = store.latest_active_version() or ""
+    with _lock:
+        state = load_state(path)
+        state["version"] = now
+        state["detail"] = (RESUMED if active else STOPPED).format(v=version, now=now)
+        save_state(state, path)
+    view = describe(path)
+    view["detail"] = state["detail"]
     return view
 
 

@@ -143,6 +143,26 @@ class PackStore:
                 ),
             )
 
+    def set_active(self, version: str, active: bool) -> None:
+        """停用壞掉的一版就改用上一版；至少留一版啟用，避免查不到價。"""
+        with self._connect() as conn:
+            row = conn.execute(
+                "SELECT active FROM rule_package WHERE version = ?", (version,)
+            ).fetchone()
+            if not row:
+                raise LookupError(version)
+            if not active and int(row["active"]) == 1:
+                others = conn.execute(
+                    "SELECT COUNT(*) FROM rule_package WHERE active = 1 AND version <> ?",
+                    (version,),
+                ).fetchone()[0]
+                if int(others) == 0:
+                    raise ValueError("last active version")
+            conn.execute(
+                "UPDATE rule_package SET active = ? WHERE version = ?",
+                (1 if active else 0, version),
+            )
+
     def begin_run(self, started_at: str) -> int:
         with self._connect() as conn:
             cur = conn.execute(

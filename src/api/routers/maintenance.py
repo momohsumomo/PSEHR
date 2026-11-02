@@ -15,7 +15,7 @@ from src.core import app_update, clinic_reports, db_backup
 from src.core.appearance import load_appearance
 from src.core.desktop_window import open_desktop_window
 from src.core.drug_price_refresh import describe as describe_drug_price
-from src.core.drug_price_refresh import start_refresh
+from src.core.drug_price_refresh import set_version_active, start_refresh
 
 router = APIRouter(prefix="/maintenance", tags=["Maintenance"])
 
@@ -84,6 +84,24 @@ def drug_pack_status() -> dict:
 @router.post("/drug-pack", summary="Fetch the official catalog on this host and install it")
 def drug_pack_apply() -> dict:
     return start_refresh(force=True)
+
+
+class DrugPackActiveBody(BaseModel):
+    version: str = Field(min_length=1, max_length=80)
+    active: bool
+
+
+@router.post("/drug-pack/active", summary="Stop a bad drug price edition or bring it back")
+def drug_pack_active(body: DrugPackActiveBody) -> dict:
+    try:
+        return set_version_active(body.version, body.active)
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail="\u6c92\u6709\u9019\u4e00\u7248\u3002") from exc
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=409,
+            detail="\u9019\u662f\u552f\u4e00\u555f\u7528\u7684\u4e00\u7248\uff0c\u505c\u7528\u5c31\u67e5\u4e0d\u5230\u50f9\u3002\u5148\u6062\u5fa9\u5225\u7248\u3002",
+        ) from exc
 
 
 @router.get("/backup", summary="備份設定、現有備份、目前是否在備份")

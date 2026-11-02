@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from datetime import date
 from typing import Any
 
 import httpx
@@ -13,7 +14,9 @@ from src.spoke.local_hub import (
     list_local_manifest,
     load_local_pack,
 )
+from src.spoke.drug_price import clear_price_cache
 from src.spoke.nodes import HydrateNode
+from src.spoke.pack_history import MAX_PAST_CHANGES, past_price_changes
 from src.spoke.pack_models import (
     HydrateRunResult,
     NodeResult,
@@ -24,6 +27,8 @@ from src.spoke.pack_models import (
 from src.spoke.pack_store import PackStore
 
 logger = logging.getLogger("spoke.hydrator")
+
+PAST_PRICE_CHANGED = "PAST_PRICE_CHANGED"
 
 
 class PackHydrator:
@@ -255,6 +260,16 @@ class PackHydrator:
             )
         ok_node(HydrateNode.VALIDATE_SCHEMA, "SCHEMA_OK", "Schema 通過")
 
+        previous = self.store.get_package(fallback) if fallback else None
+        changed = past_price_changes(previous, pack, date.today())
+        if len(changed) > MAX_PAST_CHANGES:
+            return fail(
+                HydrateNode.VALIDATE_SCHEMA,
+                PAST_PRICE_CHANGED,
+                f"新版改掉 {len(changed)} 筆已生效的舊價（上一版 {fallback}）",
+                {"count": len(changed), "sample": changed[:20]},
+            )
+
         # --- 8 install_local ---
         try:
             self.store.install_package(pack)
@@ -265,6 +280,7 @@ class PackHydrator:
                 f"寫入本機失敗：{exc}",
                 {"version": candidate},
             )
+        clear_price_cache()
         ok_node(HydrateNode.INSTALL_LOCAL, "INSTALL_OK", f"已寫入 {candidate}")
 
         # --- 9 activate ---

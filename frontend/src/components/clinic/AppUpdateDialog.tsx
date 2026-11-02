@@ -27,6 +27,7 @@ type DrugStatus = {
   lastSuccessOn?: string;
   notice?: string;
   detail?: string;
+  versions?: { version: string; installedAt?: string; active?: boolean }[];
 };
 
 function short(sha: string | undefined): string {
@@ -125,6 +126,27 @@ export function AppUpdateDialog({ open, onClose }: { open: boolean; onClose: () 
       });
   };
 
+  const toggleDrug = (version: string, active: boolean) => {
+    const ask = active
+      ? `\u6062\u5fa9\u4f7f\u7528\u85e5\u50f9 ${version}\uff1f`
+      : `\u505c\u7528\u85e5\u50f9 ${version}\uff1f\u67e5\u50f9\u6703\u6539\u7528\u4e0a\u4e00\u7248\uff0c\u4e4b\u5f8c\u53ef\u4ee5\u518d\u6062\u5fa9\u3002`;
+    if (!window.confirm(ask)) return;
+    setBusy(`drug:${version}`);
+    setNote("");
+    void request<DrugStatus>("/maintenance/drug-pack/active", {
+      method: "POST",
+      body: JSON.stringify({ version, active }),
+    })
+      .then((body) => {
+        setDrug(body);
+        setNote(body.detail || "");
+      })
+      .catch((err: unknown) => {
+        setNote(err instanceof Error ? err.message : "\u85e5\u50f9\u5207\u63db\u5931\u6557");
+      })
+      .finally(() => setBusy(""));
+  };
+
   return (
     <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/50" onClick={onClose}>
       <div
@@ -202,6 +224,34 @@ export function AppUpdateDialog({ open, onClose }: { open: boolean; onClose: () 
           >
             {busy === "drug" || drug?.running ? "\u6293\u53d6\u4e2d\u2026" : "\u66f4\u65b0\u85e5\u50f9"}
           </button>
+          {(drug?.versions || []).length > 1 ? (
+            <div className="mt-3 border-t border-white/10 pt-2">
+              <p className="text-[12px] leading-relaxed text-[#A9B8CE]">
+                {"\u65b0\u7248\u50f9\u683c\u6709\u932f\u6642\uff0c\u505c\u7528\u9019\u7248\u5c31\u6539\u7528\u4e0a\u4e00\u7248\u3002\u65b0\u958b\u7684\u85e5\u3001\u7533\u5831\u90fd\u7167\u5207\u63db\u5f8c\u7684\u50f9\u3002"}
+              </p>
+              {(drug?.versions || []).map((row) => (
+                <div key={row.version} className="mt-2 flex items-center justify-between gap-2">
+                  <span className={`text-[12px] ${row.active ? "text-[#E7EEF8]" : "text-[#8EA0BA] line-through"}`}>
+                    {row.version}
+                    {row.version === drug?.version ? " \u00b7 \u67e5\u50f9\u7528\u9019\u7248" : ""}
+                    {row.active ? "" : " \u00b7 \u5df2\u505c\u7528"}
+                  </span>
+                  <button
+                    type="button"
+                    disabled={busy !== "" || Boolean(drug?.running)}
+                    className="rounded border border-[#E7D7A8]/60 px-3 py-1 text-[13px] disabled:opacity-40"
+                    onClick={() => toggleDrug(row.version, !row.active)}
+                  >
+                    {busy === `drug:${row.version}`
+                      ? "\u5207\u63db\u4e2d\u2026"
+                      : row.active
+                        ? "\u505c\u7528\u9019\u7248"
+                        : "\u6062\u5fa9\u4f7f\u7528"}
+                  </button>
+                </div>
+              ))}
+            </div>
+          ) : null}
         </section>
         {note ? <p className="mt-3 text-[12px] leading-relaxed text-[#E7D7A8]">{note}</p> : null}
       </div>
