@@ -30,11 +30,19 @@ import { SelfRegisterKioskPage } from "@/pages/SelfRegisterKioskPage";
 import { applyHisDocumentTheme } from "@/lib/hisTheme";
 import { PrintPreviewHost } from "@/components/clinic/PrintPreviewDialog";
 import { DeskExeNotice } from "@/components/clinic/DeskExeNotice";
+import { useLeaveGuard } from "@/hooks/useLeaveGuard";
 
 function DeskNoticeGate() {
   const loc = useLocation();
   if (loc.pathname === "/kiosk/body-preview") return null;
   return <DeskExeNotice />;
+}
+
+function LeaveGuardGate() {
+  const loc = useLocation();
+  const patientFacing = loc.pathname.startsWith("/kiosk/") || loc.pathname.startsWith("/previsit/");
+  useLeaveGuard(!patientFacing);
+  return null;
 }
 
 function AppShell() {
@@ -86,6 +94,7 @@ export default function App() {
     <BrowserRouter>
       <div className="wundadi-his flex h-dvh flex-col overflow-hidden" style={{ colorScheme: "only light" }}>
         <DeskNoticeGate />
+        <LeaveGuardGate />
         <AppShell />
         <PrintPreviewHost />
       </div>
