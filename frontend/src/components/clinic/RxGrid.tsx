@@ -145,6 +145,13 @@ function isMeasureCol(key: string): boolean {
   return key === "qty" || key === "days";
 }
 
+/** Columns read at a glance while prescribing: same large bold type as quantity and days. */
+function isBigCol(key: string): boolean {
+  return isMeasureCol(key) || key === "sig" || key === "totalAmount";
+}
+
+const TINT: Record<string, string> = { sig: "#FFF4CC", totalAmount: "#DCEBFF" };
+
 function isEditableDraftCol(key: string): boolean {
   return (
     key === "name" ||
@@ -667,7 +674,7 @@ export function RxGrid({
                 style={{
                   borderColor: HIS.chromeBorder,
                   background: HIS.rxHeader,
-                  fontSize: isMeasureCol(col.key) && !compact ? 16 : HIS.fs.secondary,
+                  fontSize: isBigCol(col.key) && !compact ? 16 : HIS.fs.secondary,
                   maxWidth: isMeasureCol(col.key) ? undefined : col.widthCh ? `${col.widthCh}ch` : undefined,
                   minWidth: compact ? undefined : col.key === "qty" ? "4.8rem" : col.key === "days" ? "3.6rem" : undefined,
                   width: compact && COMPACT_WIDTH[col.key]
@@ -811,6 +818,7 @@ export function RxGrid({
                   const primary = isPrimaryCol(col.key);
                   const narrow = isNarrowCol(col.key);
                   const measure = isMeasureCol(col.key);
+                  const big = isBigCol(col.key);
                   const pay = col.key === "payMark";
                   const memo = col.key === "memo";
                   const mark = resolvedPayMark(line);
@@ -830,8 +838,8 @@ export function RxGrid({
                         borderColor: "#A0A0A0",
                         height: 30,
                         verticalAlign: "middle",
-                        fontSize: measure && !compact ? 20 : primary || measure ? HIS.fs.body : HIS.fs.secondary,
-                        fontWeight: measure || primary || pay ? 700 : 400,
+                        fontSize: big && !compact ? 20 : primary || measure ? HIS.fs.body : HIS.fs.secondary,
+                        fontWeight: big || primary || pay ? 700 : 400,
                         maxWidth: compact && COMPACT_WIDTH[col.key]
                           ? COMPACT_WIDTH[col.key]
                           : measure ? undefined : col.widthCh ? `${col.widthCh}ch` : undefined,
@@ -840,7 +848,13 @@ export function RxGrid({
                           : col.key === "qty" ? "4.8rem" : col.key === "days" ? "3.6rem" : pay || memo ? "1.4rem" : undefined,
                         textAlign:
                           measure || pay || memo || narrow || col.key === "totalAmount" ? "center" : undefined,
-                        background: cellHot ? "#C6EBC2" : pay && mark ? "#D0D0D0" : undefined,
+                        background: cellHot
+                          ? "#C6EBC2"
+                          : pay && mark
+                            ? "#D0D0D0"
+                            : !compact && TINT[col.key]
+                              ? TINT[col.key]
+                              : undefined,
                         whiteSpace: readonly ? "nowrap" : undefined,
                         overflow: readonly ? "hidden" : undefined,
                         textOverflow: readonly ? "ellipsis" : undefined,
@@ -954,9 +968,9 @@ export function RxGrid({
                           autoFocus
                           style={{
                             height: 26,
-                            fontSize: measure ? 20 : primary ? HIS.fs.body : HIS.fs.secondary,
+                            fontSize: big && !compact ? 20 : primary || measure ? HIS.fs.body : HIS.fs.secondary,
                             fontFamily: HIS_FONT,
-                            fontWeight: measure || primary ? 700 : 400,
+                            fontWeight: big || primary ? 700 : 400,
                             color: "#111",
                             textAlign: measure || narrow ? "center" : "left",
                             cursor: "text",
