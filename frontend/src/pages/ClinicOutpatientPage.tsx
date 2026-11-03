@@ -262,6 +262,7 @@ export function ClinicOutpatientPage() {
     ensureVisitDetail,
     currentRx: apiCurrentRx,
     patientResource,
+    encounterResource,
     ccFromWs,
     lesionMedia,
     clinicalProfile,
@@ -736,6 +737,9 @@ export function ClinicOutpatientPage() {
     () => serverChartSig(diagnoses, apiCurrentRx ?? []),
     [diagnoses, apiCurrentRx],
   );
+  // The chart just fetched from the host; this PC's queue list can lag behind it.
+  const hostStatus = String((encounterResource as { status?: string } | null)?.status || "");
+  const hostClosed = hostStatus === "finished" || hostStatus === "onleave" || hostStatus === "cancelled";
 
   useEffect(() => {
     if (!selectedEncounterId || ccFromWs === undefined) return;
@@ -748,6 +752,7 @@ export function ClinicOutpatientPage() {
     const server = visibleComplaint(ccFromWs);
     const draft = visitDrafts[selectedEncounterId] ?? null;
     const finished =
+      hostClosed ||
       selected?.queueStatus === "finished" ||
       selected?.queueStatus === "no_show" ||
       selected?.queueStatus === "cancelled";
@@ -777,6 +782,7 @@ export function ClinicOutpatientPage() {
     ccFromWs,
     ccSlot.id,
     dxSlot.id,
+    hostClosed,
     rxSlot.id,
     selected?.queueStatus,
     selectedEncounterId,
@@ -1775,6 +1781,7 @@ export function ClinicOutpatientPage() {
       if (retiredDraftsRef.current.has(eid)) return;
       const entry = queue.find((e) => e.encounterId === eid);
       const saved =
+        hostClosed ||
         entry?.queueStatus === "finished" ||
         entry?.queueStatus === "no_show" ||
         Boolean(committedFpRef.current[eid]);
@@ -1830,6 +1837,7 @@ export function ClinicOutpatientPage() {
       refreshQueue,
       selectedEncounterId,
       serverSig,
+      hostClosed,
     ],
   );
 
