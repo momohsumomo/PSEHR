@@ -43,6 +43,11 @@ function htmlForSlip(html: string, page: number): string {
   return "<!doctype html>" + doc.documentElement.outerHTML;
 }
 
+/** A wide sheet on portrait feed is turned into one 93 by 210 page, so later slips would be cut off. */
+function turnsOntoOnePage(sheet: PreparedPrint): boolean {
+  return (sheet.feed || "portrait") === "portrait" && Number(sheet.widthMm) > Number(sheet.heightMm) + 2;
+}
+
 function downloadHtml(title: string, html: string) {
   const name = (title || "preview").replace(/[\\/:*?"<>|]/g, "_");
   const blob = new Blob([html], { type: "text/html;charset=utf-8" });
@@ -209,7 +214,13 @@ function PreviewWindow({ req, onClose }: { req: Req; onClose: () => void }) {
       if (seen.has(item.sheet)) continue;
       seen.add(item.sheet);
       const one = sheets[item.sheet];
-      if (one) jobs.push({ sheet: one, html: one.html });
+      if (!one) continue;
+      const count = slipCount(one.html);
+      if (count > 1 && turnsOntoOnePage(one)) {
+        for (let page = 0; page < count; page += 1) jobs.push({ sheet: one, html: htmlForSlip(one.html, page) });
+      } else {
+        jobs.push({ sheet: one, html: one.html });
+      }
     }
     sendSheets(jobs, again);
   };
