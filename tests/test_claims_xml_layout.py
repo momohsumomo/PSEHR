@@ -175,7 +175,7 @@ class ClaimsXmlLayoutTest(unittest.TestCase):
             ClaimMedLine("o", "ORAL", "tab", 3, 1, 1, 1, "snapshot", routeCode="PO"),
             ClaimMedLine("t", "CREAM", "cream", 7, 1, 1, 1, "snapshot", routeCode="TOPI"),
         ]
-        self.assertEqual(claim_supply_days(mixed), 3)
+        self.assertEqual(claim_supply_days(mixed), 7)
         self.assertEqual(pharmacy_supply_days(mixed), 7)
         self.assertEqual(shorter_flat_days(mixed), 3)
         long = [

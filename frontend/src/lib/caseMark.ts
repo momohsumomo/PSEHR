@@ -19,18 +19,15 @@ export function storedCase(caseNo: string | undefined | null): string {
 function claimLine(line: RxLine): boolean {
   const mark = String(line.payMark || "").trim();
   if (mark === "\u81ea" || line.selfPay) return false;
-  if (String(line.memo || "").includes("[")) return false;
   return true;
 }
 
-/** Days the monthly file uses: oral course when any oral line has days, otherwise the longest line. Self-pay lines do not count. */
+/** Days the monthly file uses: the longest line, creams included. Self-pay lines do not count. */
 export function prescriptionDays(lines: RxLine[]): number {
   const drugs = lines.filter(
     (line) => claimLine(line) && !ORDER_CODE.test((line.nhiCode || "").trim()),
   );
-  const oral = drugs.filter((line) => /^(po|oral)$/i.test(line.route || ""));
-  const pool = oral.some((line) => (line.days || 0) > 0) ? oral : drugs;
-  return pool.reduce((max, line) => Math.max(max, Number(line.days) || 0), 0);
+  return drugs.reduce((max, line) => Math.max(max, Number(line.days) || 0), 0);
 }
 
 /** NHI treatment codes on this visit. Self-pay procedures do not change the case. */

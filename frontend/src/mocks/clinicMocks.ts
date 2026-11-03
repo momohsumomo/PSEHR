@@ -151,7 +151,7 @@ export type RxMemoMark = "" | "[" | "/" | "*" | "@" | "," | "\\" | "^" | "$" | "
 
 export const RX_MEMO_MARKS: { mark: RxMemoMark; hint: string }[] = [
   { mark: "", hint: "（清除／空白）" },
-  { mark: "[", hint: "\u4e0d\u7533\u5831\u3002\u524d\u9762\u6709\u81ea\u624d\u6536\u81ea\u8cbb" },
+  { mark: "[", hint: "\u524d\u9762\u6709\u81ea\u624d\u6536\u81ea\u8cbb\uff1b\u6c92\u6709\u81ea\u7167\u5e38\u7533\u5831" },
   { mark: "/", hint: "強迫列印此項" },
   { mark: "*", hint: "不印在處方箋" },
   { mark: "@", hint: "\u4ecd\u7533\u5831\uff0c\u4e0d\u56e0\u6b64\u6536\u81ea\u8cbb" },

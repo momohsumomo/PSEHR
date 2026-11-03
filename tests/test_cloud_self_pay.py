@@ -23,8 +23,12 @@ class CloudSelfPayTest(unittest.TestCase):
     def test_cash_mark_is_not_a_cloud_order(self) -> None:
         self.assertIsNone(cloud_order_from_request(_line("PP", pay="\u81ea", sig="AsOrde")))
 
-    def test_bracket_note_is_not_a_cloud_order(self) -> None:
-        self.assertIsNone(cloud_order_from_request(_line("AC00000000", memo="[")))
+    def test_bracket_without_cash_mark_is_a_cloud_order(self) -> None:
+        item = cloud_order_from_request(_line("AC19411100", memo="["))
+        self.assertIsNotNone(item)
+
+    def test_bracket_with_cash_mark_is_not_a_cloud_order(self) -> None:
+        self.assertIsNone(cloud_order_from_request(_line("AC19411100", pay="\u81ea", memo="[")))
 
     def test_insurance_line_is_kept(self) -> None:
         item = cloud_order_from_request(_line("AC19616321", sig="AsOrde"))
@@ -38,11 +42,12 @@ class CloudSelfPayTest(unittest.TestCase):
         rows = [
             _line("PP", pay="\u81ea"),
             _line("AC19616321"),
-            _line("XX", memo="note ["),
+            _line("XX", pay="\u81ea", memo="["),
+            _line("AC19411100", memo="["),
         ]
         kept = [cloud_order_from_request(row) for row in rows]
         codes = [item["nhiCode"] for item in kept if item]
-        self.assertEqual(codes, ["AC19616321"])
+        self.assertEqual(codes, ["AC19616321", "AC19411100"])
 
 
 if __name__ == "__main__":

@@ -401,11 +401,10 @@ def profile_to_patient_intake(profile: dict[str, str]) -> NhiPatientIntake:
 
 
 def cloud_order_from_request(entry: dict[str, Any]) -> dict[str, Any] | None:
-    """A cash line (pay mark) or a bracket note stays on the chart and is not a cloud order."""
+    """A cash line (pay mark) stays on the chart and is not a cloud order. 醫聖 writes a [ line without 自 to the card."""
     meta = entry.get("indexMeta") or {}
     pay_mark = str(meta.get("payMark") or "").strip()
-    memo = str(meta.get("memo") or "")
-    if pay_mark == "\u81ea" or "[" in memo:
+    if pay_mark == "\u81ea":
         return None
     resource = entry.get("resource") or {}
     item = {

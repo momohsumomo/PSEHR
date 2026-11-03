@@ -336,14 +336,8 @@ def apply_daily_drug_fee(rec: object, *, days: int, case: str) -> float:
 
 
 def claim_supply_days(lines: list) -> int:
-    """給藥日份. Oral plus topical uses the longest oral course."""
-    def longest(rows: list) -> int:
-        return max((int(getattr(row, "daysSupply", 0) or 0) for row in rows), default=0)
-
-    oral = [row for row in lines if str(getattr(row, "routeCode", "") or "").upper() == "PO"]
-    if oral and longest(oral) > 0:
-        return longest(oral)
-    return longest(lines)
+    """給藥日份 is the longest line, creams included. 醫聖 files oral 3 + cream 7 as 04, 7 days."""
+    return max((int(getattr(row, "daysSupply", 0) or 0) for row in lines), default=0)
 
 
 def pharmacy_supply_days(lines: list) -> int:

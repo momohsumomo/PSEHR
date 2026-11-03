@@ -26,11 +26,9 @@ function treatmentOrder(code: string): boolean {
   return true;
 }
 
-/** Self-pay, a [ note, and outside-lab lines are not part of the NHI drug fee. */
+/** Self-pay and outside-lab lines are not part of the NHI drug fee. A [ line without 自 is filed and counts. */
 function excludedFromDrugFee(line: RxLine): boolean {
   const mark = (line.payMark || (line.selfPay ? "\u81ea" : "")).trim();
-  const memo = (line.memo || "").trim();
-  if (memo.includes("[")) return true;
   return (
     mark === "\u81ea" ||
     mark === "\u4ea4" ||
