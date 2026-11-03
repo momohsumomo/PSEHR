@@ -145,12 +145,19 @@ function isMeasureCol(key: string): boolean {
   return key === "qty" || key === "days";
 }
 
-/** Columns read at a glance while prescribing: same large bold type as quantity and days. */
+/** Columns read at a glance while prescribing. */
 function isBigCol(key: string): boolean {
-  return isMeasureCol(key) || key === "sig" || key === "totalAmount";
+  return isMeasureCol(key) || key === "sig" || key === "totalAmount" || key === "route";
+}
+
+/** Quantity and days stay the largest; usage, total and route sit one step below. */
+function bigCellPx(key: string): number {
+  return isMeasureCol(key) ? 20 : 18;
 }
 
 const TINT: Record<string, string> = { sig: "#FFF4CC", totalAmount: "#DCEBFF" };
+
+const INK: Record<string, string> = { sig: "#1d4ed8", totalAmount: "#1d4ed8", route: "#C00000" };
 
 function isEditableDraftCol(key: string): boolean {
   return (
@@ -838,8 +845,9 @@ export function RxGrid({
                         borderColor: "#A0A0A0",
                         height: 30,
                         verticalAlign: "middle",
-                        fontSize: big && !compact ? 20 : primary || measure ? HIS.fs.body : HIS.fs.secondary,
-                        fontWeight: big || primary || pay ? 700 : 400,
+                        fontSize: big && !compact ? bigCellPx(col.key) : primary || measure ? HIS.fs.body : HIS.fs.secondary,
+                        fontWeight: 700,
+                        color: !compact && INK[col.key] ? INK[col.key] : undefined,
                         maxWidth: compact && COMPACT_WIDTH[col.key]
                           ? COMPACT_WIDTH[col.key]
                           : measure ? undefined : col.widthCh ? `${col.widthCh}ch` : undefined,
@@ -968,10 +976,10 @@ export function RxGrid({
                           autoFocus
                           style={{
                             height: 26,
-                            fontSize: big && !compact ? 20 : primary || measure ? HIS.fs.body : HIS.fs.secondary,
+                            fontSize: big && !compact ? bigCellPx(col.key) : primary || measure ? HIS.fs.body : HIS.fs.secondary,
                             fontFamily: HIS_FONT,
-                            fontWeight: big || primary ? 700 : 400,
-                            color: "#111",
+                            fontWeight: 700,
+                            color: !compact && INK[col.key] ? INK[col.key] : "#111",
                             textAlign: measure || narrow ? "center" : "left",
                             cursor: "text",
                             background: "#C6EBC2",
