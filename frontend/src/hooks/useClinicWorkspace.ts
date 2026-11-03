@@ -1090,7 +1090,8 @@ export function useClinicWorkspace(options?: {
           referralHospName: payload.referralHospName,
           referralDate: payload.referralDate,
         });
-        const slips = await rememberReferral(form.encounterId);
+        const linked = (payload.referralSeq || prior?.referralSeq || "").trim();
+        const slips = linked ? [] : await rememberReferral(form.encounterId);
         const fromSlip = await storeIncoming(form.encounterId, patientId, slips);
         if ((payload.acceptReferral || "").trim() === "1" || fromSlip) {
           await ensureAcceptReferralOrder(form.encounterId);

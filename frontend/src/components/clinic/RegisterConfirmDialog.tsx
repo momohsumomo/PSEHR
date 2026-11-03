@@ -603,18 +603,20 @@ export function RegisterConfirmDialog({
           const same = await fetchSameDayEncounters(form.patientId!, encounterDate, {
             includeCloud: false,
           });
-          if (!cancelled && same.isSameDay && same.count > 0) {
-            const brief = same.encounters
+          const others = same.encounters.filter((e) => !form.encounterId || e.encounterId !== form.encounterId);
+          if (!cancelled && others.length > 0) {
+            const brief = others
               .slice(0, 3)
               .map((e) => {
                 const src = e.source === "nhi_cloud" ? "雲端" : "本機";
                 return `[${src}]#${e.queueNumber || e.treatSeq || "?"} ${e.hospitalId || e.queueStatus || ""}`;
               })
               .join("；");
+            const cloudCount = others.filter((e) => e.source === "nhi_cloud").length;
             const cloudPart = same.cloudError
               ? `雲端未通（${same.cloudError}），僅本機。`
-              : `本機 ${same.localCount ?? 0}／雲端 ${same.cloudCount ?? 0}。`;
-            setSameDayNote(`同日就診提示：共 ${same.count} 筆。${cloudPart} ${brief}。請櫃台確認。`);
+              : `本機 ${others.length - cloudCount}／雲端 ${cloudCount}。`;
+            setSameDayNote(`同日就診提示：共 ${others.length} 筆。${cloudPart} ${brief}。請櫃台確認。`);
           } else if (!cancelled) {
             setSameDayNote(null);
           }
