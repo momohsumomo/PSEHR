@@ -248,6 +248,50 @@ def prompts_for(id_no: str, slips: list[ReferralSlip]) -> list[ReferralSlip]:
     return [row for row in slips if needs_accept_prompt(row, accepted)]
 
 
+def pending_incoming(id_no: str, hosp_id: str = "") -> ReferralSlip | None:
+    """The newest downloaded notice sent to us for this person that nobody accepted yet.
+
+    When a hospital was picked, only that hospital's notice counts.
+    """
+    patient = (id_no or "").strip().upper()
+    if not patient:
+        return None
+    with get_shadow_store()._connect() as conn:
+        _ensure(conn)
+        accepted = _stored_accepted(conn, patient) | _encounter_accepted(conn, patient)
+        rows = conn.execute(
+            """
+            SELECT serial, kind, hosp_seq, hosp_id, hosp_name, open_date, status,
+                   summary, valid_until, contact
+            FROM referral_download
+            WHERE id_no = ? AND deleted = 0
+            ORDER BY open_date DESC, fetched_at DESC
+            """,
+            (patient,),
+        ).fetchall()
+    slips = [
+        ReferralSlip(
+            serial=str(r[0] or ""),
+            kind=str(r[1] or ""),
+            hosp_seq=str(r[2] or ""),
+            hosp_id=str(r[3] or ""),
+            hosp_name=str(r[4] or ""),
+            open_date=str(r[5] or ""),
+            status=str(r[6] or ""),
+            summary=str(r[7] or ""),
+            valid_until=str(r[8] or ""),
+            contact=str(r[9] or ""),
+            deleted=False,
+        )
+        for r in rows
+    ]
+    pending = [slip for slip in slips if needs_accept_prompt(slip, accepted)]
+    want = (hosp_id or "").strip()
+    if want:
+        pending = [slip for slip in pending if want in {slip.hosp_id.strip(), slip.hosp_seq.strip()}]
+    return pending[0] if pending else None
+
+
 def _lane(kind: str, status: str) -> str:
     if "\u5df2\u56de\u5fa9" in status or "\u5df2\u56de\u590d" in status:
         if kind in {"1", "3"}:

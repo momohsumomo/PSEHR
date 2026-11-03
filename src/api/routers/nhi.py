@@ -719,6 +719,31 @@ def register_nhi_encounter(body: NhiEncounterIntake) -> dict[str, Any]:
     }
 
 
+def _link_incoming_referral(store: SqliteShadowStore, payload: dict[str, Any], body: NhiEncounterIntake) -> None:
+    """Accepting a referral by picking the hospital still has to take the downloaded notice."""
+    meta = extract_reg_meta(payload)
+    if str(meta.get("acceptReferral") or "").strip() != "1" or str(meta.get("referralSeq") or "").strip():
+        return
+    id_no = str(meta.get("hcIdNo") or body.patientIdNo or "").strip().upper()
+    if not id_no and body.patientId:
+        id_no = str(store.get_patient_id_no(body.patientId) or "").strip().upper()
+    if not id_no:
+        return
+    from src.core.referral_inbox import mark_accepted, pending_incoming
+
+    slip = pending_incoming(id_no, str(meta.get("referralHospId") or ""))
+    if slip is None:
+        return
+    put_reg_string(payload, "referralSeq", slip.serial)
+    if not str(meta.get("referralDate") or "").strip():
+        put_reg_string(payload, "referralDate", slip.open_date)
+    if not str(meta.get("referralHospId") or "").strip():
+        put_reg_string(payload, "referralHospId", slip.hosp_id or slip.hosp_seq)
+    if not str(meta.get("referralHospName") or "").strip():
+        put_reg_string(payload, "referralHospName", slip.hosp_name)
+    mark_accepted(slip.serial, "chart")
+
+
 @router.patch(
     "/v1/encounter/{encounter_id}/reg",
     summary="修改此次掛號資料（掛號編輯／F3）",
@@ -830,6 +855,7 @@ def patch_encounter_reg(encounter_id: str, body: NhiEncounterIntake) -> dict[str
         # The appointment quick button fills the note with just this word.
         if str(extract_reg_meta(payload).get("noteMark") or "").strip() == APPOINTMENT_NOTE:
             put_reg_string(payload, "noteMark", "")
+    _link_incoming_referral(store, payload, body)
     enc_date = ""
     start = str((payload.get("period") or {}).get("start") or "")
     if "T" in start:

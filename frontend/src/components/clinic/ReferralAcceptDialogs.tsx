@@ -74,6 +74,7 @@ function IncomingReferralDialog({
         <div className="mt-3 flex gap-2">
           <button
             type="button"
+            autoFocus
             className="border border-[#004d00] bg-[#c8f5c8] px-3 py-1 font-bold"
             onClick={() =>
               onDone({
