@@ -350,9 +350,16 @@ def transition_queue_status(encounter_id: str, body: QueueStatusTransition) -> d
 
     rows = store.list_encounters_for_date(_today_str())
     encounter_date = _today_str()
+    current = ""
     for row in rows:
         if row["resource"].get("id") == encounter_id:
             encounter_date = row["queueMeta"]["encounterDate"]
+            current = str(row["queueMeta"].get("queueStatus") or "")
+            if body.keep_closed and current in {"finished", "no_show", "cancelled"} and queue_status in {
+                "waiting",
+                "in_progress",
+            }:
+                return row
             break
 
     if queue_status == "in_progress":

@@ -83,3 +83,7 @@ class QueueStatusTransition(BaseModel):
     """診間掛號狀態變更（Swagger 一鍵操作）。"""
 
     queue_status: QueueStatus = Field(..., description="waiting|in_progress|no_show|finished")
+    keep_closed: bool = Field(
+        False,
+        description="Leave a finished or no-show visit as it is; another PC may have saved it a moment ago",
+    )

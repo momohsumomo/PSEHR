@@ -462,10 +462,11 @@ export { CHART_IN_USE };
 export async function patchQueueStatus(
   encounterId: string,
   queue_status: string,
+  opts?: { keepClosed?: boolean },
 ): Promise<void> {
   await request(`/fhir/Encounter/${encounterId}/queue-status`, {
     method: "PATCH",
-    body: JSON.stringify({ queue_status }),
+    body: JSON.stringify({ queue_status, keep_closed: Boolean(opts?.keepClosed) }),
   });
 }
 

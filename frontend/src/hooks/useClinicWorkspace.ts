@@ -1406,9 +1406,9 @@ export function useClinicWorkspace(options?: {
   );
 
   const handleStatusChange = useCallback(
-    async (encounterId: string, status: QueueStatus) => {
+    async (encounterId: string, status: QueueStatus, opts?: { keepClosed?: boolean }) => {
       if (apiMode) {
-        await patchQueueStatus(encounterId, status);
+        await patchQueueStatus(encounterId, status, opts);
         const res = await fetchQueueForDate(currentDate);
         const mapped = mapApiQueue(res.entry);
         queueStampRef.current = queueStamp(currentDate, mapped);

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { chartPaint, overlayForEncounter, textForEncounter } from "@/lib/chartScreen";
+import { chartPaint, overlayForEncounter, serverChartSig, textForEncounter } from "@/lib/chartScreen";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { ClinicalAlertsPanel } from "@/components/clinic/ClinicalAlertsPanel";
 import { ClinicShortcutBar } from "@/components/clinic/ClinicShortcutBar";
@@ -151,7 +151,7 @@ function chineseDxName(row: DiagnosisRow, catalog: CatalogDiagnosis[]): string {
 
 const CHART_DRAFT_KEY = "psehr.chartDrafts.v1";
 
-type ChartDraft = { cc: string; dx: DiagnosisRow[]; rx: RxLine[]; bound?: string };
+type ChartDraft = { cc: string; dx: DiagnosisRow[]; rx: RxLine[]; bound?: string; base?: string };
 
 function loadChartDrafts(): Record<string, ChartDraft> {
   try {
@@ -732,6 +732,11 @@ export function ClinicOutpatientPage() {
     setSelectedRxIndex(0);
   }, [selectedEncounterId]);
 
+  const serverSig = useMemo(
+    () => serverChartSig(diagnoses, apiCurrentRx ?? []),
+    [diagnoses, apiCurrentRx],
+  );
+
   useEffect(() => {
     if (!selectedEncounterId || ccFromWs === undefined) return;
     const editingThis =
@@ -751,6 +756,7 @@ export function ClinicOutpatientPage() {
       serverCc: server,
       selectedId: selectedEncounterId,
       draft,
+      serverSig,
     });
     if (paint.restoreDraft && draft) {
       setCcText(draft.cc);
@@ -774,6 +780,7 @@ export function ClinicOutpatientPage() {
     rxSlot.id,
     selected?.queueStatus,
     selectedEncounterId,
+    serverSig,
     setApiDxOverlay,
     setApiRxOverlay,
     setCcText,
@@ -1350,7 +1357,14 @@ export function ClinicOutpatientPage() {
         try {
           await handleStatusChange(selectedEncounterId, "finished");
         } catch {
-          /* status update best-effort */
+          try {
+            await new Promise((r) => setTimeout(r, 800));
+            await handleStatusChange(selectedEncounterId, "finished");
+          } catch {
+            alert(
+              "\u75c5\u6b77\u5df2\u5b58\uff0c\u4f46\u300c\u5df2\u770b\u8a3a\u300d\u72c0\u614b\u6c92\u6709\u9001\u5230\u4e3b\u6a5f\uff0c\u5225\u53f0\u53ef\u80fd\u9084\u770b\u5230\u770b\u8a3a\u4e2d\u3002\u8acb\u518d\u6309\u4e00\u6b21\u5b58\u6a94\u3002",
+            );
+          }
         }
       }
       if (saveDraft.printRx) {
@@ -1776,10 +1790,17 @@ export function ClinicOutpatientPage() {
       if (touched && body) {
         setVisitDrafts((prev) => ({
           ...prev,
-          [eid]: { cc: ccText, dx: displayDiagnoses, rx: currentRx, bound: eid },
+          [eid]: {
+            cc: ccText,
+            dx: displayDiagnoses,
+            rx: currentRx,
+            bound: eid,
+            base: prev[eid]?.base ?? serverSig,
+          },
         }));
+        // This PC's queue can be a few seconds old; another PC may have just finished the visit.
         if (entry?.queueStatus !== "in_progress") {
-          void handleStatusChange(eid, "in_progress").then(() => refreshQueue());
+          void handleStatusChange(eid, "in_progress", { keepClosed: true }).then(() => refreshQueue());
         }
         return;
       }
@@ -1791,15 +1812,25 @@ export function ClinicOutpatientPage() {
           return next;
         });
         if (entry?.queueStatus === "in_progress") {
-          void handleStatusChange(eid, "waiting").then(() => refreshQueue());
+          void handleStatusChange(eid, "waiting", { keepClosed: true }).then(() => refreshQueue());
         }
         return;
       }
       if (!visitDrafts[eid] && entry?.queueStatus === "in_progress") {
-        void handleStatusChange(eid, "waiting").then(() => refreshQueue());
+        void handleStatusChange(eid, "waiting", { keepClosed: true }).then(() => refreshQueue());
       }
     },
-    [queue, visitDrafts, ccText, displayDiagnoses, currentRx, handleStatusChange, refreshQueue, selectedEncounterId],
+    [
+      queue,
+      visitDrafts,
+      ccText,
+      displayDiagnoses,
+      currentRx,
+      handleStatusChange,
+      refreshQueue,
+      selectedEncounterId,
+      serverSig,
+    ],
   );
 
   const openChart = useCallback(
