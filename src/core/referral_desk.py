@@ -110,6 +110,8 @@ def save_slip(body: dict[str, Any]) -> dict[str, Any]:
             ).fetchone()
             if existing and existing[0]:
                 fields["opened_on"] = str(existing[0])[:10]
+        if not fields["opened_on"] and kind == "reply":
+            fields["opened_on"] = _visit_day(conn, fields["encounter_id"]) or now[:10]
         conn.execute(
             """
             INSERT INTO referral_slip (
@@ -542,6 +544,16 @@ def _memo_text(handle, block: int, token: str | None) -> str:
     return cleaned.replace("\r\n", "\n").replace("\r", "\n").strip()
 
 
+def _visit_day(conn, encounter_id: str) -> str:
+    if not encounter_id:
+        return ""
+    row = conn.execute(
+        "SELECT encounter_date FROM encounter_index WHERE resource_id=?",
+        (encounter_id,),
+    ).fetchone()
+    return str(row[0] or "")[:10] if row else ""
+
+
 def _fill_missing_reply_dates() -> None:
     """Put the reply day back when a save stored a blank date."""
     import os
@@ -550,6 +562,20 @@ def _fill_missing_reply_dates() -> None:
 
     with get_shadow_store()._connect() as conn:
         _ensure(conn)
+        conn.execute(
+            """
+            UPDATE referral_slip
+            SET opened_on = (
+                SELECT substr(ei.encounter_date, 1, 10) FROM encounter_index ei
+                WHERE ei.resource_id = referral_slip.encounter_id
+            )
+            WHERE kind = 'reply' AND IFNULL(opened_on, '') = '' AND IFNULL(encounter_id, '') <> ''
+              AND EXISTS (
+                SELECT 1 FROM encounter_index ei
+                WHERE ei.resource_id = referral_slip.encounter_id AND IFNULL(ei.encounter_date, '') <> ''
+              )
+            """
+        )
         blank = conn.execute(
             "SELECT id FROM referral_slip WHERE id LIKE 'ys-reply-%' AND IFNULL(opened_on, '') = ''"
         ).fetchall()

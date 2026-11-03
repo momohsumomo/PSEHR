@@ -126,6 +126,30 @@ class PendingIncomingTests(unittest.TestCase):
         self.assertEqual(rows[0]["encounterId"], "")
         self.assertNotIn(OURS, rows[0]["status"])
 
+    def _rows_with_reply(self, reply: dict):
+        from src.core import referral_desk
+
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
+            store = SqliteShadowStore(Path(tmp) / "t.db")
+            store.initialize()
+            self._visit(store, "arrived")
+            with mock.patch.object(referral_inbox, "get_shadow_store", return_value=store), mock.patch.object(
+                referral_desk, "get_shadow_store", return_value=store
+            ):
+                referral_inbox.remember_download(PERSON, [_slip("S1", "111", "20261103")])
+                saved = referral_desk.save_slip({"kind": "reply", "encounterId": "e1", "serial": "S1", **reply})
+                return saved, referral_inbox.list_downloads()
+
+    def test_saved_reply_not_uploaded_is_named(self):
+        saved, rows = self._rows_with_reply({"status": "\u5df2\u5b58\u6a94"})
+        self.assertEqual(saved["openedOn"], "2026-11-03")
+        self.assertIn("\u5065\u4fdd\uff1a" + NOT_TAKEN, rows[0]["status"])
+        self.assertIn("\u56de\u8986\u5df2\u5b58\u6a94\u9084\u6c92\u4e0a\u50b3", rows[0]["status"])
+
+    def test_uploaded_reply_waits_for_the_bureau(self):
+        _saved, rows = self._rows_with_reply({"status": "\u5df2\u56de\u8986"})
+        self.assertIn("\u56de\u8986\u5df2\u4e0a\u50b3", rows[0]["status"])
+
 
 class LinkOnRegistrationSaveTests(unittest.TestCase):
     def test_saving_an_accepted_registration_takes_the_desk_accepted_notice(self):

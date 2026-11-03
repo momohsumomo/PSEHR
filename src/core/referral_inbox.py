@@ -379,10 +379,41 @@ def _held_by_visits(conn) -> dict[str, str]:
     return held
 
 
+def _our_replies(conn) -> dict[str, bool]:
+    """Referral serial -> whether our reply has been uploaded."""
+    from src.core.referral_desk import _ensure as ensure_slips
+    from src.core.referral_guard import uploaded
+
+    ensure_slips(conn)
+    found: dict[str, bool] = {}
+    rows = conn.execute(
+        """
+        SELECT serial, status, local_id, nhi_id FROM referral_slip
+        WHERE kind = 'reply' AND TRIM(IFNULL(serial, '')) <> ''
+        """
+    ).fetchall()
+    for serial, status, local_id, nhi_id in rows:
+        key = str(serial or "").strip()
+        sent = uploaded({"status": status, "localId": local_id, "nhiId": nhi_id})
+        found[key] = found.get(key, False) or sent
+    return found
+
+
+def _our_side(visit: str, reply: bool | None) -> str:
+    if reply is True:
+        return "\u672c\u9662\u56de\u8986\u5df2\u4e0a\u50b3\uff0c\u7b49\u5065\u4fdd\u66f4\u65b0"
+    if reply is False:
+        return "\u672c\u9662\u5df2\u63a5\u53d7\uff0c\u56de\u8986\u5df2\u5b58\u6a94\u9084\u6c92\u4e0a\u50b3"
+    if visit:
+        return "\u672c\u9662\u5df2\u63a5\u53d7\uff0c\u9084\u6c92\u56de\u8986"
+    return ""
+
+
 def list_downloads() -> list[dict[str, Any]]:
     with get_shadow_store()._connect() as conn:
         _ensure(conn)
         held = _held_by_visits(conn)
+        replies = _our_replies(conn)
         rows = conn.execute(
             """
             SELECT serial, kind, id_no, patient_name, medical_no, hosp_id, hosp_name,
@@ -397,10 +428,14 @@ def list_downloads() -> list[dict[str, Any]]:
     for row in rows:
         serial, kind, id_no, name, medical_no, hosp_id, hosp_name, opened, status, summary, valid, _deleted, fetched = row
         lane = _lane(str(kind or ""), str(status or ""))
-        visit = held.get(str(serial or "").strip(), "") if str(kind or "") in {"2", "4"} else ""
-        shown = "%s \u00b7 %s" % (lane, status or "\u2014")
-        if visit:
-            shown += " \u00b7 \u672c\u9662\u5df2\u63a5\u53d7"
+        key = str(serial or "").strip()
+        incoming = str(kind or "") in {"2", "4"}
+        visit = held.get(key, "") if incoming else ""
+        shown = "%s \u00b7 \u5065\u4fdd\uff1a%s" % (lane, status or "\u2014")
+        done = "\u5df2\u56de\u5fa9" in str(status or "") or "\u5df2\u56de\u8986" in str(status or "")
+        ours = _our_side(visit, replies.get(key)) if incoming and not done else ""
+        if ours:
+            shown += " \u00b7 " + ours
         items.append(
             {
                 "id": "dl-%s-%s" % (kind, serial),
