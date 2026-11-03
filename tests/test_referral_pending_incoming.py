@@ -12,6 +12,7 @@ from src.infrastructure.sqlite_shadow_store import SqliteShadowStore
 PERSON = "A123456789"
 NOT_TAKEN = "\u672a\u53d7\u7406"
 TAKEN = "\u5df2\u53d7\u7406"
+OURS = "\u672c\u9662\u5df2\u63a5\u53d7"
 
 
 def _slip(serial: str, hosp: str, opened: str, status: str = NOT_TAKEN, kind: str = "2") -> ReferralSlip:
@@ -72,7 +73,8 @@ class PendingIncomingTests(unittest.TestCase):
 
     def test_desk_acceptance_alone_does_not_hold_the_notice(self):
         def check():
-            referral_inbox.mark_accepted("S1")
+            referral_inbox.mark_accepted("S1", "accept")
+            referral_inbox.mark_accepted("S1", "chart")
             self.assertEqual(referral_inbox.pending_incoming(PERSON, "111").serial, "S1")
 
         self._run([_slip("S1", "111", "20261103")], check)
@@ -107,16 +109,55 @@ class PendingIncomingTests(unittest.TestCase):
             self._visit(store, status)
             with mock.patch.object(referral_inbox, "get_shadow_store", return_value=store):
                 referral_inbox.remember_download(PERSON, [_slip("S1", "111", "20261103")])
-                referral_inbox.mark_accepted("S1")
-                return referral_inbox.pending_incoming(PERSON, "111")
+                referral_inbox.mark_accepted("S1", "accept")
+                return referral_inbox.pending_incoming(PERSON, "111"), referral_inbox.list_downloads()
 
     def test_standing_visit_holds_the_notice(self):
-        self.assertIsNone(self._with_visit("arrived"))
+        hit, rows = self._with_visit("arrived")
+        self.assertIsNone(hit)
+        self.assertEqual(rows[0]["encounterId"], "e1")
+        self.assertIn(OURS, rows[0]["status"])
+        self.assertNotIn(TAKEN, rows[0]["status"])
 
     def test_cancelled_visit_gives_the_notice_back(self):
-        hit = self._with_visit("cancelled")
+        hit, rows = self._with_visit("cancelled")
         self.assertIsNotNone(hit)
         self.assertEqual(hit.serial, "S1")
+        self.assertEqual(rows[0]["encounterId"], "")
+        self.assertNotIn(OURS, rows[0]["status"])
+
+
+class LinkOnRegistrationSaveTests(unittest.TestCase):
+    def test_saving_an_accepted_registration_takes_the_desk_accepted_notice(self):
+        from types import SimpleNamespace
+
+        from src.api.routers import nhi
+        from src.core.encounter_extensions import extract_reg_meta
+
+        payload = {
+            "resourceType": "Encounter",
+            "status": "finished",
+            "extension": [
+                {
+                    "url": REG_EXTENSION_URL,
+                    "extension": [
+                        {"url": "acceptReferral", "valueString": "1"},
+                        {"url": "hcIdNo", "valueString": PERSON},
+                        {"url": "referralHospId", "valueString": "111"},
+                    ],
+                }
+            ],
+        }
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
+            store = SqliteShadowStore(Path(tmp) / "t.db")
+            store.initialize()
+            with mock.patch.object(referral_inbox, "get_shadow_store", return_value=store):
+                referral_inbox.remember_download(PERSON, [_slip("S1", "111", "20261103")])
+                referral_inbox.mark_accepted("S1", "accept")
+                nhi._link_incoming_referral(store, payload, SimpleNamespace(patientIdNo=None, patientId="p1"))
+        meta = extract_reg_meta(payload)
+        self.assertEqual(meta.get("referralSeq"), "S1")
+        self.assertEqual(meta.get("referralDate"), "20261103")
 
 
 if __name__ == "__main__":

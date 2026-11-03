@@ -172,7 +172,7 @@ def remember_download(id_no: str, slips: list[ReferralSlip]) -> None:
 def _stored_accepted(conn, id_no: str) -> set[str]:
     """Taken by the bureau or answered by us. A desk acceptance counts only while its visit stands."""
     found: set[str] = set()
-    for row in conn.execute("SELECT serial FROM referral_accept WHERE source NOT IN ('local', 'chart')"):
+    for row in conn.execute("SELECT serial FROM referral_accept WHERE source IN ('bureau', 'reply')"):
         if row[0]:
             found.add(str(row[0]))
     try:
@@ -356,9 +356,33 @@ def apply_list_rows(rows: list[dict[str, Any]], query_kind: str) -> int:
     return kept
 
 
+def _held_by_visits(conn) -> dict[str, str]:
+    """Referral serial -> the standing visit that accepted it."""
+    held: dict[str, str] = {}
+    rows = conn.execute(
+        """
+        SELECT resource_id, payload_json FROM resource_cache
+        WHERE resource_type = 'Encounter' AND payload_json LIKE '%referralSeq%'
+        """
+    ).fetchall()
+    for resource_id, raw in rows:
+        try:
+            payload = json.loads(raw or "")
+        except json.JSONDecodeError:
+            continue
+        if not isinstance(payload, dict) or str(payload.get("status") or "") in {"cancelled", "entered-in-error"}:
+            continue
+        meta = extract_reg_meta(payload)
+        serial = str(meta.get("referralSeq") or "").strip()
+        if serial and str(meta.get("acceptReferral") or "").strip() == "1":
+            held[serial] = str(resource_id)
+    return held
+
+
 def list_downloads() -> list[dict[str, Any]]:
     with get_shadow_store()._connect() as conn:
         _ensure(conn)
+        held = _held_by_visits(conn)
         rows = conn.execute(
             """
             SELECT serial, kind, id_no, patient_name, medical_no, hosp_id, hosp_name,
@@ -373,11 +397,15 @@ def list_downloads() -> list[dict[str, Any]]:
     for row in rows:
         serial, kind, id_no, name, medical_no, hosp_id, hosp_name, opened, status, summary, valid, _deleted, fetched = row
         lane = _lane(str(kind or ""), str(status or ""))
+        visit = held.get(str(serial or "").strip(), "") if str(kind or "") in {"2", "4"} else ""
+        shown = "%s \u00b7 %s" % (lane, status or "\u2014")
+        if visit:
+            shown += " \u00b7 \u672c\u9662\u5df2\u63a5\u53d7"
         items.append(
             {
                 "id": "dl-%s-%s" % (kind, serial),
                 "kind": "down",
-                "encounterId": "",
+                "encounterId": visit,
                 "patientName": name or "",
                 "medicalNo": medical_no or "",
                 "idNo": id_no or "",
@@ -390,7 +418,7 @@ def list_downloads() -> list[dict[str, Any]]:
                 "note": summary or "",
                 "serial": serial or "",
                 "validUntil": valid or "",
-                "status": "%s \u00b7 %s" % (lane, status or "\u2014"),
+                "status": shown,
                 "openedOn": _iso_day(str(opened or "")),
                 "updatedAt": fetched or "",
             }
