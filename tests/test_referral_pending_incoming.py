@@ -1,9 +1,11 @@
+import json
 import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
 
 from src.core import referral_inbox
+from src.core.encounter_extensions import REG_EXTENSION_URL
 from src.core.nhi_referral import ReferralSlip
 from src.infrastructure.sqlite_shadow_store import SqliteShadowStore
 
@@ -68,12 +70,53 @@ class PendingIncomingTests(unittest.TestCase):
             check,
         )
 
-    def test_once_accepted_it_is_not_offered_again(self):
+    def test_desk_acceptance_alone_does_not_hold_the_notice(self):
         def check():
             referral_inbox.mark_accepted("S1")
-            self.assertIsNone(referral_inbox.pending_incoming(PERSON, "111"))
+            self.assertEqual(referral_inbox.pending_incoming(PERSON, "111").serial, "S1")
 
         self._run([_slip("S1", "111", "20261103")], check)
+
+    def _visit(self, store, status: str) -> None:
+        payload = {
+            "resourceType": "Encounter",
+            "id": "e1",
+            "status": status,
+            "extension": [
+                {
+                    "url": REG_EXTENSION_URL,
+                    "extension": [
+                        {"url": "acceptReferral", "valueString": "1"},
+                        {"url": "referralSeq", "valueString": "S1"},
+                    ],
+                }
+            ],
+        }
+        with store._connect() as conn:
+            conn.execute("INSERT INTO patient_index (resource_id, id_no) VALUES ('p1', ?)", (PERSON,))
+            conn.execute("INSERT INTO encounter_index (resource_id, patient_id, encounter_date) VALUES ('e1', 'p1', '2026-11-03')")
+            conn.execute(
+                "INSERT INTO resource_cache (resource_type, resource_id, payload_json) VALUES ('Encounter', 'e1', ?)",
+                (json.dumps(payload),),
+            )
+
+    def _with_visit(self, status: str):
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
+            store = SqliteShadowStore(Path(tmp) / "t.db")
+            store.initialize()
+            self._visit(store, status)
+            with mock.patch.object(referral_inbox, "get_shadow_store", return_value=store):
+                referral_inbox.remember_download(PERSON, [_slip("S1", "111", "20261103")])
+                referral_inbox.mark_accepted("S1")
+                return referral_inbox.pending_incoming(PERSON, "111")
+
+    def test_standing_visit_holds_the_notice(self):
+        self.assertIsNone(self._with_visit("arrived"))
+
+    def test_cancelled_visit_gives_the_notice_back(self):
+        hit = self._with_visit("cancelled")
+        self.assertIsNotNone(hit)
+        self.assertEqual(hit.serial, "S1")
 
 
 if __name__ == "__main__":

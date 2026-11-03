@@ -170,8 +170,9 @@ def remember_download(id_no: str, slips: list[ReferralSlip]) -> None:
 
 
 def _stored_accepted(conn, id_no: str) -> set[str]:
+    """Taken by the bureau or answered by us. A desk acceptance counts only while its visit stands."""
     found: set[str] = set()
-    for row in conn.execute("SELECT serial FROM referral_accept"):
+    for row in conn.execute("SELECT serial FROM referral_accept WHERE source NOT IN ('local', 'chart')"):
         if row[0]:
             found.add(str(row[0]))
     try:
@@ -212,6 +213,9 @@ def _encounter_accepted(conn, id_no: str) -> set[str]:
         except json.JSONDecodeError:
             continue
         if not isinstance(payload, dict):
+            continue
+        # A cancelled registration gives the notice back for the next registration.
+        if str(payload.get("status") or "") in {"cancelled", "entered-in-error"}:
             continue
         meta = extract_reg_meta(payload)
         if str(meta.get("acceptReferral") or "").strip() != "1":
