@@ -14,10 +14,12 @@ from src.core.encounter_extensions import attach_reg_extension, extract_reg_meta
 from src.core.nhi_fhir_mapper import TW_NATIONAL_ID_SYSTEM
 from src.core.nhi_cshis6_client import DEFAULT_HOSPITAL_ID
 from src.core.nhi_referral import (
+    ACCEPT_TYPE_CODE,
     DELETE_TYPE_CODE,
     LIST_TYPE_CODE,
     OPEN_TYPE_CODE,
     REPLY_TYPE_CODE,
+    build_accept_xml,
     build_delete_xml,
     build_list_request,
     build_open_xml,
@@ -27,18 +29,23 @@ from src.core.nhi_referral import (
     referral_upload_name,
 )
 from src.core.referral_desk import (
+    WAITING,
     get_slip,
     list_slips,
     mark_uploaded,
     physician_ids,
+    record_accept_sent,
     remember_self_seq,
     remove_slip,
+    reply_for_encounter,
     save_slip,
     slips_for_encounter,
+    take_incoming,
 )
 from src.core.referral_guard import classify, uploaded
 from src.core.referral_inbox import (
     apply_list_rows,
+    download_person,
     list_downloads,
     mark_accepted,
     prompts_for,
@@ -290,15 +297,77 @@ def referral_downloads() -> dict[str, Any]:
 
 class ReferralAcceptedBody(BaseModel):
     serial: str = ""
+    encounterId: str = ""
+    hospId: str = ""
+    hospName: str = ""
+
+
+class ReferralAcceptSentBody(BaseModel):
+    id: str = ""
+    localId: str = ""
+
+
+def take_for_visit(serial: str, encounter_id: str, hosp_id: str = "", hosp_name: str = "") -> dict[str, Any] | None:
+    """Accepting a notice opens its reply row on this visit."""
+    person = download_person(serial)
+    id_no = person.get("idNo", "")
+    doctor = ""
+    if encounter_id:
+        try:
+            _encounter, reg, stored = _load(encounter_id)
+        except LookupError:
+            reg, stored = {}, ""
+        id_no = stored or id_no
+        doctor = str(reg.get("doctorName") or "")
+    return take_incoming(
+        serial,
+        encounter_id,
+        id_no=id_no,
+        patient_name=person.get("patientName", ""),
+        medical_no=person.get("medicalNo", ""),
+        hosp_name=hosp_name or person.get("hospName", ""),
+        hosp_id=hosp_id or person.get("hospId", ""),
+        doctor=doctor,
+    )
+
+
+def _pack_accept(slip: dict[str, Any]) -> dict[str, Any] | None:
+    if uploaded(slip) or str(slip.get("acceptLocalId") or "").strip():
+        return None
+    hosp = _hosp()
+    if len(hosp) != 10:
+        return None
+    xml = build_accept_xml(serial=str(slip.get("serial") or ""), hosp=hosp, accepted_on=date.today().isoformat())
+    return {
+        "name": referral_upload_name("ETE", hosp, _file_seq()),
+        "type": ACCEPT_TYPE_CODE,
+        "b64": _b64(xml),
+    }
 
 
 @router.post("/accepted")
 def referral_accepted(body: ReferralAcceptedBody) -> dict[str, Any]:
+    """Store the acceptance and hand back the accept file for this PC to send."""
     serial = body.serial.strip()
     if not serial:
         return {"ok": False, "reason": "\u6c92\u6709\u8f49\u8a3a\u55ae\u5e8f\u865f"}
     mark_accepted(serial, "accept")
+    slip = take_for_visit(serial, body.encounterId.strip(), body.hospId.strip(), body.hospName.strip())
+    if slip is None:
+        return {"ok": True, "id": "", "pack": None}
+    return {"ok": True, "id": slip["id"], "pack": _pack_accept(slip)}
+
+
+@router.post("/accept-sent")
+def referral_accept_sent(body: ReferralAcceptSentBody) -> dict[str, Any]:
+    record_accept_sent(body.id, body.localId)
     return {"ok": True}
+
+
+@router.get("/reply-for")
+def referral_reply_for(encounterId: str = "") -> dict[str, Any]:
+    slip = reply_for_encounter(encounterId.strip())
+    return {"item": slip, "uploaded": bool(slip and uploaded(slip))}
 
 
 @router.get("/physicians")
@@ -327,7 +396,7 @@ def referral_save_slip(body: ReferralSlipBody) -> dict[str, Any]:
         item = save_slip(body.model_dump(exclude_unset=True))
     except ValueError as exc:
         return {"ok": False, "reason": str(exc)}
-    if body.kind == "reply" and (item.get("serial") or "").strip():
+    if body.kind == "reply" and (item.get("serial") or "").strip() and item.get("status") != WAITING:
         mark_accepted(str(item.get("serial") or ""), "reply")
     return {"ok": True, "item": item}
 
@@ -479,8 +548,12 @@ def _pack_upload(slip: dict[str, Any]) -> dict[str, Any]:
         missing.append("\u8eab\u5206\u8b49")
     kind = str(slip.get("kind") or "")
     if kind == "reply":
+        if str(slip.get("status") or "") == WAITING:
+            return {"ok": False, "reason": "\u9084\u6c92\u5beb\u56de\u8986\u3002\u8acb\u5148\u586b\u597d\u56de\u8986\u518d\u5b58\u6a94\u4e0a\u50b3\u3002"}
         if not str(slip.get("serial") or "").strip():
             missing.append("\u8f49\u8a3a\u55ae\u5e8f\u865f")
+        if not str(slip.get("diagnosis") or "").strip():
+            missing.append("\u4e3b\u8a3a\u65b7")
         if not str(profile.get("phone") or "").strip():
             missing.append("\u9662\u6240\u96fb\u8a71")
     else:

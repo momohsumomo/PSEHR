@@ -27,6 +27,8 @@ QUERY_URL = "https://medws.nhi.gov.tw/IPI/API/IPIE0001/GetRefData_rc6"
 TEST_PATIENT_ID = "A000000005"
 OPEN_TYPE_CODE = "10"
 REPLY_TYPE_CODE = "04"
+# IPR_ETE_API: accept and cancel-accept also go up as type 04; the ETE file name tells them apart.
+ACCEPT_TYPE_CODE = "04"
 # IPR_ETG_API and IPR_ETH_API both say NHI_DownloadB type 10.
 # The file itself says which delete: ETG h2=1, ETH h2=2.
 DELETE_TYPE_CODE = "10"
@@ -420,6 +422,21 @@ def build_open_xml(
             ("h36", self_seq),
         ],
         header=[("hospaddr", address), ("hospfax", fax), ("hospemail", email)],
+    )
+
+
+def build_accept_xml(*, serial: str, hosp: str, accepted_on: str = "") -> bytes:
+    """ETE accept (h2=1). Doctor and visit arrangement fields are optional and left out."""
+    return _xml_bytes(
+        "etehosp",
+        hosp,
+        "",
+        "etedata",
+        [
+            ("h1", serial),
+            ("h2", "1"),
+            ("h3", _ymd(accepted_on)),
+        ],
     )
 
 

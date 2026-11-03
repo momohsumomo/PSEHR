@@ -79,7 +79,7 @@ import {
   applyClinicDrugDisplayNames,
   resolvePackageLines,
 } from "@/utils/catalogRx";
-import { cancelRegister, writeVisitToCard, CardReadError, type CardFaultReport, patchEncounterReg, previewVisitCase, fetchStaff, fetchQualityLabOrders, saveReferralSlip, claimChartOpen, releaseChartOpen, CHART_IN_USE } from "@/api/clinicApi";
+import { cancelRegister, writeVisitToCard, CardReadError, type CardFaultReport, patchEncounterReg, previewVisitCase, fetchStaff, fetchQualityLabOrders, saveReferralSlip, uploadReferralSlip, fetchReplyForVisit, claimChartOpen, releaseChartOpen, CHART_IN_USE } from "@/api/clinicApi";
 import { dropChartDraft } from "@/lib/chartDraft";
 import { displayCase, prescriptionDays, prescriptionOrders, storedCase } from "@/lib/caseMark";
 import { ageYearsMonths } from "@/lib/ageLabel";
@@ -1229,6 +1229,7 @@ export function ClinicOutpatientPage() {
     setActionError(null);
     setCardNote(null);
     let hisOk = false;
+    let replyPending = false;
     try {
       if (apiMode) {
         let doctorId =
@@ -1310,8 +1311,16 @@ export function ClinicOutpatientPage() {
         }
         hisOk = true;
         const accepted = (selected?.acceptReferral || "").trim() === "1";
-        const replied = Boolean((selected?.referralLocalId || "").trim());
-        if (accepted && !replied) {
+        let replied = Boolean((selected?.referralLocalId || "").trim());
+        if (accepted && !replied && apiMode) {
+          try {
+            replied = (await fetchReplyForVisit(selectedEncounterId)).uploaded;
+          } catch {
+            /* Unknown reply state asks again; uploading twice is refused by the host. */
+          }
+        }
+        replyPending = accepted && !replied;
+        if (replyPending) {
           setReplyError("");
           setReplyAsk({
             serial: (selected?.referralSeq || "").trim(),
@@ -1373,17 +1382,14 @@ export function ClinicOutpatientPage() {
           }
         }
       }
+      const holdForReply = apiMode && replyPending;
       if (saveDraft.printRx) {
-        const holdForReply =
-          apiMode && (selected?.acceptReferral || "").trim() === "1" && !(selected?.referralLocalId || "").trim();
         leaveListAfterPrintRef.current = !holdForReply;
         printSimpleSlipRef.current();
       } else {
         openLabSheetRef.current();
       }
       committedFpRef.current[selectedEncounterId] = visitFingerprint;
-      const holdForReply =
-        apiMode && (selected?.acceptReferral || "").trim() === "1" && !(selected?.referralLocalId || "").trim();
       if (!holdForReply) {
         const leaveAfter = afterSaveLeaveRef.current;
         afterSaveLeaveRef.current = null;
@@ -3961,8 +3967,15 @@ export function ClinicOutpatientPage() {
               doctor: selected?.doctorName || "",
               status: "\u5df2\u5b58\u6a94",
             })
-              .then(() => {
-                setCardNote("\u8f49\u8a3a\u56de\u8986\u5df2\u5b58\u6a94\u3002\u4e0a\u50b3\u8acb\u5230\u53e6\u4e00\u53f0\u96fb\u8166\u7528\u8f49\u8a3a\u4e0a\u50b3\u5de5\u5177\u3002");
+              .then(async (saved) => {
+                try {
+                  await uploadReferralSlip(saved.id, "\u5df2\u56de\u8986");
+                } catch (err: unknown) {
+                  const why = err instanceof Error ? err.message : "\u4e0a\u50b3\u5931\u6557";
+                  setReplyError(`\u56de\u8986\u5df2\u5b58\u6a94\uff0c\u4f46\u6c92\u6709\u4e0a\u50b3\uff1a${why}\u3002\u53ef\u4ee5\u518d\u6309\u4e00\u6b21\u5b58\u6a94\u4e0a\u50b3\uff0c\u6216\u6309\u7a0d\u5f8c\u518d\u56de\u3002`);
+                  return;
+                }
+                setCardNote("\u8f49\u8a3a\u56de\u8986\u5df2\u5b58\u6a94\u4e26\u4e0a\u50b3\u3002");
                 finishReply();
               })
               .catch((err: unknown) => {

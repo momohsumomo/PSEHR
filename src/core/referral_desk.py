@@ -10,6 +10,8 @@ from typing import Any
 
 from src.app.bootstrap import get_shadow_store
 
+WAITING = "\u5c1a\u672a\u56de\u8986"
+
 _DDL = """
 CREATE TABLE IF NOT EXISTS referral_slip (
     id TEXT PRIMARY KEY,
@@ -76,7 +78,10 @@ def save_slip(body: dict[str, Any]) -> dict[str, Any]:
     if kind not in {"out", "reply"}:
         raise ValueError("kind must be out or reply")
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    slip_id = str(body.get("id") or "").strip() or uuid.uuid4().hex
+    slip_id = str(body.get("id") or "").strip()
+    if not slip_id and kind == "reply":
+        slip_id = reply_id_for_serial(str(body.get("serial") or ""))
+    slip_id = slip_id or uuid.uuid4().hex
     opened_on = str(body.get("openedOn") or "")[:10]
     status = str(body.get("status") or "")
     if not status:
@@ -170,6 +175,8 @@ _SHEET_KEYS = (
     ("drugs", "drugs"),
     ("aux", "aux"),
     ("selfSeq", "selfSeq"),
+    ("acceptLocalId", "acceptLocalId"),
+    ("acceptedOn", "acceptedOn"),
 )
 
 
@@ -278,6 +285,124 @@ def remove_slip(slip_id: str) -> None:
         conn.execute("DELETE FROM referral_slip WHERE id=?", (slip,))
 
 
+def reply_id_for_serial(serial: str) -> str:
+    """One reply row per incoming notice."""
+    key = (serial or "").strip()
+    if not key:
+        return ""
+    with get_shadow_store()._connect() as conn:
+        _ensure(conn)
+        row = conn.execute(
+            "SELECT id FROM referral_slip WHERE kind='reply' AND serial=? ORDER BY updated_at DESC LIMIT 1",
+            (key,),
+        ).fetchone()
+    return str(row[0]) if row else ""
+
+
+def take_incoming(
+    serial: str,
+    encounter_id: str,
+    *,
+    id_no: str = "",
+    patient_name: str = "",
+    medical_no: str = "",
+    hosp_name: str = "",
+    hosp_id: str = "",
+    doctor: str = "",
+) -> dict[str, Any] | None:
+    """Accepting a notice puts it on the reply list as not yet answered, tied to this visit."""
+    from src.core.referral_guard import uploaded
+
+    key = (serial or "").strip()
+    if not key:
+        return None
+    found = reply_id_for_serial(key)
+    current = get_slip(found) if found else None
+    if current is not None and uploaded(current):
+        return current
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    with get_shadow_store()._connect() as conn:
+        _ensure(conn)
+        day = _visit_day(conn, encounter_id) or now[:10]
+        if current is None:
+            slip_id = uuid.uuid4().hex
+            conn.execute(
+                """
+                INSERT INTO referral_slip (
+                    id, kind, encounter_id, patient_name, medical_no, id_no,
+                    dest_hosp, dest_code, doctor, serial, status, opened_on, updated_at
+                ) VALUES (?, 'reply', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    slip_id, encounter_id, patient_name, medical_no, (id_no or "").strip().upper(),
+                    hosp_name, hosp_id, doctor, key, WAITING, day, now,
+                ),
+            )
+        else:
+            slip_id = current["id"]
+            conn.execute(
+                """
+                UPDATE referral_slip SET
+                    encounter_id=?,
+                    patient_name=CASE WHEN ?<>'' THEN ? ELSE patient_name END,
+                    medical_no=CASE WHEN ?<>'' THEN ? ELSE medical_no END,
+                    id_no=CASE WHEN ?<>'' THEN ? ELSE id_no END,
+                    dest_hosp=CASE WHEN ?<>'' THEN ? ELSE dest_hosp END,
+                    dest_code=CASE WHEN ?<>'' THEN ? ELSE dest_code END,
+                    doctor=CASE WHEN ?<>'' THEN ? ELSE doctor END,
+                    opened_on=?, updated_at=?
+                WHERE id=?
+                """,
+                (
+                    encounter_id,
+                    patient_name, patient_name,
+                    medical_no, medical_no,
+                    (id_no or "").strip().upper(), (id_no or "").strip().upper(),
+                    hosp_name, hosp_name,
+                    hosp_id, hosp_id,
+                    doctor, doctor,
+                    day, now, slip_id,
+                ),
+            )
+    return get_slip(slip_id)
+
+
+def record_accept_sent(slip_id: str, local_id: str) -> None:
+    slip = (slip_id or "").strip()
+    token = (local_id or "").strip()
+    if not slip or not token:
+        return
+    with get_shadow_store()._connect() as conn:
+        _ensure(conn)
+        _write_slip_extra(
+            conn,
+            slip,
+            {"acceptLocalId": token, "acceptedOn": datetime.now().strftime("%Y-%m-%d %H:%M:%S")},
+        )
+
+
+def release_for_encounter(encounter_id: str) -> None:
+    """A cancelled visit lets go of its notice. The next registration takes it again."""
+    from src.core.referral_guard import uploaded
+
+    for slip in slips_for_encounter(encounter_id):
+        if slip.get("kind") != "reply" or not str(slip.get("serial") or "").strip() or uploaded(slip):
+            continue
+        with get_shadow_store()._connect() as conn:
+            _ensure(conn)
+            conn.execute(
+                "UPDATE referral_slip SET encounter_id='', status=?, updated_at=? WHERE id=?",
+                (WAITING, datetime.now().strftime("%Y-%m-%d %H:%M:%S"), slip["id"]),
+            )
+
+
+def reply_for_encounter(encounter_id: str) -> dict[str, Any] | None:
+    for slip in slips_for_encounter(encounter_id):
+        if slip.get("kind") == "reply":
+            return slip
+    return None
+
+
 def remember_self_seq(slip_id: str, self_seq: str) -> None:
     slip = (slip_id or "").strip()
     token = (self_seq or "").strip()
@@ -345,6 +470,8 @@ def _public(fields: dict[str, Any]) -> dict[str, Any]:
         "nhiId": fields.get("nhi_id") or "",
         "uploadedAt": fields.get("uploaded_at") or "",
         "selfSeq": extra.get("selfSeq") or "",
+        "acceptLocalId": extra.get("acceptLocalId") or "",
+        "acceptedOn": extra.get("acceptedOn") or "",
         "openedOn": fields.get("opened_on") or "",
         "updatedAt": fields["updated_at"],
         "sex": extra.get("sex") or "",

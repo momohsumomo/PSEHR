@@ -168,7 +168,7 @@ export function ReferralReplyDialog({
     <div className="fixed inset-0 z-[80] flex flex-col" style={{ fontFamily: HIS_FONT, background: "#F4F1EA" }}>
       <header className="flex shrink-0 items-center justify-between bg-[#2060A0] px-3 py-1 text-white">
         <span className="font-bold">{"\u8f49\u8a3a\u56de\u8986"}</span>
-        <span className="text-[13px]">{"\u56de\u8986\u5148\u5b58\u5728\u9019\u53f0\u3002\u4e0a\u50b3\u7528\u53e6\u4e00\u53f0\u7684\u8f49\u8a3a\u4e0a\u50b3\u5de5\u5177\u3002"}</span>
+        <span className="text-[13px]">{"\u5b58\u6a94\u5c31\u4e0a\u50b3\u5230\u8f49\u8a3a\u5e73\u53f0\u3002"}</span>
       </header>
       <div className="min-h-0 flex-1 overflow-auto p-3">
         <div className="mx-auto max-w-4xl border border-black bg-white p-2 text-[14px]">
@@ -245,7 +245,7 @@ export function ReferralReplyDialog({
                 });
               }}
             >
-              {"\u5b58\u6a94"}
+              {"\u5b58\u6a94\u4e0a\u50b3"}
             </button>
             <button type="button" className="border border-[#333] bg-white px-3 py-1" onClick={onSkip}>
               {"\u7a0d\u5f8c\u518d\u56de"}

@@ -1183,11 +1183,36 @@ export async function fetchReferralDownloads(): Promise<{ items: ReferralSlipRow
   return request("/nhi/v1/referral/downloads");
 }
 
-export async function markReferralAccepted(serial: string): Promise<void> {
-  await request("/nhi/v1/referral/accepted", {
+export async function markReferralAccepted(body: {
+  serial: string;
+  encounterId: string;
+  hospId?: string;
+  hospName?: string;
+}): Promise<string> {
+  const taken = await request<{
+    ok: boolean;
+    reason?: string;
+    id?: string;
+    pack?: { name: string; type: string; b64: string } | null;
+  }>("/nhi/v1/referral/accepted", {
     method: "POST",
-    body: JSON.stringify({ serial }),
+    body: JSON.stringify(body),
   });
+  if (!taken.ok) throw new Error(taken.reason || "\u63a5\u53d7\u8f49\u8a3a\u6c92\u6709\u5b58\u5230");
+  if (!taken.pack || !taken.id) return "";
+  const sent = await postReferralIo({ op: "send", name: taken.pack.name, type: taken.pack.type, b64: taken.pack.b64 });
+  if (!sent.ok || !sent.localId) {
+    return `\u53d7\u7406\u6c92\u6709\u9001\u51fa\uff08${sent.reason || sent.code || ""}\uff09\u3002\u56de\u8986\u4e0a\u50b3\u6642\u5065\u4fdd\u6703\u4e00\u4f75\u7b97\u53d7\u7406\u3002`;
+  }
+  await request("/nhi/v1/referral/accept-sent", {
+    method: "POST",
+    body: JSON.stringify({ id: taken.id, localId: sent.localId }),
+  });
+  return "\u5df2\u9001\u51fa\u53d7\u7406";
+}
+
+export async function fetchReplyForVisit(encounterId: string): Promise<{ item: ReferralSlipRow | null; uploaded: boolean }> {
+  return request(`/nhi/v1/referral/reply-for?encounterId=${encodeURIComponent(encounterId)}`);
 }
 
 export async function saveReferralSlip(body: Partial<ReferralSlipRow> & { kind: "out" | "reply" }): Promise<ReferralSlipRow> {

@@ -16,6 +16,7 @@ from typing import Any
 from src.app.bootstrap import get_shadow_store
 from src.core.encounter_extensions import extract_reg_meta
 from src.core.nhi_referral import ReferralSlip, bureau_already_accepted, needs_accept_prompt
+from src.core.referral_desk import WAITING
 
 _DDL = """
 CREATE TABLE IF NOT EXISTS referral_download (
@@ -181,8 +182,9 @@ def _stored_accepted(conn, id_no: str) -> set[str]:
             SELECT serial FROM referral_slip
             WHERE kind = 'reply' AND TRIM(IFNULL(serial, '')) <> ''
               AND (id_no = ? OR IFNULL(id_no, '') = '')
+              AND status <> ?
             """,
-            (id_no,),
+            (id_no, WAITING),
         ).fetchall()
     except Exception:
         rows = []
@@ -226,15 +228,35 @@ def _encounter_accepted(conn, id_no: str) -> set[str]:
     return found
 
 
+def _released(conn) -> set[str]:
+    """Notices we accepted whose visit was cancelled. Bureau status does not hide them."""
+    try:
+        rows = conn.execute(
+            "SELECT serial FROM referral_slip WHERE kind = 'reply' AND status = ? AND TRIM(IFNULL(serial, '')) <> ''",
+            (WAITING,),
+        ).fetchall()
+    except Exception:
+        return set()
+    waiting = {str(row[0]).strip() for row in rows if row[0]}
+    return waiting - set(_held_by_visits(conn))
+
+
+def _asks(slip: ReferralSlip, accepted: set[str], released: set[str]) -> bool:
+    if slip.serial in released and not slip.deleted and slip.kind in {"2", "4"}:
+        return True
+    return needs_accept_prompt(slip, accepted)
+
+
 def prompts_for(id_no: str, slips: list[ReferralSlip]) -> list[ReferralSlip]:
     """Incoming notices this clinic has not accepted. Everything else stays stored."""
-    if not any(needs_accept_prompt(row, set()) for row in slips):
-        return []
     patient = (id_no or "").strip().upper()
     with get_shadow_store()._connect() as conn:
         _ensure(conn)
-        accepted = _stored_accepted(conn, patient)
-        pending = [row for row in slips if needs_accept_prompt(row, accepted)]
+        released = _released(conn)
+        if not any(_asks(row, set(), released) for row in slips):
+            return []
+        accepted = _stored_accepted(conn, patient) - released
+        pending = [row for row in slips if _asks(row, accepted, released)]
         if not pending:
             return []
         from_chart = _encounter_accepted(conn, patient)
@@ -249,7 +271,7 @@ def prompts_for(id_no: str, slips: list[ReferralSlip]) -> list[ReferralSlip]:
                 """,
                 [(serial, now) for serial in from_chart],
             )
-    return [row for row in slips if needs_accept_prompt(row, accepted)]
+    return [row for row in slips if _asks(row, accepted, released)]
 
 
 def pending_incoming(id_no: str, hosp_id: str = "") -> ReferralSlip | None:
@@ -262,7 +284,8 @@ def pending_incoming(id_no: str, hosp_id: str = "") -> ReferralSlip | None:
         return None
     with get_shadow_store()._connect() as conn:
         _ensure(conn)
-        accepted = _stored_accepted(conn, patient) | _encounter_accepted(conn, patient)
+        released = _released(conn)
+        accepted = (_stored_accepted(conn, patient) - released) | _encounter_accepted(conn, patient)
         rows = conn.execute(
             """
             SELECT serial, kind, hosp_seq, hosp_id, hosp_name, open_date, status,
@@ -289,11 +312,36 @@ def pending_incoming(id_no: str, hosp_id: str = "") -> ReferralSlip | None:
         )
         for r in rows
     ]
-    pending = [slip for slip in slips if needs_accept_prompt(slip, accepted)]
+    pending = [slip for slip in slips if _asks(slip, accepted, released)]
     want = (hosp_id or "").strip()
     if want:
         pending = [slip for slip in pending if want in {slip.hosp_id.strip(), slip.hosp_seq.strip()}]
     return pending[0] if pending else None
+
+
+def download_person(serial: str) -> dict[str, str]:
+    key = (serial or "").strip()
+    if not key:
+        return {}
+    with get_shadow_store()._connect() as conn:
+        _ensure(conn)
+        row = conn.execute(
+            """
+            SELECT id_no, patient_name, medical_no, hosp_id, hosp_seq, hosp_name
+            FROM referral_download WHERE serial = ? AND kind IN ('2', '4')
+            ORDER BY fetched_at DESC LIMIT 1
+            """,
+            (key,),
+        ).fetchone()
+    if not row:
+        return {}
+    return {
+        "idNo": str(row[0] or ""),
+        "patientName": str(row[1] or ""),
+        "medicalNo": str(row[2] or ""),
+        "hospId": str(row[3] or row[4] or ""),
+        "hospName": str(row[5] or ""),
+    }
 
 
 def _lane(kind: str, status: str) -> str:
@@ -379,41 +427,22 @@ def _held_by_visits(conn) -> dict[str, str]:
     return held
 
 
-def _our_replies(conn) -> dict[str, bool]:
-    """Referral serial -> whether our reply has been uploaded."""
+def _on_reply_list(conn) -> set[str]:
     from src.core.referral_desk import _ensure as ensure_slips
-    from src.core.referral_guard import uploaded
 
     ensure_slips(conn)
-    found: dict[str, bool] = {}
     rows = conn.execute(
-        """
-        SELECT serial, status, local_id, nhi_id FROM referral_slip
-        WHERE kind = 'reply' AND TRIM(IFNULL(serial, '')) <> ''
-        """
+        "SELECT serial FROM referral_slip WHERE kind = 'reply' AND TRIM(IFNULL(serial, '')) <> ''"
     ).fetchall()
-    for serial, status, local_id, nhi_id in rows:
-        key = str(serial or "").strip()
-        sent = uploaded({"status": status, "localId": local_id, "nhiId": nhi_id})
-        found[key] = found.get(key, False) or sent
-    return found
-
-
-def _our_side(visit: str, reply: bool | None) -> str:
-    if reply is True:
-        return "\u672c\u9662\u56de\u8986\u5df2\u4e0a\u50b3\uff0c\u7b49\u5065\u4fdd\u66f4\u65b0"
-    if reply is False:
-        return "\u672c\u9662\u5df2\u63a5\u53d7\uff0c\u56de\u8986\u5df2\u5b58\u6a94\u9084\u6c92\u4e0a\u50b3"
-    if visit:
-        return "\u672c\u9662\u5df2\u63a5\u53d7\uff0c\u9084\u6c92\u56de\u8986"
-    return ""
+    return {str(row[0]).strip() for row in rows}
 
 
 def list_downloads() -> list[dict[str, Any]]:
+    """Notices nobody here has taken. An accepted notice lives on the reply list instead."""
     with get_shadow_store()._connect() as conn:
         _ensure(conn)
         held = _held_by_visits(conn)
-        replies = _our_replies(conn)
+        answered = _on_reply_list(conn)
         rows = conn.execute(
             """
             SELECT serial, kind, id_no, patient_name, medical_no, hosp_id, hosp_name,
@@ -430,12 +459,12 @@ def list_downloads() -> list[dict[str, Any]]:
         lane = _lane(str(kind or ""), str(status or ""))
         key = str(serial or "").strip()
         incoming = str(kind or "") in {"2", "4"}
+        if incoming and key in answered:
+            continue
         visit = held.get(key, "") if incoming else ""
         shown = "%s \u00b7 \u5065\u4fdd\uff1a%s" % (lane, status or "\u2014")
-        done = "\u5df2\u56de\u5fa9" in str(status or "") or "\u5df2\u56de\u8986" in str(status or "")
-        ours = _our_side(visit, replies.get(key)) if incoming and not done else ""
-        if ours:
-            shown += " \u00b7 " + ours
+        if visit:
+            shown += " \u00b7 \u672c\u9662\u5df2\u63a5\u53d7\uff0c\u9084\u6c92\u56de\u8986"
         items.append(
             {
                 "id": "dl-%s-%s" % (kind, serial),

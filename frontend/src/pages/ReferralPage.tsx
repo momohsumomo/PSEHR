@@ -45,6 +45,20 @@ function purposeOn(raw: string | undefined, code: string): boolean {
   return text === code;
 }
 
+const WAITING = "\u5c1a\u672a\u56de\u8986";
+
+function replyLabel(row: ReferralSlipRow): string {
+  const status = row.status || "";
+  if ((row.localId || "").trim() || /\u5df2\u56de\u8986|\u5df2\u56de\u5fa9|\u5df2\u4e0a\u50b3/.test(status)) {
+    return "\u5df2\u56de\u8986";
+  }
+  if (status === WAITING) {
+    return row.encounterId ? WAITING : `${WAITING}\uff08\u639b\u865f\u5df2\u9000\uff09`;
+  }
+  if (status === "\u5df2\u5b58\u6a94") return "\u56de\u8986\u5df2\u5b58\u6a94\uff0c\u9084\u6c92\u4e0a\u50b3";
+  return status || "\u2014";
+}
+
 function rocDay(iso: string | undefined): string {
   const day = (iso || "").slice(0, 10);
   const parts = day.split("-");
@@ -357,7 +371,7 @@ export function ReferralPage() {
                   >
                     <div className="font-bold">{rocDay(row.openedOn)} {row.patientName || "\u2014"} {row.medicalNo}</div>
                     <div className="text-[11px] text-[#404040]">
-                      {row.status || "\u2014"}
+                      {mode === "reply" ? replyLabel(row) : row.status || "\u2014"}
                       {row.destHosp ? ` \u00b7 ${row.destHosp}` : ""}
                       {row.serial ? ` \u00b7 ${row.serial}` : ""}
                     </div>

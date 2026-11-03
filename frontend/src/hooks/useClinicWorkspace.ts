@@ -987,10 +987,20 @@ export function useClinicWorkspace(options?: {
         if (!slips.length || !onIncoming) return false;
         const choice = await onIncoming(slips);
         if (!choice?.accept || !choice.serial) return false;
+        let acceptNote = "";
         try {
-          await markReferralAccepted(choice.serial);
-        } catch {
-          /* The chart flag below still records this acceptance. */
+          acceptNote = await markReferralAccepted({
+            serial: choice.serial,
+            encounterId,
+            hospId: choice.hospId,
+            hospName: choice.hospName,
+          });
+        } catch (err) {
+          acceptNote = err instanceof Error ? err.message : "\u53d7\u7406\u6c92\u6709\u9001\u51fa";
+        }
+        if (acceptNote) {
+          seqNote = [seqNote, acceptNote].filter(Boolean).join(" \u00b7 ");
+          onSeqFields?.({ treatSeq, treatmentNumber, treatDateTime, cardId, seqNote });
         }
         await patchEncounterReg(encounterId, {
           patientId,

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { fetchStaff, saveReferralSlip, type ReferralSlipRow } from "@/api/clinicApi";
+import { fetchStaff, saveReferralSlip, uploadReferralSlip, type ReferralSlipRow } from "@/api/clinicApi";
 import { loadClinicRegisterDefaults } from "@/lib/clinicProfile";
 import { doctorDisplayName, pickClinicDoctor } from "@/lib/doctorName";
 import { autoDittoReplyChart, chartDittoText } from "@/lib/referralDitto";
@@ -129,7 +129,7 @@ export function ReferralReplyForm({
     }
     setBusy(true);
     try {
-      await saveReferralSlip({
+      const saved = await saveReferralSlip({
         ...row,
         kind: "reply",
         serial: serialText,
@@ -145,8 +145,14 @@ export function ReferralReplyForm({
         handoff,
         status: "\u5df2\u5b58\u6a94",
       });
+      try {
+        await uploadReferralSlip(saved.id, "\u5df2\u56de\u8986");
+        onNote("\u56de\u8986\u5df2\u5b58\u6a94\u4e26\u4e0a\u50b3\u3002");
+      } catch (err: unknown) {
+        const why = err instanceof Error ? err.message : "\u4e0a\u50b3\u5931\u6557";
+        onNote(`\u56de\u8986\u5df2\u5b58\u6a94\uff0c\u4f46\u6c92\u6709\u4e0a\u50b3\uff1a${why}`);
+      }
       onSaved();
-      onNote("\u56de\u8986\u5df2\u5b58\u6a94\u3002\u4e0a\u50b3\u8acb\u5230\u53e6\u4e00\u53f0\u96fb\u8166\u7528\u8f49\u8a3a\u4e0a\u50b3\u5de5\u5177\u3002");
     } catch (err: unknown) {
       onNote(err instanceof Error ? err.message : "\u56de\u8986\u6c92\u9001\u51fa");
     } finally {
@@ -231,7 +237,7 @@ export function ReferralReplyForm({
           {"\u958b\u555f\u8f49\u8a3a\u5e73\u53f0"}
         </button>
         <button type="button" disabled={busy} className="border border-[#004d00] bg-[#C8F0C8] px-3 py-1 font-bold disabled:opacity-50" onClick={() => void save()}>
-          {"F9 \u5b58\u6a94"}
+          {"F9 \u5b58\u6a94\u4e0a\u50b3"}
         </button>
         <button type="button" className="border border-[#808080] bg-[#FFFF80] px-3 py-1 font-bold" onClick={onClose}>
           Esc

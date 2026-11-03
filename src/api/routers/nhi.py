@@ -719,10 +719,26 @@ def register_nhi_encounter(body: NhiEncounterIntake) -> dict[str, Any]:
     }
 
 
-def _link_incoming_referral(store: SqliteShadowStore, payload: dict[str, Any], body: NhiEncounterIntake) -> None:
+def _link_incoming_referral(
+    store: SqliteShadowStore, payload: dict[str, Any], body: NhiEncounterIntake, encounter_id: str = ""
+) -> None:
     """Accepting a referral by picking the hospital still has to take the downloaded notice."""
     meta = extract_reg_meta(payload)
-    if str(meta.get("acceptReferral") or "").strip() != "1" or str(meta.get("referralSeq") or "").strip():
+    if str(meta.get("acceptReferral") or "").strip() != "1":
+        return
+    linked = str(meta.get("referralSeq") or "").strip()
+    if linked:
+        from src.core.referral_desk import reply_for_encounter
+
+        if encounter_id and reply_for_encounter(encounter_id) is None:
+            from src.api.routers.referral import take_for_visit
+
+            take_for_visit(
+                linked,
+                encounter_id,
+                str(meta.get("referralHospId") or ""),
+                str(meta.get("referralHospName") or ""),
+            )
         return
     id_no = str(meta.get("hcIdNo") or body.patientIdNo or "").strip().upper()
     if not id_no and body.patientId:
@@ -742,6 +758,10 @@ def _link_incoming_referral(store: SqliteShadowStore, payload: dict[str, Any], b
     if not str(meta.get("referralHospName") or "").strip():
         put_reg_string(payload, "referralHospName", slip.hosp_name)
     mark_accepted(slip.serial, "chart")
+    if encounter_id:
+        from src.api.routers.referral import take_for_visit
+
+        take_for_visit(slip.serial, encounter_id, slip.hosp_id or slip.hosp_seq, slip.hosp_name)
 
 
 @router.patch(
@@ -855,7 +875,7 @@ def patch_encounter_reg(encounter_id: str, body: NhiEncounterIntake) -> dict[str
         # The appointment quick button fills the note with just this word.
         if str(extract_reg_meta(payload).get("noteMark") or "").strip() == APPOINTMENT_NOTE:
             put_reg_string(payload, "noteMark", "")
-    _link_incoming_referral(store, payload, body)
+    _link_incoming_referral(store, payload, body, encounter_id)
     enc_date = ""
     start = str((payload.get("period") or {}).get("start") or "")
     if "T" in start:
@@ -1466,9 +1486,10 @@ def _referral_cancel_block(encounter_id: str) -> str:
 
 
 def _drop_referral_drafts(encounter_id: str) -> None:
-    from src.core.referral_desk import remove_slip, slips_for_encounter
+    from src.core.referral_desk import release_for_encounter, remove_slip, slips_for_encounter
     from src.core.referral_guard import classify
 
+    release_for_encounter(encounter_id)
     for slip in slips_for_encounter(encounter_id):
         if classify(slip)["action"] == "draft":
             remove_slip(str(slip.get("id") or ""))
