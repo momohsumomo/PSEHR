@@ -14,6 +14,7 @@ from src.claims.engine import (
     _load_staff_maps,
     _resolve_staff_nhi,
 )
+from src.claims.case_rules import dispense_code
 from src.claims.yisheng_rules import flat_consult_points, half_up_points, is_order_code, pharmacy_for
 from src.core.encounter_extensions import extract_reg_meta
 
@@ -422,7 +423,7 @@ def _compose(
     card = str(reg.get("hcId") or card_fallback or "").strip()
     visit_type = str(reg.get("icCaseNo") or "01").strip() or "01"
     remark = str(reg.get("icRemark") or "1").strip() or "1"
-    dispense = str(reg.get("dispense") or "0").strip()[:1] or "0"
+    dispense = dispense_code(str(reg.get("dispense") or ""))
     meds = store.list_medication_requests(encounter_id=encounter_id)
     orders, oral_days, drug_days, has_general, has_chronic, line_points = _orders(
         meds, when, dispense, usages, routes, sign_queues=order_sign_queues(str(reg.get("orderSigns") or ""))

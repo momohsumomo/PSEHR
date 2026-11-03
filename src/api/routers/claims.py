@@ -3,7 +3,6 @@
 
 from __future__ import annotations
 
-from datetime import date, timedelta
 from typing import Any, Literal
 
 from fastapi import APIRouter, HTTPException, Query
@@ -67,14 +66,15 @@ def _stale_price_note(date_month: str) -> str:
         return ""
     if not pack:
         return "\u672c\u6a5f\u9084\u6c92\u6709\u85e5\u50f9\u76ee\u9304\uff0c\u85e5\u8cbb\u53ea\u80fd\u7528\u75c5\u6b77\u4e0a\u7684\u55ae\u50f9\u3002\u5148\u5230\u300c\u66f4\u65b0\u300d\u6309\u66f4\u65b0\u85e5\u50f9\u3002"
-    y, m = (int(x) for x in date_month[:7].split("-"))
-    last_day = (date(y + (m == 12), m % 12 + 1, 1) - timedelta(days=1)).isoformat()
+    # The bureau publishes new prices ahead of their start date, so a catalog from inside the month already has them.
+    first_day = f"{date_month[:7]}-01"
     fetched = str(pack.get("effective_from") or "")[:10]
-    if fetched >= last_day:
+    if fetched >= first_day:
         return ""
     return (
-        f"\u85e5\u50f9\u76ee\u9304\u662f {fetched} \u6293\u7684\uff0c\u6bd4\u9019\u500b\u6708\u5e95\u65e9\u3002"
-        "\u6708\u4e2d\u82e5\u6709\u65b0\u50f9\u671f\u53ef\u80fd\u6c92\u6709\u3002\u5148\u5230\u300c\u66f4\u65b0\u300d\u6309\u66f4\u65b0\u85e5\u50f9\uff0c\u518d\u6aa2\u67e5\u4e00\u6b21\u3002"
+        f"\u85e5\u50f9\u76ee\u9304\u662f {fetched} \u6293\u7684\uff0c\u6bd4\u9019\u500b\u6708\u9084\u65e9\uff0c"
+        "\u9019\u500b\u6708\u7684\u65b0\u50f9\u53ef\u80fd\u6c92\u6709\u3002\u9019\u4e0d\u662f\u54ea\u4e00\u7b46\u75c5\u6b77\u7684\u554f\u984c\u3002"
+        "\u5148\u5230\u300c\u66f4\u65b0\u300d\u6309\u66f4\u65b0\u85e5\u50f9\uff0c\u518d\u6aa2\u67e5\u4e00\u6b21\u3002"
     )
 
 

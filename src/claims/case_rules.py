@@ -373,6 +373,18 @@ def is_chronic_dx(codes: list[str], rules: CaseRules | None = None) -> bool:
     return official or extra
 
 
+def dispense_code(dispense: str) -> str:
+    """One-digit d28/p2 code. The desk stores words such as 自行調劑; the file takes only digits."""
+    text = (dispense or "").strip()
+    if text[:1].isdigit():
+        return text[:1]
+    if "\u4ea4\u4ed8" in text:
+        return "1"
+    if "\u672a\u958b" in text or "\u4e0d\u9700" in text:
+        return "2"
+    return "0"
+
+
 def is_outside_dispense(dispense: str) -> bool:
     text = (dispense or "").strip()
     if not text or text in {"0", "-", "\u2014"}:

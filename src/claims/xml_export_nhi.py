@@ -8,6 +8,7 @@ import zipfile
 from datetime import date, datetime
 from typing import Any, Iterable
 
+from src.claims.case_rules import dispense_code
 from src.claims.engine import ClaimEncounterRecord, ClaimsSummary
 from src.core.plain_text import plain_text
 
@@ -249,7 +250,10 @@ def _render_ddata(
     dx = _diag_codes(rec)
     primary = dx[0] if dx else ""
     secondaries = dx[1:5]
-    dispense = (rec.dispense or default_dispense or "0")[:1]
+    dispense = dispense_code(rec.dispense or default_dispense or "")
+    days = int(rec.daysSupply or 0)
+    # No drug handed out: the bureau's 2 (no prescription), as every Yisheng month filed it.
+    filed_dispense = "2" if not rec.pharmacyCode and not days and dispense == "0" else dispense
     treat_seq = _treat_seq(rec.treatSeq)
     doctor = (rec.doctorId or "")[:10]
     pharmacist = (rec.pharmacistId or "")[:10]
@@ -262,7 +266,6 @@ def _render_ddata(
     total_pts = int(round(float(rec.totalPoints or (consult_pts + drug_pts + tx_pts + pharm_pts))))
     apply_pts = int(round(float(rec.applyPoints or max(total_pts - copay_pts, 0))))
     fee_code = (rec.consultCode or consult_fee_code or "")[:12]
-    days = int(rec.daysSupply or 0)
 
     dbody: list[str] = [
         _t("d3", id_no),
@@ -287,7 +290,7 @@ def _render_ddata(
         dbody.append(_t(f"d{20 + i}", code[:9]))
     if days:
         dbody.append(_t("d27", days))
-    dbody.append(_t("d28", dispense))
+    dbody.append(_t("d28", filed_dispense))
     if treat_seq:
         dbody.append(_t("d29", treat_seq))
     dbody.append(_t("d30", doctor))
