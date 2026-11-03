@@ -1555,8 +1555,8 @@ class SqliteShadowStore(ShadowStore):
                     "diseaseName": disease_name,
                     "rxDays": rx_days,
                     "weight": weight,
-                    "note": note_display or "—",
-                    "noteMark": note_display,
+                    "note": _note_after_checkin(note_display, show_pre) or "—",
+                    "noteMark": _note_after_checkin(note_display, show_pre),
                     "forespeak": forespeak if show_pre else "",
                     # Display Yu only while still waiting appointment
                     "prebook": show_pre,
@@ -2070,8 +2070,8 @@ class SqliteShadowStore(ShadowStore):
                 "diseaseName": disease_name,
                 "rxDays": rx_days,
                 "weight": weight,
-                "note": note_display or "—",
-                "noteMark": note_display,
+                "note": _note_after_checkin(note_display, show_pre) or "—",
+                "noteMark": _note_after_checkin(note_display, show_pre),
                 "forespeak": forespeak if show_pre else "",
                 "prebook": show_pre,
                 "cardWritten": card_written,
@@ -3413,6 +3413,13 @@ def patient_lookup_sql(raw: str) -> tuple[str, list]:
         clauses.append("(pi.family_name = ? AND pi.given_name LIKE ? ESCAPE '\\')")
         params.extend([q[:2], _like_prefix(q[2:])])
     return " AND (" + " OR ".join(clauses) + ")", params
+
+
+def _note_after_checkin(note: str, still_appointment: bool) -> str:
+    """The appointment quick button writes just this word into the note."""
+    if not still_appointment and note.strip() == "\u9810\u7d04":
+        return ""
+    return note
 
 
 def _age_from_birth_date(birth_date: str, as_of: str | None = None) -> str | None:

@@ -61,6 +61,8 @@ from src.infrastructure.sqlite_shadow_store import SqliteShadowStore
 
 router = APIRouter(prefix="/nhi", tags=["NHI-健保署進場"])
 
+APPOINTMENT_NOTE = "\u9810\u7d04"
+
 
 def _store() -> SqliteShadowStore:
     store = get_shadow_store()
@@ -825,6 +827,9 @@ def patch_encounter_reg(encounter_id: str, body: NhiEncounterIntake) -> dict[str
     # Check-in replaces the appointment. forespeak 預 would keep the Yu column.
     if not body.prebook:
         put_reg_string(payload, "forespeak", "")
+        # The appointment quick button fills the note with just this word.
+        if str(extract_reg_meta(payload).get("noteMark") or "").strip() == APPOINTMENT_NOTE:
+            put_reg_string(payload, "noteMark", "")
     enc_date = ""
     start = str((payload.get("period") or {}).get("start") or "")
     if "T" in start:
