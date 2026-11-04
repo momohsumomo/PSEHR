@@ -214,6 +214,7 @@ function readEmrSeek(params: URLSearchParams): ClinicSession | null {
     shift,
     pharmacist: params.get("pharmacist") || prev?.pharmacist || "",
     dept: prev?.dept || lastClinicDept(),
+    room: prev?.room || "1",
   };
 }
 
@@ -2946,6 +2947,7 @@ export function ClinicOutpatientPage() {
           pharmacist: pharmacistName,
           shift: prev?.shift || session?.shift || "上午",
           dept: prev?.dept || session?.dept || "皮膚科",
+          room: prev?.room || session?.room || "1",
         });
         setSession((s) =>
           s
@@ -2955,6 +2957,7 @@ export function ClinicOutpatientPage() {
                 pharmacist: pharmacistName,
                 shift: "上午",
                 dept: "皮膚科",
+                room: "1",
               },
         );
       }
@@ -3332,6 +3335,7 @@ export function ClinicOutpatientPage() {
                           pharmacist: session?.pharmacist || "",
                           shift: session?.shift || "上午",
                           dept: session?.dept || "皮膚科",
+                          room: session?.room || "1",
                         });
                         setSession((s) =>
                           s
@@ -3341,6 +3345,7 @@ export function ClinicOutpatientPage() {
                                 pharmacist: "",
                                 shift: "上午",
                                 dept: "皮膚科",
+                                room: "1",
                               },
                         );
                       }}
@@ -3360,6 +3365,7 @@ export function ClinicOutpatientPage() {
                           pharmacist: session?.pharmacist || "",
                           shift: session?.shift || "上午",
                           dept: session?.dept || "皮膚科",
+                          room: session?.room || "1",
                         });
                         setSession((s) =>
                           s
@@ -3369,6 +3375,7 @@ export function ClinicOutpatientPage() {
                                 pharmacist: "",
                                 shift: "上午",
                                 dept: "皮膚科",
+                                room: "1",
                               },
                         );
                       }}

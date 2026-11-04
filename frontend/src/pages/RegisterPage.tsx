@@ -543,6 +543,7 @@ export function RegisterPage() {
           pharmacist: confirmForm.pharmacist.trim(),
           shift: prev?.shift || "上午",
           dept: prev?.dept || "皮膚科",
+          room: prev?.room || "1",
         });
       }
       setConfirmOpen(false);

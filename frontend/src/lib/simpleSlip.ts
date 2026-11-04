@@ -116,7 +116,7 @@ function resolvedSelfPay(input: SimpleSlipInput): string {
 function payable(regFee: string, burden: string, deposit: string, selfPay: string, drugCopay = ""): string {
   const parts = [regFee, burden, drugCopay, deposit, selfPay].map(asNumber);
   if (parts.every((n) => n == null)) return "\u2014";
-  const sum = parts.reduce((s, n) => s + (n ?? 0), 0);
+  const sum = parts.reduce<number>((s, n) => s + (n ?? 0), 0);
   return String(Math.round(sum));
 }
 

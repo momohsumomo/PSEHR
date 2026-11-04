@@ -513,8 +513,8 @@ export function DiagnosesDbPage() {
                   rows={links}
                   rowKey={(row, index) => `${row.icd10}-${index}`}
                   selectedKey={links[linkPick] ? `${links[linkPick].icd10}-${linkPick}` : null}
-                  onSelect={(_row, _index) => {
-                    const index = links.indexOf(_row);
+                  onSelect={(row) => {
+                    const index = links.indexOf(row);
                     if (index >= 0) setLinkPick(index);
                   }}
                   cell={(row, key) => (key === "icd10" ? row.icd10 : key === "en" ? row.en : row.zh)}

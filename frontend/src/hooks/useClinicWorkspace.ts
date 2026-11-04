@@ -271,7 +271,7 @@ function mapHistoryVisitsLight(rows: PatientVisitEntry[]): HistoryVisit[] {
 function mapRxFromWorkspace(
   entries: WorkspaceResponse["currentMedications"],
 ): RxLine[] {
-  return entries.map((m, i) => {
+  return entries.map((m, i): RxLine | null => {
     const meta = m.indexMeta ?? {};
     const resource = (m.resource ?? {}) as Record<string, unknown>;
     const dosage = (

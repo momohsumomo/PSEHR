@@ -94,7 +94,7 @@ async function namedDrugs(lines: RxLine[]): Promise<RxLine[]> {
     const res = await fetch("/yisheng_clinic_catalog.json");
     if (!res.ok) return lines;
     const raw = (await res.json()) as { drugs?: CatalogDrug[] };
-    const drugs = (raw.drugs || []).map((drug) => ({
+    const drugs: CatalogDrug[] = (raw.drugs || []).map((drug) => ({
       ...drug,
       customName: (drug.customName || "").trim() || drug.shortName || "",
       name: drug.name || drug.customName || "",

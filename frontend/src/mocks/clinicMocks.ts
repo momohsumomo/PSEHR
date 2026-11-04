@@ -3,7 +3,7 @@
  * 資料形狀對齊後端 queueMeta / dual-layer 貼紙，僅本地狀態。
  */
 
-export type QueueStatus = "waiting" | "in_progress" | "no_show" | "finished";
+export type QueueStatus = "waiting" | "in_progress" | "no_show" | "finished" | "cancelled";
 
 export interface QueueEntry {
   encounterId: string;
