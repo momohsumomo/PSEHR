@@ -522,8 +522,18 @@ export function PatientLookDialog({ open, patientId, patientName, medicalNo, onC
             </div>
             <div className="flex min-h-0 flex-1">
             <div className="flex min-w-0 flex-1 flex-col">
-            <div className="min-h-0 flex-1 overflow-auto p-2">
-              {pending.length > 0 ? (
+            <div className={`min-h-0 flex-1 p-2 ${pending.length === 1 ? "flex flex-col" : "overflow-auto"}`}>
+              {pending.length === 1 ? (
+                <div className="flex min-h-0 flex-1 flex-col">
+                  <div className="relative min-h-0 flex-1 bg-[#202020]">
+                    <img src={pending[0].url} alt="" className={fitted} />
+                  </div>
+                  <span className="truncate px-1 pt-1 text-xs" title={`${pending[0].file.name} ${pending[0].date}`.trim()}>
+                    {pending[0].file.name}
+                    {pending[0].date ? `  ${pending[0].date}` : ""}
+                  </span>
+                </div>
+              ) : pending.length > 1 ? (
                 <div className={grid}>
                   {pending.map((item) => {
                     const on = item.key === selectedKey;
