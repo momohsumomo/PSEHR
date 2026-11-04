@@ -79,6 +79,11 @@ function resolvedPayMark(line: RxLine): RxPayMark {
   return line.selfPay ? "\u81ea" : "";
 }
 
+/** The blank entry row at the bottom: nothing typed yet. */
+function unfilled(line: RxLine): boolean {
+  return !(line.name || "").trim() && !(line.nhiCode || "").trim() && !(line.shortName || "").trim();
+}
+
 function routeLabel(route: RxLine["route"]): string {
   if (!route) return "";
   if (route === "topical") return "ext";
@@ -108,7 +113,7 @@ function cellValue(line: RxLine, key: string, usages?: CatalogUsage[]): string {
     case "memo":
       return line.memo ?? "";
     case "route":
-      return routeLabel(line.route);
+      return unfilled(line) ? "" : routeLabel(line.route);
     case "totalAmount":
       return (
         line.totalAmount ||
@@ -1158,7 +1163,7 @@ export function RxGrid({
                     className="border px-0.5 py-0"
                     style={{ borderColor: "#A0A0A0", fontSize: HIS.fs.tertiary }}
                   >
-                    {onRemove && (
+                    {onRemove && !unfilled(line) && (
                       <button
                         type="button"
                         className="hover:underline"
