@@ -365,8 +365,8 @@ export function PatientLookDialog({ open, patientId, patientName, medicalNo, onC
 
   if (!open) return null;
 
-  const grid = "grid grid-cols-4 gap-2 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-8";
-  const frame = "relative aspect-[3/4] w-full overflow-hidden bg-[#202020]";
+  const grid = "grid grid-cols-3 gap-2 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6";
+  const frame = "relative aspect-[4/3] w-full overflow-hidden bg-[#202020]";
   const fitted = "absolute inset-0 h-full w-full object-contain";
   const sideBtn =
     "h-16 w-full border-2 border-[#808080] bg-[#D4D0C8] text-xl font-bold text-black hover:bg-[#E4E0D8] disabled:opacity-50";
