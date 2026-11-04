@@ -365,6 +365,11 @@ export function PatientLookDialog({ open, patientId, patientName, medicalNo, onC
 
   if (!open) return null;
 
+  const grid = "grid grid-cols-4 gap-2 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-8";
+  const frame = "relative aspect-[3/4] w-full overflow-hidden bg-[#202020]";
+  const fitted = "absolute inset-0 h-full w-full object-contain";
+  const sideBtn =
+    "h-16 w-full border-2 border-[#808080] bg-[#D4D0C8] text-xl font-bold text-black hover:bg-[#E4E0D8] disabled:opacity-50";
   const bigBase = "h-14 border-2 border-[#808080] text-xl font-bold text-black";
   const bigBtn = `${bigBase} bg-[#D4D0C8] hover:bg-[#E4E0D8]`;
   const bigDanger = `${bigBase} bg-[#F0C0C0] hover:bg-[#F6D4D4]`;
@@ -408,7 +413,7 @@ export function PatientLookDialog({ open, patientId, patientName, medicalNo, onC
         </div>
         <div className="min-h-0 flex-1 overflow-auto p-2">
           {photos.length > 0 ? (
-            <div className="grid grid-cols-3 gap-2 lg:grid-cols-4 xl:grid-cols-5">
+            <div className={grid}>
               {photos.map((photo, index) => (
                 <figure
                   key={photo.id}
@@ -420,8 +425,8 @@ export function PatientLookDialog({ open, patientId, patientName, medicalNo, onC
                   }}
                   onDoubleClick={() => showPhoto(index)}
                 >
-                  <div className="flex aspect-[4/3] items-center justify-center bg-[#202020]">
-                    <img src={photo.src} alt="" loading="lazy" className="max-h-full max-w-full object-contain" />
+                  <div className={frame}>
+                    <img src={photo.src} alt="" loading="lazy" className={fitted} />
                   </div>
                   <figcaption className="truncate px-1 text-[11px] leading-4" title={`${photo.name} ${photo.date}`.trim()}>
                     {photo.name}
@@ -503,21 +508,23 @@ export function PatientLookDialog({ open, patientId, patientName, medicalNo, onC
       )}
 
       {previewOpen && (
-        <div className="fixed inset-0 z-[90] flex bg-black/45">
+        <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/55">
           <div
-            className="flex h-full w-full flex-col border bg-[#F0F0F0] shadow-lg"
-            style={{ borderColor: HIS.chromeDark, fontFamily: HIS_FONT }}
+            className="flex h-[80%] w-[80%] flex-col border-4 bg-[#FFF8E6] shadow-2xl"
+            style={{ borderColor: "#B07020", fontFamily: HIS_FONT }}
           >
-            <div className="flex shrink-0 items-center gap-2 bg-[#2060A0] px-2 py-1 text-xs font-bold text-white">
-              <span>預覽相片</span>
+            <div className="flex shrink-0 items-center gap-2 bg-[#B07020] px-2 py-1 text-xs font-bold text-white">
+              <span>新增相片（暫存，還沒匯入）</span>
               <span className="font-normal">{pending.length ? `${pending.length} 張尚未匯入` : "尚未選擇"}</span>
               <button type="button" className="ml-auto px-2 hover:underline" onClick={closePreview}>
                 關閉
               </button>
             </div>
+            <div className="flex min-h-0 flex-1">
+            <div className="flex min-w-0 flex-1 flex-col">
             <div className="min-h-0 flex-1 overflow-auto p-2">
               {pending.length > 0 ? (
-                <div className="grid grid-cols-3 gap-2 lg:grid-cols-4 xl:grid-cols-5">
+                <div className={grid}>
                   {pending.map((item) => {
                     const on = item.key === selectedKey;
                     return (
@@ -531,8 +538,8 @@ export function PatientLookDialog({ open, patientId, patientName, medicalNo, onC
                         }}
                         onClick={() => setSelectedKey(item.key)}
                       >
-                        <div className="flex aspect-[4/3] items-center justify-center bg-[#202020]">
-                          <img src={item.url} alt="" className="max-h-full max-w-full object-contain" />
+                        <div className={frame}>
+                          <img src={item.url} alt="" className={fitted} />
                         </div>
                         <span className="truncate px-1 text-[11px] leading-4" title={`${item.file.name} ${item.date}`.trim()}>
                           {item.file.name}
@@ -546,11 +553,12 @@ export function PatientLookDialog({ open, patientId, patientName, medicalNo, onC
                 <div className="px-2 py-6 text-center text-xs text-slate-600">還沒選圖片。可以按選擇圖片再挑。</div>
               )}
             </div>
-            <div className="flex shrink-0 flex-wrap items-center gap-2 border-t px-2 py-2" style={{ borderColor: HIS.chromeDark }}>
+            {previewNote && <div className="shrink-0 px-2 pb-2 text-[11px] text-red-700">{previewNote}</div>}
+            </div>
+            <div className="flex w-56 shrink-0 flex-col gap-3 border-l-2 p-3" style={{ borderColor: "#B07020" }}>
               <button
                 type="button"
-                className="border bg-[#D4D0C8] px-3 py-1 text-xs font-bold disabled:opacity-50"
-                style={{ borderColor: HIS.chromeBorder }}
+                className={sideBtn}
                 disabled={!pending.length || saving}
                 onClick={() => void commitPending()}
               >
@@ -558,8 +566,7 @@ export function PatientLookDialog({ open, patientId, patientName, medicalNo, onC
               </button>
               <button
                 type="button"
-                className="border bg-[#D4D0C8] px-3 py-1 text-xs font-bold"
-                style={{ borderColor: HIS.chromeBorder }}
+                className={sideBtn}
                 disabled={saving}
                 onClick={() => (selectedKey ? replaceRef.current?.click() : addRef.current?.click())}
               >
@@ -567,16 +574,15 @@ export function PatientLookDialog({ open, patientId, patientName, medicalNo, onC
               </button>
               <button
                 type="button"
-                className="border bg-[#D4D0C8] px-3 py-1 text-xs font-bold disabled:opacity-50"
-                style={{ borderColor: HIS.chromeBorder }}
+                className={sideBtn}
                 disabled={!selectedKey || saving}
                 onClick={removeSelected}
               >
                 刪除圖片
               </button>
-              <span className="text-[11px] text-slate-600">新增照片才會寫進這個病人。選擇和刪除只改這次預覽。</span>
+              <span className="mt-auto text-xs leading-5 text-slate-700">新增照片才會寫進這個病人。選擇和刪除只改這次預覽。</span>
             </div>
-            {previewNote && <div className="shrink-0 px-2 pb-2 text-[11px] text-red-700">{previewNote}</div>}
+            </div>
           </div>
         </div>
       )}
