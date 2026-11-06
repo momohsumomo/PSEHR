@@ -466,18 +466,20 @@ export function RxDetailSheet({
   lines,
   drugs = [],
   usages,
+  allSelf = false,
   onClose,
 }: {
   lines: RxLine[];
   drugs?: CatalogDrug[];
   usages?: CatalogUsage[];
+  allSelf?: boolean;
   onClose: () => void;
 }) {
   useEscLayer([{ open: true, close: onClose }]);
   const rows = lines.filter((line) => (line.name || "").trim() || (line.nhiCode || "").trim());
   let sum = 0;
   for (const line of rows) {
-    const amount = cashSelfPayLine(line, drugs, usages);
+    const amount = cashSelfPayLine(line, drugs, usages, allSelf);
     if (amount != null) sum += amount;
   }
   return createPortal(
@@ -506,7 +508,7 @@ export function RxDetailSheet({
               {rows.map((line, i) => {
                 const cost = money(line);
                 const selfPrice = lineSelfPayPrice(line, drugs);
-                const cash = cashSelfPayLine(line, drugs, usages);
+                const cash = cashSelfPayLine(line, drugs, usages, allSelf);
                 const mark = line.payMark || (line.selfPay ? "\u81ea" : "");
                 return (
                   <tr key={line.id} className="bg-white">

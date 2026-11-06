@@ -31,6 +31,7 @@ interface CurrentRxWidgetProps {
   onQualityLab?: (line: RxLine) => boolean;
   rxQuery: string;
   setRxQuery: (q: string) => void;
+  selfPayVisit?: boolean;
 }
 
 function isDraftId(id: string) {
@@ -85,6 +86,7 @@ export function CurrentRxWidget({
   onQualityLab,
   rxQuery,
   setRxQuery,
+  selfPayVisit = false,
 }: CurrentRxWidgetProps) {
   void _historyFontPx;
   void _sections;
@@ -298,6 +300,7 @@ export function CurrentRxWidget({
           usages={usages}
           drugs={catalog?.drugs || []}
           routes={routes}
+          selfPayVisit={selfPayVisit}
           onRemove={(id) => {
             const idx = displayLines.findIndex((line) => line.id === id);
             const committed = !isDraftId(id);

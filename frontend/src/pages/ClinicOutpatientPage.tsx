@@ -107,6 +107,7 @@ import { readLocalClinicBundle } from "@/lib/clinicProfile";
 import {
   VisitSaveConfirmPanel,
   buildVisitSaveDraft,
+  isSelfPayVisit,
   type VisitSaveDraft,
 } from "@/components/clinic/VisitSaveConfirmPanel";
 import { HIS, HIS_FONT, hisFontStyle } from "@/lib/hisTheme";
@@ -3529,6 +3530,7 @@ export function ClinicOutpatientPage() {
                     }}
                     currentRx={currentRx}
                     currentRxColumns={currentRxColumns}
+                    selfPayVisit={isSelfPayVisit(selected)}
                     apiMode={apiMode}
                     historyFontPx={HIS.fs.body}
                     mockCurrentRx={apiMode ? currentRx : mockCurrentRx}

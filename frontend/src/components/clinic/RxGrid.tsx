@@ -64,6 +64,8 @@ type Props = {
   routes?: string[];
   qtyPicks?: number[];
   dayPicks?: number[];
+  /** Self-pay patient: the detail sheet charges cash for every line. */
+  selfPayVisit?: boolean;
 };
 
 type CtxMenu =
@@ -380,6 +382,7 @@ export function RxGrid({
   routes = DEFAULT_ROUTE_PICKS,
   qtyPicks = DEFAULT_QTY_PICKS,
   dayPicks = DEFAULT_DAY_PICKS,
+  selfPayVisit = false,
 }: Props) {
   const [menu, setMenu] = useState<CtxMenu | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
@@ -1389,7 +1392,7 @@ export function RxGrid({
         )
         : null}
       {detailOpen ? (
-        <RxDetailSheet lines={lines} drugs={drugs} usages={usages} onClose={() => setDetailOpen(false)} />
+        <RxDetailSheet lines={lines} drugs={drugs} usages={usages} allSelf={selfPayVisit} onClose={() => setDetailOpen(false)} />
       ) : null}
     </>
   );

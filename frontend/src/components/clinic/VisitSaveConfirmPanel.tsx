@@ -78,6 +78,16 @@ function yuanOrNull(raw: string | undefined): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
+/** A self-pay visit charges cash for every line, NHI items included. */
+export function isSelfPayVisit(selected: QueueEntry | null | undefined): boolean {
+  if (!selected) return false;
+  return (
+    displayCase(selected.caseNo) === "\u81ea" ||
+    selected.payType === "\u81ea\u8cbb" ||
+    selected.icException === "selfPay"
+  );
+}
+
 export function buildVisitSaveDraft(args: {
   selected: QueueEntry | null;
   diagnoses: DiagnosisRow[];
@@ -111,12 +121,10 @@ export function buildVisitSaveDraft(args: {
     storedCopay === 0 ||
     (storedCopay == null && storedBurden === 0) ||
     Boolean(card?.waiveBasic);
+  const selfPayVisit = isSelfPayVisit(args.selected);
   const parts = args.selected
     ? visitCopayParts({
-        selfPay:
-          caseShown === "\u81ea" ||
-          args.selected.payType === "\u81ea\u8cbb" ||
-          args.selected.icException === "selfPay",
+        selfPay: selfPayVisit,
         exempt,
         outsideDispense: dispense.includes("\u4ea4\u4ed8"),
         waiveDrug: Boolean(card?.waiveDrug),
@@ -132,8 +140,8 @@ export function buildVisitSaveDraft(args: {
     args.doctor?.trim() ||
     (args.selected as { doctorName?: string } | null)?.doctorName ||
     DASH;
-  const selfBasis = selfPayCeiling(args.currentRx, args.drugs || [], args.usages);
-  const selfCharged = chargedSelfPay(args.currentRx, args.drugs || [], args.usages);
+  const selfBasis = selfPayCeiling(args.currentRx, args.drugs || [], args.usages, selfPayVisit);
+  const selfCharged = chargedSelfPay(args.currentRx, args.drugs || [], args.usages, selfPayVisit);
   return {
     caseNo: caseShown || "01",
     copayCode:
