@@ -86,7 +86,7 @@ function show(v: string | number | undefined | null): string {
 
 /** Chief stays one line. Each original break is marked so the print still shows it. */
 export function markChiefBreaks(value: string | undefined | null): string {
-  return String(value ?? "").replace(/\r\n|\r|\n/g, '"');
+  return String(value ?? "").replace(/\r\n|\r|\n/g, "^^");
 }
 
 function asNumber(v: string | number | undefined | null): number | null {
