@@ -2911,6 +2911,7 @@ export function ClinicOutpatientPage() {
       return;
     }
     let bureauSameDay = false;
+    let stored = false;
     setConfirmError(null);
     setSeqNote(null);
     const skipSeq =
@@ -2934,12 +2935,19 @@ export function ClinicOutpatientPage() {
         confirmDuplicate: allowDuplicate,
       };
       await submitRegisterEdit(toSave, (fields) => {
+        // After the window closed the form may already hold the next patient.
+        if (stored) return;
         const { seqNote: note, ...rest } = fields;
         setConfirmForm((prev) => ({ ...prev, ...rest }));
         setSeqNote(note);
         setSeqBusy(false);
         if ((note || "").includes("\u540c\u65e5\u5c31\u8a3a")) bureauSameDay = true;
-      }, incoming.ask);
+      }, incoming.ask, () => {
+        stored = true;
+        setConfirmOpen(false);
+        setSeqBusy(false);
+        setRegisterBusy(false);
+      });
       const pharmacistName = (confirmForm.pharmacist ?? "").trim();
       if (pharmacistName) {
         const prev = loadClinicSession();
@@ -2962,7 +2970,6 @@ export function ClinicOutpatientPage() {
               },
         );
       }
-      setConfirmOpen(false);
       if (toSave.encounterId) return;
       if (hits.length || bureauSameDay) setSameDayFlash(true);
       if (depositHold) {
@@ -2976,10 +2983,15 @@ export function ClinicOutpatientPage() {
         });
       }
     } catch (e) {
-      setConfirmError(e instanceof Error ? e.message : "掛號失敗");
+      const message = e instanceof Error ? e.message : "掛號失敗";
+      if (stored) setActionError(message);
+      else setConfirmError(message);
+      void refreshQueue();
     } finally {
-      setSeqBusy(false);
-      setRegisterBusy(false);
+      if (!stored) {
+        setSeqBusy(false);
+        setRegisterBusy(false);
+      }
     }
   };
 

@@ -1374,10 +1374,26 @@ export async function registerPatient(body: PatientRegisterBody): Promise<Patien
   });
 }
 
+const REGISTER_WAIT_MS = 30000;
+const REGISTER_NO_REPLY =
+  "\u4e3b\u6a5f 30 \u79d2\u6c92\u6709\u56de\u61c9\u3002\u9019\u7b46\u53ef\u80fd\u5df2\u7d93\u5b58\u9032\u53bb\uff0c\u8acb\u5148\u770b\u6e05\u55ae\uff0c\u6c92\u6709\u518d\u6309 F9\u3002";
+
+/** A save that never answers must not leave F9 greyed out forever. */
+async function saveWithin<T>(path: string, init: RequestInit): Promise<T> {
+  try {
+    return await request<T>(path, { ...init, signal: AbortSignal.timeout(REGISTER_WAIT_MS) });
+  } catch (err) {
+    if (err instanceof DOMException && (err.name === "TimeoutError" || err.name === "AbortError")) {
+      throw new Error(REGISTER_NO_REPLY);
+    }
+    throw err;
+  }
+}
+
 export async function registerEncounter(
   body: EncounterRegisterBody,
 ): Promise<EncounterRegisterResponse> {
-  return request<EncounterRegisterResponse>("/nhi/v1/encounter/register", {
+  return saveWithin<EncounterRegisterResponse>("/nhi/v1/encounter/register", {
     method: "POST",
     body: JSON.stringify(body),
   });
@@ -1406,7 +1422,7 @@ export async function patchEncounterReg(
   encounterId: string,
   body: EncounterRegisterBody,
 ): Promise<{ ok: boolean; encounterId: string }> {
-  return request(`/nhi/v1/encounter/${encodeURIComponent(encounterId)}/reg`, {
+  return saveWithin(`/nhi/v1/encounter/${encodeURIComponent(encounterId)}/reg`, {
     method: "PATCH",
     body: JSON.stringify(body),
   });

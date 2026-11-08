@@ -43,6 +43,19 @@ class RegDiscountReportTest(unittest.TestCase):
         self.assertEqual(set(cats), {"S"})
         self.assertEqual(cats["S"]["count"], 2)
 
+    def test_discount_is_set_against_the_whole_fee(self):
+        visits = [("2026-10-01", "D", "0800101", "200", {})] * 3 + [
+            ("2026-10-02", "S", "1000101", "100", {}),
+            ("2026-10-03", "A", "0800101", "0", {}),
+        ]
+        rep = reg_discount_report(_db(visits), "2026-10-01", "2026-10-31")
+        row = rep["rows"][0]
+        self.assertEqual((row["visits"], row["paid"], row["gross"], row["total"]), (5, 700, 800, 100))
+        self.assertEqual(row["ratio"], "12.5%")
+        self.assertEqual(rep["totals"]["gross"], 800)
+        cat = rep["sections"][0]["rows"][0]
+        self.assertEqual((cat["visitShare"], cat["grossShare"]), ("20.0%", "12.5%"))
+
     def test_visit_identity_wins_and_ordinary_splits_by_age(self):
         visits = [("2026-10-01", "D", "0800101", "200", {})] * 3 + [
             ("2026-10-02", "D", "1000101", "100", {"idCategory": "C"}),

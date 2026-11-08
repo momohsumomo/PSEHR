@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import os
 from typing import Any
 
@@ -64,7 +65,7 @@ async def save_look_file(
     ext = os.path.splitext(file.filename or "")[1] or ".JPG"
     data = await file.read()
     try:
-        saved = write_look_image(medicalNo, data, ext)
+        saved = await asyncio.to_thread(write_look_image, medicalNo, data, ext)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except FileExistsError as exc:
@@ -81,7 +82,7 @@ async def replace_look_file_route(
 
     data = await file.read()
     try:
-        return replace_look_file(rel, data)
+        return await asyncio.to_thread(replace_look_file, rel, data)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except (FileNotFoundError, OSError):

@@ -10,6 +10,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from typing import Any
 
 from fastapi import FastAPI, HTTPException, Request
@@ -61,7 +62,12 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
         if pin_code:
             try:
                 store = get_shadow_store()
-                identity = store.verify_pin(pin_code) if hasattr(store, "verify_pin") else None
+                # Every request runs this; a busy database must not stall the event loop.
+                identity = (
+                    await asyncio.to_thread(store.verify_pin, pin_code)
+                    if hasattr(store, "verify_pin")
+                    else None
+                )
                 if identity:
                     operator = identity
             except Exception:
@@ -123,6 +129,11 @@ app.include_router(maintenance.router)
 
 @app.on_event("startup")
 def on_startup() -> None:
+    import anyio.to_thread
+
+    # Plain routes share this pool; a few requests waiting on a database lock
+    # must not leave the desks with nothing to answer them.
+    anyio.to_thread.current_default_thread_limiter().total_tokens = 120
     store = get_shadow_store()
     store.initialize()
     PackStore(store.db_path).initialize()

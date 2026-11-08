@@ -2,6 +2,8 @@ from __future__ import annotations
 
 """診所端規則 Pack 診斷 API（失敗必回節點）。"""
 
+import asyncio
+
 from fastapi import APIRouter, HTTPException, Query
 
 from src.spoke.hydrator import PackHydrator
@@ -132,5 +134,5 @@ def list_hydrate_runs(limit: int = Query(20, ge=1, le=100)) -> dict:
 @router.post("/hydrate")
 async def trigger_hydrate() -> dict:
     """手動觸發一輪（除錯用）；背景 worker 亦會定期跑。"""
-    result = await PackHydrator(_store()).run_once()
+    result = await asyncio.to_thread(lambda: asyncio.run(PackHydrator(_store()).run_once()))
     return result.to_dict()

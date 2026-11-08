@@ -42,10 +42,15 @@ class PackHydratorWorker:
             self._task = None
         logger.info("Pack Hydrator worker stopped")
 
+    async def _run(self) -> None:
+        # run_once mixes file and database work with its HTTP calls; give it its own loop
+        # so the API keeps answering while a pack installs.
+        await asyncio.to_thread(lambda: asyncio.run(self.hydrator.run_once()))
+
     async def _loop(self) -> None:
         if HYDRATE_ON_STARTUP:
             try:
-                await self.hydrator.run_once()
+                await self._run()
             except Exception as exc:
                 logger.error("Startup hydrate failed: %s", exc, exc_info=True)
         while self._running:
@@ -53,7 +58,7 @@ class PackHydratorWorker:
             if not self._running:
                 break
             try:
-                await self.hydrator.run_once()
+                await self._run()
             except Exception as exc:
                 logger.error("Scheduled hydrate failed: %s", exc, exc_info=True)
 

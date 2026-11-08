@@ -27,6 +27,15 @@ def _col(key: str, label: str, align: str = "left") -> dict[str, str]:
     return {"key": key, "label": label, "align": align}
 
 
+def _pct(part: int, whole: int) -> str:
+    return f"{part * 100 / whole:.1f}%" if whole else ""
+
+
+def _share(visits: int, paid: int, off: int) -> dict[str, Any]:
+    gross = paid + off
+    return {"visits": visits, "paid": paid, "gross": gross, "ratio": _pct(off, gross)}
+
+
 def _fee(text: Any) -> int | None:
     raw = str(text or "").replace(",", "").strip()
     if not raw:
@@ -124,6 +133,12 @@ def reg_discount_report(conn: Any, date_from: str, date_to: str) -> dict[str, An
         rec["count"] += 1
         rec["amount"] += off
 
+    seen: Counter = Counter()
+    paid: Counter = Counter()
+    for month, fee, _cat, _years in visits:
+        seen[month] += 1
+        paid[month] += fee
+
     def order(label: str) -> tuple:
         if label in _AGE_LABELS:
             return (1, _AGE_LABELS.index(label), 0)
@@ -137,11 +152,15 @@ def reg_discount_report(conn: Any, date_from: str, date_to: str) -> dict[str, An
         for label in labels:
             row[keys[label]] = by_month[month].get(label, 0)
         row["total"] = sum(by_month[month].values())
+        row.update(_share(seen[month], paid[month], row["total"]))
         month_rows.append(row)
     totals: dict[str, Any] = {"month": "合計", "base": ""}
     for label in labels:
         totals[keys[label]] = by_cat[label]["amount"]
     totals["total"] = sum(r["total"] for r in month_rows)
+    totals.update(
+        _share(sum(r["visits"] for r in month_rows), sum(r["paid"] for r in month_rows), totals["total"])
+    )
 
     cat_rows = [
         {
@@ -149,6 +168,8 @@ def reg_discount_report(conn: Any, date_from: str, date_to: str) -> dict[str, An
             "count": by_cat[label]["count"],
             "amount": by_cat[label]["amount"],
             "avg": round(by_cat[label]["amount"] / by_cat[label]["count"]) if by_cat[label]["count"] else "",
+            "visitShare": _pct(by_cat[label]["count"], totals["visits"]),
+            "grossShare": _pct(by_cat[label]["amount"], totals["gross"]),
         }
         for label in labels
     ]
@@ -156,12 +177,19 @@ def reg_discount_report(conn: Any, date_from: str, date_to: str) -> dict[str, An
         "title": "掛號費優惠統計",
         "columns": [_col("month", "月份"), _col("base", "掛號費基數", "right")]
         + [_col(keys[label], label, "right") for label in labels]
-        + [_col("total", "合計少收", "right")],
+        + [_col("total", "合計少收", "right")]
+        + [
+            _col("visits", "\u639b\u865f\u4eba\u6b21", "right"),
+            _col("paid", "\u5be6\u6536\u639b\u865f\u8cbb", "right"),
+            _col("gross", "\u61c9\u6536\uff08\u5be6\u6536\uff0b\u6e1b\u6536\uff09", "right"),
+            _col("ratio", "\u6e1b\u6536\u6bd4\u4f8b", "right"),
+        ],
         "rows": month_rows,
         "totals": totals,
         "note": (
             "基數是當月一般健保看診最常見的掛號費，所以各年度掛號費不同也照樣算得對。"
             "少收＝基數－實收，只算實收比基數低的看診；自費看診與 A、B 身分不算。"
+            "\u61c9\u6536\uff1d\u5be6\u6536\uff0b\u6e1b\u6536\uff0c\u6e1b\u6536\u6bd4\u4f8b\uff1d\u6e1b\u6536\u5408\u8a08\xf7\u61c9\u6536\u3002\u639b\u865f\u4eba\u6b21\u542b A\u3001B \u8eab\u5206\uff08\u591a\u70ba\u514d\u6536\uff09\uff0c\u4e0d\u542b\u9810\u7d04\u8207\u81ea\u8cbb\u3002"
         ),
         "sections": [
             {
@@ -171,6 +199,8 @@ def reg_discount_report(conn: Any, date_from: str, date_to: str) -> dict[str, An
                     _col("count", "人次", "right"),
                     _col("amount", "少收金額", "right"),
                     _col("avg", "平均每次", "right"),
+                    _col("visitShare", "\u4f54\u7e3d\u4eba\u6b21", "right"),
+                    _col("grossShare", "\u4f54\u61c9\u6536", "right"),
                 ],
                 "rows": cat_rows,
                 "totals": {
@@ -178,11 +208,14 @@ def reg_discount_report(conn: Any, date_from: str, date_to: str) -> dict[str, An
                     "count": sum(r["count"] for r in cat_rows),
                     "amount": sum(r["amount"] for r in cat_rows),
                     "avg": "",
+                    "visitShare": _pct(sum(r["count"] for r in cat_rows), totals["visits"]),
+                    "grossShare": _pct(sum(r["amount"] for r in cat_rows), totals["gross"]),
                 },
                 "note": (
                     "身分以掛號當下記在看診上的為準；較早的看診沒有記，改用病人現在的身分。"
                     "「一般：」開頭的是主檔登記為一般身分、但當次掛號費比基數低的看診，依看診當天年齡分開："
                     "未滿 18 歲多半是當時還是 S，18～24 歲是學生自報，滿 70 歲是依年齡的老人優惠。"
+                    "\u4f54\u7e3d\u4eba\u6b21\u3001\u4f54\u61c9\u6536\u662f\u548c\u540c\u671f\u9593\u5168\u90e8\u639b\u865f\u4eba\u6b21\u3001\u5168\u90e8\u61c9\u6536\u639b\u865f\u8cbb\u76f8\u6bd4\u3002"
                 ),
             }
         ],

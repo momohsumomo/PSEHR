@@ -10,6 +10,7 @@ import {
 } from "@/api/clinicApi";
 import { mapApiPatientToHit } from "@/lib/patientSearch";
 import { PatientFinderDialog } from "@/components/clinic/PatientFinderDialog";
+import { PatientEditDialog, type PatientEditSeed } from "@/components/clinic/PatientEditDialog";
 import { HisRocDateField, rocToIso, todayRoc, normalizeRoc, clampRocEnd, isoToRoc, addDaysRoc } from "@/components/clinic/HisRocDatePicker";
 import { HisWinTitle } from "@/components/clinic/HisPageFrame";
 import { HIS, HIS_FONT } from "@/lib/hisTheme";
@@ -473,6 +474,7 @@ export function EmrLookupPage() {
   const [sortDir, setSortDir] = useState<SortDir>("asc");
   const [detail, setDetail] = useState<PatientVisitEntry | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
+  const [editSeed, setEditSeed] = useState<PatientEditSeed | null>(null);
 
   const [opts, setOpts] = useState({
     sameDay: true,
@@ -482,6 +484,7 @@ export function EmrLookupPage() {
   const [claimsSeedOn, setClaimsSeedOn] = useState(false);
 
   useEscLayer([
+    { open: !!editSeed, close: () => setEditSeed(null) },
     { open: finderOpen, close: () => setFinderOpen(false) },
     { open: resultOpen, close: () => setResultOpen(false) },
     { open: true, close: () => leave() },
@@ -776,7 +779,7 @@ export function EmrLookupPage() {
   };
 
   useEffect(() => {
-    if (!resultOpen || finderOpen) return;
+    if (!resultOpen || finderOpen || editSeed) return;
     const onKey = (ev: KeyboardEvent) => {
       if (ev.key !== "Enter" || ev.altKey || ev.ctrlKey || ev.metaKey || ev.shiftKey) return;
       const el = ev.target as HTMLElement | null;
@@ -790,7 +793,7 @@ export function EmrLookupPage() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [resultOpen, finderOpen, selected, dateFrom, dateTo, queriedFrom, queriedTo, shift, room, patientId, patientKey, patientLabel, ccText, dxText, drugText, visitKind, opts.sameDay, opts.hasImage, txFeeFrom, txFeeTo, drugFeeFrom, drugFeeTo, rows, status, sortKey, sortDir, navigate]);
+  }, [resultOpen, finderOpen, editSeed, selected, dateFrom, dateTo, queriedFrom, queriedTo, shift, room, patientId, patientKey, patientLabel, ccText, dxText, drugText, visitKind, opts.sameDay, opts.hasImage, txFeeFrom, txFeeTo, drugFeeFrom, drugFeeTo, rows, status, sortKey, sortDir, navigate]);
 
   const qm = selected?.queueMeta;
   const visitIso = String(qm?.encounterDate || detail?.visitDate || "");
@@ -1426,6 +1429,22 @@ export function EmrLookupPage() {
                     </button>
                     <button
                       type="button"
+                      className="border border-[#808080] bg-[#E0E0E0] font-bold disabled:opacity-50"
+                      style={{ fontSize: EMR_FONT, padding: `${EMR_GAP / 2}px ${EMR_GAP}px` }}
+                      disabled={!qm?.patientId}
+                      onClick={() => {
+                        if (!qm?.patientId) return;
+                        setEditSeed({
+                          patientId: qm.patientId,
+                          name: qm.patientDisplay || "",
+                          medicalNo: qm.medicalNo || "",
+                        });
+                      }}
+                    >
+                      {"\u4fee\u7de8\u75c5\u60a3"}
+                    </button>
+                    <button
+                      type="button"
                       className="border border-[#808080] bg-[#E0E0E0] font-bold"
                       style={{ fontSize: EMR_FONT, padding: `${EMR_GAP / 2}px ${EMR_GAP}px` }}
                       onClick={() => setResultOpen(false)}
@@ -1448,6 +1467,16 @@ export function EmrLookupPage() {
         </div>
       )}
 
+      <PatientEditDialog
+        open={!!editSeed}
+        seed={editSeed}
+        onClose={() => setEditSeed(null)}
+        onSaved={() => {
+          if (!resultOpen) return;
+          focusReturnId.current = selected?.resource?.id || null;
+          void runConfirm();
+        }}
+      />
       <PatientFinderDialog
         open={finderOpen}
         initialQuery={patientKey}

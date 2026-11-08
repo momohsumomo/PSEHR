@@ -49,7 +49,8 @@ class BackgroundSyncWorker:
 
     async def _process_sync_queue(self) -> None:
         # Dequeue batch of pending items
-        batch = self.store.dequeue_sync_batch(limit=20)
+        # SQLite may wait up to busy_timeout here; keep that off the event loop.
+        batch = await asyncio.to_thread(self.store.dequeue_sync_batch, limit=20)
         if not batch:
             return
 
@@ -91,7 +92,7 @@ class BackgroundSyncWorker:
                     success = True
 
                 if success:
-                    self.store.mark_sync_done(queue_id)
+                    await asyncio.to_thread(self.store.mark_sync_done, queue_id)
                     logger.info(f"Successfully synchronized sync_queue ID {queue_id} ({op} {res_type}/{res_id})")
                 else:
                     # If sync failed, halt this batch to preserve order (Strict FIFO sync queue)

@@ -855,6 +855,8 @@ export function useClinicWorkspace(options?: {
       form: RegisterEditForm,
       onSeqFields?: (fields: Partial<RegisterEditForm> & { seqNote: string }) => void,
       onIncoming?: (slips: ReferralSlipHit[]) => Promise<IncomingChoice | null>,
+      /** The visit is on the host. Referral lookup after this may still be running. */
+      onStored?: () => void,
     ) => {
       if (!apiMode) throw new Error("掛號需 API 模式");
       const mode = form.icException || "ic";
@@ -1090,6 +1092,7 @@ export function useClinicWorkspace(options?: {
           referralHospName: payload.referralHospName,
           referralDate: payload.referralDate,
         });
+        onStored?.();
         const linked = (payload.referralSeq || prior?.referralSeq || "").trim();
         const slips = linked ? [] : await rememberReferral(form.encounterId);
         const fromSlip = await storeIncoming(form.encounterId, patientId, slips);
@@ -1103,6 +1106,7 @@ export function useClinicWorkspace(options?: {
         return { encounterId: form.encounterId, patientId };
       }
       const created = await registerPatientAndEncounter(payload);
+      onStored?.();
       const slips = await rememberReferral(created.encounterId);
       const fromSlip = await storeIncoming(created.encounterId, created.patientId, slips);
       if ((payload.acceptReferral || "").trim() === "1" || fromSlip) {

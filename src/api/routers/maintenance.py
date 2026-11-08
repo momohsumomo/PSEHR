@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 from pathlib import Path
 from typing import Any
@@ -64,7 +65,7 @@ async def app_update_apply(request: Request) -> dict:
         if isinstance(data, dict):
             chosen = str(data.get("version") or "").strip()[:80]
     try:
-        return app_update.begin_apply(version=chosen)
+        return await asyncio.to_thread(app_update.begin_apply, version=chosen)
     except RuntimeError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     except Exception as exc:

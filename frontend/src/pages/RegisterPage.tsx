@@ -506,6 +506,7 @@ export function RegisterPage() {
       return;
     }
     let bureauSameDay = false;
+    let stored = false;
     setConfirmError(null);
     const skipSeq =
       Boolean(confirmForm.prebook) ||
@@ -530,12 +531,19 @@ export function RegisterPage() {
       };
       if (toSave !== confirmForm) setConfirmForm(toSave);
       await submitRegisterEdit(toSave, (fields) => {
+        // After the window closed the form may already hold the next patient.
+        if (stored) return;
         const { seqNote: note, ...rest } = fields;
         setConfirmForm((prev) => ({ ...prev, ...rest }));
         setSeqNote(note);
         setSeqBusy(false);
         if ((note || "").includes("\u540c\u65e5\u5c31\u8a3a")) bureauSameDay = true;
-      }, incoming.ask);
+      }, incoming.ask, () => {
+        stored = true;
+        setConfirmOpen(false);
+        setSeqBusy(false);
+        setBusy(false);
+      });
       if (confirmForm.pharmacist.trim()) {
         const prev = loadClinicSession();
         saveClinicSession({
@@ -546,7 +554,6 @@ export function RegisterPage() {
           room: prev?.room || "1",
         });
       }
-      setConfirmOpen(false);
       if (toSave.encounterId) return;
       if (hits.length || bureauSameDay) setSameDayFlash(true);
       if (depositHold) {
@@ -563,10 +570,15 @@ export function RegisterPage() {
         tellShell(appointment ? "已預約進清單" : "已掛號進清單");
       }
     } catch (e) {
-      setConfirmError(e instanceof Error ? e.message : "掛號失敗");
+      const message = e instanceof Error ? e.message : "掛號失敗";
+      if (stored) tellShell(message);
+      else setConfirmError(message);
+      void refreshQueue();
     } finally {
-      setSeqBusy(false);
-      setBusy(false);
+      if (!stored) {
+        setSeqBusy(false);
+        setBusy(false);
+      }
     }
   };
 
