@@ -10,7 +10,7 @@ from __future__ import annotations
 from collections import defaultdict
 from typing import Any
 
-from src.claims.engine import COPAY_NOTE, ClaimEncounterRecord
+from src.claims.engine import COPAY_NOTE, REFERRAL_OUT_FEE, ClaimEncounterRecord
 from src.claims.yisheng_rules import is_order_code
 
 _CASES = {
@@ -59,6 +59,37 @@ def add_unfinished(report: dict[str, Any], visits: list[dict[str, str]]) -> dict
     return report
 _MSG_EXT_PRIMARY = "\u4e3b\u8a3a\u65b7\u4e0d\u80fd\u653e\u5916\u56e0\u78bc\uff0c\u8acb\u6539\u653e\u53d7\u50b7\u90e8\u4f4d\uff0c\u5916\u56e0\u78bc\u62ff\u6389"
 _MSG_EXT_SECOND = "\u6b21\u8a3a\u65b7\u6709\u5916\u56e0\u78bc\u3002\u9580\u8a3a\u7533\u5831\u6c92\u6709\u7368\u7acb\u5916\u56e0\u6b04\uff0c\u9019\u78bc\u6703\u9032\u6b21\u8a3a\u65b7\u3002\u53ea\u7559\u53d7\u50b7\u90e8\u4f4d\u5373\u53ef"
+
+
+_MSG_REFERRAL_OUT = "\u6709\u8fa6\u7406\u8f49\u8a3a\u8cbb\uff0801036C\uff09\uff0c\u4f46\u627e\u4e0d\u5230\u8f49\u5f80\u9662\u6240\u3002\u8acb\u5230\u96fb\u5b50\u8f49\u8a3a\u88dc\u4e0a\u9019\u6b21\u7684\u8f49\u51fa\u55ae"
+_MSG_DX_NAMED = "\u75c5\u540d "
+_MSG_FEMALE_ONLY = "\u9650\u5973\u6027\uff0c\u9019\u4f4d\u662f\u7537\u6027\u3002\u8acb\u91ab\u5e2b\u6539\u75c5\u540d"
+_MSG_MALE_ONLY = "\u9650\u7537\u6027\uff0c\u9019\u4f4d\u662f\u5973\u6027\u3002\u8acb\u91ab\u5e2b\u6539\u75c5\u540d"
+# NHI rejects these (W1 male only, W2 female only) when the patient's sex differs.
+_FEMALE_ONLY = ("N7", "N8", "N90", "N91", "N92", "N93", "N94", "N95", "N96", "N97", "N98", "O",
+                "C51", "C52", "C53", "C54", "C55", "C56", "C57", "C58", "D06", "D25", "D26", "D27", "D28")
+_MALE_ONLY = ("N40", "N41", "N42", "N43", "N44", "N45", "N46", "N47", "N48", "N49", "N50", "N51", "N52", "N53",
+              "C60", "C61", "C62", "C63", "D29")
+
+
+def _sex_of(rec: ClaimEncounterRecord) -> str:
+    raw = (rec.sex or "").strip().upper()
+    if raw in {"M", "MALE", "1"}:
+        return "M"
+    if raw in {"F", "FEMALE", "2"}:
+        return "F"
+    ident = (rec.patientId or "").strip().upper()
+    if len(ident) == 10 and ident[0].isalpha() and ident[1] in "12":
+        return "M" if ident[1] == "1" else "F"
+    return ""
+
+
+def _sex_mismatch(code: str, sex: str) -> str:
+    if sex == "M" and code.startswith(_FEMALE_ONLY):
+        return _MSG_FEMALE_ONLY
+    if sex == "F" and code.startswith(_MALE_ONLY):
+        return _MSG_MALE_ONLY
+    return ""
 
 
 def _drug_line(code: str) -> bool:
@@ -141,6 +172,17 @@ def check_media(records: list[ClaimEncounterRecord], settings: Any = None) -> di
         codes = [code.replace(".", "").upper() for code in rec.diagnosisCodes if code]
         if len(codes) != len(set(codes)):
             warns.append({**base, "code": "dx-dup", "message": _MSG_DX_DUP})
+
+        sex = _sex_of(rec)
+        for code in codes:
+            wrong = _sex_mismatch(code, sex)
+            if wrong:
+                blocks.append({**base, "code": "dx-sex", "message": _MSG_DX_NAMED + code + " " + wrong})
+                break
+        if not (rec.referralOutHosp or "").strip() and any(
+            (line.nhiCode or "").strip().upper() in REFERRAL_OUT_FEE for line in rec.medications
+        ):
+            blocks.append({**base, "code": "referral-out", "message": _MSG_REFERRAL_OUT})
 
         primary = _primary(rec)
         if _external_cause(primary):

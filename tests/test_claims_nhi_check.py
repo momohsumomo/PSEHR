@@ -7,7 +7,9 @@ from src.claims.engine import (
     ClaimMedLine,
     ClaimsSummary,
     _filed_copay_code,
+    _referral_fee_destination,
 )
+from src.claims.media_check import check_media
 from src.claims.xml_export_nhi import render_nhi_outpatient_xml
 from src.core.icd_crosswalk import claim_code
 
@@ -106,6 +108,41 @@ class DiagnosisBookTest(unittest.TestCase):
         self.assertEqual(claim_code("L700"), "L700")
         self.assertEqual(claim_code("S80212A"), "S80212A")
         self.assertEqual(claim_code("L30.9"), "L309")
+
+
+class ReferralOutTest(unittest.TestCase):
+    """115/10 again: four referral-fee visits filed d18=N; their slips came from Yisheng undated."""
+
+    def _fee(self) -> list[ClaimMedLine]:
+        return [ClaimMedLine("m", "01036C", "ref", 1, 1, 0, 0, "snapshot")]
+
+    def test_fee_visit_takes_the_undated_slip_of_that_chart(self):
+        unlinked = {"1234": [("", "2026-10-20 01:05:36", "1101010012")]}
+        self.assertEqual(_referral_fee_destination(self._fee(), unlinked, "001234", "2026-10-12"), "1101010012")
+
+    def test_same_day_slip_wins(self):
+        unlinked = {"1234": [("", "2026-10-21", "1101010012"), ("2026-10-12", "2026-10-12", "0401180014")]}
+        self.assertEqual(_referral_fee_destination(self._fee(), unlinked, "1234", "2026-10-12"), "0401180014")
+
+    def test_no_fee_no_destination(self):
+        unlinked = {"1234": [("", "2026-10-20", "1101010012")]}
+        self.assertEqual(_referral_fee_destination([], unlinked, "1234", "2026-10-12"), "")
+
+    def test_check_blocks_fee_without_destination_and_wrong_sex(self):
+        rec = ClaimEncounterRecord(
+            encounterId="e", queueNumber=1, patientId="D100000000", patientName="t", diagnoses="",
+            consultationPoints=220, drugPoints=0, totalPoints=220, doctorId="A000000000",
+            encounterDate="2026-10-30", caseNo="09", treatSeq="0001", sex="M",
+            diagnosisCodes=["N8300"], medications=self._fee(), birthdayRoc="0750211",
+        )
+        codes = {b["code"] for b in check_media([rec])["blocks"]}
+        self.assertIn("referral-out", codes)
+        self.assertIn("dx-sex", codes)
+        rec.referralOutHosp = "1101010012"
+        rec.diagnosisCodes = ["L0292"]
+        codes = {b["code"] for b in check_media([rec])["blocks"]}
+        self.assertNotIn("referral-out", codes)
+        self.assertNotIn("dx-sex", codes)
 
 
 if __name__ == "__main__":

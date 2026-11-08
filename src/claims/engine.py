@@ -478,6 +478,7 @@ def build_claims_summary(
     dispense_default = _clinic_dispense_code(store)
     lab_code = _clinic_lab_code(store)
     outbound = _outbound_referral_codes(store)
+    unlinked_out = _unlinked_outbound_by_chart(store)
 
     records: list[ClaimEncounterRecord] = []
 
@@ -717,7 +718,8 @@ def build_claims_summary(
                 icRemark=ic_remark,
                 referralInMark="1" if referral_in == "1" else "",
                 referralInHosp=referral_hosp,
-                referralOutHosp=outbound.get(encounter_id, ""),
+                referralOutHosp=outbound.get(encounter_id, "")
+                or _referral_fee_destination(med_lines, unlinked_out, medical_no, visit_day),
                 specTreatCodes=spec_codes,
                 depositOpen=deposit_open,
             )
@@ -1115,6 +1117,60 @@ def _outbound_referral_codes(store: Any) -> dict[str, str]:
     except Exception:
         return {}
     return found
+
+
+# 01038C is filed with d18=N and accepted; only 01036C needs the destination.
+REFERRAL_OUT_FEE = {"01036C"}
+
+
+def _bare_chart(text: Any) -> str:
+    chart = str(text or "").strip()
+    return chart.lstrip("0") or chart
+
+
+def _unlinked_outbound_by_chart(store: Any) -> dict[str, list[tuple[str, str, str]]]:
+    """Chart number -> (opened day, saved at, destination) for outbound slips tied to no visit.
+
+    Slips carried over from Yisheng without an issue date never get tied to a visit.
+    """
+    connect = getattr(store, "_connect", None)
+    if connect is None:
+        return {}
+    found: dict[str, list[tuple[str, str, str]]] = {}
+    try:
+        with connect() as conn:
+            rows = conn.execute(
+                "SELECT medical_no, opened_on, updated_at, dest_code FROM referral_slip "
+                "WHERE kind = 'out' AND IFNULL(encounter_id, '') = ''"
+            ).fetchall()
+        for chart, opened, saved, dest in rows:
+            code = "".join(ch for ch in str(dest or "") if ch.isalnum())[:10]
+            key = _bare_chart(chart)
+            if key and len(code) >= 8:
+                found.setdefault(key, []).append((str(opened or "")[:10], str(saved or ""), code))
+    except Exception:
+        return {}
+    return found
+
+
+def _referral_fee_destination(
+    med_lines: list[ClaimMedLine],
+    unlinked: dict[str, list[tuple[str, str, str]]],
+    medical_no: Any,
+    visit_day: str,
+) -> str:
+    """A visit that bills a referral fee must name where the patient was sent (d18=Y, d55)."""
+    if not any((line.nhiCode or "").strip().upper() in REFERRAL_OUT_FEE for line in med_lines):
+        return ""
+    slips = unlinked.get(_bare_chart(medical_no)) or []
+    day = (visit_day or "")[:10]
+    same_day = [s for s in slips if s[0] == day]
+    if same_day:
+        return max(same_day, key=lambda s: s[1])[2]
+    undated = [s for s in slips if not s[0]]
+    if undated:
+        return max(undated, key=lambda s: s[1])[2]
+    return ""
 
 
 def _clinic_dispense_code(store: Any) -> str:

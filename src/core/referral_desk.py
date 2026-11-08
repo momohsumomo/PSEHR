@@ -108,13 +108,15 @@ def save_slip(body: dict[str, Any]) -> dict[str, Any]:
     }
     with get_shadow_store()._connect() as conn:
         _ensure(conn)
-        if not fields["opened_on"]:
-            existing = conn.execute(
-                "SELECT opened_on FROM referral_slip WHERE id=?",
-                (slip_id,),
-            ).fetchone()
-            if existing and existing[0]:
-                fields["opened_on"] = str(existing[0])[:10]
+        existing = conn.execute(
+            "SELECT opened_on, encounter_id FROM referral_slip WHERE id=?",
+            (slip_id,),
+        ).fetchone()
+        if existing and not fields["opened_on"] and existing[0]:
+            fields["opened_on"] = str(existing[0])[:10]
+        # Editing from the referral list carries no visit; the claim needs the link (d18, d55).
+        if existing and not fields["encounter_id"] and existing[1]:
+            fields["encounter_id"] = str(existing[1])
         if not fields["opened_on"] and kind == "reply":
             fields["opened_on"] = _visit_day(conn, fields["encounter_id"]) or now[:10]
         conn.execute(
