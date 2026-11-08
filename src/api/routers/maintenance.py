@@ -169,7 +169,7 @@ def drug_picks_put(payload: dict[str, Any]) -> dict[str, Any]:
     return saved
 
 
-@router.get("/reports/{kind}", summary="統計資料：disease／opdCount／drug／treatment／claim")
+@router.get("/reports/{kind}", summary="統計資料：disease／opdCount／drug／treatment／claim／claimSheet／claimAnalysis／pharmacist")
 def report(
     kind: str,
     dateFrom: str = Query(...),
@@ -179,12 +179,16 @@ def report(
     selfPay: str = Query("exclude", description="exclude／only／all"),
     name: str = Query("", description="疾病統計：病名或代碼關鍵字"),
 ) -> dict[str, Any]:
+    from src.core import claim_month_reports
+
     _check_range(dateFrom, dateTo)
-    if kind not in clinic_reports.REPORT_KINDS:
+    if kind not in clinic_reports.REPORT_KINDS and kind not in claim_month_reports.MONTH_REPORT_KINDS:
         raise HTTPException(status_code=404, detail=f"沒有這種統計：{kind}")
     store = get_shadow_store()
     sh = shift.strip() or None
     try:
+        if kind in claim_month_reports.MONTH_REPORT_KINDS:
+            return claim_month_reports.month_report(store, kind, dateFrom)
         if kind == "claim":
             return clinic_reports.claim_report(store, dateFrom, dateTo)
         with store._connect() as conn:

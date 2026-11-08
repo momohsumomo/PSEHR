@@ -162,6 +162,9 @@ class ClaimEncounterRecord:
     pharmacyPoints: float = 0.0
     pharmacyBase: float = 0.0
     pharmacyRate: float = 100.0
+    # Before the monthly consult ladder and the pharmacist-day cap (醫聖 調整前).
+    consultFull: float = 0.0
+    pharmacyFull: float = 0.0
     treatmentPoints: float = 0.0
     applyPoints: float = 0.0
     daysSupply: int = 0
@@ -893,6 +896,7 @@ def _apply_consult_volume(records: list[ClaimEncounterRecord]) -> None:
         def assign(rec: ClaimEncounterRecord, index: int) -> None:
             age = age_years(rec.birthDate, rec.encounterDate)
             code, pts, base, rate = consult_at(index, days, age, rec.encounterDate)
+            rec.consultFull = float(consult_at(1, days, age, rec.encounterDate)[1])
             rec.consultCode = code
             rec.consultBase = float(base)
             rec.consultRate = rate
@@ -922,6 +926,7 @@ def _apply_pharmacy_day_cap(records: list[ClaimEncounterRecord]) -> None:
     for rec in records:
         if not rec.claimable or not rec.pharmacyCode:
             continue
+        rec.pharmacyFull = float(rec.pharmacyPoints or 0)
         day = (rec.encounterDate or "")[:10]
         groups.setdefault((rec.doctorId or "_", day), []).append(rec)
     for group in groups.values():

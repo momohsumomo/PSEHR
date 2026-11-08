@@ -71,7 +71,11 @@ type StatKind =
   | "disease"
   | "opdCount"
   | "drug"
-  | "treatment";
+  | "treatment"
+  | "claimSheet"
+  | "claimAnalysis"
+  | "pharmacist";
+const MONTH_KINDS: ReadonlySet<StatKind> = new Set(["claimSheet", "claimAnalysis", "pharmacist"]);
 type StatMode = "detail" | "total";
 type PrintMode = "preview" | "printer" | "text" | "excel";
 
@@ -204,7 +208,11 @@ export function BillingPage() {
     setDateStart(fromNorm);
     setDateEnd(toNorm);
     setBusy(true);
-    setStatus(kind === "claim" ? "申報統計計算中（每個月約要十幾秒）…" : "統計查詢中…");
+    setStatus(
+      kind === "claim" || MONTH_KINDS.has(kind)
+        ? "申報資料計算中（每個月約要十幾秒）…"
+        : "統計查詢中…",
+    );
     try {
       const report = await fetchReport(kind, {
         dateFrom: isoFrom,
@@ -214,7 +222,7 @@ export function BillingPage() {
         selfPay: selfClaim === "只有自費" ? "only" : selfClaim === "全部" ? "all" : "exclude",
         name: kind === "disease" ? disease.trim() : "",
       });
-      const range = `${fromNorm} ~ ${toNorm}`;
+      const range = MONTH_KINDS.has(kind) ? `費用年月 ${fromNorm.slice(0, -3)}（依起日的月份）` : `${fromNorm} ~ ${toNorm}`;
       setStatReport({ report, range });
       setStatus(
         `已查 ${range}：${report.title} ${report.rows.length} 列。` +
@@ -542,6 +550,9 @@ export function BillingPage() {
                     ["opdCount", "門診人數統計"],
                     ["drug", "藥品統計"],
                     ["treatment", "診療統計"],
+                    ["claimSheet", "送核申報金額總表"],
+                    ["claimAnalysis", "申報統計分析"],
+                    ["pharmacist", "藥師調劑點數"],
                   ] as const
                 ).map(([id, lab]) => {
                   const selected = statKind === id;
@@ -769,6 +780,9 @@ function statKindLabel(k: StatKind): string {
     opdCount: "門診人數統計",
     drug: "藥品統計",
     treatment: "診療統計",
+    claimSheet: "送核申報金額總表",
+    claimAnalysis: "申報統計分析",
+    pharmacist: "藥師調劑點數",
   };
   return map[k];
 }

@@ -2583,17 +2583,27 @@ export async function readCardProfile(): Promise<{ ok: boolean; source: string; 
 }
 
 /** 統計資料（醫聖 費用統計的其他統計種類）。 */
-export type ReportKind = "disease" | "opdCount" | "drug" | "treatment" | "claim";
+export type ReportKind =
+  | "disease"
+  | "opdCount"
+  | "drug"
+  | "treatment"
+  | "claim"
+  | "claimSheet"
+  | "claimAnalysis"
+  | "pharmacist";
 
 export type ReportColumn = { key: string; label: string; align: "left" | "right" };
 
-export type ReportResult = {
+export type ReportSection = {
   title: string;
   columns: ReportColumn[];
   rows: Record<string, string | number | null>[];
   totals: Record<string, string | number | null>;
   note: string;
 };
+
+export type ReportResult = ReportSection & { sections?: ReportSection[] };
 
 export async function fetchReport(
   kind: ReportKind,
