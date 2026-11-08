@@ -2400,6 +2400,35 @@ export type ClaimCheckRow = {
   patientName?: string;
 };
 
+export type NopayItem = {
+  id: string;
+  part?: string;
+  name: string;
+  kind: "rate" | "cap" | "rx_dup" | "external";
+  month: string;
+  note?: string;
+  applies: boolean;
+  over: boolean;
+  deduction: number;
+  threshold?: number;
+  cap?: number;
+  numerator?: number | null;
+  denominator?: number;
+  rate?: number | null;
+  overGroups?: number;
+  external?: boolean;
+  cases: Array<Omit<ClaimCheckRow, "message">>;
+};
+
+export type NopayReport = {
+  version: string;
+  title: string;
+  dept: string;
+  overCount: number;
+  deduction: number;
+  items: NopayItem[];
+};
+
 export type ApiClaimsPreview = ApiClaimsStatistics & {
   records?: Array<{
     encounterId: string;
@@ -2461,6 +2490,7 @@ export type ApiClaimsPreview = ApiClaimsStatistics & {
     warnCount?: number;
     blocks?: ClaimCheckRow[];
     warnings?: ClaimCheckRow[];
+    nopay?: NopayReport | null;
   };
   caseCounts?: Record<string, number>;
   exportHistory?: Array<{ at: string; kind: "songhe" | "bubao"; count: number; points: number }>;

@@ -93,6 +93,21 @@ def clear_price_cache() -> None:
     _READY.clear()
 
 
+def drug_facts(nhi_code: str, *, pack_store: PackStore | None = None) -> dict[str, str]:
+    """ATC code and dosage form from the installed catalog; empty when unknown."""
+    code = (nhi_code or "").strip().upper()
+    if not code:
+        return {}
+    pack = _catalog(pack_store or PackStore())
+    if not pack:
+        return {}
+    rows = _index(pack).get(code) or []
+    if not rows:
+        return {}
+    row = max(rows, key=lambda r: str(r.get("startDate") or ""))
+    return {"atc": str(row.get("atc") or "").strip().upper(), "form": str(row.get("form") or "").strip()}
+
+
 def lookup_drug_price(
     nhi_code: str,
     target_date: str,

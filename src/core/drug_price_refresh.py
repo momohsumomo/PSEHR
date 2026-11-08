@@ -83,6 +83,7 @@ def public_view(state: dict[str, Any], today: date) -> dict[str, Any]:
         "lastSuccessOn": success_on,
         "notice": notice,
         "detail": notice or detail or OK_MONTH,
+        "nopayRules": state.get("nopayRules") if isinstance(state.get("nopayRules"), dict) else None,
     }
 
 
@@ -225,6 +226,13 @@ def _execute(path: Path | None) -> None:
         except Exception:
             logger.exception("drug price install failed")
             installed = {"status": "failed"}
+    try:
+        from src.claims.nopay_rules import refresh_from_github
+
+        nopay = refresh_from_github()
+    except Exception:
+        logger.exception("nopay rules refresh failed")
+        nopay = {"status": "failed"}
     with _lock:
         previous = load_state(path)
         updated = apply_pipeline_result(
@@ -233,6 +241,7 @@ def _execute(path: Path | None) -> None:
             today=date.today(),
             install=lambda: installed if installed is not None else {"status": "failed"},
         )
+        updated["nopayRules"] = nopay
         save_state(updated, path)
 
 

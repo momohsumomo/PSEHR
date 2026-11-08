@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Any, Literal
 
 from fastapi import APIRouter, HTTPException, Query
@@ -23,6 +24,7 @@ from src.claims.xml_export_nhi import (
 from src.api.routers.clinic_settings import PROFILE_KEY, DEFAULT_PROFILE
 
 router = APIRouter(prefix="/claims", tags=["健保申報"])
+logger = logging.getLogger(__name__)
 
 SubmitType = Literal["songhe", "bubao"]
 ExportFormat = Literal["nhi", "legacy"]
@@ -118,6 +120,18 @@ def get_claims_statistics(date_month: str = Query(..., description="年月份 YY
     return summary.to_statistics_dict()
 
 
+def _nopay_report(store: Any, records: list) -> dict[str, Any] | None:
+    """Estimates only; a failure here must not stop the claim check."""
+    from src.claims.nopay_check import evaluate
+    from src.claims.nopay_rules import load_rules
+
+    try:
+        return evaluate(records, load_rules(), dept=clinic_dept_code(store))
+    except Exception:
+        logger.exception("nopay indicators failed")
+        return None
+
+
 @router.get("/preview")
 def preview_claims(
     date_month: str = Query(..., description="年月份 YYYY-MM"),
@@ -153,6 +167,7 @@ def preview_claims(
             {"medicalNo": "", "encounterDate": "", "caseNo": "", "code": "pack-stale", "message": stale}
         ] + list(report.get("warnings") or [])
         report["warnCount"] = int(report.get("warnCount") or 0) + 1
+    report["nopay"] = _nopay_report(store, summary.records)
     data["check"] = report
     data["exportHistory"] = log["history"]
     data["caseCounts"] = case_counts

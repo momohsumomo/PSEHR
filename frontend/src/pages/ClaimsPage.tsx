@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { ClaimSlipDialog } from "@/components/clinic/ClaimSlipDialog";
+import { NopayPanel } from "@/components/clinic/NopayPanel";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useEscLayer } from "@/hooks/useEscLayer";
 import { useClinicWorkspace } from "@/hooks/useClinicWorkspace";
@@ -525,6 +526,7 @@ export function ClaimsPage() {
                 ) : null}
               </div>
             )}
+            <NopayPanel report={preview?.check?.nopay} onOpen={openCheckRow} />
             <h2 className="text-sm font-bold text-slate-800 border-b pb-2 mb-2">申報總表</h2>
             {!preview?.totalSheet ? (
               <p className="text-xs text-slate-400 mb-3">按「檢查申報資料」後顯示這份檔裡的總表數字。</p>
