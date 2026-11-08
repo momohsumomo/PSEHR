@@ -54,6 +54,17 @@ function rocFromIso(value: string): string {
   return isoToRoc(value.slice(0, 10));
 }
 
+/** 115.11.08: year bold, month and day bold red. */
+function CaptionDate({ roc }: { roc: string }) {
+  const m = roc.match(/^(\d+)\.(\d+\.\d+)$/);
+  if (!m) return <span className="font-bold">{roc}</span>;
+  return (
+    <>
+      <span className="font-bold">{m[1]}</span>.<span className="font-bold text-[#CC0000]">{m[2]}</span>
+    </>
+  );
+}
+
 function revokePending(items: PendingPhoto[]) {
   for (const item of items) URL.revokeObjectURL(item.url);
 }
@@ -428,9 +439,9 @@ export function PatientLookDialog({ open, patientId, patientName, medicalNo, onC
                   <div className={frame}>
                     <img src={photo.src} alt="" loading="lazy" className={fitted} />
                   </div>
-                  <figcaption className="truncate px-1 text-[11px] leading-4" title={`${photo.name} ${photo.date}`.trim()}>
+                  <figcaption className="truncate px-1 text-[16.5px] leading-6" title={`${photo.name} ${photo.date}`.trim()}>
                     {photo.name}
-                    {photo.date ? `  ${photo.date}` : ""}
+                    {photo.date ? <>{"  "}<CaptionDate roc={photo.date} /></> : null}
                   </figcaption>
                 </figure>
               ))}
