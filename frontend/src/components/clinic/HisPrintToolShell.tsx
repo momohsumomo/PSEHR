@@ -2,6 +2,7 @@ import { cloneElement, isValidElement, useEffect, useLayoutEffect, useRef, useSt
 import { createPortal } from "react-dom";
 import { fetchThisPcPrinters, printToNamedPrinter } from "@/api/clinicApi";
 import { HIS_FONT } from "@/lib/hisTheme";
+import { nodesToJpg } from "@/lib/nodeToJpg";
 import {
   loadPrinterFeed,
   savePrinterFeed,
@@ -21,6 +22,7 @@ export type HisPrintToolAction =
   | "print"
   | "saveText"
   | "saveExcel"
+  | "saveJpg"
   | "prevPage"
   | "nextPage"
   | "zoomIn"
@@ -63,6 +65,7 @@ const TOOLS: { id: HisPrintToolAction; label: string }[] = [
   { id: "saveText", label: "存檔" },
   { id: "print", label: "列印" },
   { id: "saveExcel", label: "轉Excel" },
+  { id: "saveJpg", label: "存JPG" },
   { id: "zoomOut", label: "縮小" },
   { id: "zoom100", label: "100%" },
   { id: "zoomIn", label: "放大" },
@@ -273,6 +276,25 @@ export function HisPrintToolShell({
       }
       downloadBlob(`${fileBaseName}.csv`, "text/csv;charset=utf-8", "\uFEFF" + body);
       setHint(`\u5df2\u4e0b\u8f09 ${fileBaseName}.csv\uff08Excel \u53ef\u958b\uff09`);
+      return;
+    }
+    if (id === "saveJpg") {
+      const source = explicit ? printRootRef.current : innerRef.current;
+      const nodes = source ? (Array.from(explicit ? source.children : [source]) as HTMLElement[]) : [];
+      if (!nodes.length) {
+        setHint("\u6c92\u6709\u53ef\u5b58\u7684\u5167\u5bb9\u3002");
+        return;
+      }
+      setHint("\u8f49\u6210 JPG \u4e2d\u2026");
+      void nodesToJpg(nodes, profile.widthMm, profile.padXMm)
+        .then((blob) => {
+          downloadBlob(`${fileBaseName}.jpg`, "image/jpeg", blob);
+          if (aliveRef.current) setHint(`\u5df2\u4e0b\u8f09 ${fileBaseName}.jpg`);
+        })
+        .catch((err: unknown) => {
+          if (!aliveRef.current) return;
+          setHint("\u5b58 JPG \u5931\u6557\uff1a" + (err instanceof Error ? err.message : String(err)));
+        });
       return;
     }
     if (id === "print") {
