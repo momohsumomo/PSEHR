@@ -92,6 +92,21 @@ class ClaimsXmlLayoutTest(unittest.TestCase):
     def test_makeup_card_and_referral_are_written_only_when_stored(self):
         _test_makeup_card_and_referral_are_written_only_when_stored()
 
+    def test_pharmacist_only_on_dispensed_visit_and_zero_fee_has_no_d38(self):
+        dispensed = render_nhi_outpatient_xml(
+            _summary(_visit(pharmacistId="B000000000", pharmacyCode="05234D", pharmacyPoints=0))
+        )
+        self.assertIn("<d31>B000000000</d31>", dispensed)
+        self.assertIn("<d37>05234D</d37>", dispensed)
+        self.assertNotIn("<d38>", dispensed)
+        paid = render_nhi_outpatient_xml(
+            _summary(_visit(pharmacistId="B000000000", pharmacyCode="05202C", pharmacyPoints=48))
+        )
+        self.assertIn("<d38>48</d38>", paid)
+        no_drug = render_nhi_outpatient_xml(_summary(_visit(pharmacistId="B000000000", medications=[])))
+        self.assertIn("<d28>2</d28>", no_drug)
+        self.assertNotIn("<d31>", no_drug)
+
     def test_spec_treat_codes_follow_the_visit_then_the_diagnosis(self):
         _test_spec_treat_codes_follow_the_visit_then_the_diagnosis()
 
@@ -214,7 +229,8 @@ def _test_pdata_sits_inside_dbody_and_drug_sig_is_written():
     assert xml.index("</dbody>") < xml.index("</ddata>")
     assert "<d57>50</d57>" in xml
     assert "<d58>0</d58>" in xml
-    assert "<d59>" not in xml
+    assert "<d59>0</d59>" in xml
+    assert xml.index("<d58>") < xml.index("<d59>") < xml.index("<pdata>")
     assert "<d60>" not in xml
     assert "<p1>7</p1>" in xml
     assert "<p5>1.00</p5>" in xml
@@ -349,7 +365,8 @@ def _test_makeup_card_and_referral_are_written_only_when_stored():
     assert "<d60>12345678901234567890</d60>" in deposit_only
     assert "<d61>" not in deposit_only
     assert "<d16>" not in plain
-    assert "<d17>" not in plain
+    assert "<d17>N</d17>" in plain
+    assert plain.index("<d17>") < plain.index("<d18>")
     assert "<d55>" not in plain
     assert "<d18>N</d18>" in plain
     marked = render_nhi_outpatient_xml(

@@ -280,9 +280,12 @@ def _render_ddata(
     dbody.append(_t("d14", "4"))
     if copay_code:
         dbody.append(_t("d15", copay_code))
+    # The XSD requires d17 before d18. Without a referral in, 醫聖 files N.
     if rec.referralInMark == "1" and rec.referralInHosp:
         dbody.append(_t("d16", "1"))
         dbody.append(_t("d17", rec.referralInHosp[:10]))
+    else:
+        dbody.append(_t("d17", "N"))
     dbody.append(_t("d18", "Y" if rec.referralOutHosp else "N"))
     if primary:
         dbody.append(_t("d19", primary[:9]))
@@ -294,7 +297,8 @@ def _render_ddata(
     if treat_seq:
         dbody.append(_t("d29", treat_seq))
     dbody.append(_t("d30", doctor))
-    if pharmacist:
+    # 醫聖 names the pharmacist only when the clinic dispensed (d28 = 0).
+    if pharmacist and filed_dispense == "0":
         dbody.append(_t("d31", pharmacist))
     dbody.append(_t("d32", drug_pts))
     if tx_pts:
@@ -304,7 +308,9 @@ def _render_ddata(
     dbody.append(_t("d36", consult_pts))
     if rec.pharmacyCode:
         dbody.append(_t("d37", rec.pharmacyCode[:12]))
-        dbody.append(_t("d38", pharm_pts))
+        # Past 100 a day the fee is 0. 醫聖 keeps d37 and leaves d38 out.
+        if pharm_pts:
+            dbody.append(_t("d38", pharm_pts))
     dbody.append(_t("d39", total_pts))
     dbody.append(_t("d40", copay_pts))
     dbody.append(_t("d41", apply_pts))
@@ -317,6 +323,8 @@ def _render_ddata(
         dbody.append(_t("d55", rec.referralOutHosp[:10]))
     dbody.append(_t("d57", int(rec.basicCopayPoints)))
     dbody.append(_t("d58", int(rec.drugCopayPoints)))
+    # 醫聖 files d59 on every visit, always 0.
+    dbody.append(_t("d59", 0))
     if len(rec.treatmentId) == 20:
         dbody.append(_t("d60", rec.treatmentId))
     if len(rec.actualTreatId) == 20 and (rec.icRemark or "")[:1] in {"2", "3", "4"}:

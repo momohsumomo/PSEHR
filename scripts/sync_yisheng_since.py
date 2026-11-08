@@ -482,7 +482,8 @@ def main() -> int:
         shift = slot_to_shift(row["SLOT"])
         serno = parse_serno(row["SERNO"])
         doctor = serial_staff.get(_clean(row["DOCTOR"]).zfill(2), "") if _clean(row["DOCTOR"]) else ""
-        pharmacist = default_pharm if _clean(row["PHARMACY"]) == "0" else serial_staff.get(_clean(row["PHARMACY"]).zfill(2), "")
+        # PHARMACY is the dispense type (0 self, 2 none), not a staff serial.
+        pharmacist = default_pharm if _clean(row["PHARMACY"]) == "0" else ""
         seq = _clean(row["ICNO"])
         eid_to_pid[eid] = visit["pid"]
         chief = (maintell.get(visit["vkey"]) or "").strip()

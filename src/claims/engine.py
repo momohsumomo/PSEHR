@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import asdict, dataclass, field
 from datetime import date
 from functools import lru_cache
@@ -460,6 +461,10 @@ def build_claims_summary(
     from src.core.encounter_extensions import extract_reg_meta
 
     staff_by_id, staff_by_name = _load_staff_maps(store)
+    staff_nhi = set(staff_by_id.values())
+    default_pharmacist = _resolve_staff_nhi(_default_pharmacist_id(store), staff_by_id, staff_by_name)
+    if default_pharmacist not in staff_nhi:
+        default_pharmacist = ""
     dispense_default = _clinic_dispense_code(store)
     lab_code = _clinic_lab_code(store)
     outbound = _outbound_referral_codes(store)
@@ -524,6 +529,9 @@ def build_claims_summary(
         doctor_nhi = _resolve_staff_nhi(doctor_raw, staff_by_id, staff_by_name)
         pharmacist_raw = str(reg.get("pharmacist") or claim_pharm or "")
         pharmacist_nhi = _resolve_staff_nhi(pharmacist_raw, staff_by_id, staff_by_name)
+        # A code that matches no staff member must not reach d31.
+        if pharmacist_nhi not in staff_nhi and not _looks_like_person_id(pharmacist_nhi):
+            pharmacist_nhi = default_pharmacist
 
         case_no = str(reg.get("caseNo") or "01")
         treat_seq = str(reg.get("treatSeq") or claim_seq or "")
@@ -985,6 +993,21 @@ def clinic_dept_code(store: Any) -> str:
 
 def clinic_dispense_code(store: Any) -> str:
     return _clinic_dispense_code(store)
+
+
+def _looks_like_person_id(text: str) -> bool:
+    return bool(re.fullmatch(r"[A-Z][A-Z0-9]\d{8}", (text or "").strip().upper()))
+
+
+def _default_pharmacist_id(store: Any) -> str:
+    try:
+        from src.api.routers.clinic_settings import PROFILE_KEY
+
+        saved = store.get_json_setting(PROFILE_KEY) or {}
+        profile = (saved.get("profile") if isinstance(saved, dict) else None) or {}
+        return str(profile.get("defaultPharmacistId") or "").strip()
+    except Exception:
+        return ""
 
 
 def _clinic_dept_code(store: Any) -> str:
