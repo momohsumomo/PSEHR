@@ -635,6 +635,23 @@ def import_care_online(visitingDate: str = Query(..., description="YYYY-MM-DD"))
         raise HTTPException(status_code=502, detail=f"照護線上讀取失敗：{exc}") from exc
 
 
+def _stamp_id_category(store: Any, payload: dict[str, Any], patient_id: str) -> None:
+    """Keep the patient's identity on the visit, so later fee reports know the discount reason then."""
+    if not patient_id:
+        return
+    try:
+        with store._connect() as conn:
+            row = conn.execute(
+                "SELECT IFNULL(id_category, '') FROM patient_index WHERE resource_id = ?",
+                (patient_id,),
+            ).fetchone()
+    except Exception:
+        return
+    code = str(row[0] if row else "").strip()
+    if code:
+        put_reg_string(payload, "idCategory", code)
+
+
 @router.post(
     "/v1/encounter/register",
     status_code=201,
@@ -677,6 +694,7 @@ def register_nhi_encounter(body: NhiEncounterIntake) -> dict[str, Any]:
         payload = nhi_encounter_to_fhir(body)
     except NhiValidationError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+    _stamp_id_category(store, payload, body.patientId or "")
 
     encounter_date = body.encounterDate or date.today().isoformat()
     queue_status = body.queueStatus
@@ -869,6 +887,9 @@ def patch_encounter_reg(encounter_id: str, body: NhiEncounterIntake) -> dict[str
             "noteMark": body.reasonText,
         },
     )
+    if not prev.get("idCategory"):
+        subject = str(((existing.get("subject") or {}).get("reference")) or "")
+        _stamp_id_category(store, payload, body.patientId or subject.split("/", 1)[-1])
     # Check-in replaces the appointment. forespeak 預 would keep the Yu column.
     if not body.prebook:
         put_reg_string(payload, "forespeak", "")

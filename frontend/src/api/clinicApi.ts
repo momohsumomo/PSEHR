@@ -2591,7 +2591,8 @@ export type ReportKind =
   | "claim"
   | "claimSheet"
   | "claimAnalysis"
-  | "pharmacist";
+  | "pharmacist"
+  | "regDiscount";
 
 export type ReportColumn = { key: string; label: string; align: "left" | "right" };
 

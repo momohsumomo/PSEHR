@@ -180,8 +180,12 @@ def report(
     name: str = Query("", description="疾病統計：病名或代碼關鍵字"),
 ) -> dict[str, Any]:
     from src.core import claim_month_reports
+    from src.core.reg_discount_report import reg_discount_report
 
     _check_range(dateFrom, dateTo)
+    if kind == "regDiscount":
+        with get_shadow_store()._connect() as conn:
+            return reg_discount_report(conn, dateFrom, dateTo)
     if kind not in clinic_reports.REPORT_KINDS and kind not in claim_month_reports.MONTH_REPORT_KINDS:
         raise HTTPException(status_code=404, detail=f"沒有這種統計：{kind}")
     store = get_shadow_store()

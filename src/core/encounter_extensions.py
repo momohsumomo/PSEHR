@@ -69,6 +69,7 @@ REG_STRING_KEYS = (
     "icUploadFee",
     "icCopay",
     "regCc",
+    "idCategory",
 )
 REG_BOOL_KEYS = ("paperCard", "cardWritten", "prebook")
 

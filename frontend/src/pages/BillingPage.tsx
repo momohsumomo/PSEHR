@@ -74,7 +74,8 @@ type StatKind =
   | "treatment"
   | "claimSheet"
   | "claimAnalysis"
-  | "pharmacist";
+  | "pharmacist"
+  | "regDiscount";
 const MONTH_KINDS: ReadonlySet<StatKind> = new Set(["claimSheet", "claimAnalysis", "pharmacist"]);
 type StatMode = "detail" | "total";
 type PrintMode = "preview" | "printer" | "text" | "excel";
@@ -553,6 +554,7 @@ export function BillingPage() {
                     ["claimSheet", "送核申報金額總表"],
                     ["claimAnalysis", "申報統計分析"],
                     ["pharmacist", "藥師調劑點數"],
+                    ["regDiscount", "掛號費優惠統計"],
                   ] as const
                 ).map(([id, lab]) => {
                   const selected = statKind === id;
@@ -783,6 +785,7 @@ function statKindLabel(k: StatKind): string {
     claimSheet: "送核申報金額總表",
     claimAnalysis: "申報統計分析",
     pharmacist: "藥師調劑點數",
+    regDiscount: "掛號費優惠統計",
   };
   return map[k];
 }
