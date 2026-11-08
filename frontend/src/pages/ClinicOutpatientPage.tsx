@@ -38,6 +38,7 @@ import { chartOrderKey, orderMayRepeat, withoutRepeatedOrders } from "@/utils/ca
 import { rxLinesMissingFrom } from "@/lib/dittoRxLines";
 import { storedCopayFields } from "@/lib/cardIdentity";
 import { diagnosisTaken, sameDiagnosis } from "@/lib/diagnosisIdentity";
+import { dxSexProblem, patientSexOf } from "@/lib/dxSex";
 import { splitStoppedRxLines, stoppedRxLabels } from "@/utils/catalogRx";
 import { EncounterQueuePanel } from "@/components/clinic/EncounterQueuePanel";
 import { HistoryRxPanel } from "@/components/clinic/HistoryRxPanel";
@@ -917,6 +918,14 @@ export function ClinicOutpatientPage() {
 
   const placeDiagnosisRows = useCallback(
     (incoming: DiagnosisRow[], note?: string): true | string => {
+      const sex = patientSexOf(selected?.sex, selected?.ageSex, selected?.idNo);
+      for (const row of incoming) {
+        const wrong = dxSexProblem(row.nhiIcd10 || row.icd10 || "", sex);
+        if (wrong) {
+          setActionError(wrong);
+          return wrong;
+        }
+      }
       const base = dxListRef.current;
       const { accepted, overflow, duplicateName } = takeDiagnosisSlots(base, incoming);
       if (!accepted.length) {
@@ -948,7 +957,7 @@ export function ClinicOutpatientPage() {
       }
       return true;
     },
-    [apiMode, diagnoses.length, selectedEncounterId],
+    [apiMode, diagnoses.length, selectedEncounterId, selected?.sex, selected?.ageSex, selected?.idNo],
   );
 
   const addDiagnosis = useCallback(
