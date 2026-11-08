@@ -108,7 +108,7 @@ class PrincipalDiagnosisTests(unittest.TestCase):
         self.assertIn("\u672a\u660e\u793a", names[2])
 
         arranged = arrange_rows([{"icd10": "W26.0XXA", "nhiIcd10": "W260XXA", "text": "\u5200\u50b7", "id": "old"}])
-        self.assertEqual(arranged[0]["nhiIcd10"], "T1490")
+        self.assertEqual(arranged[0]["nhiIcd10"], "T1490XA")
         self.assertEqual(arranged[0]["text"], "\u5200\u50b7")
         self.assertEqual(arranged[0]["id"], "")
         self.assertEqual(arranged[1]["nhiIcd10"], "W260XXA")

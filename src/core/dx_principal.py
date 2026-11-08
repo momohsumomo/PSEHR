@@ -2,8 +2,7 @@
 
 V/W/X/Y and manifestation codes cannot be d19. The chart text stays whatever
 the doctor typed. This module only reorders codes. It does not change the database.
-The filing book is the FY2015 ICD-10-CM order file: T14.1 and T14.0 are not in it.
-An unspecified injury is T1490.
+T14.1 and T14.0 are not billable. An unspecified injury is T1490XA.
 """
 
 from __future__ import annotations
@@ -17,13 +16,13 @@ _CAR = ("motor", "traffic", "\u8eca\u798d", "\u4ea4\u901a")
 _KNIFE = (
     ("\u5200\u5272\u50b7 - \u624b\u90e8/\u624b\u6307", "S61209A", "W260XXA"),
     ("\u5200\u5272\u50b7 - \u524d\u81c2/\u4e0a\u80a2", "S51809A", "W260XXA"),
-    ("\u5200\u5272\u50b7 - \u672a\u660e\u793a\u90e8\u4f4d", "T1490", "W260XXA"),
+    ("\u5200\u5272\u50b7 - \u672a\u660e\u793a\u90e8\u4f4d", "T1490XA", "W260XXA"),
 )
 _FALL_ROWS = (
-    ("\u8dcc\u5012\u632b\u50b7 - \u672a\u660e\u793a\u90e8\u4f4d", "T1490", "W19XXXA"),
+    ("\u8dcc\u5012\u632b\u50b7 - \u672a\u660e\u793a\u90e8\u4f4d", "T1490XA", "W19XXXA"),
 )
 _CAR_ROWS = (
-    ("\u8eca\u798d\u50b7 - \u672a\u660e\u793a\u90e8\u4f4d", "T1490", "V892XXA"),
+    ("\u8eca\u798d\u50b7 - \u672a\u660e\u793a\u90e8\u4f4d", "T1490XA", "V892XXA"),
 )
 
 
@@ -84,12 +83,12 @@ def _chapter_unspecified(code: str) -> str:
 def filler_code(text: str, code: str) -> str:
     """Billable stand-in when the chosen code cannot be the principal."""
     if _family(f"{text} {code}") in {"knife", "fall", "car"} or is_external(code):
-        if "T1490" in tables().billable:
-            return "T1490"
+        if "T1490XA" in tables().billable:
+            return "T1490XA"
     found = _chapter_unspecified(code)
     if found:
         return found
-    return "T1490" if "T1490" in tables().billable else ""
+    return "T1490XA" if "T1490XA" in tables().billable else ""
 
 
 def primary_suggestions(query: str) -> list[dict]:

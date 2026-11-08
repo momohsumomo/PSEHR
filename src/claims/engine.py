@@ -33,6 +33,8 @@ COPAY_NOTE = "\u90e8\u5206\u8ca0\u64d4\u4ee3\u865f\u7a7a\u767d\uff0c\u8acb\u5728
 BASIC_COPAY_POINTS = 50
 # d15 is required. Primary-care codes from 2023-07: D12 plain visit, D24 visit with a drug copay.
 _GENERAL_COPAY = frozenset({"D10", "D12", "D20", "D24"})
+# Referral fees go in as order type G at 0 points; the referral budget pays them.
+ZERO_POINT_ORDER = re.compile(r"^(0103[4-8][BC]|00193C)$")
 
 
 def _filed_copay_code(
@@ -44,13 +46,18 @@ def _filed_copay_code(
     under_three: bool,
     case_no: str,
 ) -> str:
-    """Code for d15 when the desk left it blank.
+    """Code for d15.
 
-    004 and 003 follow the card mark only; the bureau checks them against enrolment.
+    A blank code is filled. 004 and 003 follow the card mark only; the bureau checks them against enrolment.
     A clinic discount is not an exemption, so it files as an ordinary visit.
     """
     code = (stored or "").strip().upper()
-    if code or (case_no or "").strip().upper() not in {"01", "04", "09"}:
+    if (case_no or "").strip().upper() not in {"01", "04", "09"}:
+        return code
+    # D10 is the hospital code. In a clinic d15 must agree with d58.
+    if code in _GENERAL_COPAY:
+        return "D24" if drug_copay > 0 else "D12"
+    if code:
         return code
     if paid <= drug_copay:
         if under_three:
@@ -510,17 +517,19 @@ def build_claims_summary(
                 pass
 
         conditions = store.list_conditions(encounter_id=encounter_id)
-        diag_codes = [
-            c["indexMeta"]["icd10Code"]
-            for c in conditions
-            if (c.get("indexMeta") or {}).get("icd10Code")
-        ]
-        if not diag_codes:
-            diag_codes = [
-                c["indexMeta"]["nhiIcd10Code"]
+        from src.core.icd_crosswalk import claim_code
+
+        def _filed_dx(key: str) -> list[str]:
+            return [
+                claim_code(
+                    str(c["indexMeta"][key]),
+                    str((c.get("indexMeta") or {}).get("summaryText") or ""),
+                )
                 for c in conditions
-                if (c.get("indexMeta") or {}).get("nhiIcd10Code")
+                if (c.get("indexMeta") or {}).get(key)
             ]
+
+        diag_codes = _filed_dx("icd10Code") or _filed_dx("nhiIcd10Code")
         from src.core.dx_principal import arrange_codes
 
         diag_codes = arrange_codes(diag_codes)
@@ -630,7 +639,9 @@ def build_claims_summary(
                 continue
             # 交付檢驗、轉檢、不另計價：醫令留在檔裡，點數是 0。
             # 舊匯入把型態 6 寫成「材」，那一欄其實是交付檢驗。
-            clinic_does_not_bill = pay_mark in {"\u4ea4", "\u8f49", "\u4e0d", "\u6750"}
+            clinic_does_not_bill = pay_mark in {"\u4ea4", "\u8f49", "\u4e0d", "\u6750"} or bool(
+                ZERO_POINT_ORDER.match(nhi_code.upper())
+            )
             qty = billing["quantity"]
             sig = str(meta.get("useage") or "").strip()
             stored_total = meta.get("totalQty")
@@ -818,7 +829,8 @@ def _price_claims(records: list[ClaimEncounterRecord]) -> None:
                 "\u9662\u6240\u8a2d\u5b9a\uff1a\u7d66\u85e5 4 \u5230 6 \u5929\u4e14\u85e5\u8cbb\u4f4e\u65bc\u5c08\u6848\u5e95\u9650\uff0c\u6539\u5831 09"
             )
         if case == "01" and any(
-            float(m.linePoints or 0) > 0 and (m.nhiCode or "").strip().upper() != simple_table_free
+            (float(m.linePoints or 0) > 0 or (m.delegateLabCode or "").strip())
+            and (m.nhiCode or "").strip().upper() != simple_table_free
             for m in order_lines
         ):
             case = "09"

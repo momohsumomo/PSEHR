@@ -9,13 +9,17 @@ from datetime import date, datetime
 from typing import Any, Iterable
 
 from src.claims.case_rules import dispense_code
-from src.claims.engine import ClaimEncounterRecord, ClaimsSummary
+from src.claims.engine import ZERO_POINT_ORDER, ClaimEncounterRecord, ClaimsSummary
 from src.core.plain_text import plain_text
 
 DEFAULT_INSTITUTION_CODE = "3521013662"
 DEFAULT_DEPT = "11"
 DEFAULT_CONSULT_FEE_CODE = "00101C"
-_VIRTUAL_ORDER = re.compile(r"^(R00[1-8]|S00[1-4])$")
+_VIRTUAL_ORDER = re.compile(r"^(R00[1-8]|S00[1-4])$|" + ZERO_POINT_ORDER.pattern)
+# In-house lab (chapter 06-13) carries p2 = 0, as 醫聖 files 13017C.
+_LAB_ORDER = re.compile(r"^(0[6-9]|1[0-3])\d{3}[A-C]$")
+# 醫聖 files ASORDE when the sig is blank. p7 is required on drug lines.
+_DEFAULT_FREQ = "ASORDE"
 # 免部分負擔代號。d40 記 0，d43 記原本應收的基本＋藥品部分負擔。
 _EXEMPT_COPAY = {
     "001",
@@ -429,15 +433,24 @@ def _render_pdata_lines(
         else:
             kind = "1"
         lab = str(getattr(med, "delegateLabCode", "") or "").strip()[:10]
+        if lab:
+            p2 = "4"
+        elif kind == "2" and _LAB_ORDER.match(code.upper()):
+            p2 = "0"
+        else:
+            p2 = None
+        on_day = f"{visit_roc}0000" if kind == "G" and len(visit_roc) == 7 else None
         fields: list[tuple[str, Any]] = [
-            ("p2", "4" if lab else None),
+            ("p2", p2),
             ("p3", kind),
             ("p4", code[:12]),
-            ("p8", f"{rate:.2f}"),
-            ("p10", _one_decimal(0 if kind == "G" else qty)),
+            ("p8", None if kind == "G" else f"{rate:.2f}"),
+            ("p10", "0.0" if kind == "G" else _one_decimal(qty)),
             ("p11", None if lab or kind == "G" else _money(unit)),
             ("p12", 0 if kind == "G" else pts),
             ("p13", order),
+            ("p14", on_day),
+            ("p15", on_day),
             ("p17", "4"),
             ("p24", lab or None),
         ]
@@ -457,7 +470,7 @@ def _render_pdata_lines(
                 ("p3", kind),
                 ("p4", code[:12]),
                 ("p5", each),
-                ("p7", _freq_code(med.useage)),
+                ("p7", _freq_code(med.useage) or _DEFAULT_FREQ),
                 ("p8", "100.00"),
                 ("p9", (med.routeCode or "").strip() or None),
                 ("p10", _one_decimal(qty if qty else 1.0)),

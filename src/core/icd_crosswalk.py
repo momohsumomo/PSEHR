@@ -2,7 +2,8 @@
 
 Sources (public CMS/CDC files under data/icd/):
 - 2018 ICD-9-CM to ICD-10-CM GEM (last official diagnosis GEM)
-- FY2015 ICD-10-CM order file (codes effective 2014-10-01, the set NHI adopted)
+- 2018 ICD-10-CM code list (billable set; NHI checks claims against the 2023 book)
+- FY2015 ICD-10-CM order file (titles of older chart codes)
 - CMS32 ICD-9-CM long titles
 
 A typed ICD-10 is returned as itself. A typed ICD-9 always yields one
@@ -98,8 +99,8 @@ _CHAPTER_FALLBACK = {
     "P": "P969",
     "Q": "Q899",
     "R": "R69",
-    "S": "T1490",
-    "T": "T1490",
+    "S": "T1490XA",
+    "T": "T1490XA",
     "V": "Y99",
     "W": "Y99",
     "X": "Y99",
@@ -313,6 +314,7 @@ def _load() -> _Tables:
             billable[code] = long_title
 
     extra: dict[str, str] = {}
+    newer: dict[str, str] = {}
     extra_path = _ICD / "codes" / "icd10cm_codes_2018.txt"
     if extra_path.is_file():
         for raw in extra_path.read_text(encoding="latin-1", errors="replace").splitlines():
@@ -322,8 +324,13 @@ def _load() -> _Tables:
             code, _, title = raw.partition(" ")
             code = bare(code)
             title = title.strip()
-            if code and title and code not in billable:
-                extra[code] = title
+            if code and title:
+                newer[code] = title
+    # From fee month 114/01 the bureau checks d19-d23 against the 2023 book.
+    # FY2015 codes that later grew a 7th character (T1490) are rejected there.
+    if newer:
+        extra = {code: title for code, title in billable.items() if code not in newer}
+        billable = newer
 
     zh: dict[str, str] = {}
     zh_cm: dict[str, str] = {}
@@ -431,6 +438,22 @@ def _best(codes: list[str], source_title: str) -> str:
         return ""
     ranked.sort(key=lambda item: (-item[0], -item[1], len(item[2]), item[2]))
     return ranked[0][2]
+
+
+def claim_code(code: str, hint: str = "") -> str:
+    """The code to file for a stored chart code. The chart itself is not changed."""
+    data = tables()
+    c = bare(code)
+    if not c or c[0].isdigit() or c in data.billable:
+        return c
+    for tail in ("XA", "A"):
+        if c + tail in data.billable:
+            return c + tail
+    kids = [k for k in data.billable if k.startswith(c)]
+    if not kids:
+        return c
+    initial = [k for k in kids if len(k) == 7 and k.endswith("A")]
+    return _best(initial or kids, hint or _title_of(c)) or sorted(kids, key=lambda k: (len(k), k))[0]
 
 
 def _search_chapter(icd9: str, source_title: str) -> tuple[str, int]:
