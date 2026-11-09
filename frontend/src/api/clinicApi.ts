@@ -1232,6 +1232,20 @@ export type ReferralSlipHit = {
   summary: string;
 };
 
+/** Downloaded notices not yet accepted here. Host database only; no card and no bureau call. */
+export async function pendingReferrals(body: { encounterId?: string; idNo?: string }): Promise<{
+  ok: boolean;
+  reason: string;
+  count: number;
+  slips: ReferralSlipHit[];
+}> {
+  return request("/nhi/v1/referral/pending", {
+    method: "POST",
+    body: JSON.stringify(body),
+    signal: AbortSignal.timeout(10000),
+  });
+}
+
 /** Sign for the referral lookup while this patient's card is still in the reader. */
 export async function signReferralLookup(idNo: string): Promise<DeskSign> {
   const sign = await signLocalHc("20");

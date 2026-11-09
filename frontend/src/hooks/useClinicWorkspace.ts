@@ -9,8 +9,7 @@ import {
   isApiMode,
   patchQueueStatus,
   fetchSeqNext,
-  queryReferral,
-  signReferralLookup,
+  pendingReferrals,
   markReferralAccepted,
   patchEncounterReg,
   type ReferralSlipHit,
@@ -44,7 +43,6 @@ import type { IncomingChoice } from "@/components/clinic/ReferralAcceptDialogs";
 import { BAD_CARD_REASON, claimSeqFor } from "@/lib/nocardClaim";
 import { roomNumber } from "@/lib/roomMark";
 import { rememberRegisteredPick } from "@/lib/queueOrder";
-import type { DeskSign } from "@/lib/localCard";
 import {
   buildConditionIntake,
   buildMedicationIntake,
@@ -947,53 +945,20 @@ export function useClinicWorkspace(options?: {
 
       onSeqFields?.({ treatSeq, treatmentNumber, treatDateTime, cardId, securitySign, seqNote });
 
+      // Registration never waits on the card or the bureau; only notices already downloaded are matched.
       const referralWanted = !(
         mode === "selfPay" ||
-        mode === "deposit" ||
-        isDepositHold(form) ||
-        NOCARD_MODES.has(mode) ||
+        form.caseNo === "9X" ||
         form.prebook ||
+        !form.idNo.trim() ||
         (form.encounterId &&
           (form.referralSeq || queue.find((row) => row.encounterId === form.encounterId)?.referralSeq || "").trim())
       );
-      // Once the window closes the desk swaps cards, so the card is never touched in the background.
-      let referralSign: DeskSign | null = null;
-      let referralSignError = "";
-      if (referralWanted) {
-        let giveUp = 0;
-        try {
-          referralSign = await Promise.race([
-            signReferralLookup(form.idNo),
-            new Promise<never>((_, reject) => {
-              giveUp = window.setTimeout(
-                () => reject(new Error("\u8b80\u5361\u8edf\u9ad4 10 \u79d2\u6c92\u6709\u7c3d\u7ae0\uff0c\u9019\u4f4d\u6c92\u6709\u67e5\u8f49\u8a3a\u3002")),
-                10000,
-              );
-            }),
-          ]);
-        } catch (err) {
-          referralSignError = err instanceof Error ? err.message : "\u8f49\u8a3a\u5e8f\u865f\u6c92\u4e0b\u8f09\u5230";
-        } finally {
-          window.clearTimeout(giveUp);
-        }
-      }
 
       const rememberReferral = async (encounterId: string): Promise<ReferralSlipHit[]> => {
         if (!referralWanted) return [];
-        if (!referralSign) {
-          if (referralSignError) {
-            onSeqFields?.({
-              treatSeq,
-              treatmentNumber,
-              treatDateTime,
-              cardId,
-              seqNote: [seqNote, referralSignError].filter(Boolean).join(" \u00b7 "),
-            });
-          }
-          return [];
-        }
         try {
-          const ref = await queryReferral({ encounterId, idNo: form.idNo.trim() }, referralSign);
+          const ref = await pendingReferrals({ encounterId, idNo: form.idNo.trim() });
           const slips = ref.slips || [];
           const extra = slips.length
             ? `\u6709 ${slips.length} \u7b46\u8f49\u5165\u8cc7\u6599`

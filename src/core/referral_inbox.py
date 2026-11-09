@@ -279,9 +279,15 @@ def pending_incoming(id_no: str, hosp_id: str = "") -> ReferralSlip | None:
 
     When a hospital was picked, only that hospital's notice counts.
     """
+    pending = pending_list(id_no, hosp_id)
+    return pending[0] if pending else None
+
+
+def pending_list(id_no: str, hosp_id: str = "") -> list[ReferralSlip]:
+    """Downloaded notices for this person that nobody here accepted yet, newest first. Local only."""
     patient = (id_no or "").strip().upper()
     if not patient:
-        return None
+        return []
     with get_shadow_store()._connect() as conn:
         _ensure(conn)
         released = _released(conn)
@@ -316,7 +322,7 @@ def pending_incoming(id_no: str, hosp_id: str = "") -> ReferralSlip | None:
     want = (hosp_id or "").strip()
     if want:
         pending = [slip for slip in pending if want in {slip.hosp_id.strip(), slip.hosp_seq.strip()}]
-    return pending[0] if pending else None
+    return pending
 
 
 def download_person(serial: str) -> dict[str, str]:

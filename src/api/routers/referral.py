@@ -48,6 +48,7 @@ from src.core.referral_inbox import (
     download_person,
     list_downloads,
     mark_accepted,
+    pending_list,
     prompts_for,
     remember_download,
 )
@@ -399,6 +400,29 @@ def referral_save_slip(body: ReferralSlipBody) -> dict[str, Any]:
     if body.kind == "reply" and (item.get("serial") or "").strip() and item.get("status") != WAITING:
         mark_accepted(str(item.get("serial") or ""), "reply")
     return {"ok": True, "item": item}
+
+
+@router.post("/pending")
+def referral_pending(body: ReferralQueryBody) -> dict[str, Any]:
+    """Registration check against downloaded notices only. No card, no bureau call."""
+    id_no = body.idNo.strip().upper()
+    if not id_no and body.encounterId:
+        try:
+            _encounter, _reg, id_no = _load(body.encounterId)
+        except LookupError as exc:
+            return {"ok": False, "reason": str(exc), "slips": [], "count": 0}
+    rows = pending_list(id_no)
+    slips = [
+        {
+            "serial": row.serial,
+            "hospId": row.hosp_id or row.hosp_seq,
+            "openDate": row.open_date,
+            "kind": row.kind,
+            "summary": (row.hosp_name or row.summary or "")[:120],
+        }
+        for row in rows
+    ]
+    return {"ok": True, "reason": "", "slips": slips, "count": len(slips)}
 
 
 @router.post("/query")
