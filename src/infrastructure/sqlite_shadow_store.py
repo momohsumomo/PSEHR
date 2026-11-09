@@ -3916,6 +3916,8 @@ def _apply_index_migrations(conn: sqlite3.Connection) -> None:
         )
     if "id_no" in patient_cols and "medical_no" in patient_cols:
         _ensure_patient_unique_keys(conn)
+    if "sex" in patient_cols and "birthday_roc" in patient_cols:
+        _repair_patient_sex_roc(conn)
     _ensure_runtime_settings_table(conn)
     # 稽核表：補 action 欄（舊庫相容）
     audit_cols = {row[1] for row in conn.execute("PRAGMA table_info(audit_modifications)").fetchall()}
@@ -4489,6 +4491,46 @@ def _apply_patient_fallbacks_to_queue_meta(
     queue_meta["patientArrearage"] = str(patient_clinic.get("arrearage") or "").strip()
 
 
+_GENDER_SEX = {"male": "M", "female": "F"}
+
+
+def _patient_roc_fallback(payload: dict[str, Any]) -> str | None:
+    """Yisheng imports keep the ROC birthday in the clinic block or only as birthDate."""
+    for ext in payload.get("extension") or []:
+        if isinstance(ext, dict) and "patient-clinic-ext" in str(ext.get("url") or ""):
+            for sub in ext.get("extension") or []:
+                if isinstance(sub, dict) and sub.get("url") == "birthdayRoc" and sub.get("valueString"):
+                    return str(sub["valueString"]).strip() or None
+    parts = str(payload.get("birthDate") or "")[:10].split("-")
+    if len(parts) != 3 or not all(p.isdigit() for p in parts):
+        return None
+    year = int(parts[0]) - 1911
+    if year < 0:
+        return None
+    return f"{year:03d}{parts[1]}{parts[2]}"
+
+
+def _repair_patient_sex_roc(conn: sqlite3.Connection) -> None:
+    """Rows that lost sex or ROC birthday on a re-save get them back from the stored Patient."""
+    rows = conn.execute(
+        """
+        SELECT p.resource_id, p.sex, p.birthday_roc, c.payload_json
+        FROM patient_index p
+        JOIN resource_cache c ON c.resource_type = 'Patient' AND c.resource_id = p.resource_id
+        WHERE p.sex IS NULL OR p.sex = '' OR p.birthday_roc IS NULL OR p.birthday_roc = ''
+        """
+    ).fetchall()
+    for rid, sex, roc, raw in rows:
+        try:
+            fields = _patient_index_fields(json.loads(raw))
+        except (TypeError, ValueError):
+            continue
+        conn.execute(
+            "UPDATE patient_index SET sex = ?, birthday_roc = ? WHERE resource_id = ?",
+            (sex or fields.get("sex"), roc or fields.get("birthday_roc"), rid),
+        )
+
+
 def _patient_index_fields(payload: dict[str, Any]) -> dict[str, str | None]:
     """從 FHIR Patient 抽出索引欄位（含健保貼紙與連絡資訊）。"""
     from src.core.nhi_fhir_mapper import extract_nhi_stickers_from_patient
@@ -4565,8 +4607,8 @@ def _patient_index_fields(payload: dict[str, Any]) -> dict[str, str | None]:
         "identifier": identifier,
         "birth_date": payload.get("birthDate"),
         "id_no": id_no,
-        "birthday_roc": stickers.get("birthdayRoc"),
-        "sex": stickers.get("sex"),
+        "birthday_roc": stickers.get("birthdayRoc") or _patient_roc_fallback(payload),
+        "sex": stickers.get("sex") or _GENDER_SEX.get(str(payload.get("gender") or "").lower()),
         "medical_no": medical_no,
         "phone": phone,
         "address": address,
