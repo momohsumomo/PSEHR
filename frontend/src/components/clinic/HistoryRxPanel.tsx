@@ -351,7 +351,9 @@ export function HistoryRxPanel({
               active={false}
               fontSizePx={bodyFs}
               textScale={0.7}
+              textPlusPx={2}
               heavyText
+              fitText
               onDitto={(line) => onDittoRx([line])}
               emptyText={"\u5c1a\u7121\u524d\u6b21\u8655\u65b9"}
               drugs={drugs}

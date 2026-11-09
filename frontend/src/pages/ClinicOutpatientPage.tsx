@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
+import { RAIL_PCT_DEFAULT, clampRailPct, loadRailPct, saveRailPct } from "@/lib/chartSplit";
 import { chartPaint, overlayForEncounter, serverChartSig, textForEncounter } from "@/lib/chartScreen";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { ClinicalAlertsPanel } from "@/components/clinic/ClinicalAlertsPanel";
@@ -628,6 +629,27 @@ export function ClinicOutpatientPage() {
   const queuePanelRef = useRef<HTMLElement>(null);
   const mainPanelRef = useRef<HTMLElement>(null);
   const historyPanelRef = useRef<HTMLDivElement>(null);
+  const [railPct, setRailPct] = useState(loadRailPct);
+  const startRailDrag = useCallback((ev: ReactMouseEvent) => {
+    const row = historyPanelRef.current?.parentElement;
+    if (!row) return;
+    ev.preventDefault();
+    const box = row.getBoundingClientRect();
+    let last = railPct;
+    const move = (e: MouseEvent) => {
+      last = clampRailPct(((box.right - e.clientX) / box.width) * 100);
+      setRailPct(last);
+    };
+    const up = () => {
+      window.removeEventListener("mousemove", move);
+      window.removeEventListener("mouseup", up);
+      document.body.style.cursor = "";
+      saveRailPct(last);
+    };
+    document.body.style.cursor = "col-resize";
+    window.addEventListener("mousemove", move);
+    window.addEventListener("mouseup", up);
+  }, [railPct]);
   /** Ignore left-zone onFocus right after clicking 候診／歷史／內服 (unmount focus bounce). */
   const railTabClickGuardRef = useRef(0);
   const lesionSectionRef = useRef<HTMLElement>(null);
@@ -3654,14 +3676,23 @@ export function ClinicOutpatientPage() {
               </div>
             </main>
             <div
+              className="w-1 shrink-0 cursor-col-resize bg-[#ACA899] hover:bg-[#0A5AD6]"
+              title={"\u62d6\u66f3\u8abf\u6574\u5de6\u53f3\u5927\u5c0f\uff0c\u9019\u53f0\u96fb\u8166\u6703\u8a18\u4f4f\u3002\u96d9\u64ca\u9084\u539f\u3002"}
+              onMouseDown={startRailDrag}
+              onDoubleClick={() => {
+                setRailPct(RAIL_PCT_DEFAULT);
+                saveRailPct(RAIL_PCT_DEFAULT);
+              }}
+            />
+            <div
               ref={historyPanelRef}
               tabIndex={-1}
-              className={`flex w-[35%] min-w-[18rem] shrink-0 flex-col overflow-hidden border-l bg-white outline-none ${
+              className={`flex min-w-[10rem] shrink-0 flex-col overflow-hidden border-l bg-white outline-none ${
                 activeShortcutKey === "F4" || chartRailTab === "history"
                   ? "ring-1 ring-inset ring-[#808080]"
                   : ""
               }`}
-              style={{ borderColor: HIS.chromeDark }}
+              style={{ borderColor: HIS.chromeDark, width: `${railPct}%` }}
             >
               <div
                 className="flex shrink-0 border-b"

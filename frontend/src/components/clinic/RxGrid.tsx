@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import type { UiColumnDef } from "@/types/uiConfig";
 import {
@@ -42,7 +42,11 @@ type Props = {
   fontSizePx?: number;
   /** Shrinks row text and row height together. */
   textScale?: number;
+  /** Added to the scaled text only; rows keep the scaled height. */
+  textPlusPx?: number;
   heavyText?: boolean;
+  /** Read-only cells shrink their text until it fits instead of cutting it off. */
+  fitText?: boolean;
   onRemove?: (id: string) => void;
   onDitto?: (line: RxLine) => void;
   onChangeLine?: (id: string, patch: Partial<RxLine>) => void;
@@ -365,7 +369,9 @@ export function RxGrid({
   active = true,
   fontSizePx = HIS.fs.body,
   textScale = 1,
+  textPlusPx = 0,
   heavyText = false,
+  fitText = false,
   onRemove,
   onDitto,
   onChangeLine,
@@ -425,6 +431,23 @@ export function RxGrid({
   const lastFocusNonce = useRef(focusNonce);
   const suggestOpen = active && !readonly && suggestHits.length > 0;
   const routeList = routes.length ? routes : DEFAULT_ROUTE_PICKS;
+
+  useLayoutEffect(() => {
+    const table = tableRef.current;
+    if (!fitText || !readonly || !table) return;
+    const fit = () => {
+      table.querySelectorAll<HTMLElement>("[data-fit]").forEach((el) => {
+        el.style.fontSize = "";
+        if (el.scrollWidth <= el.clientWidth + 1 || el.clientWidth <= 0) return;
+        const base = parseFloat(window.getComputedStyle(el).fontSize) || 12;
+        el.style.fontSize = `${Math.max(7, Math.floor((base * el.clientWidth) / el.scrollWidth * 10) / 10)}px`;
+      });
+    };
+    fit();
+    const watch = new ResizeObserver(() => fit());
+    watch.observe(table);
+    return () => watch.disconnect();
+  }, [fitText, readonly, lines, columns, textScale, textPlusPx]);
 
   useEffect(() => {
     if (!menu) return;
@@ -860,7 +883,8 @@ export function RxGrid({
                         verticalAlign: "middle",
                         fontSize:
                           (big && !compact ? bigCellPx(col.key) : primary || measure ? HIS.fs.body : HIS.fs.secondary) *
-                          textScale,
+                            textScale +
+                          textPlusPx,
                         fontWeight: 700,
                         WebkitTextStroke: heavyText ? HIS_HEAVY_TEXT.WebkitTextStroke : undefined,
                         color: !compact && INK[col.key] ? INK[col.key] : undefined,
@@ -1164,6 +1188,7 @@ export function RxGrid({
                       ) : (
                         <span
                           className="block"
+                          data-fit={fitText && readonly ? "" : undefined}
                           style={{ minHeight: Math.round(26 * textScale), lineHeight: `${Math.round(26 * textScale)}px` }}
                         >
                           {cellValue(line, col.key, usages) || "\u00a0"}
