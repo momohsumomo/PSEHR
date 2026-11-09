@@ -44,6 +44,7 @@ class MedicationRequestBody(BaseModel):
     memo: str | None = Field(None, description="註記，例如 [")
     daysSupply: int | None = Field(None, description="給藥日份")
     quantity: float | None = Field(None, description="次量")
+    unitPrice: float | None = Field(None, description="unit price for the visit date")
 
     def to_fhir_dict(self) -> dict[str, Any]:
         existing = self.medicationCodeableConcept.to_fhir() if self.medicationCodeableConcept else None
@@ -111,6 +112,13 @@ class MedicationRequestBody(BaseModel):
                 {
                     "url": "https://wundadi.local/fhir/StructureDefinition/medication-billing/quantity",
                     "valueDecimal": float(self.quantity),
+                }
+            )
+        if self.unitPrice is not None:
+            extensions.append(
+                {
+                    "url": "https://wundadi.local/fhir/StructureDefinition/medication-billing/unitPrice",
+                    "valueDecimal": float(self.unitPrice),
                 }
             )
         if extensions:

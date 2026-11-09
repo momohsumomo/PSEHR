@@ -888,8 +888,15 @@ class SqliteShadowStore(ShadowStore):
                 status = excluded.status,
                 days_supply = COALESCE(excluded.days_supply, medication_request_index.days_supply),
                 quantity = COALESCE(excluded.quantity, medication_request_index.quantity),
-                unit_price = COALESCE(excluded.unit_price, medication_request_index.unit_price),
-                pack_version = COALESCE(excluded.pack_version, medication_request_index.pack_version),
+                unit_price = CASE
+                    WHEN excluded.unit_price IS NOT NULL THEN excluded.unit_price
+                    WHEN medication_request_index.nhi_code IS excluded.nhi_code
+                        THEN medication_request_index.unit_price
+                    ELSE NULL END,
+                pack_version = CASE
+                    WHEN medication_request_index.nhi_code IS excluded.nhi_code
+                        THEN COALESCE(excluded.pack_version, medication_request_index.pack_version)
+                    ELSE excluded.pack_version END,
                 updated_at = datetime('now')
             """,
             (

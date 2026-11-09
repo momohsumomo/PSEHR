@@ -204,7 +204,10 @@ export function CurrentRxWidget({
     handleChangeLine(id, {
       name: next.name,
       shortName: next.shortName,
+      tradeName: next.tradeName,
       nhiCode: next.nhiCode,
+      unitPrice: next.unitPrice,
+      unit: next.unit,
       sig: next.sig,
       days: next.days,
       qty: next.qty,

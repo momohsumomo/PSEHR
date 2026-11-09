@@ -117,6 +117,7 @@ export function medicationSaveBody(
     memo: line.memo || "",
     daysSupply: line.days > 0 ? line.days : 1,
     quantity: line.qty != null && Number(line.qty) > 0 ? Number(line.qty) : 1,
+    unitPrice: Number(line.unitPrice) > 0 ? Number(line.unitPrice) : undefined,
   };
 }
 

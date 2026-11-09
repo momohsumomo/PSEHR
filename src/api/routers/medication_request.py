@@ -36,6 +36,32 @@ def _store() -> SqliteShadowStore:
     return store
 
 
+def _price_changed_code(medication_id: str, body: MedicationRequestBody, payload: dict[str, Any]) -> None:
+    """A row switched to another code must not keep the old item's price."""
+    store = _store()
+    dual = store.get_dual_layer("MedicationRequest", medication_id) or {}
+    old = dual.get("indexLayer") or {}
+    code = str(body.nhiCode or "").strip().upper()
+    if str(old.get("nhiCode") or "").strip().upper() == code and old.get("unitPrice") is not None:
+        return
+    day = ""
+    if body.encounter:
+        enc = store.get_cached_resource("Encounter", body.encounter.reference.split("/")[-1]) or {}
+        day = str((enc.get("period") or {}).get("start") or "")[:10]
+    if not day:
+        return
+    from src.core.nhi_clinical_mappers import BILLING_EXT_BASE
+    from src.spoke.drug_price import lookup_drug_price
+
+    looked = lookup_drug_price(code, day)
+    if not looked:
+        return
+    ext = payload.setdefault("extension", [])
+    ext.append({"url": f"{BILLING_EXT_BASE}/unitPrice", "valueDecimal": float(looked["unitPrice"])})
+    if looked.get("packVersion"):
+        ext.append({"url": f"{BILLING_EXT_BASE}/packVersion", "valueString": str(looked["packVersion"])})
+
+
 @router.get("/MedicationRequest/previous")
 def list_previous_medication_requests(
     patient: str = Query(..., description="病人 ID"),
@@ -122,6 +148,8 @@ def update_medication_request(medication_id: str, body: MedicationRequestBody) -
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     payload["id"] = medication_id
+    if body.unitPrice is None and body.nhiCode:
+        _price_changed_code(medication_id, body, payload)
     # Same as Condition: the order can exist only on the index. Save creates the cache row.
     updated = repo.update_resource("MedicationRequest", medication_id, payload)
     dual = _store().get_dual_layer("MedicationRequest", medication_id)
