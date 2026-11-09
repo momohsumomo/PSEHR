@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useState, useRef } from "react";
-import { HIS, HIS_FONT } from "@/lib/hisTheme";
+import { HIS, HIS_FONT, HIS_HEAVY_TEXT } from "@/lib/hisTheme";
 import { hisTextareaStyle } from "@/components/clinic/HisPageFrame";
 import { fetchCcSuggest } from "@/api/clinicApi";
 
@@ -247,10 +247,10 @@ const textStyle = {
           ref={preRef}
           aria-hidden
           className="pointer-events-none absolute inset-0 m-0 overflow-hidden whitespace-pre-wrap break-words p-0.5"
-          style={{ ...textStyle, color: HIS.ccText }}
+          style={{ ...textStyle, ...HIS_HEAVY_TEXT, color: HIS.ccText }}
         >
           {mirrorBody(ccText)}
-          <span style={{ color: "#9a86b0", fontWeight: 500 }}>{suffix}</span>
+          <span style={{ color: "#9a86b0", fontWeight: 500, WebkitTextStroke: 0 }}>{suffix}</span>
         </pre>
         <textarea
           ref={areaRef}

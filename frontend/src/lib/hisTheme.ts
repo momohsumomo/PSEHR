@@ -9,6 +9,9 @@
 export const HIS_FONT =
   '"\u65b0\u7d30\u660e\u9ad4", "PMingLiU", MingLiU, "Microsoft JhengHei", Tahoma, sans-serif';
 
+/** PMingLiU has no bold face; weight 700 alone barely shows at these sizes. */
+export const HIS_HEAVY_TEXT = { fontWeight: 700, WebkitTextStroke: "0.45px currentColor" } as const;
+
 export const HIS = {
   /** XP dialog face (not Win95 gray) */
   chrome: "#C9DEB4",

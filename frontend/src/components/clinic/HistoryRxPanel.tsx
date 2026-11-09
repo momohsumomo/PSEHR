@@ -5,6 +5,7 @@ import { RxGrid } from "@/components/clinic/RxGrid";
 import type { UiColumnDef } from "@/types/uiConfig";
 import type { DiagnosisRow, HistoryVisit, RxLine } from "@/mocks/clinicMocks";
 import type { CatalogDrug } from "@/types/clinicCatalog";
+import { HIS_HEAVY_TEXT } from "@/lib/hisTheme";
 
 const HISTORY_SPLIT_KEY = "wundadi.history.splits";
 const HISTORY_SPLIT_DEFAULT = { visits: 168, cc: 36, dx: 42 };
@@ -266,7 +267,7 @@ export function HistoryRxPanel({
         >
           <pre
             className="min-w-0 flex-1 overflow-auto whitespace-pre-wrap px-1 py-0.5 leading-snug text-slate-800"
-            style={{ fontSize: bodyFs }}
+            style={{ fontSize: bodyFs, ...HIS_HEAVY_TEXT }}
           >
             {selected?.chiefComplaint || dash}
           </pre>
@@ -349,6 +350,8 @@ export function HistoryRxPanel({
               compact
               active={false}
               fontSizePx={bodyFs}
+              textScale={0.7}
+              heavyText
               onDitto={(line) => onDittoRx([line])}
               emptyText={"\u5c1a\u7121\u524d\u6b21\u8655\u65b9"}
               drugs={drugs}

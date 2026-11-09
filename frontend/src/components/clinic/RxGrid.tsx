@@ -11,7 +11,7 @@ import {
 } from "@/mocks/clinicMocks";
 import { CatalogDropdown } from "@/components/clinic/CatalogDropdown";
 import { RxDetailSheet } from "@/components/clinic/IcdBrowseDialogs";
-import { HIS, HIS_FONT } from "@/lib/hisTheme";
+import { HIS, HIS_FONT, HIS_HEAVY_TEXT } from "@/lib/hisTheme";
 import type { CatalogDrug } from "@/types/clinicCatalog";
 import {
   DEFAULT_DAY_PICKS,
@@ -40,6 +40,9 @@ type Props = {
   /** Only handle ArrowUp/Down when this pane is active */
   active?: boolean;
   fontSizePx?: number;
+  /** Shrinks row text and row height together. */
+  textScale?: number;
+  heavyText?: boolean;
   onRemove?: (id: string) => void;
   onDitto?: (line: RxLine) => void;
   onChangeLine?: (id: string, patch: Partial<RxLine>) => void;
@@ -361,6 +364,8 @@ export function RxGrid({
   compact = false,
   active = true,
   fontSizePx = HIS.fs.body,
+  textScale = 1,
+  heavyText = false,
   onRemove,
   onDitto,
   onChangeLine,
@@ -851,10 +856,13 @@ export function RxGrid({
                       }`}
                       style={{
                         borderColor: "#A0A0A0",
-                        height: 30,
+                        height: Math.round(30 * textScale),
                         verticalAlign: "middle",
-                        fontSize: big && !compact ? bigCellPx(col.key) : primary || measure ? HIS.fs.body : HIS.fs.secondary,
+                        fontSize:
+                          (big && !compact ? bigCellPx(col.key) : primary || measure ? HIS.fs.body : HIS.fs.secondary) *
+                          textScale,
                         fontWeight: 700,
+                        WebkitTextStroke: heavyText ? HIS_HEAVY_TEXT.WebkitTextStroke : undefined,
                         color: !compact && INK[col.key] ? INK[col.key] : undefined,
                         maxWidth: compact && COMPACT_WIDTH[col.key]
                           ? COMPACT_WIDTH[col.key]
@@ -1154,7 +1162,10 @@ export function RxGrid({
                           }}
                         />
                       ) : (
-                        <span className="block" style={{ minHeight: 26, lineHeight: "26px" }}>
+                        <span
+                          className="block"
+                          style={{ minHeight: Math.round(26 * textScale), lineHeight: `${Math.round(26 * textScale)}px` }}
+                        >
                           {cellValue(line, col.key, usages) || "\u00a0"}
                         </span>
                       )}

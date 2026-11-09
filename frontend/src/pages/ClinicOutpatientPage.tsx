@@ -350,7 +350,7 @@ export function ClinicOutpatientPage() {
   const [liveCase, setLiveCase] = useState<{ encounterId: string; display: string } | null>(null);
   const [certificateOpen, setCertificateOpen] = useState(false);
   const [otherMenuOpen, setOtherMenuOpen] = useState(false);
-  const [chartRailTab, setChartRailTab] = useState<ChartRailTab>("waiting");
+  const [chartRailTab, setChartRailTab] = useState<ChartRailTab>("history");
   const [historyVisit, setHistoryVisit] = useState<HistoryVisit | null>(null);
   const [saveLayerOpen, setSaveLayerOpen] = useState(false);
   const [cloudAgainAsk, setCloudAgainAsk] = useState(false);
@@ -1758,8 +1758,7 @@ export function ClinicOutpatientPage() {
 
       setSelectedEncounterId(encounterId);
       setClinicTab("chart");
-      // Default right rail: waiting/family (YiSheng)
-      setChartRailTab(opts?.fromSeek ? "common" : "waiting");
+      setChartRailTab("history");
       setChartFocus(opts?.fromSeek ? "rx" : "cc");
       setDxQuery("");
       setRxQuery("");
@@ -2018,7 +2017,7 @@ export function ClinicOutpatientPage() {
         () => {
           setChartInUse(false);
           setClinicTab(tab);
-          if (tab === "chart") setChartRailTab("waiting");
+          if (tab === "chart") setChartRailTab("history");
         },
         (err: unknown) => {
           if (err instanceof Error && err.message === CHART_IN_USE) {
@@ -2026,7 +2025,7 @@ export function ClinicOutpatientPage() {
             return;
           }
           setClinicTab(tab);
-          if (tab === "chart") setChartRailTab("waiting");
+          if (tab === "chart") setChartRailTab("history");
         },
       );
     },
