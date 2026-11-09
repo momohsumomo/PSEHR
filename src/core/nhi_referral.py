@@ -41,6 +41,7 @@ _FULL = re.compile(
 _SHORT = re.compile(r"(\d{16}),([^,]*),(\d{8}),([1-4]),")
 _ACCEPT_KINDS = {"2", "4"}
 _DELETED = "\u522a\u9664"
+CARD_SWAPPED = "\u7c3d\u7ae0\u7684\u5361\u4e0d\u662f\u9019\u4f4d\u75c5\u4eba\uff0c\u6c92\u6709\u67e5\u8f49\u8a3a\u3002"
 
 DLL_PATH = Path(os.environ.get("NHI_EIIAPI_DLL", r"Z:\SC\nhi_eiiapi.dll"))
 WORK_DIR = Path(os.environ.get("NHI_REFERRAL_WORKDIR", r"C:\Temp\wundadi-ref"))
@@ -202,8 +203,8 @@ def query_referrals(id_no: str, *, desk_sign: dict[str, Any] | None = None, cons
     except RuntimeError:
         return {"ok": False, "reason": "NEED_DESK_SIGN", "slips": [], "retry": True}
     card_id = str(signed.get("hcIdNo") or "").strip().upper()
-    if card_id:
-        patient = card_id
+    if card_id and card_id != patient:
+        return {"ok": False, "reason": CARD_SWAPPED, "slips": [], "retry": True}
     hosp = str(signed.get("hospitalId") or "").strip()
     verify = {
         "signature": str(signed.get("signature") or ""),

@@ -1232,7 +1232,21 @@ export type ReferralSlipHit = {
   summary: string;
 };
 
-export async function queryReferral(body: { encounterId?: string; idNo?: string }): Promise<{
+/** Sign for the referral lookup while this patient's card is still in the reader. */
+export async function signReferralLookup(idNo: string): Promise<DeskSign> {
+  const sign = await signLocalHc("20");
+  const want = idNo.trim().toUpperCase();
+  const got = String(sign.hcIdNo || "").trim().toUpperCase();
+  if (want && got && want !== got) {
+    throw new Error("\u8b80\u5361\u6a5f\u4e0a\u5df2\u7d93\u63db\u6210\u5225\u4eba\u7684\u5361\uff0c\u9019\u4f4d\u6c92\u6709\u67e5\u8f49\u8a3a\u3002");
+  }
+  return sign;
+}
+
+export async function queryReferral(
+  body: { encounterId?: string; idNo?: string },
+  signed?: DeskSign,
+): Promise<{
   ok: boolean;
   reason: string;
   serial: string;
@@ -1243,7 +1257,7 @@ export async function queryReferral(body: { encounterId?: string; idNo?: string 
 }> {
   let deskSign: DeskSign;
   try {
-    deskSign = await signLocalHc("20");
+    deskSign = signed ?? (await signReferralLookup(body.idNo || ""));
   } catch (err) {
     const reason = err instanceof Error ? err.message : "NEED_DESK_SIGN";
     return { ok: false, reason, serial: "", retry: true };
@@ -1251,6 +1265,7 @@ export async function queryReferral(body: { encounterId?: string; idNo?: string 
   return request("/nhi/v1/referral/query", {
     method: "POST",
     body: JSON.stringify({ ...body, deskSign }),
+    signal: AbortSignal.timeout(40000),
   });
 }
 
