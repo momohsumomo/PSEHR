@@ -918,8 +918,116 @@ public class PsehrTrustAll : ICertificatePolicy {
         return '{"ok":false,"error":"unreachable","statusCode":1119}'
       }
     }
+    # Card and referral tools can run for minutes. They go one at a time on their own thread,
+    # so /print and /health on this thread always answer.
+    $slowRoutes = @("/tools/card-pair", "/tools/referral-io", "/tools/coexist-test", "/tools/cshis")
+    $slowDefs = (@("Send-Bytes", "Send-Json", "Test-CardPort", "Get-CardExe", "Invoke-CoexistProbe", "Invoke-CshisProxy") | ForEach-Object {
+      "function $_ {`n" + (Get-Item "function:$_").ScriptBlock.ToString() + "`n}"
+    }) -join "`n"
+    $slowLog = Join-Path $env:LOCALAPPDATA "PSEHR\desk.log"
+    $slowPool = [RunspaceFactory]::CreateRunspacePool(1, 1)
+    $slowPool.Open()
+    $slowRuns = New-Object System.Collections.ArrayList
+    $slowJob = {
+      param($defs, $client, $target, $line, $text, $clientDir, $logPath)
+      . ([ScriptBlock]::Create($defs))
+      $began = Get-Date
+      try {
+        if ($target -eq "/tools/card-pair") {
+          $action = "ensure"
+          if ($line -match "action=(ensure6|ensure|restart6|restart5)") { $action = $Matches[1] }
+          if ($text -match '"action"\s*:\s*"(ensure6|ensure|restart6|restart5)"') { $action = $Matches[1] }
+          $pair = Join-Path $clientDir "card_pair.ps1"
+          $raw = ""
+          if (Test-Path -LiteralPath $pair) {
+            $raw = (& $pair -Action $action | Out-String).Trim()
+          }
+          $json = ""
+          foreach ($row in @($raw -split "`r?`n")) {
+            $trim = "$row".Trim()
+            if ($trim.StartsWith("{")) { $json = $trim }
+          }
+          if (-not $json) { $json = '{"ok":false,"action":"fail"}' }
+          Send-Json $client $json 200
+          return
+        }
+        if ($target -eq "/tools/referral-io") {
+          $splitAt = $text.IndexOf("`r`n`r`n")
+          $rawBody = ""
+          if ($splitAt -ge 0) { $rawBody = $text.Substring($splitAt + 4) }
+          $box = Join-Path $env:LOCALAPPDATA "PSEHR"
+          New-Item -ItemType Directory -Force -Path $box | Out-Null
+          $req = Join-Path $box ("ref-" + [guid]::NewGuid().ToString("n") + ".json")
+          [IO.File]::WriteAllText($req, $rawBody, (New-Object System.Text.UTF8Encoding $false))
+          $exe32 = Join-Path $env:SystemRoot "SysWOW64\WindowsPowerShell\v1.0\powershell.exe"
+          $script = Join-Path $clientDir "referral_io.ps1"
+          $raw = ""
+          if ((Test-Path -LiteralPath $script) -and (Test-Path -LiteralPath $exe32)) {
+            $sp = New-Object System.Diagnostics.ProcessStartInfo
+            $sp.FileName = $exe32
+            $sp.Arguments = "-NoProfile -ExecutionPolicy Bypass -File `"$script`" -RequestFile `"$req`""
+            $sp.UseShellExecute = $false
+            $sp.CreateNoWindow = $true
+            $sp.RedirectStandardOutput = $true
+            $sp.StandardOutputEncoding = New-Object System.Text.UTF8Encoding $false
+            $run = [System.Diagnostics.Process]::Start($sp)
+            $read = $run.StandardOutput.ReadToEndAsync()
+            if ($run.WaitForExit(150000)) {
+              $raw = "$($read.Result)".Trim()
+            } else {
+              try { $run.Kill() } catch {}
+              $raw = '{"ok":false,"reason":"referral io timed out"}'
+            }
+          }
+          Remove-Item -LiteralPath $req -ErrorAction SilentlyContinue
+          $json = ""
+          foreach ($row in @($raw -split "`r?`n")) {
+            $trim = "$row".Trim()
+            if ($trim.StartsWith("{")) { $json = $trim }
+          }
+          if (-not $json) { $json = '{"ok":false,"reason":"referral io failed"}' }
+          Send-Json $client $json 200
+          return
+        }
+        if ($target -eq "/tools/coexist-test") {
+          Send-Json $client (Invoke-CoexistProbe) 200
+          return
+        }
+        if ($target -eq "/tools/cshis") {
+          $rawBody = ""
+          $splitAt = $text.IndexOf("`r`n`r`n")
+          if ($splitAt -ge 0) { $rawBody = $text.Substring($splitAt + 4) }
+          $method = "GET"
+          $path = ""
+          $inner = ""
+          try {
+            $payload = $rawBody | ConvertFrom-Json
+            if ($payload.method) { $method = "$($payload.method)".ToUpper() }
+            if ($payload.path) { $path = "$($payload.path)" }
+            if ($payload.body) { $inner = ($payload.body | ConvertTo-Json -Compress -Depth 6) }
+          } catch {}
+          Send-Json $client (Invoke-CshisProxy $method $path $inner) 200
+          return
+        }
+      } catch {
+      } finally {
+        try { $client.Close() } catch {}
+        $took = [int]((Get-Date) - $began).TotalSeconds
+        if ($took -ge 10) {
+          try { Add-Content -Path $logPath -Value ((Get-Date -Format "HH:mm:ss") + " slow " + $target + " " + $took + "s") -Encoding ASCII } catch {}
+        }
+      }
+    }
     while ($true) {
       $client = $null
+      for ($i = $slowRuns.Count - 1; $i -ge 0; $i--) {
+        $run = $slowRuns[$i]
+        if ($run.Handle.IsCompleted) {
+          try { $run.Ps.EndInvoke($run.Handle) | Out-Null } catch {}
+          $run.Ps.Dispose()
+          $slowRuns.RemoveAt($i)
+        }
+      }
       try {
         $client = $tcp.AcceptTcpClient()
         $stream = $client.GetStream()
@@ -964,22 +1072,12 @@ public class PsehrTrustAll : ICertificatePolicy {
           Send-Json $client ('{"ok":true,"printers":[' + $printers + '],"card6":{"installed":' + $flag + ',"running":' + $run + "}}") 200
           continue
         }
-        if ($verb -eq "POST" -and $target -eq "/tools/card-pair") {
-          $action = "ensure"
-          if ($line -match "action=(ensure6|ensure|restart6|restart5)") { $action = $Matches[1] }
-          if ($text -match '"action"\s*:\s*"(ensure6|ensure|restart6|restart5)"') { $action = $Matches[1] }
-          $pair = Join-Path $clientDir "card_pair.ps1"
-          $raw = ""
-          if (Test-Path -LiteralPath $pair) {
-            $raw = (& $pair -Action $action | Out-String).Trim()
-          }
-          $json = ""
-          foreach ($row in @($raw -split "`r?`n")) {
-            $trim = "$row".Trim()
-            if ($trim.StartsWith("{")) { $json = $trim }
-          }
-          if (-not $json) { $json = '{"ok":false,"action":"fail"}' }
-          Send-Json $client $json 200
+        if ($verb -eq "POST" -and $slowRoutes -contains $target) {
+          $work = [PowerShell]::Create()
+          $work.RunspacePool = $slowPool
+          [void]$work.AddScript($slowJob).AddArgument($slowDefs).AddArgument($client).AddArgument($target).AddArgument($line).AddArgument($text).AddArgument($clientDir).AddArgument($slowLog)
+          [void]$slowRuns.Add(@{ Ps = $work; Handle = $work.BeginInvoke() })
+          $client = $null
           continue
         }
         if ($verb -eq "POST" -and $target -eq "/tools/card") {
@@ -994,52 +1092,6 @@ public class PsehrTrustAll : ICertificatePolicy {
           }
           Start-Process -FilePath $exe -WorkingDirectory (Split-Path -Parent $exe) | Out-Null
           Send-Json $client '{"ok":true,"code":"started"}' 200
-          continue
-        }
-        if ($verb -eq "POST" -and $target -eq "/tools/referral-io") {
-          $splitAt = $text.IndexOf("`r`n`r`n")
-          $rawBody = ""
-          if ($splitAt -ge 0) { $rawBody = $text.Substring($splitAt + 4) }
-          $box = Join-Path $env:LOCALAPPDATA "PSEHR"
-          New-Item -ItemType Directory -Force -Path $box | Out-Null
-          $req = Join-Path $box ("ref-" + [guid]::NewGuid().ToString("n") + ".json")
-          [IO.File]::WriteAllText($req, $rawBody, (New-Object System.Text.UTF8Encoding $false))
-          $exe32 = Join-Path $env:SystemRoot "SysWOW64\WindowsPowerShell\v1.0\powershell.exe"
-          $script = Join-Path $clientDir "referral_io.ps1"
-          $raw = ""
-          if ((Test-Path -LiteralPath $script) -and (Test-Path -LiteralPath $exe32)) {
-            $raw = (& $exe32 -NoProfile -ExecutionPolicy Bypass -File $script -RequestFile $req | Out-String).Trim()
-          }
-          Remove-Item -LiteralPath $req -ErrorAction SilentlyContinue
-          $json = ""
-          foreach ($row in @($raw -split "`r?`n")) {
-            $trim = "$row".Trim()
-            if ($trim.StartsWith("{")) { $json = $trim }
-          }
-          if (-not $json) { $json = '{"ok":false,"reason":"referral io failed"}' }
-          Send-Json $client $json 200
-          continue
-        }
-        if ($verb -eq "POST" -and $target -eq "/tools/coexist-test") {
-          $note = Invoke-CoexistProbe
-          Send-Json $client $note 200
-          continue
-        }
-        if ($verb -eq "POST" -and $target -eq "/tools/cshis") {
-          $rawBody = ""
-          $splitAt = $text.IndexOf("`r`n`r`n")
-          if ($splitAt -ge 0) { $rawBody = $text.Substring($splitAt + 4) }
-          $method = "GET"
-          $path = ""
-          $inner = ""
-          try {
-            $payload = $rawBody | ConvertFrom-Json
-            if ($payload.method) { $method = "$($payload.method)".ToUpper() }
-            if ($payload.path) { $path = "$($payload.path)" }
-            if ($payload.body) { $inner = ($payload.body | ConvertTo-Json -Compress -Depth 6) }
-          } catch {}
-          $proxied = Invoke-CshisProxy $method $path $inner
-          Send-Json $client $proxied 200
           continue
         }
         if ($verb -eq "GET" -and ($target -eq "/printers" -or $target -eq "/")) {

@@ -2143,6 +2143,7 @@ export async function printToNamedPrinter(body: {
       headers: { "Content-Type": "application/json" },
       body: payload,
       keepalive,
+      signal: AbortSignal.timeout(20000),
     });
   let res: Response;
   try {
