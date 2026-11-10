@@ -1281,11 +1281,22 @@ export function useClinicWorkspace(options?: {
       if (chiefComplaint.trim()) {
         await persistChiefComplaint(chiefComplaint, assessment);
       }
-      const ownDxIds = new Set(
-        (workspaceLive?.diagnoses ?? [])
-          .map((dx) => dx.id)
-          .filter((id): id is string => Boolean(id) && !isDraftId(id)),
+      const serverDx = (workspaceLive?.diagnoses ?? []).filter((dx) => dx.id && !isDraftId(dx.id));
+      const ownDxIds = new Set(serverDx.map((dx) => dx.id as string));
+      // A screen row without its saved id (e.g. a retry after the card write failed) is the saved row,
+      // not a new one; without its id, retain below would retire it and nothing would be written back.
+      const claimed = new Set(
+        dxRows.filter((dx) => dx.id && !isDraftId(dx.id) && ownDxIds.has(dx.id)).map((dx) => dx.id as string),
       );
+      dxRows = dxRows.map((dx) => {
+        if (dx.id && !isDraftId(dx.id) && ownDxIds.has(dx.id)) return dx;
+        const same = serverDx.find(
+          (row) => !claimed.has(row.id as string) && row.icd10 === dx.icd10 && row.text === dx.text,
+        );
+        if (!same) return dx;
+        claimed.add(same.id as string);
+        return { ...dx, id: same.id };
+      });
       const keptDx = dxRows
         .filter((dx) => dx.id && !isDraftId(dx.id) && ownDxIds.has(dx.id))
         .map((dx) => dx.id as string);
