@@ -352,6 +352,7 @@ export function HistoryRxPanel({
               fontSizePx={bodyFs}
               textScale={0.7}
               textPlusPx={2}
+              textBoost={1.5}
               heavyText
               fitText
               onDitto={(line) => onDittoRx([line])}

@@ -44,6 +44,8 @@ type Props = {
   textScale?: number;
   /** Added to the scaled text only; rows keep the scaled height. */
   textPlusPx?: number;
+  /** Multiplies read-only cell text without changing column widths (they are in ch of the cell font). */
+  textBoost?: number;
   heavyText?: boolean;
   /** Read-only cells shrink their text until it fits instead of cutting it off. */
   fitText?: boolean;
@@ -370,6 +372,7 @@ export function RxGrid({
   fontSizePx = HIS.fs.body,
   textScale = 1,
   textPlusPx = 0,
+  textBoost = 1,
   heavyText = false,
   fitText = false,
   onRemove,
@@ -437,7 +440,7 @@ export function RxGrid({
     if (!fitText || !readonly || !table) return;
     const fit = () => {
       table.querySelectorAll<HTMLElement>("[data-fit]").forEach((el) => {
-        el.style.fontSize = "";
+        el.style.fontSize = el.dataset.fit || "";
         if (el.scrollWidth <= el.clientWidth + 1 || el.clientWidth <= 0) return;
         const base = parseFloat(window.getComputedStyle(el).fontSize) || 12;
         el.style.fontSize = `${Math.max(7, Math.floor((base * el.clientWidth) / el.scrollWidth * 10) / 10)}px`;
@@ -447,7 +450,7 @@ export function RxGrid({
     const watch = new ResizeObserver(() => fit());
     watch.observe(table);
     return () => watch.disconnect();
-  }, [fitText, readonly, lines, columns, textScale, textPlusPx]);
+  }, [fitText, readonly, lines, columns, textScale, textPlusPx, textBoost]);
 
   useEffect(() => {
     if (!menu) return;
@@ -1188,8 +1191,12 @@ export function RxGrid({
                       ) : (
                         <span
                           className="block"
-                          data-fit={fitText && readonly ? "" : undefined}
-                          style={{ minHeight: Math.round(26 * textScale), lineHeight: `${Math.round(26 * textScale)}px` }}
+                          data-fit={fitText && readonly ? (textBoost !== 1 ? `${textBoost}em` : "") : undefined}
+                          style={{
+                            minHeight: Math.round(26 * textScale),
+                            lineHeight: `${Math.round(26 * textScale)}px`,
+                            fontSize: readonly && textBoost !== 1 ? `${textBoost}em` : undefined,
+                          }}
                         >
                           {cellValue(line, col.key, usages) || "\u00a0"}
                         </span>
