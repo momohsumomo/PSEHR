@@ -192,6 +192,12 @@ function mapApiQueue(entries: ApiQueueEntry[]): QueueEntry[] {
 const NOCARD_MODES = new Set(["noCard", "childNoCard", "pregnantNoCard", "badCard", "paper"]);
 
 /** 畫面上還沒寫進 FHIR 的暫存列。local- 是匯入後的正式 id。 */
+function savedRowIds(dx: DiagnosisRow[], rx: RxLine[]): string {
+  const ids = (rows: Array<{ id?: string }>) =>
+    rows.map((row) => row.id || "").filter((id) => id && !isDraftId(id)).sort().join(",");
+  return `${ids(dx)}|${ids(rx)}`;
+}
+
 function isDraftId(id: string | undefined): boolean {
   if (!id) return true;
   return /^(rx-draft-|rx-|dx-tmp-|dx-|new-|prebook-|media-)/i.test(id);
@@ -1273,6 +1279,24 @@ export function useClinicWorkspace(options?: {
     [apiMode, selectedEncounterId, refreshWorkspace],
   );
 
+  /**
+   * Saving replaces the visit's diagnoses and orders with this screen. When another PC saved after this
+   * screen loaded, that would wipe its rows, so refuse, reload, and return the reason ("" = safe to save).
+   */
+  const chartChangedElsewhere = useCallback(async (): Promise<string> => {
+    if (!apiMode || !selectedEncounterId) return "";
+    const eid = selectedEncounterId;
+    if (!workspaceLive) {
+      return "\u9019\u6b21\u770b\u8a3a\u7684\u75c5\u6b77\u9084\u6c92\u8f09\u5165\u5b8c\u6210\uff0c\u9019\u6b21\u6c92\u6709\u5b58\u6a94\u3002\u8acb\u7b49\u756b\u9762\u8f09\u5165\u5f8c\u518d\u5b58\u3002";
+    }
+    const fresh = mapWorkspace(await fetchWorkspace(eid, { historyLimit: 0 }));
+    if (savedRowIds(fresh.diagnoses, fresh.currentRx) === savedRowIds(workspaceLive.diagnoses, workspaceLive.currentRx)) {
+      return "";
+    }
+    await refreshWorkspace(eid);
+    return "\u5225\u53f0\u96fb\u8166\u525b\u5b58\u904e\u9019\u6b21\u770b\u8a3a\u7684\u75c5\u6b77\uff0c\u9019\u53f0\u756b\u9762\u662f\u820a\u7684\uff0c\u9019\u6b21\u6c92\u6709\u5b58\u6a94\u3002\u756b\u9762\u5df2\u91cd\u65b0\u8f09\u5165\uff0c\u8acb\u78ba\u8a8d\u8a3a\u65b7\u8207\u8655\u7f6e\u5f8c\u518d\u5b58\u3002";
+  }, [apiMode, selectedEncounterId, workspaceLive, refreshWorkspace]);
+
   const persistVisit = useCallback(
     async (chiefComplaint: string, dxRows: DiagnosisRow[], rxLines: RxLine[]) => {
       if (!apiMode || !selectedEncounterId) return;
@@ -1566,6 +1590,7 @@ export function useClinicWorkspace(options?: {
     clinicalProfile: patientId ? getPatientClinicalProfile(patientId) : null,
     emptyCurrentRx,
     cloneRxLines,
+    chartChangedElsewhere,
     handleStatusChange,
     refreshQueue,
     refreshWorkspace,

@@ -278,6 +278,7 @@ export function ClinicOutpatientPage() {
     persistVitals,
     persistVisit,
     persistHistoryVisit,
+    chartChangedElsewhere,
     refreshQueue,
     forgetPatientHistory,
     readCardRegisterPatient,
@@ -1269,6 +1270,12 @@ export function ClinicOutpatientPage() {
     let replyPending = false;
     try {
       if (apiMode) {
+        const stale = await chartChangedElsewhere();
+        if (stale) {
+          setSaveLayerOpen(false);
+          setActionError(stale);
+          return;
+        }
         let doctorId =
           saveDraft.doctorId || selected?.doctorId || loadClinicRegisterDefaults().defaultDoctorId || undefined;
         if (!doctorId) {
@@ -1454,6 +1461,7 @@ export function ClinicOutpatientPage() {
   }, [
     selectedEncounterId,
     apiMode,
+    chartChangedElsewhere,
     persistVisit,
     persistVitals,
     chartVitals,
