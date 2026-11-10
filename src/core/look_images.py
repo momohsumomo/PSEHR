@@ -107,21 +107,21 @@ def list_look_files(medical_no: str) -> list[dict[str, str]]:
 
 # Leaf folder path + its own mtime. Parent listings already carry that mtime,
 # so a date query can skip chart folders that have not been written since the start day.
-_leaf_cache: tuple[float, str, list[tuple[str, float]]] | None = None
+_leaf_cache: tuple[float, str, list[tuple[str, str, float]]] | None = None
 _LEAF_TTL_SEC = 90.0
 
 
-def _leaf_folders(base: Path) -> list[tuple[str, float]]:
-    """IMG/aa/bb/cc folders. cc is the chart folder; its mtime moves when a photo is added."""
+def _leaf_folders(base: Path) -> list[tuple[str, str, float]]:
+    """IMG/aa/bb/cc folders as (path, "aa/bb/cc", mtime). cc's mtime moves when a photo is added."""
     global _leaf_cache
     key = str(base)
     now = time.monotonic()
     if _leaf_cache is not None and _leaf_cache[1] == key and now - _leaf_cache[0] < _LEAF_TTL_SEC:
         return _leaf_cache[2]
-    leaves: list[tuple[str, float]] = []
-    stack: list[tuple[str, int]] = [(key, 0)]
+    leaves: list[tuple[str, str, float]] = []
+    stack: list[tuple[str, str, int]] = [(key, "", 0)]
     while stack:
-        current, depth = stack.pop()
+        current, prefix, depth = stack.pop()
         try:
             iterator = os.scandir(current)
         except OSError:
@@ -131,10 +131,11 @@ def _leaf_folders(base: Path) -> list[tuple[str, float]]:
                 try:
                     if not entry.is_dir(follow_symlinks=False):
                         continue
+                    rel = prefix + entry.name
                     if depth < 2:
-                        stack.append((entry.path, depth + 1))
+                        stack.append((entry.path, rel + "/", depth + 1))
                         continue
-                    leaves.append((entry.path, entry.stat(follow_symlinks=False).st_mtime))
+                    leaves.append((entry.path, rel, entry.stat(follow_symlinks=False).st_mtime))
                 except OSError:
                     continue
     _leaf_cache = (now, key, leaves)
@@ -154,7 +155,7 @@ def charts_with_images(date_from: str, date_to: str, root: Path | None = None) -
     end = date_cls.fromisoformat(date_to[:10])
     start_ts = datetime(start.year, start.month, start.day).timestamp()
     found: set[str] = set()
-    for folder, folder_mtime in _leaf_folders(base):
+    for folder, _rel, folder_mtime in _leaf_folders(base):
         if folder_mtime < start_ts:
             continue
         try:
@@ -193,8 +194,37 @@ def next_look_serial(medical_no: str) -> int:
     return nxt
 
 
-def write_look_image(medical_no: str, data: bytes, ext: str = ".JPG") -> dict[str, str]:
-    """Write one new photo. Never overwrites and never deletes."""
+def _day_stamp(day: str) -> float:
+    """Noon of that local day, so a time zone shift cannot move the photo to the next or previous day."""
+    value = date_cls.fromisoformat((day or "").strip()[:10])
+    if value.year < 1990 or value > date_cls.today():
+        raise ValueError("photo date out of range")
+    return datetime(value.year, value.month, value.day, 12, 0, 0).timestamp()
+
+
+def _file_day(path: Path) -> str:
+    return datetime.fromtimestamp(path.stat().st_mtime).date().isoformat()
+
+
+def set_look_date(rel: str, day: str) -> dict[str, str]:
+    """The album date is the file's modified time. Moves it to the given day; the bytes stay the same."""
+    path = resolve_look_file(rel)
+    stamp = _day_stamp(day)
+    before = _file_day(path)
+    os.utime(path, (stamp, stamp))
+    _drop_leaf_cache()
+    root = look_root().resolve()
+    return {
+        "rel": path.resolve().relative_to(root).as_posix(),
+        "name": path.name,
+        "before": before,
+        "modified": _file_day(path),
+    }
+
+
+def write_look_image(medical_no: str, data: bytes, ext: str = ".JPG", day: str = "") -> dict[str, str]:
+    """Write one new photo. Never overwrites and never deletes. day sets the album date."""
+    stamp = _day_stamp(day) if day else None
     folder = chart_folder(medical_no)
     if folder is None:
         raise ValueError("chart number needs 6 digits")
@@ -210,6 +240,8 @@ def write_look_image(medical_no: str, data: bytes, ext: str = ".JPG") -> dict[st
     if path.exists():
         raise FileExistsError(name)
     path.write_bytes(data)
+    if stamp is not None:
+        os.utime(path, (stamp, stamp))
     global _leaf_cache
     _leaf_cache = None
     root = look_root().resolve()
@@ -232,14 +264,18 @@ def _drop_leaf_cache() -> None:
     _leaf_cache = None
 
 
-def iter_chart_photos(root: Path | None = None):
-    """Files named like 1031700A.JPG. Does not read or write the database."""
+def iter_chart_photos(root: Path | None = None, since: float | None = None):
+    """Files named like 1031700A.JPG. Does not read or write the database.
+
+    With since (epoch seconds), only chart folders written at or after it are opened.
+    """
     base = root if root is not None else look_root()
     if not base.is_dir():
         return
     _drop_leaf_cache()
-    base_resolved = base.resolve()
-    for folder, _mtime in _leaf_folders(base):
+    for folder, prefix, folder_mtime in _leaf_folders(base):
+        if since is not None and folder_mtime < since:
+            continue
         try:
             iterator = os.scandir(folder)
         except OSError:
@@ -253,7 +289,7 @@ def iter_chart_photos(root: Path | None = None):
                     if not match or match.group(3).lower() not in _IMAGE_EXT:
                         continue
                     st = entry.stat(follow_symlinks=False)
-                    rel = Path(entry.path).resolve().relative_to(base_resolved).as_posix()
+                    rel = prefix + "/" + entry.name
                 except (OSError, ValueError):
                     continue
                 modified = datetime.fromtimestamp(st.st_mtime).date().isoformat()
@@ -289,17 +325,23 @@ def retire_look_file(rel: str) -> None:
 
 
 def replace_look_file(rel: str, data: bytes) -> dict[str, str]:
-    """Overwrite this photo. A jpeg written over a non-jpeg becomes a new .JPG and the old file is retired."""
+    """Overwrite this photo. A jpeg written over a non-jpeg becomes a new .JPG and the old file is retired.
+
+    The photo keeps its album date; rotating or swapping it does not make it today's photo.
+    """
     path = resolve_look_file(rel)
     if not data:
         raise ValueError("empty photo")
+    kept = path.stat().st_mtime
     jpeg = data[:3] == b"\xff\xd8\xff"
     if jpeg and path.suffix.lower() not in {".jpg", ".jpeg"}:
         key = path.name[:6]
         saved = write_look_image(key, data, ".JPG")
+        os.utime(look_root().resolve() / saved["rel"], (kept, kept))
         retire_look_file(rel)
         return saved
     path.write_bytes(data)
+    os.utime(path, (kept, kept))
     _drop_leaf_cache()
     root = look_root().resolve()
     return {"rel": path.resolve().relative_to(root).as_posix(), "name": path.name}

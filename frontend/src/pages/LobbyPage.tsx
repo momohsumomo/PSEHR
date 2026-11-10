@@ -239,11 +239,15 @@ export function LobbyPage() {
             return;
           }
           window.alert(
-            "\u5c0d\u9f4a\u5b8c\u6210\u3002\u9019\u6b21\u88dc\u9032 " +
-              String(res.added) +
-              " \u7b46\u6a94\u540d\uff0c\u5716\u5eab\u88e1\u5171 " +
+            "\u5c0d\u9f4a\u5b8c\u6210\u3002\u770b\u4e86 " +
+              String(res.folders ?? 0) +
+              " \u500b\u75c5\u6b77\u8cc7\u6599\u593e\u3001" +
               String(res.scanned) +
-              " \u7b46\u3002\u6c92\u6709\u522a\u7167\u7247\uff0c\u4e5f\u6c92\u6709\u628a\u5716\u6a94\u672c\u9ad4\u5beb\u9032\u75c5\u6b77\u3002",
+              " \u5f35\uff0c\u88dc\u9032 " +
+              String(res.added) +
+              " \u7b46\u6a94\u540d\uff0c\u7528\u4e86 " +
+              String(res.seconds ?? 0) +
+              " \u79d2\u3002\u6c92\u6709\u522a\u7167\u7247\uff0c\u4e5f\u6c92\u6709\u628a\u5716\u6a94\u672c\u9ad4\u5beb\u9032\u75c5\u6b77\u3002",
           );
         })
         .catch((err: unknown) => {

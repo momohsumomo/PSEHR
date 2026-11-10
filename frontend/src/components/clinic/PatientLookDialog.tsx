@@ -8,9 +8,10 @@ import {
   removeLookPhoto,
   replaceLookPhoto,
   saveLookPhoto,
+  setLookPhotoDate,
   type PatientPhotoIndex,
 } from "@/api/clinicApi";
-import { isoToRoc } from "@/components/clinic/HisRocDatePicker";
+import { HisRocDateField, isoToRoc, rocToIso, todayRoc } from "@/components/clinic/HisRocDatePicker";
 import { useEscLayer } from "@/hooks/useEscLayer";
 import { HIS, HIS_FONT } from "@/lib/hisTheme";
 
@@ -43,11 +44,11 @@ function isImageFile(file: File): boolean {
   return /\.(jpe?g|png|gif|webp)$/i.test(file.name);
 }
 
-function fileDateRoc(file: File): string {
-  const stamp = new Date(file.lastModified);
-  if (Number.isNaN(stamp.getTime())) return "";
-  const iso = `${stamp.getFullYear()}-${String(stamp.getMonth() + 1).padStart(2, "0")}-${String(stamp.getDate()).padStart(2, "0")}`;
-  return isoToRoc(iso);
+/** Album date is the day the photo is filed under. Not later than today. */
+function photoDayIso(roc: string): string {
+  const iso = rocToIso(roc);
+  if (!iso) return "";
+  return iso > rocToIso(todayRoc()) ? "" : iso;
 }
 
 function rocFromIso(value: string): string {
@@ -178,7 +179,7 @@ export function PatientLookDialog({ open, patientId, patientName, medicalNo, onC
         key: `${file.name}-${file.lastModified}-${file.size}-${Math.random().toString(36).slice(2, 8)}`,
         file,
         url: URL.createObjectURL(file),
-        date: fileDateRoc(file),
+        date: todayRoc(),
       }));
       setPending(next);
       setSelectedKey(next[0]?.key ?? null);
@@ -190,14 +191,14 @@ export function PatientLookDialog({ open, patientId, patientName, medicalNo, onC
       key: `${file.name}-${file.lastModified}-${file.size}-${Math.random().toString(36).slice(2, 8)}`,
       file,
       url: URL.createObjectURL(file),
-      date: fileDateRoc(file),
+      date: todayRoc(),
     };
     setPending((prev) => {
       const index = prev.findIndex((item) => item.key === selectedKey);
       if (index < 0) return [...prev, made];
       URL.revokeObjectURL(prev[index].url);
       const next = prev.slice();
-      next[index] = made;
+      next[index] = { ...made, date: prev[index].date };
       return next;
     });
     setSelectedKey(made.key);
@@ -228,6 +229,12 @@ export function PatientLookDialog({ open, patientId, patientName, medicalNo, onC
 
   const commitPending = async () => {
     if (!medicalNo || !pending.length || saving) return;
+    const undated = pending.find((item) => !photoDayIso(item.date));
+    if (undated) {
+      setSelectedKey(undated.key);
+      setPreviewNote("\u9019\u5f35\u7684\u76f8\u7247\u65e5\u671f\u4e0d\u5c0d\uff0c\u4e0d\u80fd\u665a\u65bc\u4eca\u5929\u3002");
+      return;
+    }
     setSaving(true);
     setPreviewNote("");
     const batch = pending.slice();
@@ -235,7 +242,7 @@ export function PatientLookDialog({ open, patientId, patientName, medicalNo, onC
     let failed = false;
     for (const item of batch) {
       try {
-        await saveLookPhoto(medicalNo, item.file);
+        await saveLookPhoto(medicalNo, item.file, photoDayIso(item.date));
         saved.add(item.key);
       } catch {
         failed = true;
@@ -261,6 +268,11 @@ export function PatientLookDialog({ open, patientId, patientName, medicalNo, onC
     photo && photo.id.startsWith("folder:") ? photo.id.slice("folder:".length) : "";
 
   const currentPhoto = viewer != null ? photos[viewer] : undefined;
+  const [viewerDate, setViewerDate] = useState("");
+  const currentKey = currentPhoto ? `${currentPhoto.id}|${currentPhoto.date}` : "";
+  useEffect(() => {
+    if (currentKey) setViewerDate(currentKey.slice(currentKey.lastIndexOf("|") + 1) || todayRoc());
+  }, [currentKey]);
 
   const showPhoto = (index: number) => {
     if (index < 0 || index >= photos.length) return;
@@ -353,6 +365,38 @@ export function PatientLookDialog({ open, patientId, patientName, medicalNo, onC
     }
   };
 
+  const setPendingDate = (roc: string, key: string | null) => {
+    setPending((prev) => prev.map((item) => (key == null || item.key === key ? { ...item, date: roc } : item)));
+    setPreviewNote("");
+  };
+
+  const redateCurrent = async () => {
+    const photo = currentPhoto;
+    const rel = folderRel(photo);
+    if (!photo || !rel || photoBusy) {
+      setPhotoNote("\u9019\u5f35\u4e0d\u5728\u76f8\u7c3f\u8cc7\u6599\u593e\uff0c\u6c92\u8fa6\u6cd5\u6539\u65e5\u671f\u3002");
+      return;
+    }
+    const day = photoDayIso(viewerDate);
+    if (!day) {
+      setPhotoNote("\u65e5\u671f\u4e0d\u5c0d\uff0c\u4e0d\u80fd\u665a\u65bc\u4eca\u5929\u3002");
+      return;
+    }
+    setPhotoBusy(true);
+    setPhotoNote("");
+    try {
+      const saved = await setLookPhotoDate(rel, day);
+      const wall = await loadWall();
+      const next = wall.findIndex((row) => row.id === `folder:${saved.rel}`);
+      setViewer(next >= 0 ? next : viewer);
+      setPhotoNote("\u65e5\u671f\u6539\u597d\u4e86\u3002");
+    } catch {
+      setPhotoNote("\u65e5\u671f\u6c92\u6539\u6210\u529f\u3002");
+    } finally {
+      setPhotoBusy(false);
+    }
+  };
+
   const replaceCurrent = async (file: File) => {
     const photo = currentPhoto;
     const rel = folderRel(photo);
@@ -375,6 +419,8 @@ export function PatientLookDialog({ open, patientId, patientName, medicalNo, onC
   };
 
   if (!open) return null;
+
+  const selectedPending = pending.find((item) => item.key === selectedKey) ?? (pending.length === 1 ? pending[0] : undefined);
 
   const grid = "grid grid-cols-3 gap-2 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6";
   const frame = "relative aspect-[4/3] w-full overflow-hidden bg-[#202020]";
@@ -510,6 +556,11 @@ export function PatientLookDialog({ open, patientId, patientName, medicalNo, onC
               <button type="button" className="border bg-[#D4D0C8] px-2 py-1 text-xs font-bold" disabled={photoBusy} onClick={() => void rotateCurrent(-1)}>左轉</button>
               <button type="button" className="border bg-[#D4D0C8] px-2 py-1 text-xs font-bold" disabled={photoBusy} onClick={() => void rotateCurrent(1)}>右轉</button>
               <button type="button" className="border bg-[#D4D0C8] px-2 py-1 text-xs font-bold" disabled={photoBusy} onClick={() => editRef.current?.click()}>換成別張</button>
+              <span className="inline-flex items-center gap-1 text-xs font-bold">
+                {"\u76f8\u7247\u65e5\u671f"}
+                <HisRocDateField value={viewerDate} onChange={setViewerDate} />
+                <button type="button" className="border bg-[#D4D0C8] px-2 py-1 text-xs font-bold" disabled={photoBusy || viewerDate === currentPhoto.date} onClick={() => void redateCurrent()}>{"\u6539\u65e5\u671f"}</button>
+              </span>
               <button type="button" className="border bg-[#F0C0C0] px-2 py-1 text-xs font-bold" disabled={photoBusy} onClick={() => void deleteCurrent(viewer ?? picked)}>{armedIndex === viewer ? "確定刪除" : "刪除"}</button>
               <span className="min-w-0 flex-1 text-[11px] text-slate-700">{photoNote || "雙擊大圖看下一張。刪除會把這張移出相簿，放到本機 data\\look-removed。"}</span>
               <button type="button" className={`${bigBtn} w-40`} onClick={() => { setViewer(null); setArmedIndex(null); }}>關閉</button>
@@ -601,6 +652,17 @@ export function PatientLookDialog({ open, patientId, patientName, medicalNo, onC
               >
                 刪除圖片
               </button>
+              {selectedPending && (
+                <div className="flex flex-col gap-2 border-t-2 pt-3" style={{ borderColor: "#B07020" }}>
+                  <span className="text-sm font-bold">{"\u76f8\u7247\u65e5\u671f"}</span>
+                  <HisRocDateField value={selectedPending.date} onChange={(roc) => setPendingDate(roc, selectedPending.key)} />
+                  {pending.length > 1 && (
+                    <button type="button" className="h-10 border-2 border-[#808080] bg-[#D4D0C8] text-sm font-bold hover:bg-[#E4E0D8]" disabled={saving} onClick={() => setPendingDate(selectedPending.date, null)}>
+                      {"\u5168\u90e8\u7528\u9019\u500b\u65e5\u671f"}
+                    </button>
+                  )}
+                </div>
+              )}
               <span className="mt-auto text-xs leading-5 text-slate-700">新增照片才會寫進這個病人。選擇和刪除只改這次預覽。</span>
             </div>
             </div>

@@ -80,6 +80,52 @@ class LookImageNameTests(unittest.TestCase):
             finally:
                 os.environ.pop("WUNDADI_LOOK_DIR", None)
 
+    def test_photo_date_set_by_hand_and_kept_on_rotate(self) -> None:
+        from src.core.look_images import replace_look_file, set_look_date
+
+        with tempfile.TemporaryDirectory() as tmp:
+            os.environ["WUNDADI_LOOK_DIR"] = tmp
+            try:
+                saved = write_look_image("101190", b"one", ".JPG", "2026-11-05")
+                self.assertEqual(list_look_files("101190")[0]["modified"], "2026-11-05")
+                moved = set_look_date(saved["rel"], "2026-11-03")
+                self.assertEqual((moved["before"], moved["modified"]), ("2026-11-05", "2026-11-03"))
+                replace_look_file(saved["rel"], b"\xff\xd8\xffturned")
+                self.assertEqual(list_look_files("101190")[0]["modified"], "2026-11-03")
+                with self.assertRaises(ValueError):
+                    set_look_date(saved["rel"], "2999-01-01")
+            finally:
+                os.environ.pop("WUNDADI_LOOK_DIR", None)
+
+    def test_note_look_files_opens_only_changed_folders(self) -> None:
+        from datetime import datetime
+
+        from src.infrastructure.sqlite_shadow_store import SqliteShadowStore
+
+        with tempfile.TemporaryDirectory() as tmp:
+            os.environ["WUNDADI_LOOK_DIR"] = tmp
+            try:
+                write_look_image("101190", b"one", ".JPG")
+                write_look_image("102200", b"two", ".JPG")
+                old = Path(tmp) / "10" / "22" / "00"
+                stamp = datetime(2020, 1, 2, 12, 0, 0).timestamp()
+                os.utime(old, (stamp, stamp))
+                store = SqliteShadowStore(Path(tmp) / "t.db")
+                first = store.note_look_files()
+                self.assertEqual((first["full"], first["added"], first["folders"]), (True, 2, 2))
+                second = store.note_look_files()
+                self.assertEqual((second["full"], second["folders"], second["added"]), (False, 1, 0))
+                write_look_image("101190", b"three", ".JPG")
+                third = store.note_look_files()
+                self.assertEqual((third["added"], third["folders"]), (1, 1))
+                self.assertEqual(store.note_look_files(full=True)["folders"], 2)
+                held = getattr(store._local, "conn", None)
+                if held is not None:
+                    held.close()
+                    store._local.conn = None
+            finally:
+                os.environ.pop("WUNDADI_LOOK_DIR", None)
+
 
 if __name__ == "__main__":
     unittest.main()

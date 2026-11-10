@@ -36,9 +36,9 @@ def list_media(
 
 
 @router.post("/Media/look-sync")
-def sync_look_names() -> dict[str, Any]:
+def sync_look_names(full: bool = Query(False)) -> dict[str, Any]:
     """Add filenames that are on disk and not yet stored. Never deletes."""
-    return _store().note_look_files()
+    return _store().note_look_files(full=full)
 
 
 @router.get("/Media/look-folder")
@@ -58,6 +58,7 @@ def list_look_folder(medicalNo: str = Query("")) -> dict[str, Any]:
 @router.post("/Media/look-file")
 async def save_look_file(
     medicalNo: str = Query(""),
+    day: str = Query(""),
     file: UploadFile = File(...),
 ) -> dict[str, str]:
     from src.core.look_images import write_look_image
@@ -65,7 +66,7 @@ async def save_look_file(
     ext = os.path.splitext(file.filename or "")[1] or ".JPG"
     data = await file.read()
     try:
-        saved = await asyncio.to_thread(write_look_image, medicalNo, data, ext)
+        saved = await asyncio.to_thread(write_look_image, medicalNo, data, ext, day)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except FileExistsError as exc:
@@ -87,6 +88,21 @@ async def replace_look_file_route(
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except (FileNotFoundError, OSError):
         raise HTTPException(status_code=404, detail="相片不在 LOOK 資料夾") from None
+
+
+@router.post("/Media/look-file/date")
+def set_look_file_date(rel: str = Query(""), day: str = Query("")) -> dict[str, str]:
+    from src.core.look_images import set_look_date
+
+    try:
+        saved = set_look_date(rel, day)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except (FileNotFoundError, OSError):
+        raise HTTPException(status_code=404, detail="\u76f8\u7247\u4e0d\u5728 LOOK \u8cc7\u6599\u593e") from None
+    if saved["before"] != saved["modified"]:
+        _store().note_look_date(saved["rel"], saved["before"], saved["modified"])
+    return saved
 
 
 @router.post("/Media/look-file/remove")

@@ -1251,13 +1251,18 @@ class SqliteShadowStore(ShadowStore):
                 found.add(digits[:6].zfill(6))
         return found
 
-    def note_look_files(self) -> dict[str, Any]:
+    def note_look_files(self, *, full: bool = False) -> dict[str, Any]:
         """Remember photo filenames that are already in the image folder.
 
+        After the first run only chart folders written since the last run (less a day) are opened,
+        so a day's import costs about one folder per patient. full=True opens every folder.
         Does not copy image bytes and does not delete a name or a file.
         """
+        import time as time_mod
+
         from src.core.look_images import iter_chart_photos, look_root
 
+        began = time_mod.time()
         root = look_root()
         if not root.is_dir():
             return {
@@ -1286,13 +1291,24 @@ class SqliteShadowStore(ShadowStore):
             conn.execute(
                 "CREATE INDEX IF NOT EXISTS idx_look_file_chart ON look_file(chart_no)"
             )
-            known = {str(row[0]) for row in conn.execute("SELECT rel FROM look_file")}
+            conn.execute(
+                "CREATE TABLE IF NOT EXISTS look_sync_state (key TEXT PRIMARY KEY, value TEXT NOT NULL)"
+            )
+            since: float | None = None
+            if not full:
+                row = conn.execute("SELECT value FROM look_sync_state WHERE key = 'last_run'").fetchone()
+                try:
+                    since = float(row[0]) - 86400 if row else None
+                except (TypeError, ValueError):
+                    since = None
             pending: list[tuple[Any, ...]] = []
+            folders: set[str] = set()
 
             def flush() -> None:
                 nonlocal added
                 if not pending:
                     return
+                before = conn.total_changes
                 conn.executemany(
                     """
                     INSERT OR IGNORE INTO look_file
@@ -1301,27 +1317,54 @@ class SqliteShadowStore(ShadowStore):
                     """,
                     pending,
                 )
-                added += len(pending)
+                added += conn.total_changes - before
+                conn.executemany(
+                    """
+                    UPDATE look_file SET modified = ?, size_bytes = ?
+                    WHERE rel = ? AND (IFNULL(modified, '') != ? OR IFNULL(size_bytes, -1) != ?)
+                    """,
+                    [(row[3], row[4], row[0], row[3], row[4]) for row in pending],
+                )
                 pending.clear()
 
-            for item in iter_chart_photos(root):
+            for item in iter_chart_photos(root, since=since):
                 scanned += 1
-                rel = item["rel"]
-                if rel in known:
-                    continue
-                known.add(rel)
-                pending.append((rel, item["chart"], item["name"], item["modified"], item["size"]))
+                folders.add(item["rel"].rsplit("/", 1)[0])
+                pending.append((item["rel"], item["chart"], item["name"], item["modified"], item["size"]))
                 if len(pending) >= 400:
                     flush()
             flush()
+            conn.execute(
+                "INSERT INTO look_sync_state (key, value) VALUES ('last_run', ?) "
+                "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+                (str(began),),
+            )
         return {
             "ok": True,
             "reachable": True,
             "root": str(root),
+            "full": since is None,
+            "folders": len(folders),
             "scanned": scanned,
             "added": added,
             "known": scanned - added,
+            "seconds": round(time_mod.time() - began, 2),
         }
+
+    def note_look_date(self, rel: str, before: str, after: str) -> None:
+        """A photo's album date was changed by hand. Keeps the name list and the change log in step."""
+        with self._connect() as conn:
+            exists = conn.execute(
+                "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'look_file'"
+            ).fetchone()
+            if exists:
+                conn.execute("UPDATE look_file SET modified = ? WHERE rel = ?", (after, rel))
+        self.write_audit_event(
+            action="UPDATE",
+            resource_type="LookPhoto",
+            resource_id=rel,
+            changed_fields={"date": {"before": before, "after": after}},
+        )
 
     def list_encounters_for_date(
         self,

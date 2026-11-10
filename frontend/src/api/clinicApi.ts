@@ -1600,15 +1600,17 @@ export type PatientPhotoIndex = {
 
 export type LookFolderFile = { rel: string; name: string; medicalNo: string; modified?: string };
 
-export async function syncLookNames(): Promise<{
+export async function syncLookNames(full = false): Promise<{
   ok: boolean;
   reachable: boolean;
   root: string;
+  folders?: number;
   scanned: number;
   added: number;
   known: number;
+  seconds?: number;
 }> {
-  return request("/fhir/Media/look-sync", { method: "POST" });
+  return request(`/fhir/Media/look-sync${full ? "?full=true" : ""}`, { method: "POST" });
 }
 
 export async function fetchLookFolder(medicalNo: string): Promise<{
@@ -1626,8 +1628,9 @@ export function lookFileUrl(rel: string): string {
   return `${API_BASE}/fhir/Media/look-file?${q.toString()}`;
 }
 
-export async function saveLookPhoto(medicalNo: string, file: File): Promise<{ rel: string; name: string }> {
+export async function saveLookPhoto(medicalNo: string, file: File, day = ""): Promise<{ rel: string; name: string }> {
   const q = new URLSearchParams({ medicalNo });
+  if (day) q.set("day", day);
   const body = new FormData();
   body.append("file", file);
   const res = await fetch(`${API_BASE}/fhir/Media/look-file?${q.toString()}`, {
@@ -1656,6 +1659,11 @@ export async function replaceLookPhoto(
   });
   if (!res.ok) throw new Error(await res.text());
   return res.json() as Promise<{ rel: string; name: string }>;
+}
+
+export async function setLookPhotoDate(rel: string, day: string): Promise<{ rel: string; modified: string }> {
+  const q = new URLSearchParams({ rel, day });
+  return request(`/fhir/Media/look-file/date?${q.toString()}`, { method: "POST" });
 }
 
 export async function removeLookPhoto(rel: string): Promise<void> {
