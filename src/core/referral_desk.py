@@ -109,9 +109,11 @@ def save_slip(body: dict[str, Any]) -> dict[str, Any]:
     with get_shadow_store()._connect() as conn:
         _ensure(conn)
         existing = conn.execute(
-            "SELECT opened_on, encounter_id FROM referral_slip WHERE id=?",
+            "SELECT opened_on, encounter_id, status FROM referral_slip WHERE id=?",
             (slip_id,),
         ).fetchone()
+        if existing and not str(body.get("status") or "") and existing[2]:
+            fields["status"] = str(existing[2])
         if existing and not fields["opened_on"] and existing[0]:
             fields["opened_on"] = str(existing[0])[:10]
         # Editing from the referral list carries no visit; the claim needs the link (d18, d55).
@@ -179,7 +181,14 @@ _SHEET_KEYS = (
     ("selfSeq", "selfSeq"),
     ("acceptLocalId", "acceptLocalId"),
     ("acceptedOn", "acceptedOn"),
+    ("clinicTel", "clinicTel"),
+    ("fax", "fax"),
+    ("email", "email"),
+    ("medOn", "medOn"),
+    ("paper", "paper"),
 )
+
+PAPER_SHEET_LIKE = '%"paper": "Y"%'
 
 
 def _write_slip_extra(conn, slip_id: str, body: dict[str, Any]) -> None:
@@ -405,6 +414,18 @@ def reply_for_encounter(encounter_id: str) -> dict[str, Any] | None:
     return None
 
 
+def is_paper(slip: dict[str, Any] | None) -> bool:
+    """Self-pay referral printed on paper. It never goes to the NHI platform."""
+    return str((slip or {}).get("paper") or "").strip().upper() == "Y"
+
+
+def out_for_encounter(encounter_id: str) -> dict[str, Any] | None:
+    outs = [slip for slip in slips_for_encounter(encounter_id) if slip.get("kind") == "out"]
+    if not outs:
+        return None
+    return max(outs, key=lambda slip: str(slip.get("updatedAt") or ""))
+
+
 def remember_self_seq(slip_id: str, self_seq: str) -> None:
     slip = (slip_id or "").strip()
     token = (self_seq or "").strip()
@@ -496,6 +517,7 @@ def _public(fields: dict[str, Any]) -> dict[str, Any]:
         "handoff": extra.get("handoff") or "",
         "drugs": extra.get("drugs") or "",
         "aux": extra.get("aux") or "",
+        "paper": extra.get("paper") or "",
     }
 
 

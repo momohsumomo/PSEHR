@@ -3,7 +3,7 @@ import { HIS, HIS_FONT } from "@/lib/hisTheme";
 import { openPrintPreview } from "@/lib/printJob";
 import { buildReferralSlipHtml } from "@/lib/clinicPrintDocs";
 import { doctorDisplayName, pickClinicDoctor } from "@/lib/doctorName";
-import { fetchStaff, saveReferralSlip, uploadReferralSlip } from "@/api/clinicApi";
+import { fetchStaff, saveReferralSlip, uploadReferralSlip, type ReferralSlipRow } from "@/api/clinicApi";
 import { thisPcUploadsReferralOnSave } from "@/lib/clinicDevice";
 import { readLocalClinicBundle } from "@/lib/clinicProfile";
 import { referralDeptOptions } from "@/lib/referralDepts";
@@ -45,7 +45,28 @@ export type ReferralArchive = {
   openedOn?: string;
 };
 
+export function referralArchiveFromRow(row: ReferralSlipRow | null | undefined): ReferralArchive | null {
+  if (!row || !row.destHosp) return null;
+  return {
+    destHosp: row.destHosp,
+    destCode: row.destCode,
+    destAddr: row.destAddr || "",
+    destTel: row.destTel || "",
+    destDeptLabel: row.destDept || row.dept || "",
+    ourDept: (row.ourDept || row.dept || "").trim(),
+    clinicTel: row.clinicTel || "",
+    fax: row.fax || "",
+    email: row.email || "",
+    validUntil: row.validUntil || "",
+    purpose: row.purpose || "",
+    suggestDoctor: row.destDoctor || "",
+    openedOn: row.openedOn || "",
+  };
+}
+
 const DEPTS = referralDeptOptions();
+const PAPER_TITLE = "\u81ea\u8cbb\uff0c\u975e\u5065\u4fdd\u8eab\u5206\u8f49\u8a3a\uff08\u7d19\u672c\uff09";
+const PAPER_STATUS = "\u7d19\u672c\uff08\u81ea\u8cbb\uff09";
 const PURPOSES: Array<[string, string]> = [
   ["1", "\u6025\u8a3a\u6cbb\u7642"],
   ["2", "\u4f4f\u9662\u6cbb\u7642"],
@@ -110,7 +131,9 @@ type Props = {
   encounterId?: string;
   slipId?: string;
   archive?: ReferralArchive | null;
-  onSaved?: (info: { hosp: string; uploaded: boolean }) => void;
+  /** Self-pay visit: printed slip only, no NHI platform, no upload. */
+  paper?: boolean;
+  onSaved?: (info: { hosp: string; uploaded: boolean; paper: boolean; id: string }) => void;
 };
 
 function rocToday(): string {
@@ -162,7 +185,7 @@ function markedPurpose(raw: string): string {
   return PURPOSES.some(([code]) => code === text) ? text : "";
 }
 
-export function ReferralSlipDialog({ open, seed, onClose, encounterId, slipId, archive, onSaved }: Props) {
+export function ReferralSlipDialog({ open, seed, onClose, encounterId, slipId, archive, paper = false, onSaved }: Props) {
   const [localSlipId, setLocalSlipId] = useState(slipId || "");
   const [hosp, setHosp] = useState("");
   const [hospCode, setHospCode] = useState("");
@@ -200,7 +223,8 @@ export function ReferralSlipDialog({ open, seed, onClose, encounterId, slipId, a
   useEffect(() => {
     if (!open) return;
     setLocalSlipId(slipId || "");
-    setUploadOnSave(thisPcUploadsReferralOnSave());
+    setUploadOnSave(!paper && thisPcUploadsReferralOnSave());
+    setNote("");
     const saved = loadReferralSettings();
     setSettings(saved);
     const named = doctorDisplayName(seed.doctorName) || seed.doctorName || "";
@@ -222,7 +246,7 @@ export function ReferralSlipDialog({ open, seed, onClose, encounterId, slipId, a
     setDept(archive ? deptChoice(archive.destDeptLabel, ours) : deptHit);
     const marked = archive ? markedPurpose(archive.purpose) : "";
     setPurpose(marked || saved.defaultPurpose || "4");
-    setWriteDa(saved.writeDaOnSave);
+    setWriteDa(!paper && saved.writeDaOnSave);
     setValid(archive?.validUntil || plusDays(rocToday(), saved.validDays));
     setOpened(rocDay(archive?.openedOn || "") || rocToday());
     if (archive) {
@@ -234,11 +258,17 @@ export function ReferralSlipDialog({ open, seed, onClose, encounterId, slipId, a
       setFax(archive.fax);
       setEmail(archive.email);
       setSuggestDoc(archive.suggestDoctor);
+    } else {
+      setHosp("");
+      setHospCode("");
+      setHospAddr("");
+      setHospTel("");
+      setSuggestDoc("");
     }
     return () => {
       cancel = true;
     };
-  }, [open, seed.doctorName, slipId, archive]);
+  }, [open, seed.doctorName, slipId, archive, paper]);
 
   if (!open) return null;
 
@@ -282,7 +312,8 @@ export function ReferralSlipDialog({ open, seed, onClose, encounterId, slipId, a
       return;
     }
     const dx = seed.diagnoses.split(/\n/).map((line) => line.trim()).filter(Boolean)[0] || "";
-    if (uploadOnSave) {
+    const upload = uploadOnSave && !paper;
+    if (upload) {
       const missing: string[] = [];
       if (!seed.name.trim()) missing.push("\u59d3\u540d");
       if (!seed.idNo.trim()) missing.push("\u8eab\u5206\u8b49");
@@ -312,7 +343,11 @@ export function ReferralSlipDialog({ open, seed, onClose, encounterId, slipId, a
       note: chiefOut,
       validUntil: valid,
       openedOn: isoDay(opened),
-      status: "\u8349\u7a3f",
+      status: paper ? PAPER_STATUS : localSlipId ? "" : "\u8349\u7a3f",
+      paper: paper ? "Y" : "",
+      clinicTel: tel,
+      fax,
+      email,
       phone: seed.phone,
       address: seed.address,
       sex: seed.sex,
@@ -330,14 +365,18 @@ export function ReferralSlipDialog({ open, seed, onClose, encounterId, slipId, a
     }).then(async (row) => {
       setLocalSlipId(row.id);
       const hospName = hosp.trim();
-      onSaved?.({ hosp: hospName, uploaded: false });
-      if (!uploadOnSave) {
+      onSaved?.({ hosp: hospName, uploaded: false, paper, id: row.id });
+      if (paper) {
+        setNote("\u5df2\u5b58\u9032\u8f49\u8a3a\u5de5\u5177\u7684\u8f49\u51fa\u540d\u55ae\u3002\u81ea\u8cbb\u7d19\u672c\u8f49\u8a3a\u4e0d\u4e0a\u50b3\u5065\u4fdd\uff0c\u8acb\u5217\u5370\u7d19\u672c\u7d66\u75c5\u4eba\u3002");
+        return;
+      }
+      if (!upload) {
         setNote("\u5df2\u8a18\u5165\u8f49\u51fa\u540d\u55ae\u3002\u9019\u6b21\u6c92\u6709\u4e0a\u50b3\u3002");
         return;
       }
       try {
         const text = await uploadReferralSlip(row.id, "\u5df2\u4e0a\u50b3");
-        onSaved?.({ hosp: hospName, uploaded: true });
+        onSaved?.({ hosp: hospName, uploaded: true, paper, id: row.id });
         setNote(text);
       } catch (err: unknown) {
         const why = err instanceof Error ? err.message : "\u4e0a\u50b3\u5931\u6557";
@@ -389,12 +428,13 @@ export function ReferralSlipDialog({ open, seed, onClose, encounterId, slipId, a
       hospTel,
       valid: valid || "",
       copies,
+      selfPay: paper,
     });
     openPrintPreview({
       kind: "report",
       layout: "paged",
       setupId: "referral",
-      title: "\u5168\u6c11\u5065\u5eb7\u4fdd\u96aa\u8f49\u8a3a\u55ae",
+      title: paper ? PAPER_TITLE : "\u5168\u6c11\u5065\u5eb7\u4fdd\u96aa\u8f49\u8a3a\u55ae",
       patientName: seed.name,
       medicalNo: seed.medicalNo,
       lines: [],
@@ -408,8 +448,8 @@ export function ReferralSlipDialog({ open, seed, onClose, encounterId, slipId, a
   return (
     <div className="fixed inset-0 z-[85] flex items-center justify-center bg-black/40 p-2">
       <div className="flex max-h-[94vh] w-[min(68rem,98vw)] flex-col border bg-[#F0F0F0] shadow-lg" style={{ borderColor: HIS.chromeDark, fontFamily: HIS_FONT }}>
-        <div className="flex shrink-0 items-center bg-[#2060A0] px-2 py-1 text-xs font-bold text-white">
-          <span>{"\u8f49\u8a3a\u7cfb\u7d71"}</span>
+        <div className={`flex shrink-0 items-center px-2 py-1 text-xs font-bold text-white ${paper ? "bg-[#A04000]" : "bg-[#2060A0]"}`}>
+          <span>{paper ? PAPER_TITLE : "\u8f49\u8a3a\u7cfb\u7d71"}</span>
           <button type="button" className="ml-auto px-2" onClick={onClose}>{"\u95dc\u9589"}</button>
         </div>
         <div className="min-h-0 flex-1 overflow-auto p-2 text-[12px]">
@@ -462,13 +502,17 @@ export function ReferralSlipDialog({ open, seed, onClose, encounterId, slipId, a
             <label className="mr-3"><input type="checkbox" checked={copy1} onChange={(e) => setCopy1(e.target.checked)} /> {"\u7b2c\u4e00\u806f\uff1a\u63a5\u53d7\u8f49\u8a3a\u91ab\u9662\u3001\u8a3a\u6240\u7559\u5b58\uff08\u85cd\u8272\uff09"}</label>
             <label className="mr-3"><input type="checkbox" checked={copy2} onChange={(e) => setCopy2(e.target.checked)} /> {"\u7b2c\u4e8c\u806f\uff1a\u63a5\u53d7\u8f49\u8a3a\u91ab\u9662\u3001\u8a3a\u6240\u56de\u8986\u8f49\u51fa\u91ab\u9662\u3001\u8a3a\u6240\uff08\u7d05\u8272\uff09"}</label>
             <label className="mr-3"><input type="checkbox" checked={copy3} onChange={(e) => setCopy3(e.target.checked)} /> {"\u7b2c\u4e09\u806f\uff1a\u539f\u8a3a\u7642\u91ab\u9662\u3001\u8a3a\u6240\u7559\u5b58\uff08\u767d\u8272\uff09"}</label>
-            <label><input type="checkbox" checked={writeDa} onChange={(e) => setWriteDa(e.target.checked)} /> {"\u5b58\u6a94\u6642\u5beb\u5165\u5c31\u91ab\u985e\u5225 DA \u65bcIC\u5361"}</label>
-            <label className="ml-3"><input type="checkbox" checked={uploadOnSave} onChange={(e) => setUploadOnSave(e.target.checked)} /> {"\u5b58\u6a94\u5f8c\u4e0a\u50b3"}</label>
+            {paper ? null : (
+              <>
+                <label><input type="checkbox" checked={writeDa} onChange={(e) => setWriteDa(e.target.checked)} /> {"\u5b58\u6a94\u6642\u5beb\u5165\u5c31\u91ab\u985e\u5225 DA \u65bcIC\u5361"}</label>
+                <label className="ml-3"><input type="checkbox" checked={uploadOnSave} onChange={(e) => setUploadOnSave(e.target.checked)} /> {"\u5b58\u6a94\u5f8c\u4e0a\u50b3"}</label>
+              </>
+            )}
           </div>
           {note ? <p className="mt-1 text-[12px] text-[#004000]">{note}</p> : null}
         </div>
         <div className="flex shrink-0 gap-1 border-t p-1" style={{ borderColor: HIS.chromeDark }}>
-          <button type="button" className={btn} onClick={openPlatform}>{"\u958b\u555f\u8f49\u8a3a\u5e73\u53f0"}</button>
+          {paper ? null : <button type="button" className={btn} onClick={openPlatform}>{"\u958b\u555f\u8f49\u8a3a\u5e73\u53f0"}</button>}
           <button type="button" className={btn} onClick={openSettings}>{"\u7de8\u8f2f\u53c3\u6578\u8a2d\u5b9a"}</button>
           <button type="button" className={btn} onClick={printSlip}>{"\u5217\u5370"}</button>
           <button type="button" className="flex min-w-0 flex-1 items-center justify-center border border-[#808080] bg-[#C8F0C8] px-1 py-1 text-[13px] font-bold" onClick={saveXml}>{"F9 \u5b58\u6a94"}</button>

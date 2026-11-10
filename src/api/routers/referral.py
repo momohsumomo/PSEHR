@@ -32,7 +32,9 @@ from src.core.referral_desk import (
     WAITING,
     get_slip,
     list_slips,
+    is_paper,
     mark_uploaded,
+    out_for_encounter,
     physician_ids,
     record_accept_sent,
     remember_self_seq,
@@ -98,6 +100,11 @@ class ReferralSlipBody(BaseModel):
     handoff: str | None = None
     drugs: str | None = None
     aux: str | None = None
+    clinicTel: str | None = None
+    fax: str | None = None
+    email: str | None = None
+    medOn: str | None = None
+    paper: str | None = None
 
 
 class ReferralReplyBody(BaseModel):
@@ -371,6 +378,12 @@ def referral_reply_for(encounterId: str = "") -> dict[str, Any]:
     return {"item": slip, "uploaded": bool(slip and uploaded(slip))}
 
 
+@router.get("/out-for")
+def referral_out_for(encounterId: str = "") -> dict[str, Any]:
+    """The outbound slip already saved on this visit, so reopening shows it."""
+    return {"item": out_for_encounter(encounterId.strip())}
+
+
 @router.get("/physicians")
 def referral_physicians() -> dict[str, Any]:
     return {"items": physician_ids(list(get_shadow_store().get_staff_list()))}
@@ -558,6 +571,8 @@ def _when(text: str) -> datetime | None:
 
 
 def _pack_upload(slip: dict[str, Any]) -> dict[str, Any]:
+    if is_paper(slip):
+        return {"ok": False, "reason": "\u81ea\u8cbb\u7d19\u672c\u8f49\u8a3a\u4e0d\u4e0a\u50b3\u5065\u4fdd\u3002"}
     if uploaded(slip):
         return {"ok": False, "reason": "\u9019\u4e00\u7b46\u5df2\u7d93\u4e0a\u50b3\u904e\u3002"}
     profile = _clinic_profile()

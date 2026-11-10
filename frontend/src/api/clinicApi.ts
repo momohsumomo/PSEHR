@@ -1053,6 +1053,7 @@ export type ReferralSlipRow = {
   uploadedAt?: string;
   selfSeq?: string;
   openedOn?: string;
+  paper?: string;
   updatedAt: string;
 };
 
@@ -1209,6 +1210,13 @@ export async function markReferralAccepted(body: {
     body: JSON.stringify({ id: taken.id, localId: sent.localId }),
   });
   return "\u5df2\u9001\u51fa\u53d7\u7406";
+}
+
+export async function fetchOutSlipForVisit(encounterId: string): Promise<ReferralSlipRow | null> {
+  const res = await request<{ item: ReferralSlipRow | null }>(
+    `/nhi/v1/referral/out-for?encounterId=${encodeURIComponent(encounterId)}`,
+  );
+  return res.item || null;
 }
 
 export async function fetchReplyForVisit(encounterId: string): Promise<{ item: ReferralSlipRow | null; uploaded: boolean }> {

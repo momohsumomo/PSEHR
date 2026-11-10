@@ -13,7 +13,7 @@ import { NewPatientDialog } from "@/components/clinic/NewPatientDialog";
 import { CertificateDialog } from "@/components/clinic/CertificateDialog";
 import { OutpatientSidebarQueue } from "@/components/clinic/OutpatientSidebarQueue";
 import { PatientLookDialog } from "@/components/clinic/PatientLookDialog";
-import { ReferralSlipDialog } from "@/components/clinic/ReferralSlipDialog";
+import { ReferralSlipDialog, referralArchiveFromRow } from "@/components/clinic/ReferralSlipDialog";
 import { referralChiefLead } from "@/lib/referralDepts";
 import { IcCardInfoDialog } from "@/components/clinic/IcCardInfoDialog";
 import {
@@ -40,7 +40,7 @@ import { rxLinesMissingFrom } from "@/lib/dittoRxLines";
 import { storedCopayFields } from "@/lib/cardIdentity";
 import { diagnosisTaken, sameDiagnosis } from "@/lib/diagnosisIdentity";
 import { dxSexProblem, patientSexOf } from "@/lib/dxSex";
-import { splitStoppedRxLines, stoppedRxLabels } from "@/utils/catalogRx";
+import { catalogDrugToRxLine, splitStoppedRxLines, stoppedRxLabels } from "@/utils/catalogRx";
 import { EncounterQueuePanel } from "@/components/clinic/EncounterQueuePanel";
 import { HistoryRxPanel } from "@/components/clinic/HistoryRxPanel";
 import { PatientHeaderWidget } from "@/components/clinic/widgets/PatientHeaderWidget";
@@ -81,7 +81,7 @@ import {
   applyClinicDrugDisplayNames,
   resolvePackageLines,
 } from "@/utils/catalogRx";
-import { cancelRegister, writeVisitToCard, CardReadError, type CardFaultReport, patchEncounterReg, previewVisitCase, fetchStaff, fetchQualityLabOrders, saveReferralSlip, uploadReferralSlip, fetchReplyForVisit, claimChartOpen, releaseChartOpen, CHART_IN_USE } from "@/api/clinicApi";
+import { cancelRegister, writeVisitToCard, CardReadError, type CardFaultReport, patchEncounterReg, previewVisitCase, fetchStaff, fetchQualityLabOrders, saveReferralSlip, uploadReferralSlip, fetchReplyForVisit, fetchOutSlipForVisit, type ReferralSlipRow, claimChartOpen, releaseChartOpen, CHART_IN_USE } from "@/api/clinicApi";
 import { dropChartDraft } from "@/lib/chartDraft";
 import { displayCase, prescriptionDays, prescriptionOrders, storedCase } from "@/lib/caseMark";
 import { ageYearsMonths } from "@/lib/ageLabel";
@@ -153,6 +153,7 @@ function chineseDxName(row: DiagnosisRow, catalog: CatalogDiagnosis[]): string {
 }
 
 const CHART_DRAFT_KEY = "psehr.chartDrafts.v1";
+const PAPER_REFERRAL_CODE = "PAPERREF";
 
 type ChartDraft = { cc: string; dx: DiagnosisRow[]; rx: RxLine[]; bound?: string; base?: string };
 
@@ -306,6 +307,9 @@ export function ClinicOutpatientPage() {
   const [lesionOpen, setLesionOpen] = useState(false);
   const [lookOpen, setLookOpen] = useState(false);
   const [referralOpen, setReferralOpen] = useState(false);
+  const [referralSlip, setReferralSlip] = useState<ReferralSlipRow | null>(null);
+  const [referralPaper, setReferralPaper] = useState(false);
+  const referralArchive = useMemo(() => referralArchiveFromRow(referralSlip), [referralSlip]);
   const [icInfoOpen, setIcInfoOpen] = useState(false);
   const [sameDayFlash, setSameDayFlash] = useState(false);
   const [dupAsk, setDupAsk] = useState<SameDayHit[] | null>(null);
@@ -2205,6 +2209,36 @@ export function ClinicOutpatientPage() {
     })();
   }, [apiMode, beginCheckIn, entryShift, offerQueueNumber, openConfirmFromSeed, queue, readCardRegisterPatient, session]);
 
+  const openReferral = useCallback(async () => {
+    const eid = selectedEncounterId || "";
+    let slip: ReferralSlipRow | null = null;
+    if (eid) {
+      try {
+        slip = await fetchOutSlipForVisit(eid);
+      } catch {
+        slip = null;
+      }
+    }
+    let paper = slip?.paper === "Y";
+    if (!paper && isSelfPayVisit(selected)) {
+      if (!window.confirm("\u81ea\u8cbb\u75c5\u60a3\u50c5\u80fd\u7d19\u672c\u8f49\u8a3a\u3002\u8981\u958b\u7d19\u672c\u8f49\u8a3a\u55ce\uff1f")) return;
+      paper = true;
+    }
+    if (paper) {
+      const item = catalog.drugs.find((d) => (d.alias || d.shortName || "").toUpperCase() === PAPER_REFERRAL_CODE);
+      const taken = currentRx.some(
+        (row) =>
+          (row.shortName || "").toUpperCase() === PAPER_REFERRAL_CODE ||
+          (row.nhiCode || "").toUpperCase() === PAPER_REFERRAL_CODE,
+      );
+      if (item && !taken) addRxLines([catalogDrugToRxLine(item, catalog.usages)]);
+      if (!item) setActionError("\u85e5\u54c1\u8cc7\u6599\u88e1\u627e\u4e0d\u5230\u300c\u7d19\u672c\u8f49\u8a3a\u300d\uff0c\u8655\u7f6e\u6c92\u6709\u5e36\u5165\u3002");
+    }
+    setReferralSlip(slip);
+    setReferralPaper(paper);
+    setReferralOpen(true);
+  }, [addRxLines, catalog.drugs, catalog.usages, currentRx, selected, selectedEncounterId]);
+
   const applyRegisterHub = useCallback(
     (label: string) => {
       const act = registerHubAction(label);
@@ -2222,10 +2256,10 @@ export function ClinicOutpatientPage() {
       }
       if (act.kind === "referral") {
         if (!selected && !selectedEncounterId) {
-          setActionError("請先選病患");
+          setActionError("\u8acb\u5148\u9078\u75c5\u60a3");
           return;
         }
-        setReferralOpen(true);
+        void openReferral();
         return;
       }
       if (act.kind === "cloud") {
@@ -2260,7 +2294,7 @@ export function ClinicOutpatientPage() {
       }
       setStubId(act.id);
     },
-    [goRegisterByCard, navigate, selected, selectedEncounterId],
+    [goRegisterByCard, navigate, openReferral, selected, selectedEncounterId],
   );
 
   const openFinder = useCallback((seed = queueSearch) => {
@@ -3866,7 +3900,7 @@ export function ClinicOutpatientPage() {
               >
                 過敏藥物
               </button>
-              <button type="button" className="flex min-w-0 flex-1 items-center justify-center border border-[#808080] bg-[#D4D0C8] px-1 text-[13px] font-bold" onClick={() => setReferralOpen(true)}>
+              <button type="button" className="flex min-w-0 flex-1 items-center justify-center border border-[#808080] bg-[#D4D0C8] px-1 text-[13px] font-bold" onClick={() => void openReferral()}>
                 轉診作業
               </button>
               <span>F9</span>
@@ -3886,7 +3920,7 @@ export function ClinicOutpatientPage() {
               <button type="button" className="flex min-w-0 flex-1 items-center justify-center border border-[#808080] bg-[#D4D0C8] px-1 text-[13px] font-bold" onClick={() => setIcInfoOpen(true)}>
                 IC資訊
               </button>
-              <button type="button" className="flex min-w-0 flex-1 items-center justify-center border border-[#808080] bg-[#D4D0C8] px-1 text-[13px] font-bold" onClick={() => setReferralOpen(true)}>
+              <button type="button" className="flex min-w-0 flex-1 items-center justify-center border border-[#808080] bg-[#D4D0C8] px-1 text-[13px] font-bold" onClick={() => void openReferral()}>
                 轉診
               </button>
               <button
@@ -3909,10 +3943,14 @@ export function ClinicOutpatientPage() {
       <ReferralSlipDialog
         open={referralOpen}
         encounterId={selectedEncounterId || ""}
+        slipId={referralSlip?.id}
+        archive={referralArchive}
+        paper={referralPaper}
         onClose={() => setReferralOpen(false)}
         onSaved={(info) => {
           const eid = selectedEncounterId;
           if (!eid) return;
+          if (info.paper) return;
           void (async () => {
             try {
               const medId = await ensureOutboundReferralOrder(eid);
@@ -4164,7 +4202,7 @@ export function ClinicOutpatientPage() {
         onClose={() => setCertificateOpen(false)}
         onOpenReferral={() => {
           setCertificateOpen(false);
-          setReferralOpen(true);
+          void openReferral();
         }}
         seed={certificateSeed}
       />

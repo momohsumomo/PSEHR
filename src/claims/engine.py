@@ -1097,6 +1097,9 @@ def _clinic_lab_code(store: Any) -> str:
         return ""
 
 
+PAPER_SHEET_LIKE = '%"paper": "Y"%'
+
+
 def _outbound_referral_codes(store: Any) -> dict[str, str]:
     """Encounter id -> destination institution, from the referral desk list."""
     connect = getattr(store, "_connect", None)
@@ -1107,7 +1110,9 @@ def _outbound_referral_codes(store: Any) -> dict[str, str]:
         with connect() as conn:
             rows = conn.execute(
                 "SELECT encounter_id, dest_code FROM referral_slip "
-                "WHERE kind = 'out' AND IFNULL(encounter_id, '') <> ''"
+                "WHERE kind = 'out' AND IFNULL(encounter_id, '') <> '' "
+                "AND IFNULL(sheet_json, '') NOT LIKE ?",
+                (PAPER_SHEET_LIKE,),
             ).fetchall()
         for row in rows:
             eid = str(row[0] or "").strip()
@@ -1141,7 +1146,9 @@ def _unlinked_outbound_by_chart(store: Any) -> dict[str, list[tuple[str, str, st
         with connect() as conn:
             rows = conn.execute(
                 "SELECT medical_no, opened_on, updated_at, dest_code FROM referral_slip "
-                "WHERE kind = 'out' AND IFNULL(encounter_id, '') = ''"
+                "WHERE kind = 'out' AND IFNULL(encounter_id, '') = '' "
+                "AND IFNULL(sheet_json, '') NOT LIKE ?",
+                (PAPER_SHEET_LIKE,),
             ).fetchall()
         for chart, opened, saved, dest in rows:
             code = "".join(ch for ch in str(dest or "") if ch.isalnum())[:10]

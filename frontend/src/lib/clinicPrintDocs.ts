@@ -207,9 +207,14 @@ export type ReferralDocInput = {
   hospTel: string;
   valid: string;
   copies: Array<[string, string]>;
+  /** Self-pay patient on a paper slip: the heading says it is not an NHI referral. */
+  selfPay?: boolean;
 };
 
 export function buildReferralSlipHtml(input: ReferralDocInput): string {
+  const heading = input.selfPay
+    ? "\u3010\u81ea\u8cbb\uff0c\u975e\u5065\u4fdd\u8eab\u5206\u8f49\u8a3a\u3011" + esc(input.clinicName || "")
+    : "\u5168\u6c11\u5065\u5eb7\u4fdd\u96aa" + esc(input.clinicName || "");
   const K = 25.4 / 72;
   const mm = (pt: number) => (pt * K).toFixed(2) + "mm";
   const roc3 = (raw: string): [string, string, string] => {
@@ -371,7 +376,7 @@ export function buildReferralSlipHtml(input: ReferralDocInput): string {
   `;
   return copies.map(([which]) => `
       <section class="slip-page" style="position:relative;box-sizing:border-box;width:210mm;height:297mm;margin:0;padding:0;overflow:hidden;background:#fff;color:#000;font-family:'DFKai-SB','標楷體','PMingLiU',serif;">
-        <div style="position:absolute;left:0;top:${mm(8)};width:210mm;text-align:center;font-size:14pt;white-space:nowrap;overflow:hidden;">全民健康保險${esc(input.clinicName || "")}　轉診單（轉診至${esc(input.hosp || "")}）</div>
+        <div style="position:absolute;left:0;top:${mm(8)};width:210mm;text-align:center;font-size:14pt;white-space:nowrap;overflow:hidden;">${heading}\u3000\u8f49\u8a3a\u55ae（轉診至${esc(input.hosp || "")}）</div>
         <div style="position:absolute;left:${mm(14.2)};top:${mm(30)};font-size:12pt;">保險醫事服務機構代號：${esc(input.clinicCode || "")}</div>
         <div style="position:absolute;left:${mm(14.2)};top:${mm(48.1)};width:${mm(538.4)};height:${mm(708.6)};border:0.6pt solid #000;box-sizing:border-box;"></div>
         ${lines}

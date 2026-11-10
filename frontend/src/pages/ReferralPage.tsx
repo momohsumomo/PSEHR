@@ -223,7 +223,8 @@ export function ReferralPage() {
         <button
           type="button"
           className="border border-[#808080] bg-[#C8F0C8] px-2 py-1 text-[13px] font-bold"
-          disabled={busy || mode === "down" || !current}
+          disabled={busy || mode === "down" || !current || current.paper === "Y"}
+          title={current?.paper === "Y" ? "\u81ea\u8cbb\u7d19\u672c\u8f49\u8a3a\u4e0d\u4e0a\u50b3\u5065\u4fdd" : undefined}
           onClick={() => {
             if (!current) return;
             void (async () => {
@@ -459,6 +460,7 @@ export function ReferralPage() {
         encounterId={current?.encounterId || ""}
         slipId={current?.id}
         archive={slipArchive}
+        paper={current?.paper === "Y"}
         seed={seed}
         onClose={() => {
           setSlipOpen(false);
