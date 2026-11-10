@@ -1068,7 +1068,7 @@ async function postReferralIo(body: Record<string, unknown>): Promise<{
   rows?: Array<Record<string, string>>;
 }> {
   const ctrl = new AbortController();
-  const timer = window.setTimeout(() => ctrl.abort(), 90000);
+  const timer = window.setTimeout(() => ctrl.abort(), 35000);
   try {
     const res = await fetch(`${REFERRAL_DESK}/tools/referral-io`, {
       method: "POST",

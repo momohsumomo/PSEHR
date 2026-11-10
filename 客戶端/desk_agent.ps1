@@ -885,7 +885,8 @@ public class PsehrTrustAll : ICertificatePolicy {
       try {
         $req = [System.Net.HttpWebRequest]::Create("https://127.0.0.1:5066" + $Path)
         $req.Method = $Method
-        $req.Timeout = 20000
+        $req.Timeout = 10000
+        $req.ReadWriteTimeout = 10000
         $req.Accept = "application/json"
         $req.ServerCertificateValidationCallback = { $true }
         if ($Method -eq "POST") {
@@ -918,18 +919,29 @@ public class PsehrTrustAll : ICertificatePolicy {
         return '{"ok":false,"error":"unreachable","statusCode":1119}'
       }
     }
-    # Card and referral tools can run for minutes. They go one at a time on their own thread,
-    # so /print and /health on this thread always answer.
-    $slowRoutes = @("/tools/card-pair", "/tools/referral-io", "/tools/coexist-test", "/tools/cshis")
+    # This thread only takes requests. Card work and referral work each get their own lane, one job
+    # at a time per lane, so neither can hold up the other or /print. A job running past its limit
+    # is dropped and its lane is replaced, so the next request never waits behind it.
+    $laneOf = @{ "/tools/cshis" = "card"; "/tools/card-pair" = "card"; "/tools/coexist-test" = "card"; "/tools/referral-io" = "referral" }
+    $limitOf = @{ "/tools/cshis" = 12; "/tools/card-pair" = 30; "/tools/coexist-test" = 30; "/tools/referral-io" = 30 }
     $slowDefs = (@("Send-Bytes", "Send-Json", "Test-CardPort", "Get-CardExe", "Invoke-CoexistProbe", "Invoke-CshisProxy") | ForEach-Object {
       "function $_ {`n" + (Get-Item "function:$_").ScriptBlock.ToString() + "`n}"
     }) -join "`n"
     $slowLog = Join-Path $env:LOCALAPPDATA "PSEHR\desk.log"
-    $slowPool = [RunspaceFactory]::CreateRunspacePool(1, 1)
-    $slowPool.Open()
-    $slowRuns = New-Object System.Collections.ArrayList
+    function New-Lane {
+      $pool = [RunspaceFactory]::CreateRunspacePool(1, 1)
+      $pool.Open()
+      return @{ Pool = $pool; Runs = (New-Object System.Collections.ArrayList) }
+    }
+    function Write-LaneLog([string]$Line) {
+      try { Add-Content -Path $slowLog -Value ((Get-Date -Format "HH:mm:ss") + " " + $Line) -Encoding ASCII } catch {}
+    }
+    $lanes = @{ card = (New-Lane); referral = (New-Lane) }
+    $printerJson = ""
+    $printerAt = [datetime]::MinValue
     $slowJob = {
-      param($defs, $client, $target, $line, $text, $clientDir, $logPath)
+      param($defs, $client, $target, $line, $text, $clientDir, $logPath, $state)
+      $state.Started = Get-Date
       . ([ScriptBlock]::Create($defs))
       $began = Get-Date
       try {
@@ -972,7 +984,7 @@ public class PsehrTrustAll : ICertificatePolicy {
             $sp.StandardOutputEncoding = New-Object System.Text.UTF8Encoding $false
             $run = [System.Diagnostics.Process]::Start($sp)
             $read = $run.StandardOutput.ReadToEndAsync()
-            if ($run.WaitForExit(150000)) {
+            if ($run.WaitForExit(25000)) {
               $raw = "$($read.Result)".Trim()
             } else {
               try { $run.Kill() } catch {}
@@ -1020,13 +1032,35 @@ public class PsehrTrustAll : ICertificatePolicy {
     }
     while ($true) {
       $client = $null
-      for ($i = $slowRuns.Count - 1; $i -ge 0; $i--) {
-        $run = $slowRuns[$i]
-        if ($run.Handle.IsCompleted) {
-          try { $run.Ps.EndInvoke($run.Handle) | Out-Null } catch {}
-          $run.Ps.Dispose()
-          $slowRuns.RemoveAt($i)
+      foreach ($name in @($lanes.Keys)) {
+        $lane = $lanes[$name]
+        $stuck = $false
+        for ($i = $lane.Runs.Count - 1; $i -ge 0; $i--) {
+          $run = $lane.Runs[$i]
+          if ($run.Handle.IsCompleted) {
+            try { $run.Ps.EndInvoke($run.Handle) | Out-Null } catch {}
+            $run.Ps.Dispose()
+            $lane.Runs.RemoveAt($i)
+            continue
+          }
+          $started = $run.State.Started
+          if ($started -and ((Get-Date) - $started).TotalSeconds -gt $run.Limit) {
+            $stuck = $true
+            Write-LaneLog ("gave up " + $run.Target + " after " + $run.Limit + "s")
+          }
         }
+        if ($stuck) {
+          foreach ($run in @($lane.Runs)) {
+            try { $run.Client.Close() } catch {}
+            try { [void]$run.Ps.BeginStop($null, $null) } catch {}
+          }
+          try { [void]$lane.Pool.BeginClose($null, $null) } catch {}
+          $lanes[$name] = New-Lane
+        }
+      }
+      if (-not $tcp.Pending()) {
+        Start-Sleep -Milliseconds 50
+        continue
       }
       try {
         $client = $tcp.AcceptTcpClient()
@@ -1068,15 +1102,21 @@ public class PsehrTrustAll : ICertificatePolicy {
           $run = "false"
           if ($installed) { $flag = "true" }
           if ($running) { $run = "true" }
-          $printers = Get-PrinterJson
+          if (((Get-Date) - $printerAt).TotalSeconds -gt 15) {
+            $printerJson = Get-PrinterJson
+            $printerAt = Get-Date
+          }
+          $printers = $printerJson
           Send-Json $client ('{"ok":true,"printers":[' + $printers + '],"card6":{"installed":' + $flag + ',"running":' + $run + "}}") 200
           continue
         }
-        if ($verb -eq "POST" -and $slowRoutes -contains $target) {
+        if ($verb -eq "POST" -and $laneOf.ContainsKey($target)) {
+          $lane = $lanes[$laneOf[$target]]
+          $state = [hashtable]::Synchronized(@{})
           $work = [PowerShell]::Create()
-          $work.RunspacePool = $slowPool
-          [void]$work.AddScript($slowJob).AddArgument($slowDefs).AddArgument($client).AddArgument($target).AddArgument($line).AddArgument($text).AddArgument($clientDir).AddArgument($slowLog)
-          [void]$slowRuns.Add(@{ Ps = $work; Handle = $work.BeginInvoke() })
+          $work.RunspacePool = $lane.Pool
+          [void]$work.AddScript($slowJob).AddArgument($slowDefs).AddArgument($client).AddArgument($target).AddArgument($line).AddArgument($text).AddArgument($clientDir).AddArgument($slowLog).AddArgument($state)
+          [void]$lane.Runs.Add(@{ Ps = $work; Handle = $work.BeginInvoke(); State = $state; Client = $client; Target = $target; Limit = $limitOf[$target] })
           $client = $null
           continue
         }
@@ -1095,7 +1135,11 @@ public class PsehrTrustAll : ICertificatePolicy {
           continue
         }
         if ($verb -eq "GET" -and ($target -eq "/printers" -or $target -eq "/")) {
-          Send-Json $client ('{"ok":true,"printers":[' + (Get-PrinterJson) + "]}") 200
+          if (((Get-Date) - $printerAt).TotalSeconds -gt 15) {
+            $printerJson = Get-PrinterJson
+            $printerAt = Get-Date
+          }
+          Send-Json $client ('{"ok":true,"printers":[' + $printerJson + "]}") 200
           continue
         }
         if ($verb -eq "POST" -and $target -eq "/print") {
@@ -1131,8 +1175,49 @@ public class PsehrTrustAll : ICertificatePolicy {
   Write-Log "printer list on 5310"
 }
 
+function Test-Elevated {
+  try {
+    $me = [Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()
+    return $me.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+  } catch { return $false }
+}
+
+function Test-Listen5310 {
+  $client = New-Object System.Net.Sockets.TcpClient
+  try {
+    $wait = $client.BeginConnect("127.0.0.1", 5310, $null, $null)
+    return ($wait.AsyncWaitHandle.WaitOne(400, $false) -and $client.Connected)
+  } catch { return $false } finally { $client.Close() }
+}
+
+# A copy with administrator rights cannot be closed by the normal copy that reopening the clinic
+# starts, so if it got stuck it held 5310 until a reboot. Rerun this file with the desktop's rights.
+function Start-AsNormalUser {
+  $stamp = Join-Path $Root "unelevate.txt"
+  if ((Test-Path -LiteralPath $stamp) -and ((Get-Date) - (Get-Item -LiteralPath $stamp).LastWriteTime).TotalSeconds -lt 60) { return $false }
+  Set-Content -Path $stamp -Value (Get-Date -Format o) -Encoding ASCII
+  $vbs = Join-Path $Root "desk_normal.vbs"
+  $cmd = 'powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File ""' + $PSCommandPath + '""'
+  Set-Content -Path $vbs -Value ('CreateObject("WScript.Shell").Run "' + $cmd + '", 0, False') -Encoding Unicode
+  try {
+    Start-Process -FilePath (Join-Path $env:SystemRoot "explorer.exe") -ArgumentList ('"' + $vbs + '"')
+  } catch {
+    Write-Log $_.Exception.Message
+    return $false
+  }
+  Write-Log "administrator copy handed to normal rights"
+  return $true
+}
+
 function Start-DeskLoop {
   Stop-OldAgent
+  if ((Test-Elevated) -and (Start-AsNormalUser)) {
+    for ($i = 0; $i -lt 20; $i++) {
+      Start-Sleep -Milliseconds 500
+      if (Test-Listen5310) { return }
+    }
+    Write-Log "normal-rights copy did not start; running as administrator"
+  }
   try {
     $mutex = New-Object System.Threading.Mutex($false, "Local\PSEHR-desk-agent")
   } catch {

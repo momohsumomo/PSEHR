@@ -17,7 +17,7 @@ const HELPER = "http://127.0.0.1:5310";
 async function callPair(action: "ensure" | "ensure6" | "restart6" | "restart5"): Promise<Pair> {
   const res = await fetch(HELPER + "/tools/card-pair?action=" + action, {
     method: "POST",
-    signal: AbortSignal.timeout(25000),
+    signal: AbortSignal.timeout(35000),
   });
   if (!res.ok) throw new Error("down");
   return (await res.json()) as Pair;

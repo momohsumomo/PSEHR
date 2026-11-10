@@ -23,7 +23,7 @@ async function localCshisViaHelper(method: string, path: string, body?: unknown,
       method: "POST",
       headers: { Accept: "application/json", "Content-Type": "application/json" },
       body: JSON.stringify({ method, path, body: body ?? null }),
-      signal: AbortSignal.timeout(timeoutMs),
+      signal: AbortSignal.timeout(Math.min(timeoutMs, 12000)),
     });
     if (!res.ok) return null;
     const data = await res.json() as Record<string, unknown>;
