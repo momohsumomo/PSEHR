@@ -135,7 +135,9 @@ def _leaf_folders(base: Path) -> list[tuple[str, str, float]]:
                     if depth < 2:
                         stack.append((entry.path, rel + "/", depth + 1))
                         continue
-                    leaves.append((entry.path, rel, entry.stat(follow_symlinks=False).st_mtime))
+                    # The parent listing keeps a stale copy of a folder's time on NTFS and SMB;
+                    # only a stat on the folder itself shows a photo added today.
+                    leaves.append((entry.path, rel, os.stat(entry.path).st_mtime))
                 except OSError:
                     continue
     _leaf_cache = (now, key, leaves)
