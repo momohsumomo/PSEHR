@@ -1,0 +1,15 @@
+---
+description: Agent entry — read AGENTS.md and doc index before product work
+alwaysApply: true
+---
+
+# Agent 文件入口
+
+開新對話或跨專案進來時：
+
+1. 先讀倉庫根目錄 `AGENTS.md`
+2. 再依 `docs/文件索引.md` 的權威順序讀憲章與交接
+3. 改目錄前看 `docs/模組地圖.md`
+
+不要使用已廢止的 `CURSOR_PROJECT_HANDOVER.md` 當現況。
+硬性禁止（主機更新、裝置歸屬、列印轉向、醫聖匯入等）以 `.cursor/rules/` 其餘規則與憲章為準。
