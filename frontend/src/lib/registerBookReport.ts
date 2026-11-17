@@ -288,8 +288,7 @@ export function buildRegisterBookFromSummary(opts: {
       deposit: d.deposit || 0,
       copayAmt: d.copayAmt || 0,
       cardDisc: d.cardDisc || 0,
-      // Paper column 「藥優」shows 藥部 (drugCopay). drugDisc stays 0 in practice.
-      drugDisc: d.drugCopay || d.drugDisc || 0,
+      drugDisc: d.drugDisc || 0,
       regFee: d.regFee || 0,
       selfPay: d.selfPay || 0,
       received: d.received || 0,
@@ -363,7 +362,7 @@ export function registerBookToExportText(r: RegisterBookReport): string {
     `期間: ${r.dateFromRoc}~${r.dateToRoc}    醫師: ${r.doctor}    科別: ${r.dept}    案件: ${r.caseFilter}`,
     `列印: ${r.printedAtRoc} Time: ${r.printedTime} (報表編號: ${r.reportNo})`,
     "",
-    ["日期", "人數", "押金", "部額", "卡優", "藥部", "掛費", "自費", "已收", "欠款", "雜費", "還款", "還單", "合計"].join("\t"),
+    ["日期", "人數", "押金", "部額", "卡優", "藥優", "掛費", "自費", "已收", "欠款", "雜費", "還款", "還單", "合計"].join("\t"),
   ];
   const rows = r.days.map((d) =>
     [
@@ -588,7 +587,7 @@ export function buildCashDetailReport(opts: {
       caseNo: String(q.caseNo || ""),
       copayCode: String(q.copayCode || ""),
       copayAmt: n(q.copayAmt),
-      drugDisc: n(q.drugCopay) || n(q.drugDisc),
+      drugDisc: n(q.drugDisc),
       regFee: n(q.regFee),
       selfPay: n(q.selfPay),
       cardDisc: n(q.cardDisc),
