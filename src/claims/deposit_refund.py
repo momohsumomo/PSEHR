@@ -215,8 +215,10 @@ def apply_refund(
     )
     repo.update_resource("Encounter", encounter_id, payload)
     amount = int(prepared["amount"])
+    # Cash book nets on the visit day (deposit stays in that day's totalFee).
+    # IC daily upload still uses icUploadDate = refund day above.
     store.insert_cash_return(
-        encounter_date=upload_day,
+        encounter_date=str(prepared.get("encounterDate") or upload_day),
         amount=amount,
         keywords=encounter_id,
         chart_no=str(prepared.get("chartNo") or ""),

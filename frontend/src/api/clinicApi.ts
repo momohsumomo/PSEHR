@@ -390,6 +390,7 @@ export async function fetchCashBook(opts: {
     copayAmt: number;
     cardDisc: number;
     drugDisc: number;
+    drugCopay?: number;
     regFee: number;
     selfPay: number;
     received: number;

@@ -793,8 +793,8 @@ class SqliteShadowStore(ShadowStore):
             INSERT INTO encounter_index (
                 resource_id, patient_id, encounter_date, queue_number, queue_status, fhir_status,
                 copay_code, case_no, fee_deposit, fee_copay, fee_card_disc, fee_drug_disc,
-                fee_reg, fee_self, fee_total, fee_arrears, ic_upload_date, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+                fee_drug_copay, fee_reg, fee_self, fee_total, fee_arrears, ic_upload_date, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
             ON CONFLICT(resource_id) DO UPDATE SET
                 patient_id = excluded.patient_id,
                 encounter_date = excluded.encounter_date,
@@ -807,6 +807,7 @@ class SqliteShadowStore(ShadowStore):
                 fee_copay = excluded.fee_copay,
                 fee_card_disc = excluded.fee_card_disc,
                 fee_drug_disc = excluded.fee_drug_disc,
+                fee_drug_copay = excluded.fee_drug_copay,
                 fee_reg = excluded.fee_reg,
                 fee_self = excluded.fee_self,
                 fee_total = excluded.fee_total,
@@ -827,6 +828,7 @@ class SqliteShadowStore(ShadowStore):
                 fees["fee_copay"],
                 fees["fee_card_disc"],
                 fees["fee_drug_disc"],
+                fees["fee_drug_copay"],
                 fees["fee_reg"],
                 fees["fee_self"],
                 fees["fee_total"],
@@ -1688,6 +1690,7 @@ class SqliteShadowStore(ShadowStore):
                        COALESCE(SUM(fee_copay), 0),
                        COALESCE(SUM(fee_card_disc), 0),
                        COALESCE(SUM(fee_drug_disc), 0),
+                       COALESCE(SUM(IFNULL(fee_drug_copay, 0)), 0),
                        COALESCE(SUM(fee_reg), 0),
                        COALESCE(SUM(fee_self), 0),
                        COALESCE(SUM(fee_total), 0),
@@ -1712,26 +1715,35 @@ class SqliteShadowStore(ShadowStore):
                 """,
                 tuple(params),
             ).fetchall()
+            # Refund cash leaves the drawer on the refund day in cash_return.encounter_date,
+            # but the visit total still holds depositPaid on the visit day. Attribute the
+            # return to that visit day so one day's book nets (已收 - 還單) like 醫聖.
             returns = conn.execute(
                 """
-                SELECT encounter_date,
-                       CASE WHEN UPPER(TRIM(IFNULL(case_no, ''))) IN ('9X', '\u81ea', '\u81ea\u8cbb') THEN '\u81ea\u8cbb'
-                            WHEN TRIM(IFNULL(copay_code, '')) IN ('', '0') THEN '\u4e00\u822c'
-                            ELSE copay_code END,
-                       COUNT(*), COALESCE(SUM(amount), 0)
-                FROM cash_return
-                WHERE encounter_date >= ? AND encounter_date <= ?
-                GROUP BY encounter_date,
-                         CASE WHEN UPPER(TRIM(IFNULL(case_no, ''))) IN ('9X', '\u81ea', '\u81ea\u8cbb') THEN '\u81ea\u8cbb'
-                              WHEN TRIM(IFNULL(copay_code, '')) IN ('', '0') THEN '\u4e00\u822c'
-                              ELSE copay_code END
+                SELECT COALESCE(ei.encounter_date, cr.encounter_date),
+                       CASE WHEN UPPER(TRIM(IFNULL(COALESCE(ei.case_no, cr.case_no), '')))
+                                 IN ('9X', '\u81ea', '\u81ea\u8cbb') THEN '\u81ea\u8cbb'
+                            WHEN TRIM(IFNULL(COALESCE(ei.copay_code, cr.copay_code), '')) IN ('', '0')
+                                 THEN '\u4e00\u822c'
+                            ELSE COALESCE(ei.copay_code, cr.copay_code) END,
+                       COUNT(*), COALESCE(SUM(cr.amount), 0)
+                FROM cash_return cr
+                LEFT JOIN encounter_index ei ON ei.resource_id = cr.keywords
+                WHERE COALESCE(ei.encounter_date, cr.encounter_date) >= ?
+                  AND COALESCE(ei.encounter_date, cr.encounter_date) <= ?
+                GROUP BY COALESCE(ei.encounter_date, cr.encounter_date),
+                         CASE WHEN UPPER(TRIM(IFNULL(COALESCE(ei.case_no, cr.case_no), '')))
+                                   IN ('9X', '\u81ea', '\u81ea\u8cbb') THEN '\u81ea\u8cbb'
+                              WHEN TRIM(IFNULL(COALESCE(ei.copay_code, cr.copay_code), '')) IN ('', '0')
+                                   THEN '\u4e00\u822c'
+                              ELSE COALESCE(ei.copay_code, cr.copay_code) END
                 """,
                 (d0, d1),
             ).fetchall()
         by_day: dict[str, dict[str, Any]] = {}
         for row in day_rows:
-            received = int(row[8] or 0)
-            arrears = int(row[9] or 0)
+            received = int(row[9] or 0)
+            arrears = int(row[10] or 0)
             by_day[str(row[0])] = {
                 "date": str(row[0]),
                 "people": int(row[1] or 0),
@@ -1739,8 +1751,9 @@ class SqliteShadowStore(ShadowStore):
                 "copayAmt": int(row[3] or 0),
                 "cardDisc": int(row[4] or 0),
                 "drugDisc": int(row[5] or 0),
-                "regFee": int(row[6] or 0),
-                "selfPay": int(row[7] or 0),
+                "drugCopay": int(row[6] or 0),
+                "regFee": int(row[7] or 0),
+                "selfPay": int(row[8] or 0),
                 "received": received,
                 "arrears": arrears,
                 "returnSlip": 0,
@@ -1770,6 +1783,7 @@ class SqliteShadowStore(ShadowStore):
                         "copayAmt": 0,
                         "cardDisc": 0,
                         "drugDisc": 0,
+                        "drugCopay": 0,
                         "regFee": 0,
                         "selfPay": 0,
                         "received": 0,
@@ -1799,15 +1813,18 @@ class SqliteShadowStore(ShadowStore):
         }
 
     def list_cash_returns(self, date_from: str, date_to: str) -> list[dict[str, Any]]:
-        """ACOUNT.Dat refunds (還單) in the visit-date range."""
+        """Refunds (還單) attributed to the visit day when keywords is an encounter id."""
         with self._connect() as conn:
             rows = conn.execute(
                 """
-                SELECT encounter_date, amount, copay_code,
-                       chart_no, patient_name, id_no, seg, treat_seq, case_no
-                FROM cash_return
-                WHERE encounter_date >= ? AND encounter_date <= ?
-                ORDER BY encounter_date, id
+                SELECT COALESCE(ei.encounter_date, cr.encounter_date), cr.amount,
+                       COALESCE(ei.copay_code, cr.copay_code),
+                       cr.chart_no, cr.patient_name, cr.id_no, cr.seg, cr.treat_seq, cr.case_no
+                FROM cash_return cr
+                LEFT JOIN encounter_index ei ON ei.resource_id = cr.keywords
+                WHERE COALESCE(ei.encounter_date, cr.encounter_date) >= ?
+                  AND COALESCE(ei.encounter_date, cr.encounter_date) <= ?
+                ORDER BY COALESCE(ei.encounter_date, cr.encounter_date), cr.id
                 """,
                 (date_from[:10], date_to[:10]),
             ).fetchall()
@@ -3589,6 +3606,7 @@ def _encounter_fee_fields(payload: dict[str, Any]) -> dict[str, Any]:
         "fee_copay": _fee_int(meta.get("copayAmt")),
         "fee_card_disc": _fee_int(meta.get("cardDisc")),
         "fee_drug_disc": _fee_int(meta.get("drugDisc")),
+        "fee_drug_copay": _fee_int(meta.get("drugCopay")),
         "fee_reg": _fee_int(meta.get("regFee")),
         "fee_self": _fee_int(meta.get("selfPay")),
         "fee_total": _fee_int(meta.get("totalFee")),
@@ -3631,6 +3649,7 @@ _INDEX_MIGRATIONS: list[tuple[str, str, str]] = [
     ("encounter_index", "fee_copay", "INTEGER NOT NULL DEFAULT 0"),
     ("encounter_index", "fee_card_disc", "INTEGER NOT NULL DEFAULT 0"),
     ("encounter_index", "fee_drug_disc", "INTEGER NOT NULL DEFAULT 0"),
+    ("encounter_index", "fee_drug_copay", "INTEGER NOT NULL DEFAULT 0"),
     ("encounter_index", "fee_reg", "INTEGER NOT NULL DEFAULT 0"),
     ("encounter_index", "fee_self", "INTEGER NOT NULL DEFAULT 0"),
     ("encounter_index", "fee_total", "INTEGER NOT NULL DEFAULT 0"),

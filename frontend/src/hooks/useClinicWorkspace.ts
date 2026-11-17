@@ -1051,9 +1051,14 @@ export function useClinicWorkspace(options?: {
           return Number.isFinite(n) ? n : 0;
         };
         const burden = String(form.burdenFee || "").trim() ? yuan(form.burdenFee) : yuan(form.copayAmt);
+        const drugCopay = yuan(prior?.drugCopay);
         const totalFee = String(
           Math.round(
-            yuan(form.regFee) + burden + depositInTotal(form.deposit, prior?.depositPaid) + yuan(prior?.selfPay),
+            yuan(form.regFee) +
+              burden +
+              drugCopay +
+              depositInTotal(form.deposit, prior?.depositPaid) +
+              yuan(prior?.selfPay),
           ),
         );
         await patchEncounterReg(form.encounterId, {
@@ -1089,6 +1094,7 @@ export function useClinicWorkspace(options?: {
           drugFee: payload.drugFee,
           materialFee: payload.materialFee,
           burdenFee: payload.burdenFee,
+          drugCopay: prior?.drugCopay,
           cardIdentity,
           totalFee,
           prebook: Boolean(form.prebook),
