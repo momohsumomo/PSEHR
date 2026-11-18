@@ -28,7 +28,6 @@ import {
   EMPTY_VITALS,
   type ChartVitals,
 } from "@/components/clinic/ChartVitalsColumn";
-import { ChartQtyPad } from "@/components/clinic/ChartQtyPad";
 import {
   CLINIC_CHART_SHORTCUT_BAR,
   CLINIC_LIST_SHORTCUT_BAR,
@@ -907,36 +906,6 @@ export function ClinicOutpatientPage() {
       setCurrentRxByEncounter((prev) => ({ ...prev, [selectedEncounterId]: lines }));
     },
     [selectedEncounterId],
-  );
-
-  const applyQtyPadToken = useCallback(
-    (token: string) => {
-      if (!currentRx.length) return;
-      const idx =
-        selectedRxIndex >= 0 && selectedRxIndex < currentRx.length ? selectedRxIndex : 0;
-      const frac: Record<string, number> = { "1/2": 0.5, "1/3": 1 / 3, "1/4": 0.25 };
-      const isLetter = /^[A-M]$/i.test(token);
-      const qtyVal =
-        token in frac ? frac[token] : /^\d+(\.\d+)?$/.test(token) ? Number(token) : null;
-      const next = currentRx.map((line, i) => {
-        if (i !== idx) return line;
-        if (isLetter) {
-          return { ...line, memo: token.toUpperCase() };
-        }
-        if (qtyVal != null) {
-          return { ...line, qty: Math.round(qtyVal * 100) / 100 };
-        }
-        return line;
-      });
-      if (apiMode) setApiRxOverlay(next);
-      else setMockCurrentRx(next);
-      chartDirtyRef.current = true; setSaveSpent(false);
-      setChartFocus("rx");
-      setChartRailTab((prev) =>
-        prev === "waiting" || prev === "history" ? "common" : prev,
-      );
-    },
-    [apiMode, currentRx, selectedRxIndex, setMockCurrentRx],
   );
 
   const markChartDirty = useCallback(() => {
@@ -3676,7 +3645,6 @@ export function ClinicOutpatientPage() {
                     setRxQuery={setRxQuery}
                   />
                 </div>
-                <ChartQtyPad onInsert={applyQtyPadToken} />
               </div>
               {lesionOpen && (
                 <div className="h-28 shrink-0">
