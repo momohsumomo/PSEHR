@@ -85,6 +85,8 @@ type CtxMenu =
   | { kind: "route"; lineId: string; rowIdx: number; x: number; y: number }
   | { kind: "days"; lineId: string; rowIdx: number; x: number; y: number };
 
+const NHI_MAX_DAYS = 30;
+
 function resolvedPayMark(line: RxLine): RxPayMark {
   if (line.payMark != null) return line.payMark;
   return line.selfPay ? "\u81ea" : "";
@@ -427,6 +429,7 @@ export function RxGrid({
   const keepOnBlur = useRef(false);
   const armEdit = useRef(false);
   const qtyCancelRef = useRef(false);
+  const askingDays = useRef(false);
   const nameInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
   const rowRefs = useRef<Record<string, HTMLTableRowElement | null>>({});
   const tableRef = useRef<HTMLTableElement | null>(null);
@@ -551,9 +554,31 @@ export function RxGrid({
     setMenu(null);
   };
 
+  /** 健保藥一次最多 30 天。超過就問要不要轉自費（自＋[），不轉就不改天數。 */
+  const guardNhiDays = (line: RxLine, patch: Partial<RxLine>): Partial<RxLine> | null => {
+    const days = Number(patch.days);
+    if (!(days > NHI_MAX_DAYS)) return patch;
+    const mark = resolvedPayMark(line);
+    if (selfPayVisit || mark === "\u81ea" || mark === "\u6750" || !(line.nhiCode || "").trim()) return patch;
+    // The confirm box blurs the cell, and blur commits days again.
+    if (askingDays.current) return null;
+    askingDays.current = true;
+    let ok = false;
+    try {
+      ok = window.confirm(
+        `${line.name || line.nhiCode} 天數 ${days} 天，健保用藥一次最多 ${NHI_MAX_DAYS} 天。\n\n要轉成自費用藥（自、[）嗎？\n按「取消」天數不改。`,
+      );
+    } finally {
+      askingDays.current = false;
+    }
+    if (!ok) return null;
+    return { ...patch, payMark: "\u81ea", selfPay: true, memo: "[" };
+  };
+
   const applyField = (patch: Partial<RxLine>) => {
     if (!menu || !onChangeLine || !lineOfMenu) return;
-    onChangeLine(menu.lineId, patchWithTotal(lineOfMenu, patch, usages));
+    const guarded = guardNhiDays(lineOfMenu, patch);
+    if (guarded) onChangeLine(menu.lineId, patchWithTotal(lineOfMenu, guarded, usages));
     setMenu(null);
   };
 
@@ -609,7 +634,9 @@ export function RxGrid({
     if (!/^\d+$/.test(raw)) return null;
     const n = Number(raw);
     if (!Number.isFinite(n) || n < 0) return null;
-    const patch = patchWithTotal(line, { days: n }, usages);
+    const guarded = guardNhiDays(line, { days: n });
+    if (!guarded) return null;
+    const patch = patchWithTotal(line, guarded, usages);
     onChangeLine?.(line.id, patch);
     return patch;
   };
@@ -809,7 +836,8 @@ export function RxGrid({
                     !e.metaKey &&
                     !e.altKey &&
                     onChangeLine &&
-                    isEditableDraftCol(focusCol)
+                    isEditableDraftCol(focusCol) &&
+                    !(isDraft && !isPrimaryCol(focusCol))
                   ) {
                     e.preventDefault();
                     e.stopPropagation();
@@ -868,8 +896,10 @@ export function RxGrid({
                   const pay = col.key === "payMark";
                   const memo = col.key === "memo";
                   const mark = resolvedPayMark(line);
+                  // The blank entry row only takes a drug name until a drug is picked.
+                  const locked = isDraft && !primary;
                   const canEdit =
-                    !readonly && !!onChangeLine && isEditableDraftCol(col.key);
+                    !readonly && !!onChangeLine && !locked && isEditableDraftCol(col.key);
                   const editing =
                     !!editCell && editCell.id === line.id && editCell.key === col.key;
 
@@ -929,6 +959,13 @@ export function RxGrid({
                       }
                       onClick={(e) => {
                         e.stopPropagation();
+                        if (locked) {
+                          if (editCell) cancelOpenEdit();
+                          onSelectIndex?.(rowIdx);
+                          setFocusCol(col.key);
+                          rowRefs.current[line.id]?.focus();
+                          return;
+                        }
                         if (col.key === "tag" && !readonly && onChangeLine) {
                           onSelectIndex?.(rowIdx);
                           const on = (line.tag || "").trim() === "\u2713";
@@ -953,6 +990,7 @@ export function RxGrid({
                         );
                       }}
                       onDoubleClick={(e) => {
+                        if (locked) return;
                         if (
                           (col.key === "name" || col.key === "shortName") &&
                           onQualityLab?.(line)
@@ -987,6 +1025,10 @@ export function RxGrid({
                         beginEdit(line, col.key);
                       }}
                       onContextMenu={(e) => {
+                        if (locked) {
+                          e.preventDefault();
+                          return;
+                        }
                         if (pay) openMenu("pay", line.id, rowIdx, e);
                         else if (memo) openMenu("memo", line.id, rowIdx, e);
                         else if (col.key === "sig") openMenu("sig", line.id, rowIdx, e);
@@ -1198,7 +1240,7 @@ export function RxGrid({
                             fontSize: readonly && textBoost !== 1 ? `${textBoost}em` : undefined,
                           }}
                         >
-                          {cellValue(line, col.key, usages) || "\u00a0"}
+                          {(!locked && cellValue(line, col.key, usages)) || "\u00a0"}
                         </span>
                       )}
                     </td>

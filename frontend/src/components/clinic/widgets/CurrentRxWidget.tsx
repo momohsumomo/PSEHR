@@ -48,7 +48,7 @@ function newDraft(): RxLine {
     days: 0,
     qty: undefined,
     nhiCode: "",
-    route: "oral",
+    route: "",
     payMark: "",
     memo: "",
   };
