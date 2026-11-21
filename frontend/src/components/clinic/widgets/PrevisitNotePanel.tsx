@@ -45,7 +45,7 @@ export function PrevisitSplit({
     [pct],
   );
 
-  if (!text.trim()) return <>{children}</>;
+  const filled = Boolean(text.trim());
 
   return (
     <div ref={rowRef} className="absolute inset-0 flex min-w-0">
@@ -63,7 +63,7 @@ export function PrevisitSplit({
         className="flex h-full min-w-0 shrink-0 flex-col overflow-hidden p-0.5"
         style={{
           width: `${pct}%`,
-          background: cosmetic ? COSMETIC_BG : MEDICAL_BG,
+          background: filled ? (cosmetic ? COSMETIC_BG : MEDICAL_BG) : "#F4F4F4",
           border: `1px solid ${HIS.chromeDark}`,
           fontFamily: HIS_FONT,
         }}
@@ -74,9 +74,9 @@ export function PrevisitSplit({
         </div>
         <div
           className="min-h-0 flex-1 overflow-y-auto whitespace-pre-wrap break-words"
-          style={{ fontSize: HIS.fs.body, lineHeight: 1.25, color: "#102030" }}
+          style={{ fontSize: HIS.fs.body, lineHeight: 1.25, color: filled ? "#102030" : "#999999" }}
         >
-          {text}
+          {filled ? text : "\u672a\u586b"}
         </div>
       </section>
     </div>
