@@ -405,19 +405,15 @@ export function EncounterQueuePanel({
                   className="cursor-pointer leading-none"
                   style={{
                     height: HIS.row.list,
-                    background: queueRowBackground(
-                      e.visitKind,
-                      selected,
-                      selected
-                        ? HIS.rowSelected
-                        : finished
-                          ? HIS.rowFinished
-                          : waiting
-                            ? HIS.rowWaiting
-                            : alt
-                              ? HIS.rowAlt
-                              : "#FFFFFF",
-                    ),
+                    background: selected
+                      ? HIS.rowSelected
+                      : finished
+                        ? HIS.rowFinished
+                        : waiting
+                          ? HIS.rowWaiting
+                          : alt
+                            ? HIS.rowAlt
+                            : "#FFFFFF",
                     color: finished && !selected ? "#666666" : "#000000",
                   }}
                   onClick={() => onSelect(e.encounterId)}
@@ -439,7 +435,15 @@ export function EncounterQueuePanel({
                         fontSize: isPrimary ? HIS.fs.primary : HIS.fs.body,
                         fontWeight: isPrimary ? 700 : 400,
                         background:
-                          col.key === "patientDisplay" && isFirstVisit(e.regCc) ? FIRST_VISIT_BG : undefined,
+                          col.key !== "patientDisplay"
+                            ? undefined
+                            : e.visitKind === "cosmetic"
+                              ? selected
+                                ? COSMETIC_ROW_SELECTED
+                                : COSMETIC_ROW
+                              : isFirstVisit(e.regCc)
+                                ? FIRST_VISIT_BG
+                                : undefined,
                         color:
                           col.key === "patientDisplay" && owesPatient(e.patientArrearage)
                             ? ARREARS_NAME_COLOR

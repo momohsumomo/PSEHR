@@ -37,6 +37,16 @@ const DAYS: Array<[string, string]> = [
   ["forgot", "\u4e0d\u8a18\u5f97\u4e86"],
 ];
 
+const BLOCKED: Record<string, string> = {
+  busy: "\u76ee\u524d\u7121\u6cd5\u5b58\u53d6",
+  appointment: "\u9810\u7d04\u9084\u6c92\u5831\u5230\uff0c\u8acb\u5148\u5230\u6ac3\u6aaf\u5831\u5230",
+  seen: "\u91ab\u5e2b\u5df2\u7d93\u770b\u904e\u4e86\uff0c\u4e0d\u7528\u518d\u586b",
+};
+
+function blockedText(card: Card): string {
+  return card.access && card.access !== "open" ? BLOCKED[card.access] || BLOCKED.busy : "";
+}
+
 const big = "flex min-h-16 flex-1 items-center justify-center rounded-2xl border-4 border-[#2060A0] bg-white text-2xl font-bold text-black";
 const choice = "flex h-full min-h-0 items-center justify-center rounded-2xl border-4 border-[#2060A0] bg-white px-2 text-xl font-bold leading-tight text-black";
 const onCls = "kiosk-pick";
@@ -165,8 +175,9 @@ export function IntakeKioskPage() {
         setDigits("");
         return;
       }
-      if (found.items.every((item) => item.access === "busy")) {
-        setToast("\u76ee\u524d\u7121\u6cd5\u5b58\u53d6");
+      const blocked = found.items.map(blockedText);
+      if (blocked.every(Boolean)) {
+        setToast(blocked[0]);
         setDigits("");
         return;
       }
@@ -334,16 +345,16 @@ export function IntakeKioskPage() {
                     key={card.encounterId}
                     type="button"
                     className={`rounded-2xl border-4 p-5 text-left ${picked?.encounterId === card.encounterId ? "border-[#2060A0] bg-[#D6E8FF]" : "border-[#2060A0] bg-white"}`}
-                    disabled={card.access === "busy"}
+                    disabled={Boolean(blockedText(card))}
                     onClick={() => {
-                      if (card.access === "busy") return;
+                      if (blockedText(card)) return;
                       setPicked(card);
                     }}
                   >
                     <div className="text-4xl font-bold">{`\u3010 ${card.maskedName} \u3011`}</div>
                     <div className="mt-2 text-2xl">{`\u8eab\u5206\u8b49\u672b 4 \u78bc\uff1a**** ${card.idTail}`}</div>
-                    {card.access === "busy" ? <div className="mt-2 text-2xl font-bold text-[#8A1C1C]">{"\u76ee\u524d\u7121\u6cd5\u5b58\u53d6"}</div> : null}
-                    {card.filled && card.access !== "busy" ? <div className="mt-2 text-2xl font-bold text-[#8A1C1C]">{"\u4eca\u5929\u5df2\u7d93\u586b\u904e"}</div> : null}
+                    {blockedText(card) ? <div className="mt-2 text-2xl font-bold text-[#8A1C1C]">{blockedText(card)}</div> : null}
+                    {card.filled && !blockedText(card) ? <div className="mt-2 text-2xl font-bold text-[#8A1C1C]">{"\u4eca\u5929\u5df2\u7d93\u586b\u904e"}</div> : null}
                   </button>
                 ))}
                 <div className="mt-auto grid grid-cols-2 gap-3">

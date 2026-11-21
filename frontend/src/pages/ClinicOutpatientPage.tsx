@@ -45,6 +45,7 @@ import { HistoryRxPanel } from "@/components/clinic/HistoryRxPanel";
 import { PatientHeaderWidget } from "@/components/clinic/widgets/PatientHeaderWidget";
 import { LesionPhotosWidget } from "@/components/clinic/widgets/LesionPhotosWidget";
 import { ChiefComplaintWidget } from "@/components/clinic/widgets/ChiefComplaintWidget";
+import { PrevisitSplit } from "@/components/clinic/widgets/PrevisitNotePanel";
 import { DiagnosesWidget } from "@/components/clinic/widgets/DiagnosesWidget";
 import { CurrentRxWidget } from "@/components/clinic/widgets/CurrentRxWidget";
 import { QualityLabPanel } from "@/components/clinic/QualityLabPanel";
@@ -268,6 +269,7 @@ export function ClinicOutpatientPage() {
     patientResource,
     encounterResource,
     ccFromWs,
+    previsitFromWs,
     lesionMedia,
     clinicalProfile,
     emptyCurrentRx,
@@ -3525,6 +3527,10 @@ export function ClinicOutpatientPage() {
               <div className="flex min-h-0 flex-1 flex-col gap-0">
                 <div className="flex h-[6rem] min-h-[4.25rem] max-h-[6rem] shrink-0 gap-0.5 px-0.5 pt-0.5">
                   <div className="relative h-full min-h-[4.25rem] max-h-[6rem] min-w-0 flex-1 self-stretch overflow-hidden">
+                    <PrevisitSplit
+                      text={previsitFromWs?.text ?? ""}
+                      cosmetic={previsitFromWs?.visitKind === "cosmetic"}
+                    >
                     <div className="absolute inset-0">
                     <ChiefComplaintWidget
                       key={selectedEncounterId || "none"}
@@ -3542,6 +3548,7 @@ export function ClinicOutpatientPage() {
                       onActivate={() => activateChartZone("cc")}
                     />
                     </div>
+                    </PrevisitSplit>
                   </div>
                   <ChartVitalsColumn
                     value={chartVitals}

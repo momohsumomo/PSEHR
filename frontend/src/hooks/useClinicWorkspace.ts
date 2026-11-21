@@ -399,6 +399,8 @@ function mapWorkspace(ws: WorkspaceResponse) {
     lesionMedia: mapLesionMedia(ws.lesionMedia),
     vitals: vitalsFlat,
     cc: ws.chiefComplaint,
+    previsitText: ws.previsitText || "",
+    visitKind: ws.visitKind || "",
     patientResource: ws.patient as (typeof mockPatients)[string],
     encounterResource: ws.encounter as (typeof mockEncounters)[string],
     preVisitCompleted: ws.preVisitCompleted,
@@ -641,6 +643,9 @@ export function useClinicWorkspace(options?: {
       ? (mockEncounters[selectedEncounterId] ?? null)
       : null;
   const ccFromWs = workspaceLive?.cc;
+  const previsitFromWs = workspaceLive
+    ? { text: workspaceLive.previsitText, visitKind: workspaceLive.visitKind }
+    : null;
   const patientIdNo = extractPatientIdNo(patientResource);
 
   const selectedEncounterRef = useRef(selectedEncounterId);
@@ -1582,6 +1587,7 @@ export function useClinicWorkspace(options?: {
     patientResource,
     encounterResource,
     ccFromWs,
+    previsitFromWs,
     vitalsFromWs: workspaceLive?.vitals ?? EMPTY_WS_VITALS,
     lesionMedia: apiMode
       ? (workspaceLive?.lesionMedia ?? [])

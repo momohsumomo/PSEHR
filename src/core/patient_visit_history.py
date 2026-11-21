@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from src.core.encounter_extensions import previsit_text
 from src.core.nhi_soap_fhir_mapper import extract_soap_stickers_from_composition
 from src.infrastructure.sqlite_shadow_store import SqliteShadowStore
 
@@ -20,8 +21,9 @@ def chief_complaint_text(value: str | None) -> str:
 
 
 def _reason_text(encounter: dict[str, Any]) -> str:
+    intake = previsit_text(encounter)
     for rc in encounter.get("reasonCode") or []:
-        if isinstance(rc, dict) and rc.get("text"):
+        if isinstance(rc, dict) and rc.get("text") and str(rc["text"]) != intake:
             return chief_complaint_text(str(rc["text"]))
     return ""
 

@@ -10,7 +10,7 @@ from pydantic import BaseModel, Field
 from src.app.bootstrap import get_fhir_repository, get_shadow_store
 from src.core.chart_presence import claim as claim_chart
 from src.core.chart_presence import release as release_chart
-from src.core.encounter_extensions import previsit_completed
+from src.core.encounter_extensions import previsit_completed, previsit_text, previsit_visit_kind
 from src.core.nhi_allergy_fhir_mapper import extract_allergy_stickers
 from src.core.nhi_soap_fhir_mapper import extract_soap_stickers_from_composition
 from src.core.patient_visit_history import build_patient_visit_records, chief_complaint_text
@@ -102,10 +102,11 @@ def get_outpatient_workspace(
 
     # 跟調閱病歷同一份。reasonCode 曾被掛號備註蓋過，有存檔主訴時不以它為準。
     cc = chief_complaint_text(store.lookup_chief_complaint(encounter_id))
+    intake = previsit_text(encounter)
     soap = None
     if not cc:
         for rc in encounter.get("reasonCode") or []:
-            if isinstance(rc, dict) and rc.get("text"):
+            if isinstance(rc, dict) and rc.get("text") and str(rc["text"]) != intake:
                 cc = chief_complaint_text(str(rc["text"]))
                 break
     if not cc:
@@ -143,6 +144,8 @@ def get_outpatient_workspace(
         "patientId": patient_id,
         "queueMeta": queue_meta,
         "preVisitCompleted": previsit_completed(encounter),
+        "previsitText": intake,
+        "visitKind": previsit_visit_kind(encounter),
         "hasAllergyAlert": has_alert,
         "patient": patient,
         "encounter": encounter,

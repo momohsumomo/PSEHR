@@ -23,3 +23,30 @@ export function saveRailPct(value: number): void {
     // Private mode or full storage: the split just resets next time.
   }
 }
+
+const INTAKE_KEY = "wundadi.chart.intakePct";
+
+/** Width of the waiting-room intake box, as a share of the chief complaint row. */
+export const INTAKE_PCT_DEFAULT = 33;
+
+export function clampIntakePct(value: number): number {
+  if (!Number.isFinite(value)) return INTAKE_PCT_DEFAULT;
+  return Math.min(60, Math.max(12, Math.round(value * 10) / 10));
+}
+
+export function loadIntakePct(): number {
+  try {
+    const raw = window.localStorage.getItem(INTAKE_KEY);
+    return raw ? clampIntakePct(Number(raw)) : INTAKE_PCT_DEFAULT;
+  } catch {
+    return INTAKE_PCT_DEFAULT;
+  }
+}
+
+export function saveIntakePct(value: number): void {
+  try {
+    window.localStorage.setItem(INTAKE_KEY, String(clampIntakePct(value)));
+  } catch {
+    // Private mode or full storage: the split just resets next time.
+  }
+}

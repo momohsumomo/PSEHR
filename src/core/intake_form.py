@@ -440,7 +440,7 @@ DAY_EN = {
 }
 
 def _on(place: str) -> str:
-    if place.startswith("both "):
+    if place.startswith("both ") or place == "multiple sites":
         return f"on {place}"
     return f"on the {place}"
 
@@ -455,21 +455,33 @@ def _join(items: list[str]) -> str:
     return ", ".join(items[:-1]) + " and " + items[-1]
 
 
-def _has_finger(sites: list[str], side: str) -> bool:
-    prefix = f"finger-{side}-"
-    nail = f"nail-{side}"
-    return any(item.startswith(prefix) or item == nail for item in sites)
-
-
-# Both sides of one trunk region become the plain word. One side keeps R/L.
-_PAIRS = (
-    ("chest-r", "chest-l", "chest", "R chest", "L chest"),
-    ("abdomen-r", "abdomen-l", "abdomen", "R abdomen", "L abdomen"),
-    ("groin-r", "groin-l", "groin", "R groin", "L groin"),
-    ("back-upper-r", "back-upper-l", "upper back", "R upper back", "L upper back"),
-    ("back-lower-r", "back-lower-l", "lower back", "R lower back", "L lower back"),
+# A full region becomes one chart phrase. A single side keeps its own name.
+_COMPLETE = (
+    (("body_chest_right", "body_chest_left", "body_abdomen_right", "body_abdomen_left"), "chest and abdomen"),
+    (("chest-r", "chest-l", "abdomen-r", "abdomen-l"), "chest and abdomen"),
+    (("body_back_upper_right", "body_back_upper_left", "body_back_lower_right", "body_back_lower_left"), "back"),
+    (("back-upper-r", "back-upper-l", "back-lower-r", "back-lower-l"), "back"),
+    (("body_buttock_right", "body_buttock_left"), "buttocks"),
+    (("buttock-r", "buttock-l"), "buttocks"),
+    (("body_shoulder_right", "body_upper_arm_right", "body_forearm_right"), "R arm"),
+    (("body_shoulder_left", "body_upper_arm_left", "body_forearm_left"), "L arm"),
+    (("body_thigh_right", "body_calf_right"), "R leg"),
+    (("body_thigh_left", "body_calf_left"), "L leg"),
 )
-_PAIR_OF = {side: row for row in _PAIRS for side in row[:2]}
+_BOTH = (
+    (("chest-r", "chest-l"), "chest"),
+    (("body_chest_right", "body_chest_left"), "chest"),
+    (("abdomen-r", "abdomen-l"), "abdomen"),
+    (("body_abdomen_right", "body_abdomen_left"), "abdomen"),
+    (("groin-r", "groin-l"), "groin"),
+    (("back-upper-r", "back-upper-l"), "upper back"),
+    (("body_back_upper_right", "body_back_upper_left"), "upper back"),
+    (("back-lower-r", "back-lower-l"), "lower back"),
+    (("body_back_lower_right", "body_back_lower_left"), "lower back"),
+)
+_DIGIT_NAMES = ("thumb", "index", "middle", "ring", "little")
+_TOE_NAMES = ("hallux", "second", "third", "fourth", "little")
+_PLACE_LIMIT = 3
 
 _FACE_RIGHT = {
     "face-r", "eyelid-r", "forehead-r", "temple-r", "undereye-r", "jaw-r",
@@ -541,41 +553,139 @@ def _face_phrase(sites: list[str]) -> str:
     return ""
 
 
+def _hand_digit_ids(side: str, digit: str) -> tuple[str, ...]:
+    long = "right" if side == "r" else "left"
+    return (
+        f"hand_{long}_palmar_{digit}",
+        f"hand_{long}_dorsal_{digit}",
+        f"finger-{side}-{digit}",
+    )
+
+
+def _hand_ids(side: str) -> tuple[str, ...]:
+    long = "right" if side == "r" else "left"
+    ids = [
+        f"hand-{side}",
+        f"hand-{side}-back",
+        f"nail-{side}",
+        f"hand_{long}_palmar_palm",
+        f"hand_{long}_dorsal_dorsum",
+        f"hand_{long}_palmar_fingers",
+        f"hand_{long}_dorsal_fingers",
+    ]
+    for digit in _DIGIT_NAMES:
+        ids.extend(_hand_digit_ids(side, digit))
+    return tuple(ids)
+
+
+def _foot_ids(side: str) -> tuple[str, ...]:
+    short = "r" if side == "right" else "l"
+    ids = [
+        f"foot-{short}",
+        f"foot-{short}-back",
+        f"foot_{side}_dorsal_dorsum",
+        f"foot_{side}_posterior",
+        f"foot_{side}_plantar_sole",
+        f"foot_{side}_plantar_fore",
+        f"foot_{side}_plantar_mid",
+        f"foot_{side}_plantar_heel",
+    ]
+    for digit in _TOE_NAMES:
+        ids.append(f"foot_{side}_dorsal_{digit}")
+        ids.append(f"foot_{side}_plantar_{digit}")
+    return tuple(ids)
+
+
+def _merge_pair(terms: list[str], left: str, right: str, both: str) -> list[str]:
+    if left not in terms or right not in terms:
+        return terms
+    out: list[str] = []
+    used = False
+    for term in terms:
+        if term in {left, right}:
+            if not used:
+                out.append(both)
+                used = True
+            continue
+        out.append(term)
+    return out
+
+
 def _place_terms(sites: list[str]) -> list[str]:
+    """Chart places. A whole region is one phrase. More than three leftovers stay 'multiple sites'."""
     chosen = set(sites)
-    skip = set()
-    if _has_finger(sites, "r"):
-        skip.update({"hand-r", "hand-r-back"})
-    if _has_finger(sites, "l"):
-        skip.update({"hand-l", "hand-l-back"})
+    consumed: set[str] = set()
+    pinned: dict[str, str] = {}
+
+    def consume(members: tuple[str, ...], phrase: str, *, need_all: bool) -> None:
+        present = [item for item in members if item in chosen]
+        if not present or any(item in consumed for item in present):
+            return
+        if need_all and len(present) != len(members):
+            return
+        anchor = min(present, key=sites.index)
+        pinned[anchor] = phrase
+        consumed.update(present)
+
+    for members, phrase in _COMPLETE:
+        consume(members, phrase, need_all=True)
+    for members, phrase in _BOTH:
+        consume(members, phrase, need_all=True)
+    for side, phrase in (("r", "R hand"), ("l", "L hand")):
+        digits = [digit for digit in _DIGIT_NAMES if any(item in chosen for item in _hand_digit_ids(side, digit))]
+        if len(digits) >= 3:
+            consume(_hand_ids(side), phrase, need_all=False)
+    for side, foot_phrase, sole_phrase in (("right", "R foot", "R sole"), ("left", "L foot", "L sole")):
+        toes = [
+            digit
+            for digit in _TOE_NAMES
+            if f"foot_{side}_dorsal_{digit}" in chosen or f"foot_{side}_plantar_{digit}" in chosen
+        ]
+        sole = (
+            f"foot_{side}_plantar_fore",
+            f"foot_{side}_plantar_mid",
+            f"foot_{side}_plantar_heel",
+        )
+        sole_full = all(item in chosen for item in sole)
+        if len(toes) >= 3 or (sole_full and toes):
+            consume(_foot_ids(side), foot_phrase, need_all=False)
+        elif sole_full:
+            consume(sole, sole_phrase, need_all=True)
+    for side in ("r", "l"):
+        named = [
+            item
+            for digit in _DIGIT_NAMES
+            for item in _hand_digit_ids(side, digit)
+            if item in chosen and item not in consumed
+        ]
+        if named:
+            consumed.update({f"hand-{side}", f"hand-{side}-back"} & chosen)
+
     phrase = _face_phrase(sites)
-    emitted: set[str] = set()
     terms: list[str] = []
     face_done = False
+    emitted: set[str] = set()
     for item in sites:
+        if item in pinned:
+            if pinned[item] not in emitted:
+                terms.append(pinned[item])
+                emitted.add(pinned[item])
+            continue
+        if item in consumed:
+            continue
         if item in _FACE_ALL and phrase:
             if not face_done:
                 terms.append(phrase)
                 face_done = True
             continue
-        pair = _PAIR_OF.get(item)
-        if pair:
-            if pair[0] in emitted:
-                continue
-            emitted.add(pair[0])
-            left_id, right_id, both, only_left, only_right = pair
-            if left_id in chosen and right_id in chosen:
-                terms.append(both)
-            elif left_id in chosen:
-                terms.append(only_left)
-            else:
-                terms.append(only_right)
-            continue
-        if item in skip:
-            continue
         term = _term(item, SITE_EN, SITE_LABEL)
-        if term:
+        if term and term not in emitted:
             terms.append(term)
+            emitted.add(term)
+    terms = _merge_pair(terms, "R arm", "L arm", "both arms")
+    terms = _merge_pair(terms, "R leg", "L leg", "both legs")
+    if len(terms) > _PLACE_LIMIT:
+        return ["multiple sites"]
     return terms
 
 
@@ -586,13 +696,7 @@ def compose_kiosk_note(
     days: str,
     severity: str = "",
     seen_other_doctor: bool = False,
-    refill_only: bool = False,
-    course: str = "",
-    prior_topical: bool = False,
 ) -> str:
-    del course, prior_topical
-    if refill_only:
-        return "Medication refill"
     places = _place_terms(sites)
     feels = [_term(item, SYMPTOM_EN, SYMPTOM_LABEL) for item in symptoms]
     feels = [item for item in feels if item]

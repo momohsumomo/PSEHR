@@ -135,3 +135,63 @@ class IntakeFormTests(unittest.TestCase):
         )
         self.assertIn("whole face", text)
         self.assertNotIn("glabella", text)
+
+    def test_front_trunk_quadrants_become_one_place(self):
+        text = compose_kiosk_note(
+            sites=["body_chest_right", "body_chest_left", "body_abdomen_right", "body_abdomen_left"],
+            symptoms=["itch"],
+            days="2",
+            severity="3",
+            seen_other_doctor=False,
+        )
+        self.assertIn("on the chest and abdomen", text)
+        self.assertNotIn("R chest", text)
+        self.assertNotIn("L abdomen", text)
+
+    def test_three_fingers_become_the_hand(self):
+        text = compose_kiosk_note(
+            sites=["finger-r-thumb", "finger-r-index", "finger-r-middle"],
+            symptoms=["pain"],
+            days="1",
+            severity="4",
+            seen_other_doctor=False,
+        )
+        self.assertIn("on the R hand", text)
+        self.assertNotIn("thumb", text)
+        self.assertNotIn("index", text)
+
+    def test_thigh_and_calf_become_the_leg(self):
+        text = compose_kiosk_note(
+            sites=["body_thigh_left", "body_calf_left"],
+            symptoms=["red"],
+            days="3",
+            severity="2",
+            seen_other_doctor=False,
+        )
+        self.assertIn("on the L leg", text)
+        self.assertNotIn("thigh", text)
+
+    def test_whole_sole_is_one_place(self):
+        text = compose_kiosk_note(
+            sites=["foot_right_plantar_fore", "foot_right_plantar_mid", "foot_right_plantar_heel"],
+            symptoms=["pain"],
+            days="2",
+            severity="5",
+            seen_other_doctor=False,
+        )
+        self.assertIn("on the R sole", text)
+        self.assertNotIn("fore", text)
+
+    def test_scattered_places_stay_a_short_phrase(self):
+        text = compose_kiosk_note(
+            sites=["scalp", "body_chest_right", "hand_left_palmar_index", "body_thigh_right"],
+            symptoms=["itch"],
+            days="7",
+            severity="6",
+            seen_other_doctor=True,
+        )
+        self.assertIn("on multiple sites", text)
+        self.assertNotIn("scalp", text)
+        self.assertNotIn("chest", text)
+        self.assertNotIn("thigh", text)
+        self.assertNotIn("finger", text)

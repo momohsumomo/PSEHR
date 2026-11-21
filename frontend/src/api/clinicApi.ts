@@ -212,6 +212,8 @@ export type WorkspaceResponse = {
   encounterId: string;
   patientId: string;
   preVisitCompleted: boolean;
+  previsitText?: string;
+  visitKind?: string;
   hasAllergyAlert: boolean;
   chiefComplaint: string;
   patient: Record<string, unknown>;
@@ -508,19 +510,14 @@ export async function lookupIntake(rocBirthday: string): Promise<{
 
 export async function submitIntake(body: {
   encounterId: string;
-  location?: string;
   sites?: string[];
   symptoms: string[];
-  duration?: string;
   days?: string;
   course?: string;
   severity?: string;
-  priorTopical?: boolean;
   seenOtherDoctor?: boolean;
-  refillOnly?: boolean;
   replace?: boolean;
   visitKind?: string;
-  intent?: string;
   concerns?: string[];
   prior?: string;
 }): Promise<void> {

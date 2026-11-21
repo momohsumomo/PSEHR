@@ -159,6 +159,17 @@ def previsit_visit_kind(payload: dict[str, Any]) -> str:
     return ""
 
 
+def previsit_text(payload: dict[str, Any]) -> str:
+    """病人在候診區填的那一句。不是主訴，不列印。"""
+    for ext in payload.get("extension") or []:
+        if ext.get("url") != PREVISIT_EXTENSION_URL:
+            continue
+        for sub in ext.get("extension") or []:
+            if sub.get("url") == "chiefComplaint" and sub.get("valueString"):
+                return str(sub["valueString"])
+    return ""
+
+
 def attach_previsit_extension(
     payload: dict[str, Any],
     *,
@@ -167,8 +178,19 @@ def attach_previsit_extension(
     submitted_at: str,
     visit_kind: str = "",
 ) -> dict[str, Any]:
-    """病患預診完成後寫入 Encounter.extension。"""
+    """病患預診完成後寫入 Encounter.extension。只寫預診欄，不碰主訴。"""
     out = dict(payload)
+    earlier = previsit_text(out)
+    if earlier:
+        kept = [
+            rc
+            for rc in out.get("reasonCode") or []
+            if not (isinstance(rc, dict) and str(rc.get("text") or "") == earlier)
+        ]
+        if kept:
+            out["reasonCode"] = kept
+        else:
+            out.pop("reasonCode", None)
     extensions: list[dict[str, Any]] = [
         e for e in out.get("extension") or [] if e.get("url") != PREVISIT_EXTENSION_URL
     ]
@@ -190,5 +212,4 @@ def attach_previsit_extension(
         }
     )
     out["extension"] = extensions
-    out["reasonCode"] = [{"text": chief_complaint[:500]}]
     return out
