@@ -133,24 +133,13 @@ def save_for_visit(body: dict[str, Any]) -> dict[str, Any]:
         if not data["docNo"].strip():
             kept = str(existing[1] or "").strip() if existing else ""
             data["docNo"] = kept or _format_serial(_max_serial(conn, store) + 1)
-        columns = [column for _, column in _FIELDS]
-        values = [data[key] for key, _ in _FIELDS]
-        if existing:
-            row_id = str(existing[0])
-            sets = ", ".join(f"{column}=?" for column in columns)
-            conn.execute(
-                f"UPDATE visit_certificate SET {sets}, english=?, updated_at=? WHERE id=?",
-                (*values, english, now, row_id),
-            )
-        else:
-            row_id = uuid.uuid4().hex
-            names = ", ".join(["id", "encounter_id", *columns, "english", "updated_at"])
-            marks = ", ".join("?" for _ in range(len(columns) + 4))
-            conn.execute(
-                f"INSERT INTO visit_certificate ({names}) VALUES ({marks})",
-                (row_id, eid, *values, english, now),
-            )
-        conn.commit()
+        row_id = str(existing[0]) if existing else uuid.uuid4().hex
+        row = store.side_row("visit_certificate", row_id)
+        if not existing:
+            row["encounter_id"] = eid
+        row.update({column: data[key] for key, column in _FIELDS})
+        row.update({"english": english, "updated_at": now})
+        store.put_side_row("visit_certificate", row)
     saved = find_for_visit(eid)
     return saved or {"id": row_id, "encounterId": eid, "updatedAt": now}
 
@@ -304,14 +293,12 @@ def import_yisheng_certificates(dat_dir: str | Path | None = None) -> dict[str, 
                     "yisheng",
                 )
             )
-        conn.executemany(
-            "INSERT INTO visit_certificate "
-            "(id, encounter_id, doc_no, visit_date, print_date, diagnosis, order_text, updated_at, source) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            rows,
-        )
-        conn.commit()
-        added = len(rows)
+    names = ("id", "encounter_id", "doc_no", "visit_date", "print_date", "diagnosis", "order_text", "updated_at", "source")
+    for values in rows:
+        row = store.side_row("visit_certificate", values[0])
+        row.update(dict(zip(names, values)))
+        store.put_side_row("visit_certificate", row)
+    added = len(rows)
     return {"added": added, "skipped": skipped}
 
 

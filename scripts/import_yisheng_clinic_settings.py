@@ -418,8 +418,7 @@ def import_all(sc_root: Path, db_path: Path | None = None, replace_staff: bool =
 
     print(f"[4/5] staff replace={replace_staff} ...")
     if replace_staff:
-        with store._connect() as conn:
-            conn.execute("DELETE FROM clinic_staff")
+        store.retire_side_rows("clinic_staff", "1 = 1", ())
     for s in staff:
         store.save_staff(
             {

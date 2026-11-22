@@ -7,7 +7,7 @@ import json
 import re
 import sqlite3
 import threading
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Callable, Generator
 
@@ -340,6 +340,126 @@ class SqliteShadowStore(ShadowStore):
         else:
             id_cat_ext["valueString"] = default_code
 
+    def _side_links(self, conn: sqlite3.Connection, row: dict[str, Any]) -> Any:
+        from src.core.side_records import Links
+
+        links = Links()
+        have = {
+            str(r[0])
+            for r in conn.execute(
+                "SELECT name FROM sqlite_master WHERE type = 'table' AND name IN ('encounter_index', 'patient_index')"
+            )
+        }
+        if len(have) < 2:
+            return links
+        enc = str(row.get("encounter_id") or "")
+        if enc:
+            hit = conn.execute(
+                "SELECT resource_id, patient_id FROM encounter_index WHERE resource_id = ?", (enc,)
+            ).fetchone()
+            if hit:
+                links.encounter_id = str(hit[0])
+                links.patient_id = str(hit[1] or "") or None
+        chart = str(row.get("medical_no") or row.get("chart_no") or "").strip()
+        if links.patient_id is None and chart:
+            hit = conn.execute(
+                "SELECT resource_id FROM patient_index WHERE medical_no = ? LIMIT 1", (chart,)
+            ).fetchone()
+            if hit:
+                links.patient_id = str(hit[0])
+        return links
+
+    def put_side_row(
+        self,
+        table: str,
+        row: dict[str, Any],
+        *,
+        retired: bool = False,
+        table_only: dict[str, Any] | None = None,
+    ) -> None:
+        """Write one desk row as its FHIR resource; the table row is derived from it.
+
+        table_only holds columns kept out of FHIR (staff PIN)."""
+        from src.core import side_records
+
+        with self._connect() as conn:
+            payload = side_records.to_resource(table, row, self._side_links(conn, row), retired=retired)
+            self._local.side_table_only = table_only
+            try:
+                self.cache_resource(payload["resourceType"], payload["id"], payload)
+            finally:
+                self._local.side_table_only = None
+
+    def side_row(self, table: str, key: Any) -> dict[str, Any]:
+        """Stored row, or a blank row with the column defaults."""
+        from src.core.side_records import SPECS
+
+        spec = SPECS[table]
+        with self._connect() as conn:
+            hit = conn.execute(f"SELECT * FROM {table} WHERE {spec.key} = ?", (key,)).fetchone()
+            if hit is not None:
+                return dict(hit)
+            out: dict[str, Any] = {}
+            for col in conn.execute(f"PRAGMA table_info({table})"):
+                default = col[4]
+                if default is None:
+                    out[col[1]] = None
+                elif default.startswith("'") and default.endswith("'"):
+                    out[col[1]] = default[1:-1].replace("''", "'")
+                else:
+                    try:
+                        out[col[1]] = int(default)
+                    except ValueError:
+                        out[col[1]] = default
+            out[spec.key] = key
+            return out
+
+    def patch_side_rows(
+        self, table: str, where: str, params: tuple[Any, ...] | list[Any], changes: Any
+    ) -> int:
+        """Apply changes (dict, or row -> dict) to every matching row, FHIR first."""
+        with self._connect() as conn:
+            rows = [dict(r) for r in conn.execute(f"SELECT * FROM {table} WHERE {where}", tuple(params))]
+        for row in rows:
+            update = changes(row) if callable(changes) else changes
+            row.update(update or {})
+            self.put_side_row(table, row)
+        return len(rows)
+
+    def retire_side_rows(self, table: str, where: str, params: tuple[Any, ...] | list[Any]) -> int:
+        with self._connect() as conn:
+            rows = [dict(r) for r in conn.execute(f"SELECT * FROM {table} WHERE {where}", tuple(params))]
+        for row in rows:
+            self.put_side_row(table, row, retired=True)
+        return len(rows)
+
+    def _upsert_side_row(self, conn: sqlite3.Connection, payload: dict[str, Any]) -> bool:
+        from src.core.side_records import EXCLUDED, from_resource
+
+        found = from_resource(payload)
+        if found is None:
+            return False
+        spec, row, retired = found
+        key = row.get(spec.key)
+        if key is None:
+            return True
+        if retired:
+            conn.execute(f"DELETE FROM {spec.table} WHERE {spec.key} = ?", (key,))
+            return True
+        cols = [r[1] for r in conn.execute(f"PRAGMA table_info({spec.table})")]
+        keep = EXCLUDED.get(spec.table, set())
+        extra = getattr(self._local, "side_table_only", None) or {}
+        values = {c: row.get(c) for c in cols if c not in keep}
+        values.update({c: v for c, v in extra.items() if c in cols})
+        names = list(values)
+        sets = ", ".join(f"{c} = excluded.{c}" for c in names if c != spec.key)
+        conn.execute(
+            f"INSERT INTO {spec.table} ({', '.join(names)}) VALUES ({', '.join('?' for _ in names)}) "
+            f"ON CONFLICT({spec.key}) DO UPDATE SET {sets}",
+            [values[c] for c in names],
+        )
+        return True
+
     def cache_resource(self, resource_type: str, resource_id: str, payload: dict[str, Any]) -> None:
         if resource_type == "Patient":
             from src.core.plain_text import sanitize_patient_names
@@ -423,7 +543,9 @@ class SqliteShadowStore(ShadowStore):
                     # 稽核失敗＝交易失敗，不可 silently 改病歷
                     raise RuntimeError(f"稽核寫入失敗，已中止存檔：{e}") from e
 
-            if resource_type == "Patient":
+            if self._upsert_side_row(conn, payload):
+                pass
+            elif resource_type == "Patient":
                 try:
                     self._upsert_patient_index(conn, resource_id, payload)
                 except PatientKeyConflict:
@@ -661,35 +783,19 @@ class SqliteShadowStore(ShadowStore):
             ]
 
     def save_staff(self, staff: dict[str, Any]) -> None:
-        with self._connect() as conn:
-            conn.execute(
-                """
-                INSERT INTO clinic_staff (id, name, role, nhi_id, cert_no, pin, status, room)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                ON CONFLICT(id) DO UPDATE SET
-                    name = excluded.name,
-                    role = excluded.role,
-                    nhi_id = excluded.nhi_id,
-                    cert_no = excluded.cert_no,
-                    pin = excluded.pin,
-                    status = excluded.status,
-                    room = excluded.room
-                """,
-                (
-                    staff.get("id"),
-                    staff.get("name"),
-                    staff.get("role"),
-                    staff.get("nhiId"),
-                    staff.get("certNo"),
-                    staff.get("pin"),
-                    staff.get("status", "在職"),
-                    str(staff.get("room") or "1").strip() or "1",
-                )
-            )
+        row = {
+            "id": staff.get("id"),
+            "name": staff.get("name"),
+            "role": staff.get("role"),
+            "nhi_id": staff.get("nhiId"),
+            "cert_no": staff.get("certNo"),
+            "status": staff.get("status", "在職"),
+            "room": str(staff.get("room") or "1").strip() or "1",
+        }
+        self.put_side_row("clinic_staff", row, table_only={"pin": staff.get("pin")})
 
     def delete_staff(self, staff_id: str) -> None:
-        with self._connect() as conn:
-            conn.execute("DELETE FROM clinic_staff WHERE id = ?", (staff_id,))
+        self.retire_side_rows("clinic_staff", "id = ?", (staff_id,))
 
     def _upsert_patient_index(
         self, conn: sqlite3.Connection, resource_id: str, payload: dict[str, Any]
@@ -1317,23 +1423,23 @@ class SqliteShadowStore(ShadowStore):
                 nonlocal added
                 if not pending:
                     return
-                before = conn.total_changes
-                conn.executemany(
-                    """
-                    INSERT OR IGNORE INTO look_file
-                        (rel, chart_no, file_name, modified, size_bytes)
-                    VALUES (?, ?, ?, ?, ?)
-                    """,
-                    pending,
-                )
-                added += conn.total_changes - before
-                conn.executemany(
-                    """
-                    UPDATE look_file SET modified = ?, size_bytes = ?
-                    WHERE rel = ? AND (IFNULL(modified, '') != ? OR IFNULL(size_bytes, -1) != ?)
-                    """,
-                    [(row[3], row[4], row[0], row[3], row[4]) for row in pending],
-                )
+                marks = ",".join("?" for _ in pending)
+                known = {
+                    str(r["rel"]): dict(r)
+                    for r in conn.execute(f"SELECT * FROM look_file WHERE rel IN ({marks})", [p[0] for p in pending])
+                }
+                noted = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+                for rel, chart, name, modified, size in pending:
+                    row = known.get(rel)
+                    if row is None:
+                        row = {"rel": rel, "chart_no": chart, "file_name": name, "noted_at": noted}
+                        added += 1
+                    elif (row.get("modified") or "") == (modified or "") and (
+                        -1 if row.get("size_bytes") is None else row["size_bytes"]
+                    ) == (-1 if size is None else size):
+                        continue
+                    row.update({"modified": modified, "size_bytes": size})
+                    self.put_side_row("look_file", row)
                 pending.clear()
 
             for item in iter_chart_photos(root, since=since):
@@ -1366,8 +1472,8 @@ class SqliteShadowStore(ShadowStore):
             exists = conn.execute(
                 "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'look_file'"
             ).fetchone()
-            if exists:
-                conn.execute("UPDATE look_file SET modified = ? WHERE rel = ?", (after, rel))
+        if exists:
+            self.patch_side_rows("look_file", "rel = ?", (rel,), {"modified": after})
         self.write_audit_event(
             action="UPDATE",
             resource_type="LookPhoto",

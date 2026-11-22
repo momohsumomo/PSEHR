@@ -121,39 +121,11 @@ def save_slip(body: dict[str, Any]) -> dict[str, Any]:
             fields["encounter_id"] = str(existing[1])
         if not fields["opened_on"] and kind == "reply":
             fields["opened_on"] = _visit_day(conn, fields["encounter_id"]) or now[:10]
-        conn.execute(
-            """
-            INSERT INTO referral_slip (
-                id, kind, encounter_id, patient_name, medical_no, id_no,
-                dest_hosp, dest_code, dept, purpose, doctor, diagnosis, note,
-                serial, valid_until, status, opened_on, updated_at
-            ) VALUES (
-                :id, :kind, :encounter_id, :patient_name, :medical_no, :id_no,
-                :dest_hosp, :dest_code, :dept, :purpose, :doctor, :diagnosis, :note,
-                :serial, :valid_until, :status, :opened_on, :updated_at
-            )
-            ON CONFLICT(id) DO UPDATE SET
-                kind=excluded.kind,
-                encounter_id=excluded.encounter_id,
-                patient_name=excluded.patient_name,
-                medical_no=excluded.medical_no,
-                id_no=excluded.id_no,
-                dest_hosp=excluded.dest_hosp,
-                dest_code=excluded.dest_code,
-                dept=excluded.dept,
-                purpose=excluded.purpose,
-                doctor=excluded.doctor,
-                diagnosis=excluded.diagnosis,
-                note=excluded.note,
-                serial=excluded.serial,
-                valid_until=excluded.valid_until,
-                status=excluded.status,
-                opened_on=excluded.opened_on,
-                updated_at=excluded.updated_at
-            """,
-            fields,
-        )
-        _write_slip_extra(conn, slip_id, body)
+        store = get_shadow_store()
+        row = store.side_row("referral_slip", slip_id)
+        row.update(fields)
+        row.update(_slip_extra(row.get("sheet_json"), body))
+        store.put_side_row("referral_slip", row)
         stored = conn.execute(
             "SELECT * FROM referral_slip WHERE id=?",
             (slip_id,),
@@ -191,42 +163,29 @@ _SHEET_KEYS = (
 PAPER_SHEET_LIKE = '%"paper": "Y"%'
 
 
-def _write_slip_extra(conn, slip_id: str, body: dict[str, Any]) -> None:
-    """Keep upload fields that are not columns. Omitted keys stay as they were."""
-    sets: list[str] = []
-    params: dict[str, Any] = {"id": slip_id}
+def _slip_extra(sheet_json: Any, body: dict[str, Any]) -> dict[str, Any]:
+    """Upload fields that are not columns. Omitted keys stay as they were."""
+    out: dict[str, Any] = {}
     if "historyText" in body:
-        sets.append("history_text=:history_text")
-        params["history_text"] = str(body.get("historyText") or "")
+        out["history_text"] = str(body.get("historyText") or "")
     if "treatText" in body:
-        sets.append("treat_text=:treat_text")
-        params["treat_text"] = str(body.get("treatText") or "")
+        out["treat_text"] = str(body.get("treatText") or "")
     patch: dict[str, str] = {}
     for stored, incoming in _SHEET_KEYS:
         if incoming in body:
             patch[stored] = str(body.get(incoming) or "")
     if patch:
-        row = conn.execute(
-            "SELECT sheet_json FROM referral_slip WHERE id=?",
-            (slip_id,),
-        ).fetchone()
         current: dict[str, Any] = {}
-        if row and row[0]:
+        if sheet_json:
             try:
-                parsed = json.loads(row[0])
+                parsed = json.loads(sheet_json)
             except json.JSONDecodeError:
                 parsed = {}
             if isinstance(parsed, dict):
                 current = parsed
         current.update(patch)
-        sets.append("sheet_json=:sheet_json")
-        params["sheet_json"] = json.dumps(current, ensure_ascii=True)
-    if not sets:
-        return
-    conn.execute(
-        "UPDATE referral_slip SET " + ", ".join(sets) + " WHERE id=:id",
-        params,
-    )
+        out["sheet_json"] = json.dumps(current, ensure_ascii=True)
+    return out
 
 
 def physician_ids(staff: list[dict[str, Any]]) -> list[dict[str, str]]:
@@ -252,13 +211,11 @@ def mark_uploaded(slip_id: str, *, local_id: str, nhi_id: str, status: str) -> N
             (slip,),
         ).fetchone()
         uploaded_at = str(prior[0] or "") if prior and prior[0] else now
-        conn.execute(
-            """
-            UPDATE referral_slip
-            SET status=?, local_id=?, nhi_id=?, uploaded_at=?, updated_at=?
-            WHERE id=?
-            """,
-            (status, local_id or "", nhi_id or "", uploaded_at, now, slip),
+        get_shadow_store().patch_side_rows(
+            "referral_slip",
+            "id=?",
+            (slip,),
+            {"status": status, "local_id": local_id or "", "nhi_id": nhi_id or "", "uploaded_at": uploaded_at, "updated_at": now},
         )
 
 
@@ -293,7 +250,7 @@ def remove_slip(slip_id: str) -> None:
         return
     with get_shadow_store()._connect() as conn:
         _ensure(conn)
-        conn.execute("DELETE FROM referral_slip WHERE id=?", (slip,))
+    get_shadow_store().retire_side_rows("referral_slip", "id=?", (slip,))
 
 
 def reply_id_for_serial(serial: str) -> str:
@@ -335,47 +292,33 @@ def take_incoming(
     with get_shadow_store()._connect() as conn:
         _ensure(conn)
         day = _visit_day(conn, encounter_id) or now[:10]
-        if current is None:
-            slip_id = uuid.uuid4().hex
-            conn.execute(
-                """
-                INSERT INTO referral_slip (
-                    id, kind, encounter_id, patient_name, medical_no, id_no,
-                    dest_hosp, dest_code, doctor, serial, status, opened_on, updated_at
-                ) VALUES (?, 'reply', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    slip_id, encounter_id, patient_name, medical_no, (id_no or "").strip().upper(),
-                    hosp_name, hosp_id, doctor, key, WAITING, day, now,
-                ),
-            )
-        else:
-            slip_id = current["id"]
-            conn.execute(
-                """
-                UPDATE referral_slip SET
-                    encounter_id=?,
-                    patient_name=CASE WHEN ?<>'' THEN ? ELSE patient_name END,
-                    medical_no=CASE WHEN ?<>'' THEN ? ELSE medical_no END,
-                    id_no=CASE WHEN ?<>'' THEN ? ELSE id_no END,
-                    dest_hosp=CASE WHEN ?<>'' THEN ? ELSE dest_hosp END,
-                    dest_code=CASE WHEN ?<>'' THEN ? ELSE dest_code END,
-                    doctor=CASE WHEN ?<>'' THEN ? ELSE doctor END,
-                    opened_on=?, updated_at=?
-                WHERE id=?
-                """,
-                (
-                    encounter_id,
-                    patient_name, patient_name,
-                    medical_no, medical_no,
-                    (id_no or "").strip().upper(), (id_no or "").strip().upper(),
-                    hosp_name, hosp_name,
-                    hosp_id, hosp_id,
-                    doctor, doctor,
-                    day, now, slip_id,
-                ),
-            )
+    store = get_shadow_store()
+    given = {
+        "patient_name": patient_name,
+        "medical_no": medical_no,
+        "id_no": (id_no or "").strip().upper(),
+        "dest_hosp": hosp_name,
+        "dest_code": hosp_id,
+        "doctor": doctor,
+    }
+    if current is None:
+        slip_id = uuid.uuid4().hex
+        row = store.side_row("referral_slip", slip_id)
+        row.update(given)
+        row.update({"kind": "reply", "serial": key, "status": WAITING})
+    else:
+        slip_id = current["id"]
+        row = store.side_row("referral_slip", slip_id)
+        row.update({k: v for k, v in given.items() if v != ""})
+    row.update({"encounter_id": encounter_id, "opened_on": day, "updated_at": now})
+    store.put_side_row("referral_slip", row)
     return get_slip(slip_id)
+
+
+def _patch_extra(slip_id: str, body: dict[str, Any]) -> None:
+    get_shadow_store().patch_side_rows(
+        "referral_slip", "id=?", (slip_id,), lambda row: _slip_extra(row.get("sheet_json"), body)
+    )
 
 
 def record_accept_sent(slip_id: str, local_id: str) -> None:
@@ -385,11 +328,7 @@ def record_accept_sent(slip_id: str, local_id: str) -> None:
         return
     with get_shadow_store()._connect() as conn:
         _ensure(conn)
-        _write_slip_extra(
-            conn,
-            slip,
-            {"acceptLocalId": token, "acceptedOn": datetime.now().strftime("%Y-%m-%d %H:%M:%S")},
-        )
+    _patch_extra(slip, {"acceptLocalId": token, "acceptedOn": datetime.now().strftime("%Y-%m-%d %H:%M:%S")})
 
 
 def release_for_encounter(encounter_id: str) -> None:
@@ -399,12 +338,12 @@ def release_for_encounter(encounter_id: str) -> None:
     for slip in slips_for_encounter(encounter_id):
         if slip.get("kind") != "reply" or not str(slip.get("serial") or "").strip() or uploaded(slip):
             continue
-        with get_shadow_store()._connect() as conn:
-            _ensure(conn)
-            conn.execute(
-                "UPDATE referral_slip SET encounter_id='', status=?, updated_at=? WHERE id=?",
-                (WAITING, datetime.now().strftime("%Y-%m-%d %H:%M:%S"), slip["id"]),
-            )
+        get_shadow_store().patch_side_rows(
+            "referral_slip",
+            "id=?",
+            (slip["id"],),
+            {"encounter_id": "", "status": WAITING, "updated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S")},
+        )
 
 
 def reply_for_encounter(encounter_id: str) -> dict[str, Any] | None:
@@ -433,7 +372,7 @@ def remember_self_seq(slip_id: str, self_seq: str) -> None:
         return
     with get_shadow_store()._connect() as conn:
         _ensure(conn)
-        _write_slip_extra(conn, slip, {"selfSeq": token})
+    _patch_extra(slip, {"selfSeq": token})
 
 
 def attach_bureau_serial(self_seq: str, serial: str) -> None:
@@ -454,7 +393,7 @@ def attach_bureau_serial(self_seq: str, serial: str) -> None:
             blob = str(row[2] or "")
             if token not in blob:
                 continue
-            conn.execute("UPDATE referral_slip SET serial=? WHERE id=?", (bureau, row[0]))
+            get_shadow_store().patch_side_rows("referral_slip", "id=?", (row[0],), {"serial": bureau})
 
 
 def _sheet(fields: dict[str, Any]) -> dict[str, Any]:
@@ -568,12 +507,12 @@ def link_outbound_encounters() -> int:
             ids = {str(row[0]) for row in rows if row[0]}
             if len(ids) != 1:
                 continue
-            conn.execute(
-                "UPDATE referral_slip SET encounter_id = ? "
-                "WHERE id = ? AND IFNULL(encounter_id, '') = ''",
-                (next(iter(ids)), slip_id),
+            linked += get_shadow_store().patch_side_rows(
+                "referral_slip",
+                "id = ? AND IFNULL(encounter_id, '') = ''",
+                (slip_id,),
+                {"encounter_id": next(iter(ids))},
             )
-            linked += 1
         return linked
 
 
@@ -657,23 +596,17 @@ def _import_yisheng_archive() -> None:
             )
     if not batch:
         return
-    with get_shadow_store()._connect() as conn:
+    store = get_shadow_store()
+    with store._connect() as conn:
         _ensure(conn)
-        conn.executemany(
-            """
-            INSERT INTO referral_slip (
-                id, kind, encounter_id, patient_name, medical_no, id_no,
-                dest_hosp, dest_code, dept, purpose, doctor, diagnosis, note,
-                serial, valid_until, status, opened_on, updated_at
-            ) VALUES (
-                :id, :kind, '', :patient_name, :medical_no, :id_no,
-                :dest_hosp, :dest_code, :dept, :purpose, :doctor, :diagnosis, :note,
-                :serial, :valid_until, :status, :opened_on, :opened_on
-            )
-            ON CONFLICT(id) DO NOTHING
-            """,
-            batch,
-        )
+        have = {str(r[0]) for r in conn.execute("SELECT id FROM referral_slip WHERE id LIKE 'ys-%'")}
+    for item in batch:
+        if item["id"] in have:
+            continue
+        row = store.side_row("referral_slip", item["id"])
+        row.update(item)
+        row.update({"encounter_id": "", "updated_at": item["opened_on"]})
+        store.put_side_row("referral_slip", row)
 
 
 def _memo_text(handle, block: int, token: str | None) -> str:
@@ -711,22 +644,20 @@ def _fill_missing_reply_dates() -> None:
 
     from scripts.import_yisheng_data import parse_roc_date, read_dbf_records
 
-    with get_shadow_store()._connect() as conn:
+    store = get_shadow_store()
+    with store._connect() as conn:
         _ensure(conn)
-        conn.execute(
+        days = conn.execute(
             """
-            UPDATE referral_slip
-            SET opened_on = (
-                SELECT substr(ei.encounter_date, 1, 10) FROM encounter_index ei
-                WHERE ei.resource_id = referral_slip.encounter_id
-            )
+            SELECT referral_slip.id, substr(ei.encounter_date, 1, 10) FROM referral_slip
+            JOIN encounter_index ei ON ei.resource_id = referral_slip.encounter_id
             WHERE kind = 'reply' AND IFNULL(opened_on, '') = '' AND IFNULL(encounter_id, '') <> ''
-              AND EXISTS (
-                SELECT 1 FROM encounter_index ei
-                WHERE ei.resource_id = referral_slip.encounter_id AND IFNULL(ei.encounter_date, '') <> ''
-              )
+              AND IFNULL(ei.encounter_date, '') <> ''
             """
-        )
+        ).fetchall()
+    for slip_id, day in days:
+        store.patch_side_rows("referral_slip", "id=?", (slip_id,), {"opened_on": day})
+    with store._connect() as conn:
         blank = conn.execute(
             "SELECT id FROM referral_slip WHERE id LIKE 'ys-reply-%' AND IFNULL(opened_on, '') = ''"
         ).fetchall()
@@ -745,11 +676,9 @@ def _fill_missing_reply_dates() -> None:
     updates = [item for item in updates if item["opened_on"]]
     if not updates:
         return
-    with get_shadow_store()._connect() as conn:
-        _ensure(conn)
-        conn.executemany(
-            "UPDATE referral_slip SET opened_on=:opened_on WHERE id=:id AND IFNULL(opened_on, '') = ''",
-            updates,
+    for item in updates:
+        store.patch_side_rows(
+            "referral_slip", "id=? AND IFNULL(opened_on, '') = ''", (item["id"],), {"opened_on": item["opened_on"]}
         )
 
 
@@ -789,21 +718,14 @@ def _fill_reply_sheets() -> None:
     finally:
         if handle is not None:
             handle.close()
-    with get_shadow_store()._connect() as conn:
-        _ensure(conn)
-        conn.executemany(
-            """
-            UPDATE referral_slip
-               SET note=:note,
-                   history_text=:history_text,
-                   treat_text=:treat_text,
-                   diagnosis=:diagnosis,
-                   purpose=:purpose,
-                   dept=:dept
-             WHERE id=:id
-            """,
-            updates,
-        )
+    _patch_each(updates)
+
+
+def _patch_each(updates: list[dict[str, Any]]) -> None:
+    store = get_shadow_store()
+    for item in updates:
+        changes = {k: v for k, v in item.items() if k != "id"}
+        store.patch_side_rows("referral_slip", "id=?", (item["id"],), changes)
 
 
 def _fill_out_sheets() -> None:
@@ -871,19 +793,4 @@ def _fill_out_sheets() -> None:
     finally:
         if handle is not None:
             handle.close()
-    with get_shadow_store()._connect() as conn:
-        _ensure(conn)
-        conn.executemany(
-            """
-            UPDATE referral_slip
-               SET note=:note,
-                   diagnosis=:diagnosis,
-                   treat_text=:treat_text,
-                   history_text=:history_text,
-                   dept=:dept,
-                   purpose=:purpose,
-                   sheet_json=:sheet_json
-             WHERE id=:id
-            """,
-            updates,
-        )
+    _patch_each(updates)

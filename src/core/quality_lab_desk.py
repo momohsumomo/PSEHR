@@ -112,49 +112,25 @@ def save_report(body: dict[str, Any]) -> dict[str, Any]:
             (encounter_id, order_code, "uploaded"),
         ).fetchone()
         report_id = str(existing[0]) if existing else uuid.uuid4().hex
-        if existing:
-            conn.execute(
-                "UPDATE quality_lab_report SET patient_name=?, medical_no=?, birthday=?, order_name=?, "
-                "report_text=?, doctor=?, slip_no=?, report_on=?, status=?, updated_at=? WHERE id=?",
-                (
-                    str(body.get("patientName") or ""),
-                    str(body.get("medicalNo") or ""),
-                    str(body.get("birthday") or ""),
-                    str(body.get("orderName") or ""),
-                    report,
-                    str(body.get("doctor") or ""),
-                    str(body.get("slipNo") or ""),
-                    str(body.get("reportOn") or ""),
-                    "saved",
-                    now,
-                    report_id,
-                ),
-            )
-        else:
-            conn.execute(
-                "INSERT INTO quality_lab_report ("
-                "id, encounter_id, patient_name, medical_no, birthday, order_code, order_name, "
-                "report_text, doctor, slip_no, report_on, status, local_id, nhi_id, updated_at"
-                ") VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-                (
-                    report_id,
-                    encounter_id,
-                    str(body.get("patientName") or ""),
-                    str(body.get("medicalNo") or ""),
-                    str(body.get("birthday") or ""),
-                    order_code,
-                    str(body.get("orderName") or ""),
-                    report,
-                    str(body.get("doctor") or ""),
-                    str(body.get("slipNo") or ""),
-                    str(body.get("reportOn") or ""),
-                    "saved",
-                    "",
-                    "",
-                    now,
-                ),
-            )
-        conn.commit()
+    store = get_shadow_store()
+    row = store.side_row("quality_lab_report", report_id)
+    if not existing:
+        row.update({"encounter_id": encounter_id, "order_code": order_code, "local_id": "", "nhi_id": ""})
+    row.update(
+        {
+            "patient_name": str(body.get("patientName") or ""),
+            "medical_no": str(body.get("medicalNo") or ""),
+            "birthday": str(body.get("birthday") or ""),
+            "order_name": str(body.get("orderName") or ""),
+            "report_text": report,
+            "doctor": str(body.get("doctor") or ""),
+            "slip_no": str(body.get("slipNo") or ""),
+            "report_on": str(body.get("reportOn") or ""),
+            "status": "saved",
+            "updated_at": now,
+        }
+    )
+    store.put_side_row("quality_lab_report", row)
     saved = get_report(report_id)
     return saved or {"id": report_id, "status": "saved"}
 
@@ -163,8 +139,9 @@ def mark_uploaded(report_id: str, local_id: str, nhi_id: str) -> None:
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     with get_shadow_store()._connect() as conn:
         _ensure(conn)
-        conn.execute(
-            "UPDATE quality_lab_report SET status=?, local_id=?, nhi_id=?, updated_at=? WHERE id=?",
-            ("uploaded", local_id, nhi_id, now, report_id),
-        )
-        conn.commit()
+    get_shadow_store().patch_side_rows(
+        "quality_lab_report",
+        "id=?",
+        (report_id,),
+        {"status": "uploaded", "local_id": local_id, "nhi_id": nhi_id, "updated_at": now},
+    )

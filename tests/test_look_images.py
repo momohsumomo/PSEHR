@@ -60,6 +60,7 @@ class LookImageNameTests(unittest.TestCase):
             try:
                 write_look_image("101190", b"one", ".JPG")
                 store = SqliteShadowStore(Path(tmp) / "t.db")
+                store.initialize()
                 first = store.note_look_files()
                 self.assertTrue(first["ok"])
                 self.assertEqual(first["added"], 1)
@@ -111,6 +112,7 @@ class LookImageNameTests(unittest.TestCase):
                 stamp = datetime(2020, 1, 2, 12, 0, 0).timestamp()
                 os.utime(old, (stamp, stamp))
                 store = SqliteShadowStore(Path(tmp) / "t.db")
+                store.initialize()
                 first = store.note_look_files()
                 self.assertEqual((first["full"], first["added"], first["folders"]), (True, 2, 2))
                 second = store.note_look_files()

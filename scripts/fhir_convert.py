@@ -417,6 +417,45 @@ def step_cash_return(store: s.SqliteShadowStore, conn: sqlite3.Connection) -> Re
     return rep
 
 
+def step_side(store: s.SqliteShadowStore, conn: sqlite3.Connection) -> Report:
+    from src.core.side_records import EXCLUDED, SPECS, to_resource
+
+    rep = Report("desk tables -> FHIR")
+    for table, spec in SPECS.items():
+        if not conn.execute("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?", (table,)).fetchone():
+            rep.notes[f"{table} missing, skipped"] += 1
+            continue
+        rows = conn.execute(f"SELECT * FROM {table}").fetchall()
+        for row in rows:
+            rep.rows += 1
+            data = dict(row)
+            payload = to_resource(table, data, store._side_links(conn, data))
+            if conn.execute(
+                "SELECT 1 FROM resource_cache WHERE resource_type = ? AND resource_id = ?",
+                (spec.rtype, payload["id"]),
+            ).fetchone():
+                raise RuntimeError(f"{table} id clash at {data[spec.key]}")
+            conn.execute(
+                "INSERT INTO resource_cache (resource_type, resource_id, payload_json, created_at, updated_at) "
+                "VALUES (?, ?, ?, datetime('now'), datetime('now'))",
+                (spec.rtype, payload["id"], json.dumps(payload, ensure_ascii=False)),
+            )
+            rep.json_changed += 1
+            rep.notes[f"{table} -> {spec.rtype}"] += 1
+            if "subject" not in payload and spec.rtype != "Practitioner":
+                rep.notes[f"{table} no patient link"] += 1
+            store._local.side_table_only = {c: data[c] for c in EXCLUDED.get(table, ())}
+            try:
+                store._upsert_side_row(conn, payload)
+            finally:
+                store._local.side_table_only = None
+            after = conn.execute(f"SELECT * FROM {table} WHERE {spec.key} = ?", (data[spec.key],)).fetchone()
+            for col in row.keys():
+                if after is None or row[col] != after[col]:
+                    rep.index_changed[f"{table}.{col}"] += 1
+    return rep
+
+
 STEPS = {
     "materialize": step_materialize,
     "urls": step_urls,
@@ -427,6 +466,7 @@ STEPS = {
     "patient": step_patient,
     "note": step_note,
     "other": step_other,
+    "side": step_side,
 }
 
 
