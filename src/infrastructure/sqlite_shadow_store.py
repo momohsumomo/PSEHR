@@ -501,7 +501,8 @@ class SqliteShadowStore(ShadowStore):
                 "SELECT payload_json FROM resource_cache WHERE resource_type = ? AND resource_id = ?",
                 (resource_type, resource_id)
             ).fetchone()
-            
+            put_last_updated(payload, _now_index_time())
+
             # Write to resource_cache (maintaining created_at)
             conn.execute(
                 """
@@ -513,38 +514,7 @@ class SqliteShadowStore(ShadowStore):
                 """,
                 (resource_type, resource_id, json.dumps(payload, ensure_ascii=False)),
             )
-            
-            # 責任機制：正式上線（audit_recording=1）後，凡寫入必留修改紀錄
-            if _is_audit_recording_enabled(conn):
-                try:
-                    machine = current_machine_id.get() or "Unknown_Machine"
-                    operator = current_operator_identity.get() or "System_Collaborative"
-                    if old_row:
-                        old_payload = json.loads(old_row[0])
-                        diff = json_diff(old_payload, payload)
-                        if diff:
-                            _insert_audit_row(
-                                conn,
-                                action="update",
-                                resource_type=resource_type,
-                                resource_id=resource_id,
-                                machine_id=machine,
-                                operator_identity=operator,
-                                changed_fields=diff,
-                            )
-                    else:
-                        _insert_audit_row(
-                            conn,
-                            action="create",
-                            resource_type=resource_type,
-                            resource_id=resource_id,
-                            machine_id=machine,
-                            operator_identity=operator,
-                            changed_fields=_audit_create_summary(resource_type, payload),
-                        )
-                except Exception as e:
-                    # 稽核失敗＝交易失敗，不可 silently 改病歷
-                    raise RuntimeError(f"稽核寫入失敗，已中止存檔：{e}") from e
+            self._audit_write(conn, resource_type, resource_id, old_row[0] if old_row else None, payload)
 
             if self._upsert_side_row(conn, payload):
                 pass
@@ -576,6 +546,47 @@ class SqliteShadowStore(ShadowStore):
                 self._upsert_media_index(conn, resource_id, payload)
             elif resource_type == "Basic":
                 self._upsert_cash_return_index(conn, resource_id, payload)
+            _sync_index_time(conn, resource_type, resource_id, payload)
+
+    def _audit_write(
+        self,
+        conn: sqlite3.Connection,
+        resource_type: str,
+        resource_id: str,
+        old_text: str | None,
+        payload: dict[str, Any],
+    ) -> None:
+        """After go-live (audit_recording=1) every chart write leaves a change record."""
+        if not _is_audit_recording_enabled(conn):
+            return
+        try:
+            machine = current_machine_id.get() or "Unknown_Machine"
+            operator = current_operator_identity.get() or "System_Collaborative"
+            if old_text:
+                diff = json_diff(json.loads(old_text), payload)
+                if diff:
+                    _insert_audit_row(
+                        conn,
+                        action="update",
+                        resource_type=resource_type,
+                        resource_id=resource_id,
+                        machine_id=machine,
+                        operator_identity=operator,
+                        changed_fields=diff,
+                    )
+            else:
+                _insert_audit_row(
+                    conn,
+                    action="create",
+                    resource_type=resource_type,
+                    resource_id=resource_id,
+                    machine_id=machine,
+                    operator_identity=operator,
+                    changed_fields=_audit_create_summary(resource_type, payload),
+                )
+        except Exception as e:
+            # 稽核失敗＝交易失敗，不可 silently 改病歷
+            raise RuntimeError(f"稽核寫入失敗，已中止存檔：{e}") from e
 
     def _upsert_cash_return_index(self, conn: sqlite3.Connection, resource_id: str, payload: dict[str, Any]) -> None:
         from src.core.cash_return import TEXT_FIELDS, from_basic
@@ -1019,6 +1030,7 @@ class SqliteShadowStore(ShadowStore):
             return False
         payload = json.loads(row[0])
         mutate(payload)
+        put_last_updated(payload, _now_index_time())
         conn.execute(
             """
             UPDATE resource_cache SET payload_json = ?, updated_at = datetime('now')
@@ -1026,12 +1038,14 @@ class SqliteShadowStore(ShadowStore):
             """,
             (json.dumps(payload, ensure_ascii=False), resource_type, resource_id),
         )
+        self._audit_write(conn, resource_type, resource_id, row[0], payload)
         upsert = {
             "Encounter": self._upsert_encounter_index,
             "Condition": self._upsert_condition_index,
             "MedicationRequest": self._upsert_medication_request_index,
         }[resource_type]
         upsert(conn, resource_id, payload)
+        _sync_index_time(conn, resource_type, resource_id, payload)
         return True
 
     def _upsert_condition_index(
@@ -3773,6 +3787,46 @@ class PatientKeyConflict(ValueError):
         self.other_id = other_id
         label = "身分證" if field == "id_no" else "病歷號"
         super().__init__(f"{label}「{value}」已存在（病患 {other_id}），不可重複")
+
+
+INDEX_TABLE_FOR = {
+    "Patient": "patient_index",
+    "Encounter": "encounter_index",
+    "Condition": "condition_index",
+    "MedicationRequest": "medication_request_index",
+    "Composition": "clinical_note_index",
+    "Observation": "observation_index",
+    "AllergyIntolerance": "allergy_index",
+    "Media": "media_index",
+}
+
+
+def _now_index_time() -> str:
+    """Same text as SQLite datetime('now') (UTC)."""
+    return datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+
+
+def put_last_updated(payload: dict[str, Any], index_time: str) -> None:
+    """Readers order rows by the index updated_at (first diagnosis, Rx order); it lives in
+    meta.lastUpdated so a rebuild from FHIR keeps that order."""
+    meta = payload.get("meta") if isinstance(payload.get("meta"), dict) else {}
+    meta["lastUpdated"] = index_time.replace(" ", "T") + "Z"
+    payload["meta"] = meta
+
+
+def last_updated_index_time(payload: dict[str, Any]) -> str | None:
+    meta = payload.get("meta")
+    text = str(meta.get("lastUpdated") or "") if isinstance(meta, dict) else ""
+    if len(text) == 20 and text[10] == "T" and text.endswith("Z"):
+        return text[:10] + " " + text[11:19]
+    return None
+
+
+def _sync_index_time(conn: sqlite3.Connection, resource_type: str, resource_id: str, payload: dict[str, Any]) -> None:
+    table = INDEX_TABLE_FOR.get(resource_type)
+    when = last_updated_index_time(payload)
+    if table and when:
+        conn.execute(f"UPDATE {table} SET updated_at = ? WHERE resource_id = ?", (when, resource_id))
 
 
 CLINIC_PROFILE_KEY = "clinic_profile_v1"

@@ -100,6 +100,8 @@ def report(db: Path, types: list[str]) -> None:
                 exact["<derive error>"] += 1
                 continue
             derived_cols.update(got)
+            if s.last_updated_index_time(payload) != row["updated_at"]:
+                exact["updated_at (meta.lastUpdated)"] += 1
             for col in cols:
                 want = row[col]
                 if col not in got:
@@ -148,6 +150,7 @@ def report(db: Path, types: list[str]) -> None:
                 if col in cand_total:
                     line += f"  same as reg.{ENC_CANDIDATES[col]} {cand_agree[col]}/{cand_total[col]}"
                 print(line)
+        print(f"  {'updated_at':24s} meta.lastUpdated differ {exact['updated_at (meta.lastUpdated)']:>8}")
         if exact.get("<derive error>"):
             print("  derive errors:", exact["<derive error>"])
     conn.close()

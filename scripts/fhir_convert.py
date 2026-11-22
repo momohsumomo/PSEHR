@@ -131,10 +131,26 @@ def step_encounter(store: s.SqliteShadowStore, conn: sqlite3.Connection) -> Repo
     return rep
 
 
+_TYPE_FOR_TABLE = {table: rtype for rtype, table in s.INDEX_TABLE_FOR.items()}
+
+
 def _finish(conn: sqlite3.Connection, table: str, row: sqlite3.Row, rep: Report) -> None:
-    """Readers sort by index updated_at; a rebuild must not move it."""
+    """Readers sort by index updated_at; it goes into meta.lastUpdated and must not move."""
     rid = row["resource_id"]
-    conn.execute(f"UPDATE {table} SET updated_at = ? WHERE resource_id = ?", (row["updated_at"], rid))
+    when = row["updated_at"]
+    rtype = _TYPE_FOR_TABLE[table]
+    stored = conn.execute(
+        "SELECT payload_json FROM resource_cache WHERE resource_type = ? AND resource_id = ?", (rtype, rid)
+    ).fetchone()
+    if stored:
+        payload = json.loads(stored[0])
+        if s.last_updated_index_time(payload) != when:
+            s.put_last_updated(payload, when)
+            if s.last_updated_index_time(payload) != when:
+                raise RuntimeError(f"{table} updated_at not in datetime('now') form at {rid}")
+            _write(conn, rtype, rid, payload)
+            rep.notes["meta.lastUpdated from index"] += 1
+    conn.execute(f"UPDATE {table} SET updated_at = ? WHERE resource_id = ?", (when, rid))
     after = conn.execute(f"SELECT * FROM {table} WHERE resource_id = ?", (rid,)).fetchone()
     _compare(row_without(row, "_p"), after, rep)
 
