@@ -294,12 +294,34 @@ def step_other(store: s.SqliteShadowStore, conn: sqlite3.Connection) -> Report:
     return rep
 
 
+def _put_clinic_sub(payload: dict[str, Any], key: str, value: str) -> None:
+    from src.core import fhir_urls
+
+    exts = payload.setdefault("extension", [])
+    block = next((e for e in exts if isinstance(e, dict) and e.get("url") == fhir_urls.PATIENT_CLINIC), None)
+    if block is None:
+        block = {"url": fhir_urls.PATIENT_CLINIC, "extension": []}
+        exts.append(block)
+    subs = [x for x in block.get("extension") or [] if not (isinstance(x, dict) and x.get("url") == key)]
+    subs.append({"url": key, "valueString": value})
+    block["extension"] = subs
+
+
 def step_patient(store: s.SqliteShadowStore, conn: sqlite3.Connection) -> Report:
-    """JSON already holds every patient column; only the index is re-derived."""
+    """Index re-derived from JSON. A ROC birthday the index holds but birthDate cannot
+    give (born before 1912, imported text) is kept as patient-clinic birthdayRoc."""
     rep = Report("Patient")
     for row in _batches(conn, "patient_index", "Patient"):
         rep.rows += 1
-        store._upsert_patient_index(conn, row["resource_id"], json.loads(row["_p"]), check_keys=False)
+        rid = row["resource_id"]
+        payload = json.loads(row["_p"])
+        roc = row["birthday_roc"]
+        if roc and s._patient_index_fields(payload).get("birthday_roc") != roc:
+            _put_clinic_sub(payload, "birthdayRoc", str(roc))
+            _write(conn, "Patient", rid, payload)
+            rep.json_changed += 1
+            rep.notes["birthdayRoc kept from index"] += 1
+        store._upsert_patient_index(conn, rid, payload, check_keys=False)
         _finish(conn, "patient_index", row, rep)
     return rep
 
