@@ -23,6 +23,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from src.core.encounter_extensions import extract_book, extract_reg_meta  # noqa: E402
+from src.core.side_records import from_resource  # noqa: E402
 from src.infrastructure import sqlite_shadow_store as s  # noqa: E402
 
 
@@ -89,6 +90,8 @@ def report(db: Path, types: list[str]) -> None:
             f"WHERE rc.resource_type = ?"
         )
         for row in conn.execute(sql, (rtype,)):
+            if rtype == "Media" and row["resource_id"] is None and from_resource(json.loads(row["_p"])):
+                continue  # LOOK pointers derive into look_file, not media_index
             n += 1
             if row["resource_id"] is None:
                 no_index += 1
