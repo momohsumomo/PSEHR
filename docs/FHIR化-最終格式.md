@@ -26,7 +26,7 @@
 
 | 區 | 最終 FHIR | 現有表格的角色 |
 |----|-----------|----------------|
-| 1 掛號、費用、讀卡 | Encounter；`encounter-queue`、`encounter-reg` 改正式網址；`reg_cc`、`reg_remark`、`claim_*`、`treat_seq`、`chief_complaint` 等只在索引的欄位寫進 JSON；還單、退押寫成 Encounter 擴充 `encounter-cash-return`（一筆一個子擴充） | `encounter_index`、`cash_return` 由 FHIR 產生 |
+| 1 掛號、費用、讀卡 | Encounter；`encounter-queue`、`encounter-reg` 改正式網址；`reg_cc`、`reg_remark`、`claim_*`、`treat_seq`、`chief_complaint` 等只在索引的欄位寫進 `encounter-book` 擴充；還單、退押每筆一個 Basic（`basic-kind` = `cash-return`，擴充 `cash-return`，`subject` 指病人，找得到看診就帶 `encounter`） | `encounter_index`、`cash_return` 由 FHIR 產生 |
 | 2 病人 | Patient（TW Core 識別碼）；診所欄位改 `patient-clinic` 正式網址 | `patient_index` 由 FHIR 產生 |
 | 3 病名 | Condition；`entered-in-error` 改放 `verificationStatus` | `condition_index` 由 FHIR 產生 |
 | 4 處方 | MedicationRequest；計費擴充只留一套 `medication-billing` | `medication_request_index` 由 FHIR 產生 |
@@ -38,10 +38,12 @@
 | 10 論質檢驗 | DiagnosticReport | `quality_lab_report` 由 FHIR 產生；zip 檔照舊 |
 | 11 照片 | Media 指標（`content.url` 指 LOOK 相對路徑）；LOOK 檔案不動；病灶 Media 照舊 | `look_file` 由 FHIR 產生 |
 | 12 員工 | Practitioner + PractitionerRole | `clinic_staff` 保留 PIN（資安設定，不進 FHIR），其餘由 FHIR 產生 |
-| 13 院所 | Organization | 費率、Sc.ini、工作站、列印設定是程式設定，維持設定檔 |
+| 13 院所 | Organization（`org-<醫事機構代號>`，識別碼 `sid/nhi-org-id`）；存院所資料時一併寫；每筆 Encounter 的 `serviceProvider` 指它。看診醫師維持在 Encounter 擴充（`doctorId`、`claimDoctorId`），申報照舊用人員表對成身分證；不另寫 `participant`，免得人員表一改兩邊不一致 | 費率、Sc.ini、工作站、列印設定是程式設定，維持設定檔 |
 | 14 身分類別 | 程式設定，不是病歷 | 維持 `id_category_settings`；看診當時的身分已在 Encounter |
 | 15 藥品、病名、用法主檔 | 程式設定，不是病歷 | 維持主檔 JSON 與 Pack；處方本身已帶健保碼 |
-| 16 同步與稽核 | 稽核維持本機 `audit_modifications`（記哪台電腦與時間）；同步程式拿掉雲端 DELETE、沒設雲端時不再假裝同步成功 | — |
+| 16 同步與稽核 | 稽核維持本機 `audit_modifications`（記哪台電腦與時間）；同步程式只送 PUT，刪除一律不送（標 `skipped`，不標已同步）；沒設雲端時佇列原地等，不再假裝同步成功 | — |
+
+8～12 區（診斷證明、轉診、論質檢驗、LOOK、員工）共用 `src/core/side_records.py`：每列一個資源，標準欄位（病人、看診、日期、狀態）加一個擴充原樣存全部欄位（NULL 不寫、空字串寫 `""`），表格由它產生。櫃台刪除一列時資源留著、標 `retired` 並改 `entered-in-error`（員工改 `active=false`），表格那列才消失。寫入一律 `store.put_side_row` / `patch_side_rows` / `retire_side_rows`。LOOK 的 Media 不進 `media_index`，病灶照片照舊。
 
 ## 不可變的
 
@@ -51,10 +53,17 @@
 
 ## 換版當天（禮拜三，整天休診）
 
-1. 主機先備份影子庫。
-2. 大廳按更新裝新版（使用者按）；在主機執行一次轉換腳本。
-3. Agent 在主機副本跑對照；診所照測試清單實測看診、列印、照片、存檔、申報。
-4. 沒問題就上線；有問題就還原備份、裝回舊版。
+1. 主機停服務，備份影子庫（`data\shadow.db` 連同 `-wal`、`-shm`）。
+2. 大廳按更新裝新版（使用者按）。新版看到未轉換的庫會拒絕啟動，這是預期的。
+3. 在主機執行 `fhir_convert.py --db data\shadow.db --apply`。
+4. 啟動服務。Agent 在主機副本跑對照；診所照測試清單實測看診、列印、照片、存檔、申報。
+5. 沒問題就上線；有問題就停服務、還原備份、裝回舊版。
+
+## 轉換腳本
+
+`scripts/fhir_convert.py --db 副本 [--steps ...] [--apply]`。不加 `--apply` 只試跑、全部回滾；拒絕網路路徑與 repo 內的檔案。步驟依序：`materialize`（只在索引的病名、處方補 JSON）、`urls`（換正式網址，需要醫事機構代號）、`encounter`、`cash_return`、`medication`、`condition`、`patient`、`note`（只在索引的主訴建 Composition）、`other`（生命徵象、過敏、病灶照片）、`side`（8～12 區各表）、`org`（Organization 與 `serviceProvider`）。
+
+每步都還原索引的 `updated_at`（畫面靠它排序），並逐欄比對重產的索引。全部步驟跑完才寫 `fhir_format = final-1`；新版啟動時看到用過的庫沒有這個標記就拒絕開（`NotConvertedError`）。
 
 ## 進度
 
