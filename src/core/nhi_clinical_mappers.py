@@ -9,6 +9,7 @@ from src.api.schemas.common import Reference
 from src.api.schemas.condition import ConditionBody
 from src.api.schemas.encounter import EncounterBody
 from src.api.schemas.medication_request import DosageInstruction, MedicationRequestBody
+from src.core import fhir_urls
 from src.core.nhi_condition_validators import NhiConditionIntake
 from src.core.encounter_extensions import attach_reg_extension
 from src.core.nhi_encounter_validators import NhiEncounterIntake
@@ -48,7 +49,7 @@ def nhi_condition_to_fhir(intake: NhiConditionIntake, *, patient_id: str) -> dic
     return data
 
 
-BILLING_EXT_BASE = "https://wundadi.local/fhir/StructureDefinition/medication-billing"
+BILLING_EXT_BASE = fhir_urls.MEDICATION_BILLING
 # 醫聖 HISTORY.SELFTYPE / MEMO → 計費註／「註」符號
 PAY_MARK_EXT = f"{BILLING_EXT_BASE}/payMark"
 MEMO_MARK_EXT = f"{BILLING_EXT_BASE}/memoMark"

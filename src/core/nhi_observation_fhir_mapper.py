@@ -4,11 +4,10 @@ from __future__ import annotations
 
 from typing import Any
 
+from src.core import fhir_urls
 from src.core.nhi_observation_validators import NhiObservationIntake
 
-NHI_OBSERVATION_EXTENSION_URL = (
-    "https://nhidcc.nhi.gov.tw/fhir/StructureDefinition/outpatient-observation"
-)
+NHI_OBSERVATION_EXTENSION_URL = fhir_urls.OBSERVATION_OUTPATIENT
 
 
 def nhi_observation_to_fhir(

@@ -11,6 +11,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Generator
 
+from src.core import fhir_urls
 from src.core.interfaces.shadow_store import ShadowStore
 from src.core.context import current_machine_id, current_operator_identity
 
@@ -323,7 +324,7 @@ class SqliteShadowStore(ShadowStore):
 
         if clinic_ext is None:
             clinic_ext = {
-                "url": "https://clinic.org/fhir/StructureDefinition/patient-clinic-ext",
+                "url": fhir_urls.PATIENT_CLINIC,
                 "extension": []
             }
             if "extension" not in payload:
@@ -2568,14 +2569,14 @@ class SqliteShadowStore(ShadowStore):
             if pay_mark:
                 extensions.append(
                     {
-                        "url": "https://clinic.org/fhir/StructureDefinition/billing/payMark",
+                        "url": f"{fhir_urls.MEDICATION_BILLING_SCHEMA}/payMark",
                         "valueString": pay_mark,
                     }
                 )
             if memo_mark:
                 extensions.append(
                     {
-                        "url": "https://clinic.org/fhir/StructureDefinition/billing/memoMark",
+                        "url": f"{fhir_urls.MEDICATION_BILLING_SCHEMA}/memoMark",
                         "valueString": memo_mark,
                     }
                 )
@@ -2583,7 +2584,7 @@ class SqliteShadowStore(ShadowStore):
             if body_site:
                 extensions.append(
                     {
-                        "url": "https://clinic.org/fhir/StructureDefinition/billing/bodySite",
+                        "url": f"{fhir_urls.MEDICATION_BILLING_SCHEMA}/bodySite",
                         "valueString": body_site,
                     }
                 )
@@ -3576,7 +3577,7 @@ def _encounter_index_fields(
     queue_number = 0
     queue_status = "waiting"
     for ext in payload.get("extension") or []:
-        if ext.get("url") != "https://wundadi.tw/fhir/StructureDefinition/encounter-queue":
+        if ext.get("url") != fhir_urls.ENCOUNTER_QUEUE:
             continue
         for sub in ext.get("extension") or []:
             if sub.get("url") == "queueNumber":

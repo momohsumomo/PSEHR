@@ -4,11 +4,10 @@ from __future__ import annotations
 
 from typing import Any
 
+from src.core import fhir_urls
 from src.core.nhi_media_validators import NhiMediaIntake
 
-NHI_MEDIA_EXTENSION_URL = (
-    "https://nhidcc.nhi.gov.tw/fhir/StructureDefinition/lesion-media"
-)
+NHI_MEDIA_EXTENSION_URL = fhir_urls.MEDIA_LESION
 SYSTEM_SNOMED = "http://snomed.info/sct"
 
 

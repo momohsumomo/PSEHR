@@ -5,6 +5,7 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field
 
 from src.api.schemas.common import CodeableConcept, Reference
+from src.core import fhir_urls
 from src.core.terminology import build_medication_codeable
 
 MedStatus = Literal[
@@ -75,49 +76,49 @@ class MedicationRequestBody(BaseModel):
         if self.bodySite is not None:
             extensions.append(
                 {
-                    "url": "https://clinic.org/fhir/StructureDefinition/billing/bodySite",
+                    "url": f"{fhir_urls.MEDICATION_BILLING_SCHEMA}/bodySite",
                     "valueString": self.bodySite.strip(),
                 }
             )
         if self.tradeName is not None:
             extensions.append(
                 {
-                    "url": "https://clinic.org/fhir/StructureDefinition/billing/tradeName",
+                    "url": f"{fhir_urls.MEDICATION_BILLING_SCHEMA}/tradeName",
                     "valueString": self.tradeName.strip(),
                 }
             )
         if self.payMark is not None:
             extensions.append(
                 {
-                    "url": "https://clinic.org/fhir/StructureDefinition/billing/payMark",
+                    "url": f"{fhir_urls.MEDICATION_BILLING_SCHEMA}/payMark",
                     "valueString": self.payMark.strip(),
                 }
             )
         if self.memo is not None:
             extensions.append(
                 {
-                    "url": "https://clinic.org/fhir/StructureDefinition/billing/memoMark",
+                    "url": f"{fhir_urls.MEDICATION_BILLING_SCHEMA}/memoMark",
                     "valueString": self.memo.strip(),
                 }
             )
         if self.daysSupply is not None:
             extensions.append(
                 {
-                    "url": "https://wundadi.local/fhir/StructureDefinition/medication-billing/daysSupply",
+                    "url": f"{fhir_urls.MEDICATION_BILLING}/daysSupply",
                     "valueInteger": int(self.daysSupply),
                 }
             )
         if self.quantity is not None:
             extensions.append(
                 {
-                    "url": "https://wundadi.local/fhir/StructureDefinition/medication-billing/quantity",
+                    "url": f"{fhir_urls.MEDICATION_BILLING}/quantity",
                     "valueDecimal": float(self.quantity),
                 }
             )
         if self.unitPrice is not None:
             extensions.append(
                 {
-                    "url": "https://wundadi.local/fhir/StructureDefinition/medication-billing/unitPrice",
+                    "url": f"{fhir_urls.MEDICATION_BILLING}/unitPrice",
                     "valueDecimal": float(self.unitPrice),
                 }
             )

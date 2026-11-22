@@ -19,6 +19,7 @@ from src.api.schemas.nhi_patient import NhiPatientRegisterResponse
 from src.api.schemas.nhi_observation import NhiObservationIntake, NhiObservationRegisterResponse
 from src.api.schemas.nhi_soap import NhiSoapIntake, NhiSoapRegisterResponse
 from src.app.bootstrap import get_fhir_repository, get_shadow_store
+from src.core import fhir_urls
 from src.core.encounter_extensions import attach_previsit_extension, previsit_completed
 from src.core.nhi_allergy_fhir_mapper import extract_allergy_stickers, nhi_allergy_to_fhir
 from src.core.nhi_previsit_validators import NhiPreVisitIntake
@@ -105,7 +106,7 @@ def _ensure_chart_on_payload(
     idents.append(
         {
             "use": "secondary",
-            "system": "https://clinic.org/chart-number",
+            "system": fhir_urls.ID_CHART_NUMBER,
             "value": med,
         }
     )
@@ -615,7 +616,7 @@ def _apply_manual_slot(payload: dict[str, Any], body: NhiEncounterIntake, encoun
         return
     status = "waiting"
     for ext in payload.get("extension") or []:
-        if ext.get("url") != "https://wundadi.tw/fhir/StructureDefinition/encounter-queue":
+        if ext.get("url") != fhir_urls.ENCOUNTER_QUEUE:
             continue
         for sub in ext.get("extension") or []:
             if sub.get("url") == "queueStatus" and sub.get("valueCode"):
@@ -1480,7 +1481,7 @@ def _cancel_local_encounter(store: SqliteShadowStore, encounter_id: str) -> dict
         raise HTTPException(status_code=404, detail=f"Encounter/{encounter_id} 不存在")
     queue_number = 0
     for ext in existing.get("extension") or []:
-        if ext.get("url") == "https://wundadi.tw/fhir/StructureDefinition/encounter-queue":
+        if ext.get("url") == fhir_urls.ENCOUNTER_QUEUE:
             for sub in ext.get("extension") or []:
                 if sub.get("url") == "queueNumber":
                     queue_number = int(sub.get("valueInteger") or 0)

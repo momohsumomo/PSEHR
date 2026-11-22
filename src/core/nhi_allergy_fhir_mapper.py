@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from src.core import fhir_urls
 from src.core.nhi_allergy_validators import NhiAllergyIntake
 from src.core.terminology import (
     SYSTEM_SNOMED,
@@ -18,9 +19,7 @@ VERIFICATION_SYSTEM = (
 CLINICAL_STATUS_SYSTEM = (
     "http://terminology.hl7.org/CodeSystem/allergyintolerance-clinical"
 )
-NHI_ALLERGY_EXTENSION_URL = (
-    "https://nhidcc.nhi.gov.tw/fhir/StructureDefinition/outpatient-allergy"
-)
+NHI_ALLERGY_EXTENSION_URL = fhir_urls.ALLERGY_OUTPATIENT
 
 
 def nhi_allergy_to_fhir(intake: NhiAllergyIntake) -> dict[str, Any]:

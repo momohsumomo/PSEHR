@@ -6,6 +6,7 @@ from fastapi import APIRouter, HTTPException, Query
 
 from src.api.schemas.patient import PatientBody
 from src.app.bootstrap import get_fhir_repository, get_shadow_store
+from src.core import fhir_urls
 from src.core.patient_visit_history import build_patient_visit_records, chief_complaint_text
 from src.infrastructure.sqlite_shadow_store import SqliteShadowStore
 
@@ -238,7 +239,7 @@ def create_patient(body: PatientBody) -> dict[str, Any]:
         idents.append(
             {
                 "use": "secondary",
-                "system": "https://clinic.org/chart-number",
+                "system": fhir_urls.ID_CHART_NUMBER,
                 "value": med,
             }
         )

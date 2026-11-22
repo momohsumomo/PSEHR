@@ -4,12 +4,14 @@ from __future__ import annotations
 
 from typing import Any
 
+from src.core import fhir_urls
+
 # 常用 CodeSystem URI（沙盒 2 驗收對照用）
 SYSTEM_ICD10 = "http://hl7.org/fhir/sid/icd-10"
 SYSTEM_SNOMED = "http://snomed.info/sct"
 SYSTEM_RXNORM = "http://www.nlm.nih.gov/research/umls/rxnorm"
-SYSTEM_NHI_MEDICATION = "https://nhidcc.nhi.gov.tw/medication"
-SYSTEM_TW_ICD10CM = "https://nhidcc.nhi.gov.tw/icd10cm"
+SYSTEM_NHI_MEDICATION = fhir_urls.CODE_NHI_MEDICATION
+SYSTEM_TW_ICD10CM = fhir_urls.CODE_TW_ICD10CM
 
 
 def _system_matches(system: str | None, *fragments: str) -> bool:

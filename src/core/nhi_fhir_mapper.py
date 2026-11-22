@@ -4,17 +4,16 @@ from __future__ import annotations
 
 from typing import Any
 
+from src.core import fhir_urls
 from src.core.nhi_validators import (
     NhiPatientIntake,
     nhi_sex_to_fhir_gender,
     roc7_to_iso_date,
 )
 
-NHI_PATIENT_EXTENSION_URL = (
-    "https://nhidcc.nhi.gov.tw/fhir/StructureDefinition/nhi-card-basic"
-)
-TW_NATIONAL_ID_SYSTEM = "http://www.moi.gov.tw/id"
-NHI_CARD_ID_SYSTEM = "https://nhidcc.nhi.gov.tw/id"
+NHI_PATIENT_EXTENSION_URL = fhir_urls.PATIENT_NHI_CARD
+TW_NATIONAL_ID_SYSTEM = fhir_urls.ID_TW_NATIONAL
+NHI_CARD_ID_SYSTEM = fhir_urls.ID_NHI_CARD
 
 
 def merge_nhi_patient_update(existing: dict[str, Any], nhi_payload: dict[str, Any]) -> dict[str, Any]:

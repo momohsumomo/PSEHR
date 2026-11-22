@@ -13,6 +13,16 @@
 3. 「外部格式」那欄是健保或醫聖規定的格式，FHIR 化之後**照樣要產出一模一樣的檔案**。
 4. 列印方向鎖定（`turnWidePortraitJob`、`Convert-SlipForFeed`、`ys-rot`、Sumatra 字串）不在遷移範圍，不准碰。
 
+## 進度
+
+| 步 | 內容 | 狀態 |
+|----|------|------|
+| 1 | 自訂網址收進 `src/core/fhir_urls.py`，值不變；`tests/test_fhir_urls.py` 鎖住值，並禁止 `src/` 直接寫網址 | 完成（2026-11-22） |
+| 2 | 讀取端認得舊網址：`import_yisheng_lean.py` 寫的是 `clinic.org/.../queue`、`clinic.org/.../reg`，現行程式讀不到這些就診 JSON 裡的案類、預約、備註，只靠索引撐著 | 待做；先確認主機上有多少這種就診 |
+| 3 | 決定正式網址（不用 `clinic.org`、不冒用 `nhidcc.nhi.gov.tw`），新寫入改用正式網址，舊資料照讀 | 待做 |
+
+`scripts/` 與前端（`patientMaster.ts`、mocks）仍直接寫網址，第 3 步換網址時要一起改。
+
 ## 總覽
 
 | 區 | 資料 | 目前主要存放 | 已是 FHIR 嗎 | 列印 | 申報／上傳 |

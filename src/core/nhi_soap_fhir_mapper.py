@@ -6,9 +6,10 @@ import html
 from datetime import datetime, timezone
 from typing import Any
 
+from src.core import fhir_urls
 from src.core.nhi_soap_validators import NhiSoapIntake
 
-NHI_SOAP_EXTENSION_URL = "https://nhidcc.nhi.gov.tw/fhir/StructureDefinition/outpatient-soap"
+NHI_SOAP_EXTENSION_URL = fhir_urls.COMPOSITION_SOAP
 LOINC_CONSULT_NOTE = "11488-4"
 
 
@@ -85,7 +86,7 @@ def nhi_soap_to_fhir_composition(
         payload["author"] = [
             {
                 "identifier": {
-                    "system": "http://www.moi.gov.tw/id",
+                    "system": fhir_urls.ID_TW_NATIONAL,
                     "value": intake.authorIdNo,
                 }
             }

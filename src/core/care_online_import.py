@@ -8,6 +8,7 @@ import urllib.request
 from pathlib import Path
 from typing import Any
 
+from src.core import fhir_urls
 from src.core.nhi_encounter_validators import NhiEncounterIntake
 from src.core.nhi_fhir_mapper import nhi_intake_to_fhir_patient
 from src.core.nhi_validators import (
@@ -21,7 +22,7 @@ from src.core.nhi_validators import (
 _TOKEN_FILE = Path(r"Z:\SC\dat\ScPub.ini")
 _BOOK_URL = "https://careonline.com.tw/api/Registration/GetBookings?visitingDate="
 _UA = "Mozilla/4.0 (compatible; MSIE 6.0; Windows NT 5.1)"
-_CLINIC_EXT = "https://clinic.org/fhir/StructureDefinition/patient-clinic-ext"
+_CLINIC_EXT = fhir_urls.PATIENT_CLINIC
 
 
 def _token() -> str:
@@ -317,7 +318,7 @@ def import_care_bookings(visiting_date: str) -> dict[str, Any]:
             idents.append(
                 {
                     "use": "secondary",
-                    "system": "https://clinic.org/chart-number",
+                    "system": fhir_urls.ID_CHART_NUMBER,
                     "value": med,
                 }
             )

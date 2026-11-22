@@ -4,11 +4,11 @@ from __future__ import annotations
 
 from typing import Any
 
-QUEUE_EXTENSION_URL = "https://wundadi.tw/fhir/StructureDefinition/encounter-queue"
-REG_EXTENSION_URL = "https://wundadi.tw/fhir/StructureDefinition/encounter-reg"
-PREVISIT_EXTENSION_URL = (
-    "https://nhidcc.nhi.gov.tw/fhir/StructureDefinition/patient-previsit"
-)
+from src.core import fhir_urls
+
+QUEUE_EXTENSION_URL = fhir_urls.ENCOUNTER_QUEUE
+REG_EXTENSION_URL = fhir_urls.ENCOUNTER_REG
+PREVISIT_EXTENSION_URL = fhir_urls.ENCOUNTER_PREVISIT
 
 REG_STRING_KEYS = (
     "caseNo",
