@@ -8,6 +8,8 @@
 2. **表格全由 FHIR 重建**：在副本上清空所有索引表與病歷專表，只靠 FHIR 重建（`scripts/rebuild_from_fhir.py`），`fhir_baseline.py` 對照轉換前的錄製結果要 `IDENTICAL`。這證明「傳上去的就是全部」。
 3. **寫入先 FHIR**：每個寫入點先寫 FHIR，再由 FHIR 產生表格；沒有任何寫入只改表格不改 FHIR。
 
+排序時間：畫面與申報靠索引的 `updated_at` 排順序（第一個病名、處方順序）。這個時間存在 JSON 的 `meta.lastUpdated`（`YYYY-MM-DDTHH:MM:SSZ`），每次存檔由主機蓋上，索引的 `updated_at` 由它產生；轉換時把現有索引時間原樣寫進去，順序不變。
+
 畫面讀的 API 輸出不變，所以前端只需改「自己寫網址」的地方（`patientMaster.ts` 等）。
 
 ## 網址
