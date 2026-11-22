@@ -21,7 +21,7 @@
 | 2 | 查主機副本（2026-11-22）：就診 455,078 筆，411,527 筆同時有舊 `clinic.org/.../queue`、`reg` 和新 `wundadi.tw` 擴充，沒有只有舊的。舊的是精簡匯入留下的過期複本：候診號、狀態、案類、時段全同，6 筆預約／備註舊值已被新值更新。結論：**不讀舊擴充**（列在 `fhir_urls.STALE_DUPLICATES`），精簡匯入改寫新網址，舊複本等整批改寫時移除 | 完成 |
 | 2.5 | 對照工具 `scripts/fhir_baseline.py`（見下節）。同一份副本跑兩次：45 類、約 14,500 次呼叫完全一致，含月申報 XML、IC 檔 | 完成（2026-11-22） |
 | 3 | 只有索引、沒有 FHIR JSON 的列：病名 53,713／603,209、處方 119,365／1,298,532；就診 0。`scripts/materialize_index_only.py` 只對沒有 JSON 的列 INSERT，不動索引（提交前比對雜湊），每筆 JSON 用店家建索引的同一套函式解回去，17.3 萬筆全部和索引一致；索引沒從 JSON 讀的 `total_qty`、`use_type`、`line_sort` 寫成計費擴充 `totalQty`、`useType`、`lineSort`。同步修掉單筆掛號資料的「天數」：原本讀第一筆處方 JSON 找「X天」，找不到就填 3、沒 JSON 填「—」，改成和整天清單一樣取處方索引最大天數（修前同一筆兩邊不一致 371／688，修後 0）。本機副本驗證完成，**未套主機** | 副本完成 |
-| 4 | 決定正式網址（不用 `clinic.org`、不冒用 `nhidcc.nhi.gov.tw`），新寫入改用正式網址，舊資料照讀。處方計費擴充目前兩套並存：`clinic.org/.../billing` 約 117.8 萬筆、`wundadi.local/.../medication-billing` 約 50.2 萬筆 | 待做 |
+| 4 | 正式網址已定（2026-11-22）：自訂欄位一律用 `https://polarissehr.eskincrux.com/fhir/...`（全小寫，FHIR 逐字比對，定了不改）；ICD-10、健保藥品碼、身分證等標準代碼改用 TW Core 公布的官方網址（實作時對照當時最新版）。不用 `clinic.org`、不冒用 `nhidcc.nhi.gov.tw`、不用 `.local`。新寫入改用正式網址，舊資料照讀。處方計費擴充目前兩套並存：`clinic.org/.../billing` 約 117.8 萬筆、`wundadi.local/.../medication-billing` 約 50.2 萬筆 | 待做 |
 
 `scripts/` 與前端（`patientMaster.ts`、mocks）仍直接寫網址，第 4 步換網址時要一起改。
 
