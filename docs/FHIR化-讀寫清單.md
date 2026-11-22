@@ -19,10 +19,26 @@
 |----|------|------|
 | 1 | 自訂網址收進 `src/core/fhir_urls.py`，值不變；`tests/test_fhir_urls.py` 鎖住值，並禁止 `src/` 直接寫網址 | 完成（2026-11-22） |
 | 2 | 查主機副本（2026-11-22）：就診 455,078 筆，411,527 筆同時有舊 `clinic.org/.../queue`、`reg` 和新 `wundadi.tw` 擴充，沒有只有舊的。舊的是精簡匯入留下的過期複本：候診號、狀態、案類、時段全同，6 筆預約／備註舊值已被新值更新。結論：**不讀舊擴充**（列在 `fhir_urls.STALE_DUPLICATES`），精簡匯入改寫新網址，舊複本等整批改寫時移除 | 完成 |
+| 2.5 | 對照工具 `scripts/fhir_baseline.py`（見下節）。同一份副本跑兩次：45 類、約 14,500 次呼叫完全一致，含月申報 XML、IC 檔 | 完成（2026-11-22） |
 | 3 | 只有索引、沒有 FHIR JSON 的列：病名 53,713／603,209、處方 119,365／1,298,532；就診 0。要補成完整 FHIR 才能改以 FHIR 為正本 | 待做 |
 | 4 | 決定正式網址（不用 `clinic.org`、不冒用 `nhidcc.nhi.gov.tw`），新寫入改用正式網址，舊資料照讀。處方計費擴充目前兩套並存：`clinic.org/.../billing` 約 117.8 萬筆、`wundadi.local/.../medication-billing` 約 50.2 萬筆 | 待做 |
 
 `scripts/` 與前端（`patientMaster.ts`、mocks）仍直接寫網址，第 4 步換網址時要一起改。
+
+## 對照工具
+
+每一步改儲存方式之前和之後，都要用 `scripts/fhir_baseline.py` 比對，**結果必須完全一致**才能套到主機。
+
+1. 從主機複製資料庫到這台（只複製檔案，不在網路上開資料庫）：`robocopy "\\OPD\PolarisSEHR\data" <本機資料夾> shadow.db shadow.db-wal /J`
+2. 改之前：`.venv\Scripts\python.exe scripts\fhir_baseline.py capture --db <副本> --out <資料夾A> --look "\\OPD\PolarisSEHR\data\look"`
+3. 在副本上執行這一步的轉換，再跑一次 capture 到資料夾B。
+4. `.venv\Scripts\python.exe scripts\fhir_baseline.py diff <資料夾A> <資料夾B>`，要印出 `IDENTICAL`。
+
+- 工具會打看診工作台、掛號清單、調閱、掛號簿、各統計報表、月申報 XML、IC 檔、診斷證明、轉診、照片相簿、病人歷史等 45 類讀取，抽樣近期與歷年的日子、只有索引的病名處方、300 位病人。
+- 資料庫在網路磁碟上會拒絕執行；輸出放在專案資料夾內也會拒絕（輸出含病人資料，不可進 git）。
+- 不跑啟動事件（同步程式、從 `Z:` 匯入診斷證明）。
+- 兩次 capture 要同一天跑，年齡等以今天計算的欄位才會一致。
+- 一次約 30 分鐘。
 
 ## 總覽
 
