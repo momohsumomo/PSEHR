@@ -1,508 +1,508 @@
-# FHIR ¤ÆÅª¼g²M³æ¡]¾E²¾«e½LÂI¡^
+# FHIR åŒ–è®€å¯«æ¸…å–®ï¼ˆé·ç§»å‰ç›¤é»ï¼‰
 
-¥»¾÷¸ê®Æ³Ì²×­n¥ş³¡§ï¦¨¼Ğ·Ç FHIR¡]TW Core ¬°©³¡^¡C³o¥÷²M³æ¦C¥X**¥Ø«e¨C¤@ºØ¸ê®Æ¦s¦b­ş¸Ì¡B­ş¨Çµ{¦¡¼g¥¦¡BÅª¥¦¡BÅã¥Ü¥¦¡B¦L¥¦¡B¥Ó³ø©Î¤W¶Ç¥¦¡B¶×¤J¥¦**¡C¥H«á°Ê¥ô¦ó¤@¶ô¸ê®ÆªºÀx¦s¤è¦¡¡A¥ı¬d³o¥÷¡A³v±ø¤Ä§¹¤~ºâ§ï§¹¡C
+æœ¬æ©Ÿè³‡æ–™æœ€çµ‚è¦å…¨éƒ¨æ”¹æˆæ¨™æº– FHIRï¼ˆTW Core ç‚ºåº•ï¼‰ã€‚é€™ä»½æ¸…å–®åˆ—å‡º**ç›®å‰æ¯ä¸€ç¨®è³‡æ–™å­˜åœ¨å“ªè£¡ã€å“ªäº›ç¨‹å¼å¯«å®ƒã€è®€å®ƒã€é¡¯ç¤ºå®ƒã€å°å®ƒã€ç”³å ±æˆ–ä¸Šå‚³å®ƒã€åŒ¯å…¥å®ƒ**ã€‚ä»¥å¾Œå‹•ä»»ä½•ä¸€å¡Šè³‡æ–™çš„å„²å­˜æ–¹å¼ï¼Œå…ˆæŸ¥é€™ä»½ï¼Œé€æ¢å‹¾å®Œæ‰ç®—æ”¹å®Œã€‚
 
-- ½LÂI¤é´Á¡G2026-11-22¡A¨Ì·í®É `main` ªºµ{¦¡ÀRºA·j´M¡A¥¼¶}±Ò `data/shadow.db`¡C
-- ¦æ¸¹¬°¬ù²¤­È¡Aµ{¦¡§ï¹L´N·|°¾²¾¡A¥H¨ç¦¡¦W¬°·Ç¡C
-- ·s¼WÄæ¦ì¡B·s¼W¦C¦L¡B·s¼W¶×¤J¸}¥»®É¡A­n¦^¨Ó¸É³o¥÷²M³æ¡C
+- ç›¤é»æ—¥æœŸï¼š2026-11-22ï¼Œä¾ç•¶æ™‚ `main` çš„ç¨‹å¼éœæ…‹æœå°‹ï¼Œæœªé–‹å•Ÿ `data/shadow.db`ã€‚
+- è¡Œè™Ÿç‚ºç´„ç•¥å€¼ï¼Œç¨‹å¼æ”¹éå°±æœƒåç§»ï¼Œä»¥å‡½å¼åç‚ºæº–ã€‚
+- æ–°å¢æ¬„ä½ã€æ–°å¢åˆ—å°ã€æ–°å¢åŒ¯å…¥è…³æœ¬æ™‚ï¼Œè¦å›ä¾†è£œé€™ä»½æ¸…å–®ã€‚
 
-## ¨Ï¥Î¤è¦¡
+## ä½¿ç”¨æ–¹å¼
 
-1. ­n¾E²¾¬Y¤@°Ï¸ê®Æ«e¡A¥ıÅª¸Ó°Ïªº¡u¥Ø«e¦s©ñ¡v»P¡u³´¨À¡v¡C
-2. ¨Ì¡uÄ²ÂI¡v³v¤@½T»{¡G¨C¤@­Ó¼g¤JÂI§ï¦¨¼g·s®æ¦¡¡F¨C¤@­ÓÅª¨ú¡BÅã¥Ü¡B¦C¦L¡B¥Ó³øÂI³£­n¥ÎÂÂ¸ê®Æ©M·s¸ê®Æ¦U¶]¤@¦¸¡Aµ²ªG¤@­P¡C
-3. ¡u¥~³¡®æ¦¡¡v¨ºÄæ¬O°·«O©ÎÂå¸t³W©wªº®æ¦¡¡AFHIR ¤Æ¤§«á**·Ó¼Ë­n²£¥X¤@¼Ò¤@¼ËªºÀÉ®×**¡C
-4. ¦C¦L¤è¦VÂê©w¡]`turnWidePortraitJob`¡B`Convert-SlipForFeed`¡B`ys-rot`¡BSumatra ¦r¦ê¡^¤£¦b¾E²¾½d³ò¡A¤£­ã¸I¡C
+1. è¦é·ç§»æŸä¸€å€è³‡æ–™å‰ï¼Œå…ˆè®€è©²å€çš„ã€Œç›®å‰å­˜æ”¾ã€èˆ‡ã€Œé™·é˜±ã€ã€‚
+2. ä¾ã€Œè§¸é»ã€é€ä¸€ç¢ºèªï¼šæ¯ä¸€å€‹å¯«å…¥é»æ”¹æˆå¯«æ–°æ ¼å¼ï¼›æ¯ä¸€å€‹è®€å–ã€é¡¯ç¤ºã€åˆ—å°ã€ç”³å ±é»éƒ½è¦ç”¨èˆŠè³‡æ–™å’Œæ–°è³‡æ–™å„è·‘ä¸€æ¬¡ï¼Œçµæœä¸€è‡´ã€‚
+3. ã€Œå¤–éƒ¨æ ¼å¼ã€é‚£æ¬„æ˜¯å¥ä¿æˆ–é†«è–è¦å®šçš„æ ¼å¼ï¼ŒFHIR åŒ–ä¹‹å¾Œ**ç…§æ¨£è¦ç”¢å‡ºä¸€æ¨¡ä¸€æ¨£çš„æª”æ¡ˆ**ã€‚
+4. åˆ—å°æ–¹å‘é–å®šï¼ˆ`turnWidePortraitJob`ã€`Convert-SlipForFeed`ã€`ys-rot`ã€Sumatra å­—ä¸²ï¼‰ä¸åœ¨é·ç§»ç¯„åœï¼Œä¸å‡†ç¢°ã€‚
 
-## ¶i«×
+## é€²åº¦
 
-| ¨B | ¤º®e | ª¬ºA |
+| æ­¥ | å…§å®¹ | ç‹€æ…‹ |
 |----|------|------|
-| 1 | ¦Û­qºô§}¦¬¶i `src/core/fhir_urls.py`¡A­È¤£ÅÜ¡F`tests/test_fhir_urls.py` Âê¦í­È¡A¨Ã¸T¤î `src/` ª½±µ¼gºô§} | §¹¦¨¡]2026-11-22¡^ |
-| 2 | Åª¨úºİ»{±oÂÂºô§}¡G`import_yisheng_lean.py` ¼gªº¬O `clinic.org/.../queue`¡B`clinic.org/.../reg`¡A²{¦æµ{¦¡Åª¤£¨ì³o¨Ç´N¶E JSON ¸Ìªº®×Ãş¡B¹w¬ù¡B³Æµù¡A¥u¾a¯Á¤Ş¼µµÛ | «İ°µ¡F¥ı½T»{¥D¾÷¤W¦³¦h¤Ö³oºØ´N¶E |
-| 3 | ¨M©w¥¿¦¡ºô§}¡]¤£¥Î `clinic.org`¡B¤£«_¥Î `nhidcc.nhi.gov.tw`¡^¡A·s¼g¤J§ï¥Î¥¿¦¡ºô§}¡AÂÂ¸ê®Æ·ÓÅª | «İ°µ |
+| 1 | è‡ªè¨‚ç¶²å€æ”¶é€² `src/core/fhir_urls.py`ï¼Œå€¼ä¸è®Šï¼›`tests/test_fhir_urls.py` é–ä½å€¼ï¼Œä¸¦ç¦æ­¢ `src/` ç›´æ¥å¯«ç¶²å€ | å®Œæˆï¼ˆ2026-11-22ï¼‰ |
+| 2 | è®€å–ç«¯èªå¾—èˆŠç¶²å€ï¼š`import_yisheng_lean.py` å¯«çš„æ˜¯ `clinic.org/.../queue`ã€`clinic.org/.../reg`ï¼Œç¾è¡Œç¨‹å¼è®€ä¸åˆ°é€™äº›å°±è¨º JSON è£¡çš„æ¡ˆé¡ã€é ç´„ã€å‚™è¨»ï¼Œåªé ç´¢å¼•æ’è‘— | å¾…åšï¼›å…ˆç¢ºèªä¸»æ©Ÿä¸Šæœ‰å¤šå°‘é€™ç¨®å°±è¨º |
+| 3 | æ±ºå®šæ­£å¼ç¶²å€ï¼ˆä¸ç”¨ `clinic.org`ã€ä¸å†’ç”¨ `nhidcc.nhi.gov.tw`ï¼‰ï¼Œæ–°å¯«å…¥æ”¹ç”¨æ­£å¼ç¶²å€ï¼ŒèˆŠè³‡æ–™ç…§è®€ | å¾…åš |
 
-`scripts/` »P«eºİ¡]`patientMaster.ts`¡Bmocks¡^¤´ª½±µ¼gºô§}¡A²Ä 3 ¨B´«ºô§}®É­n¤@°_§ï¡C
+`scripts/` èˆ‡å‰ç«¯ï¼ˆ`patientMaster.ts`ã€mocksï¼‰ä»ç›´æ¥å¯«ç¶²å€ï¼Œç¬¬ 3 æ­¥æ›ç¶²å€æ™‚è¦ä¸€èµ·æ”¹ã€‚
 
-## Á`Äı
+## ç¸½è¦½
 
-| °Ï | ¸ê®Æ | ¥Ø«e¥D­n¦s©ñ | ¤w¬O FHIR ¶Ü | ¦C¦L | ¥Ó³ø¡ş¤W¶Ç |
+| å€ | è³‡æ–™ | ç›®å‰ä¸»è¦å­˜æ”¾ | å·²æ˜¯ FHIR å— | åˆ—å° | ç”³å ±ï¼ä¸Šå‚³ |
 |----|------|--------------|--------------|------|-----------|
-| 1 | ±¾¸¹¡B¶O¥Î¡BÅª¥d | Encounter ÂX¥R `encounter-reg`¡ş`encounter-queue` + `encounter_index.fee_*` + `cash_return` | ¥b®M¡GJSON ¬O FHIR ¥~´ß¡A¤º®e¥ş¬O¦Û­qÂX¥R | ¦¬¾Ú¡B©ãª÷³æ¡B±¾¸¹Ã¯¡B²{ª÷±b | ¤ë¥Ó³ø¡B¨C¤é IC |
-| 2 | ¯f¤H¥DÀÉ | Patient + `patient_index` | ¤j­P¬O¡A¶E©ÒÄæ¦ì¥ş¦b¦Û­qÂX¥R | ©Ò¦³³æ¾Ú©ïÀY | ¤ë¥Ó³ø¡BIC |
-| 3 | ¯f¦W | `condition_index` ¬°¥D¡A`resource_cache` ±`¯Ê | ¥b®M¡G²M³æ¥Ñ¯Á¤Ş¦X¦¨¡Acode ±`µL system | ¦¬¾Ú¡B³B¤èºà¡BÃÒ©ú¡BÂà¶E | ¤ë¥Ó³ø |
-| 4 | ³B¤è¡ş³B¸m | `medication_request_index` ¬°¥D | ¥b®M¡GÂX¥Rºô§}¨â®M¨Ã¦s | ¦¬¾Ú¡B³B¤èºà¡B¥æ¥IÀËÅç | ¤ë¥Ó³ø¡BIC |
-| 5 | ¥D¶D¡şSOAP | `encounter_index.chief_complaint` + Composition | ¥b®M¡G¤T³B¨Ó·½¦X¨Ö | ¦¬¾Ú¡BÂà¶E | ¡X |
-| 6 | ¥Í©R¼x¶H¡B¹L±Ó | Observation¡şAllergyIntolerance + ¯Á¤Ş¡F¹L±Ó¥t¦³¥DÀÉ¦r¦ê | ¬O¡A¦ı¹L±ÓÂù­y | Âà¶E | ¡X |
-| 7 | ¹w°İ¶E | Encounter ÂX¥R `patient-previsit` | ÂX¥R¡AµL¯Á¤Ş | ¤£¦L | ¡X |
-| 8 | ¶EÂ_ÃÒ©ú¡B¹w¬ù³æ | `visit_certificate` ±Mªí | §_ | ÃÒ©ú¡B¹w¬ù³æ | ¡X |
-| 9 | Âà¶E | `referral_slip`¡ş`referral_download`¡ş`referral_accept` + Encounter ÂX¥R | §_ | Âà¶E³æ | Âà¶E XML¡B¤ë¥Ó³ø d55 |
-| 10 | ½×½èÀËÅç | `quality_lab_report` + zip ÀÉ | §_ | µL¯È¥» | type 26 |
-| 11 | ·Ó¤ù | LOOK ÀÉ®×¾ğ + `look_file`¡F¯f¨_ Media ¦s base64 | LOOK §_¡F¯f¨_ Media ¬O | ¡X | ¡X |
-| 12 | ­û¤u | `clinic_staff` | §_¡]¸ô¥Ñ¥s `/fhir/staff` ¦ı¤£¬O Practitioner¡^ | Âå®v¡BÃÄ®v©m¦W | ¤ë¥Ó³ø d31 |
-| 13 | °|©Ò³]©w | `clinic_runtime_settings` ¦h­Ó JSON + «eºİ localStorage | §_ | ©Ò¦³©ïÀY | °|©Ò¥N¸¹¡B¬ì§O |
-| 14 | ¨­¤ÀÃş§O | `id_category_settings` + Patient¡şEncounter ÂX¥R | §_ | ¶O¥Î | ³¡¤À­t¾á¥N½X |
-| 15 | ÃÄ«~¡B¯f¦W¡B¥Îªk¥DÀÉ | `frontend/public/yisheng_clinic_catalog.json` + `clinic_catalog_overrides_v1`¡FÃÄ»ù¦b Pack | §_ | ÃÄ¦W¡B´£¿ô | ÃÄ»ù¡B¯S©wªvÀø |
-| 16 | ¦P¨B»P½]®Ö | `sync_queue`¡B`audit_modifications`¡B¤Ö¶q AuditEvent | ³¡¤À | ¡X | ¶³ºİ¡]¥Ø«e¼ÒÀÀ¡^ |
+| 1 | æ›è™Ÿã€è²»ç”¨ã€è®€å¡ | Encounter æ“´å…… `encounter-reg`ï¼`encounter-queue` + `encounter_index.fee_*` + `cash_return` | åŠå¥—ï¼šJSON æ˜¯ FHIR å¤–æ®¼ï¼Œå…§å®¹å…¨æ˜¯è‡ªè¨‚æ“´å…… | æ”¶æ“šã€æŠ¼é‡‘å–®ã€æ›è™Ÿç°¿ã€ç¾é‡‘å¸³ | æœˆç”³å ±ã€æ¯æ—¥ IC |
+| 2 | ç—…äººä¸»æª” | Patient + `patient_index` | å¤§è‡´æ˜¯ï¼Œè¨ºæ‰€æ¬„ä½å…¨åœ¨è‡ªè¨‚æ“´å…… | æ‰€æœ‰å–®æ“šæŠ¬é ­ | æœˆç”³å ±ã€IC |
+| 3 | ç—…å | `condition_index` ç‚ºä¸»ï¼Œ`resource_cache` å¸¸ç¼º | åŠå¥—ï¼šæ¸…å–®ç”±ç´¢å¼•åˆæˆï¼Œcode å¸¸ç„¡ system | æ”¶æ“šã€è™•æ–¹ç®‹ã€è­‰æ˜ã€è½‰è¨º | æœˆç”³å ± |
+| 4 | è™•æ–¹ï¼è™•ç½® | `medication_request_index` ç‚ºä¸» | åŠå¥—ï¼šæ“´å……ç¶²å€å…©å¥—ä¸¦å­˜ | æ”¶æ“šã€è™•æ–¹ç®‹ã€äº¤ä»˜æª¢é©— | æœˆç”³å ±ã€IC |
+| 5 | ä¸»è¨´ï¼SOAP | `encounter_index.chief_complaint` + Composition | åŠå¥—ï¼šä¸‰è™•ä¾†æºåˆä½µ | æ”¶æ“šã€è½‰è¨º | â€” |
+| 6 | ç”Ÿå‘½å¾µè±¡ã€éæ• | Observationï¼AllergyIntolerance + ç´¢å¼•ï¼›éæ•å¦æœ‰ä¸»æª”å­—ä¸² | æ˜¯ï¼Œä½†éæ•é›™è»Œ | è½‰è¨º | â€” |
+| 7 | é å•è¨º | Encounter æ“´å…… `patient-previsit` | æ“´å……ï¼Œç„¡ç´¢å¼• | ä¸å° | â€” |
+| 8 | è¨ºæ–·è­‰æ˜ã€é ç´„å–® | `visit_certificate` å°ˆè¡¨ | å¦ | è­‰æ˜ã€é ç´„å–® | â€” |
+| 9 | è½‰è¨º | `referral_slip`ï¼`referral_download`ï¼`referral_accept` + Encounter æ“´å…… | å¦ | è½‰è¨ºå–® | è½‰è¨º XMLã€æœˆç”³å ± d55 |
+| 10 | è«–è³ªæª¢é©— | `quality_lab_report` + zip æª” | å¦ | ç„¡ç´™æœ¬ | type 26 |
+| 11 | ç…§ç‰‡ | LOOK æª”æ¡ˆæ¨¹ + `look_file`ï¼›ç—…ç¶ Media å­˜ base64 | LOOK å¦ï¼›ç—…ç¶ Media æ˜¯ | â€” | â€” |
+| 12 | å“¡å·¥ | `clinic_staff` | å¦ï¼ˆè·¯ç”±å« `/fhir/staff` ä½†ä¸æ˜¯ Practitionerï¼‰ | é†«å¸«ã€è—¥å¸«å§“å | æœˆç”³å ± d31 |
+| 13 | é™¢æ‰€è¨­å®š | `clinic_runtime_settings` å¤šå€‹ JSON + å‰ç«¯ localStorage | å¦ | æ‰€æœ‰æŠ¬é ­ | é™¢æ‰€ä»£è™Ÿã€ç§‘åˆ¥ |
+| 14 | èº«åˆ†é¡åˆ¥ | `id_category_settings` + Patientï¼Encounter æ“´å…… | å¦ | è²»ç”¨ | éƒ¨åˆ†è² æ“”ä»£ç¢¼ |
+| 15 | è—¥å“ã€ç—…åã€ç”¨æ³•ä¸»æª” | `frontend/public/yisheng_clinic_catalog.json` + `clinic_catalog_overrides_v1`ï¼›è—¥åƒ¹åœ¨ Pack | å¦ | è—¥åã€æé†’ | è—¥åƒ¹ã€ç‰¹å®šæ²»ç™‚ |
+| 16 | åŒæ­¥èˆ‡ç¨½æ ¸ | `sync_queue`ã€`audit_modifications`ã€å°‘é‡ AuditEvent | éƒ¨åˆ† | â€” | é›²ç«¯ï¼ˆç›®å‰æ¨¡æ“¬ï¼‰ |
 
 ---
 
-## °Ï 1¡G±¾¸¹¡B¶O¥Î¡BÅª¥d
+## å€ 1ï¼šæ›è™Ÿã€è²»ç”¨ã€è®€å¡
 
-### ¥Ø«e¦s©ñ
+### ç›®å‰å­˜æ”¾
 
-- `resource_cache` ªº Encounter JSON¡G
-  - `encounter-queue` ÂX¥R¡G`queueNumber`¡B`queueStatus`¡C
-  - `encounter-reg` ÂX¥R¡G¦r¦êÁä `REG_STRING_KEYS`¡B¥¬ªLÁä `REG_BOOL_KEYS`¡A©w¸q¦b `src/core/encounter_extensions.py`¡C¥]§t®×Ãş¡B³¡¤À­t¾á¥N½X¡B´NÂå§Ç¸¹¡B¥d¤ù§Ç¸¹¡BÃ±³¹¡BÂå®v¡BÃÄ®v¡B¦U¶µ¶O¥Î¡BÂà¶E¡BIC ¤W¶Ç¡B`regCc`¡B`idCategory` µ¥¬ù 60 ­ÓÁä¡C
-  - `Encounter.status`¡B`period.start`¡B`subject`¡C
-- `encounter_index`¡G`queue_*`¡B`copay_code`¡B`case_no`¡B`fee_deposit`¡ş`fee_copay`¡ş`fee_card_disc`¡ş`fee_drug_disc`¡ş`fee_drug_copay`¡ş`fee_reg`¡ş`fee_self`¡ş`fee_total`¡ş`fee_arrears`¡B`ic_upload_date`¡B`chief_complaint`¡B`shift`¡B`slot_time`¡B`times_no`¡B`owe_card`¡B`reg_cc`¡B`reg_remark`¡B`claim_doctor_id`¡B`claim_pharmacist_id`¡B`treat_seq`¡C
-- `cash_return`¡GÁÙ³æ¡B°h©ã²{ª÷¡A¥H¬İ¶E¤é¤J±b¡C
-- ¼g¤JÃì¡G`create/update` ¡÷ `cache_resource` ¡÷ `_stamp_cash_book_marks`¡]·|§ï JSON¡^¡÷ `_upsert_encounter_index` ¡÷ `_write_cash_book_columns`¡C
+- `resource_cache` çš„ Encounter JSONï¼š
+  - `encounter-queue` æ“´å……ï¼š`queueNumber`ã€`queueStatus`ã€‚
+  - `encounter-reg` æ“´å……ï¼šå­—ä¸²éµ `REG_STRING_KEYS`ã€å¸ƒæ—éµ `REG_BOOL_KEYS`ï¼Œå®šç¾©åœ¨ `src/core/encounter_extensions.py`ã€‚åŒ…å«æ¡ˆé¡ã€éƒ¨åˆ†è² æ“”ä»£ç¢¼ã€å°±é†«åºè™Ÿã€å¡ç‰‡åºè™Ÿã€ç°½ç« ã€é†«å¸«ã€è—¥å¸«ã€å„é …è²»ç”¨ã€è½‰è¨ºã€IC ä¸Šå‚³ã€`regCc`ã€`idCategory` ç­‰ç´„ 60 å€‹éµã€‚
+  - `Encounter.status`ã€`period.start`ã€`subject`ã€‚
+- `encounter_index`ï¼š`queue_*`ã€`copay_code`ã€`case_no`ã€`fee_deposit`ï¼`fee_copay`ï¼`fee_card_disc`ï¼`fee_drug_disc`ï¼`fee_drug_copay`ï¼`fee_reg`ï¼`fee_self`ï¼`fee_total`ï¼`fee_arrears`ã€`ic_upload_date`ã€`chief_complaint`ã€`shift`ã€`slot_time`ã€`times_no`ã€`owe_card`ã€`reg_cc`ã€`reg_remark`ã€`claim_doctor_id`ã€`claim_pharmacist_id`ã€`treat_seq`ã€‚
+- `cash_return`ï¼šé‚„å–®ã€é€€æŠ¼ç¾é‡‘ï¼Œä»¥çœ‹è¨ºæ—¥å…¥å¸³ã€‚
+- å¯«å…¥éˆï¼š`create/update` â†’ `cache_resource` â†’ `_stamp_cash_book_marks`ï¼ˆæœƒæ”¹ JSONï¼‰â†’ `_upsert_encounter_index` â†’ `_write_cash_book_columns`ã€‚
 
-### Ä²ÂI
+### è§¸é»
 
-- **©w¸q**¡G`encounter_extensions.py`¡]`put_reg_string`¡B`attach_reg_extension`¡B`extract_reg_meta`¡^¡C
-- **¼g¤J¡]«áºİ¡^**¡G
-  - `nhi_clinical_mappers.nhi_encounter_to_fhir`¡]·s±¾¸¹ªì­È¡^
-  - `nhi.py`¡G`register_nhi_encounter`¡B`patch_encounter_reg`¡]F3¡^¡B`_link_incoming_referral`¡B`card_seq_next`¡B`card_write_visit`¡B`refund_deposit`¡B`cancel_register`
-  - `encounter.py`¡G`create/update_encounter`¡B`transition_queue_status`
+- **å®šç¾©**ï¼š`encounter_extensions.py`ï¼ˆ`put_reg_string`ã€`attach_reg_extension`ã€`extract_reg_meta`ï¼‰ã€‚
+- **å¯«å…¥ï¼ˆå¾Œç«¯ï¼‰**ï¼š
+  - `nhi_clinical_mappers.nhi_encounter_to_fhir`ï¼ˆæ–°æ›è™Ÿåˆå€¼ï¼‰
+  - `nhi.py`ï¼š`register_nhi_encounter`ã€`patch_encounter_reg`ï¼ˆF3ï¼‰ã€`_link_incoming_referral`ã€`card_seq_next`ã€`card_write_visit`ã€`refund_deposit`ã€`cancel_register`
+  - `encounter.py`ï¼š`create/update_encounter`ã€`transition_queue_status`
   - `sqlite_shadow_store.update_encounter_queue_status`
   - `referral.py._save_reg`
-  - `deposit_refund.apply_refund` ¡÷ `insert_cash_return`
-- **Åª¨ú¡]«áºİ¡^**¡G
-  - `list_encounters_for_date`¡B`get_encounter_queue_meta`¡]²Õ queueMeta¡^
-  - `list_encounters_for_patient`¡]¥u¦³¤»­Ó°ò¥»Äæ¦ì¡^
-  - `cash_book_summary`¡]¥u¥[Á`¯Á¤Ş¡^
-  - `encounter.py`¡G`emr_lookup_encounters`¡B`cash_book_summary`
-  - `kiosk.py`¡B`same_day.py`¡B`quality_lab.py`
-  - `nhi_card_bridge`¡B`nhi_seq_bridge`¡B`nhi_treatment_bridge`¡B`register_guard`
-  - `referral_inbox`¡B`patient_visit_history`¡B`reg_discount_report`
-- **¥Ó³ø¡ş¤W¶Ç**¡G
-  - `claims/engine.py`¡]`unfinished_visits`¡B¤ë²ÕÀÉ¡^
-  - `ic_daily_upload.py`¡]`collect_ic_day`¡B`_compose`¡^¡B`ic_upload_send.py`
-  - `xml_export_nhi.py`¡]d29¡^¡B`media_check.py`¡B`deposit_refund.py`¡B`yisheng_rules.py`
-- **«eºİ**¡G
-  - `useClinicWorkspace.mapQueueEntry`¡]´X¥GÅª¥ş³¡ queueMeta¡^
-  - ¦sÀÉ®É­«ºâ `totalFee`
-  - `EncounterQueuePanel`¡B`RegisterEditDialog`¡B`RegisterConfirmDialog`¡B`RegisterPage`¡B`ClinicOutpatientPage`¡B`BillingPage`¡B`EmrLookupPage`¡B`VisitSaveConfirmPanel`¡B`ClaimsPage`
-  - `lib/cardIdentity.ts`¡B`visitFees.ts`¡B`emrLookupSort.ts`
-- **¦C¦L**¡G`simpleSlip.ts`¡B`visitReceiptPrint.ts`¡B`clinicPrintDocs.ts`¡]©ãª÷³æ¡^¡B`registerBookReport.ts` + `HisRegisterBookPaper`¡B`HisCashDetailPaper`¡B`cashDetailXlsx.ts`¡C
-- **¶×¤J¡ş­×¸É¸}¥»**¡G
-  - ¶×¤J¡G`import_yisheng_data.py`¡B`import_yisheng_lean.py`¡B`sync_yisheng_since.py`
-  - ¸É¸ê®Æ¡G`backfill_cash_book.py`¡B`backfill_cash_columns.py`¡B`backfill_reg_cc.py`¡B`backfill_noid_patients.py`¡B`backfill_blank_odate_visits.py`¡B`backfill_claim_source.py`¡B`backfill_ic_upload_fields.py`¡B`backfill_cash_return_people.py`
-  - ­×´_¡G`restore_selfpay_07y.py`¡B`repair_register_queue_meta.py`¡B`repair_imported_cc_and_appts.py`¡B`repair_register_slot_clock.py`
+  - `deposit_refund.apply_refund` â†’ `insert_cash_return`
+- **è®€å–ï¼ˆå¾Œç«¯ï¼‰**ï¼š
+  - `list_encounters_for_date`ã€`get_encounter_queue_meta`ï¼ˆçµ„ queueMetaï¼‰
+  - `list_encounters_for_patient`ï¼ˆåªæœ‰å…­å€‹åŸºæœ¬æ¬„ä½ï¼‰
+  - `cash_book_summary`ï¼ˆåªåŠ ç¸½ç´¢å¼•ï¼‰
+  - `encounter.py`ï¼š`emr_lookup_encounters`ã€`cash_book_summary`
+  - `kiosk.py`ã€`same_day.py`ã€`quality_lab.py`
+  - `nhi_card_bridge`ã€`nhi_seq_bridge`ã€`nhi_treatment_bridge`ã€`register_guard`
+  - `referral_inbox`ã€`patient_visit_history`ã€`reg_discount_report`
+- **ç”³å ±ï¼ä¸Šå‚³**ï¼š
+  - `claims/engine.py`ï¼ˆ`unfinished_visits`ã€æœˆçµ„æª”ï¼‰
+  - `ic_daily_upload.py`ï¼ˆ`collect_ic_day`ã€`_compose`ï¼‰ã€`ic_upload_send.py`
+  - `xml_export_nhi.py`ï¼ˆd29ï¼‰ã€`media_check.py`ã€`deposit_refund.py`ã€`yisheng_rules.py`
+- **å‰ç«¯**ï¼š
+  - `useClinicWorkspace.mapQueueEntry`ï¼ˆå¹¾ä¹è®€å…¨éƒ¨ queueMetaï¼‰
+  - å­˜æª”æ™‚é‡ç®— `totalFee`
+  - `EncounterQueuePanel`ã€`RegisterEditDialog`ã€`RegisterConfirmDialog`ã€`RegisterPage`ã€`ClinicOutpatientPage`ã€`BillingPage`ã€`EmrLookupPage`ã€`VisitSaveConfirmPanel`ã€`ClaimsPage`
+  - `lib/cardIdentity.ts`ã€`visitFees.ts`ã€`emrLookupSort.ts`
+- **åˆ—å°**ï¼š`simpleSlip.ts`ã€`visitReceiptPrint.ts`ã€`clinicPrintDocs.ts`ï¼ˆæŠ¼é‡‘å–®ï¼‰ã€`registerBookReport.ts` + `HisRegisterBookPaper`ã€`HisCashDetailPaper`ã€`cashDetailXlsx.ts`ã€‚
+- **åŒ¯å…¥ï¼ä¿®è£œè…³æœ¬**ï¼š
+  - åŒ¯å…¥ï¼š`import_yisheng_data.py`ã€`import_yisheng_lean.py`ã€`sync_yisheng_since.py`
+  - è£œè³‡æ–™ï¼š`backfill_cash_book.py`ã€`backfill_cash_columns.py`ã€`backfill_reg_cc.py`ã€`backfill_noid_patients.py`ã€`backfill_blank_odate_visits.py`ã€`backfill_claim_source.py`ã€`backfill_ic_upload_fields.py`ã€`backfill_cash_return_people.py`
+  - ä¿®å¾©ï¼š`restore_selfpay_07y.py`ã€`repair_register_queue_meta.py`ã€`repair_imported_cc_and_appts.py`ã€`repair_register_slot_clock.py`
 
-### ¥~³¡®æ¦¡
+### å¤–éƒ¨æ ¼å¼
 
-- ¤ë¥Ó³ø XML¡]d29 ´NÂå§Ç¸¹µ¥¡^¡B¨C¤é IC ¤W¶Ç XML¡B°·«O¥d¼g¥d¡]6.0 ¶³ºİ¡^¡C
-- Âå¸t REGISTER¡BCC¡B³ÆµùÄæ¦ì»y·N¡]¶×¤J´Á¡^¡C
+- æœˆç”³å ± XMLï¼ˆd29 å°±é†«åºè™Ÿç­‰ï¼‰ã€æ¯æ—¥ IC ä¸Šå‚³ XMLã€å¥ä¿å¡å¯«å¡ï¼ˆ6.0 é›²ç«¯ï¼‰ã€‚
+- é†«è– REGISTERã€CCã€å‚™è¨»æ¬„ä½èªæ„ï¼ˆåŒ¯å…¥æœŸï¼‰ã€‚
 
-### ³´¨À
+### é™·é˜±
 
-1. ¶O¥Îªº¥¿¥»¦b reg JSON¡F`fee_*` ¬O³øªí§Ö¨ú¡C±¾¸¹Ã¯¥u¬İ¯Á¤Ş¡A¨âÃä¤£¦P¨B´N·|¹ï¤£¤W±b¡C
-2. `update_encounter_queue_status` ¥u§ï¯Á¤Ş©M `status`¡A¤£§ï queue ÂX¥R¸Ìªº `queueStatus`¡C
-3. `treat_seq` ¯Á¤ŞÄæ¦s¦b¡A¦ı¤é±`¦sÀÉ¤£¼g¡A¥u¦³¶×¤J¸}¥»¼g¡C
-4. `reg_cc`¡B`reg_remark` ¥D­n¦b¯Á¤Ş¡Cªì¶E¬İ²Ä 4 ¦r¤¸ `$`¡A¤í¥d¬İ¡u©ã¡v¡A±¾¸¹Ã¯ªº SQL ¨Ì¦¹¤À±í¡C
-5. ¤£¦b¥Õ¦W³æªº reg Áä¡]¨Ò¦p `depositPaid`¡B`icRolledBack`¡^·|³Q¥á±¼¡A¤£¶i JSON¡C
-6. ¦h³Bª½±µ `json.loads` ¸ÑªR reg¡A¨S¨«²Î¤@Åª¨ú¼h¡]`reg_discount_report`¡B`engine`¡B`ic_daily_upload._load_reg`¡B`nhi_card_bridge`¡^¡C
-7. `list_encounters_for_patient` ¦^¶ÇªºÄæ¦ì«Ü¤Ö¡A¾ú¥vµe­±­Y¾a¥¦·|¯Ê¶O¥Î»P§Ç¸¹¡C
-8. ÁÙ³æºâ¦b¬İ¶E¤é¡A°h©ã¤W¶Çºâ¦b°h©ã·í¤é¡C
-9. `chief_complaint`¡]Âå®v¥D¶D¡^¡B`regCc`¡]Âå¸t 6 ½X CC¡^¡B`visitCc` ¬O¤TºØ¤£¦PªF¦è¡C
-10. `totalFee` ¥Ñ«eºİ²Õ¡A«áºİ `patch_encounter_reg` ¥t¦³ `adjusted_visit_total`¡]¤w°h©ã¡^¡C¨âÃä³W«h­n¤@°_·h¡C
-11. Âå¸tÄæ¦ì¹ï·Ó´²¦b `backfill_cash_book._iter_fields`¡A¥Ó³ø©M IC ¤]¦b¤Ş¥Î¡C
-12. ¬ÛÃö´ú¸Õ¡G`test_deposit_cash*.py`¡B`test_reg_discount_report.py`¡B`test_queue_keep_closed.py`¡C
+1. è²»ç”¨çš„æ­£æœ¬åœ¨ reg JSONï¼›`fee_*` æ˜¯å ±è¡¨å¿«å–ã€‚æ›è™Ÿç°¿åªçœ‹ç´¢å¼•ï¼Œå…©é‚Šä¸åŒæ­¥å°±æœƒå°ä¸ä¸Šå¸³ã€‚
+2. `update_encounter_queue_status` åªæ”¹ç´¢å¼•å’Œ `status`ï¼Œä¸æ”¹ queue æ“´å……è£¡çš„ `queueStatus`ã€‚
+3. `treat_seq` ç´¢å¼•æ¬„å­˜åœ¨ï¼Œä½†æ—¥å¸¸å­˜æª”ä¸å¯«ï¼Œåªæœ‰åŒ¯å…¥è…³æœ¬å¯«ã€‚
+4. `reg_cc`ã€`reg_remark` ä¸»è¦åœ¨ç´¢å¼•ã€‚åˆè¨ºçœ‹ç¬¬ 4 å­—å…ƒ `$`ï¼Œæ¬ å¡çœ‹ã€ŒæŠ¼ã€ï¼Œæ›è™Ÿç°¿çš„ SQL ä¾æ­¤åˆ†æ¡¶ã€‚
+5. ä¸åœ¨ç™½åå–®çš„ reg éµï¼ˆä¾‹å¦‚ `depositPaid`ã€`icRolledBack`ï¼‰æœƒè¢«ä¸Ÿæ‰ï¼Œä¸é€² JSONã€‚
+6. å¤šè™•ç›´æ¥ `json.loads` è§£æ regï¼Œæ²’èµ°çµ±ä¸€è®€å–å±¤ï¼ˆ`reg_discount_report`ã€`engine`ã€`ic_daily_upload._load_reg`ã€`nhi_card_bridge`ï¼‰ã€‚
+7. `list_encounters_for_patient` å›å‚³çš„æ¬„ä½å¾ˆå°‘ï¼Œæ­·å²ç•«é¢è‹¥é å®ƒæœƒç¼ºè²»ç”¨èˆ‡åºè™Ÿã€‚
+8. é‚„å–®ç®—åœ¨çœ‹è¨ºæ—¥ï¼Œé€€æŠ¼ä¸Šå‚³ç®—åœ¨é€€æŠ¼ç•¶æ—¥ã€‚
+9. `chief_complaint`ï¼ˆé†«å¸«ä¸»è¨´ï¼‰ã€`regCc`ï¼ˆé†«è– 6 ç¢¼ CCï¼‰ã€`visitCc` æ˜¯ä¸‰ç¨®ä¸åŒæ±è¥¿ã€‚
+10. `totalFee` ç”±å‰ç«¯çµ„ï¼Œå¾Œç«¯ `patch_encounter_reg` å¦æœ‰ `adjusted_visit_total`ï¼ˆå·²é€€æŠ¼ï¼‰ã€‚å…©é‚Šè¦å‰‡è¦ä¸€èµ·æ¬ã€‚
+11. é†«è–æ¬„ä½å°ç…§æ•£åœ¨ `backfill_cash_book._iter_fields`ï¼Œç”³å ±å’Œ IC ä¹Ÿåœ¨å¼•ç”¨ã€‚
+12. ç›¸é—œæ¸¬è©¦ï¼š`test_deposit_cash*.py`ã€`test_reg_discount_report.py`ã€`test_queue_keep_closed.py`ã€‚
 
 ---
 
-## °Ï 2¡G¯f¤H¥DÀÉ
+## å€ 2ï¼šç—…äººä¸»æª”
 
-### ¥Ø«e¦s©ñ
+### ç›®å‰å­˜æ”¾
 
-- Patient JSON¡G`name`¡B`gender`¡B`birthDate`¡B`identifier`¡]¤º¬F³¡¨­¤ÀÃÒ¡B°·«O¡B¯f¾ú¸¹ `https://clinic.org/chart-number`¡^¡B`telecom`¡B`address`¡C
-- ÂX¥R `nhi-card-basic`¡G`idNo`¡B`birthdayRoc`¡B`sex`¡C
-- ÂX¥R `https://clinic.org/fhir/StructureDefinition/patient-clinic-ext`¡G`memo`¡B`keymoney`¡B`arrearage`¡B`kind`¡B`idCategory`¡B`allergic`¡B`nhiCardNo`¡B`blood`¡B`marry`¡B`customId`¡B`copayDisc`¡B`postalCode`¡B`parentId`¡B`birthOrder`¡BÅ@²z¤§®aÄæ¦ì¡BÁpµ¸¤H¡B`familyCareDate`¡B`familyCareCase`¡B`closeReason`¡B`medicalHistory` µ¥¡C
-- `patient_index`¡G©m¦W¡B¨­¤ÀÃÒ¡B¥Í¤é¡]¦è¤¸»P¥Á°ê¡^¡B©Ê§O¡B¯f¾ú¸¹¡B¹q¸Ü¡B¦a§}¡B`id_category`¡A¥H¤Î¥i¯à¦s¦bªº `phone2`¡C
+- Patient JSONï¼š`name`ã€`gender`ã€`birthDate`ã€`identifier`ï¼ˆå…§æ”¿éƒ¨èº«åˆ†è­‰ã€å¥ä¿ã€ç—…æ­·è™Ÿ `https://clinic.org/chart-number`ï¼‰ã€`telecom`ã€`address`ã€‚
+- æ“´å…… `nhi-card-basic`ï¼š`idNo`ã€`birthdayRoc`ã€`sex`ã€‚
+- æ“´å…… `https://clinic.org/fhir/StructureDefinition/patient-clinic-ext`ï¼š`memo`ã€`keymoney`ã€`arrearage`ã€`kind`ã€`idCategory`ã€`allergic`ã€`nhiCardNo`ã€`blood`ã€`marry`ã€`customId`ã€`copayDisc`ã€`postalCode`ã€`parentId`ã€`birthOrder`ã€è­·ç†ä¹‹å®¶æ¬„ä½ã€è¯çµ¡äººã€`familyCareDate`ã€`familyCareCase`ã€`closeReason`ã€`medicalHistory` ç­‰ã€‚
+- `patient_index`ï¼šå§“åã€èº«åˆ†è­‰ã€ç”Ÿæ—¥ï¼ˆè¥¿å…ƒèˆ‡æ°‘åœ‹ï¼‰ã€æ€§åˆ¥ã€ç—…æ­·è™Ÿã€é›»è©±ã€åœ°å€ã€`id_category`ï¼Œä»¥åŠå¯èƒ½å­˜åœ¨çš„ `phone2`ã€‚
 
-### Ä²ÂI
+### è§¸é»
 
-- **¼g¤J**¡G
-  - `cache_resource`¡APatient ®É·|¦Û°Ê¸É¨­¤ÀÃş§O¨Ã¼g½]®Ö
-  - `_upsert_patient_index`¡B`reevaluate_patient_id_category`
-  - `patient.py`¡G`create_patient`¡B`update_patient`¡B`delete_patient`
-  - `nhi.py.register_nhi_patient`¡F`nhi_fhir_mapper`¡]`nhi_intake_to_fhir_patient`¡B`merge_nhi_patient_update`¡^
-- **Åª¨ú**¡G
-  - `search_patients`¡B`list_patient_roster`¡B`address_for_home_phone`
-  - `list_family_members`¡]¥Î¹q¸Ü©Î¦a§}¤ñ¹ï¡A¤£¬O `Patient.link`¡^
+- **å¯«å…¥**ï¼š
+  - `cache_resource`ï¼ŒPatient æ™‚æœƒè‡ªå‹•è£œèº«åˆ†é¡åˆ¥ä¸¦å¯«ç¨½æ ¸
+  - `_upsert_patient_index`ã€`reevaluate_patient_id_category`
+  - `patient.py`ï¼š`create_patient`ã€`update_patient`ã€`delete_patient`
+  - `nhi.py.register_nhi_patient`ï¼›`nhi_fhir_mapper`ï¼ˆ`nhi_intake_to_fhir_patient`ã€`merge_nhi_patient_update`ï¼‰
+- **è®€å–**ï¼š
+  - `search_patients`ã€`list_patient_roster`ã€`address_for_home_phone`
+  - `list_family_members`ï¼ˆç”¨é›»è©±æˆ–åœ°å€æ¯”å°ï¼Œä¸æ˜¯ `Patient.link`ï¼‰
   - `_clinic_fields_from_payload`
-  - `outpatient.py` workspace¡B`kiosk.py`¡B`quality_lab.py`¡B`referral_inbox`¡B`care_online_import`
-- **¥Ó³ø**¡G`engine.py` JOIN `patient_index`¡B`xml_export_nhi.py`¡B`ic_daily_upload.py`¡B`deposit_refund.py`¡B`reg_discount_report.py`¡C
-- **«eºİ**¡G
-  - `lib/patientMaster.ts`¡]`fhirToPatientRecord` / `patientRecordToFhir`¡A¥DÀÉ½s¿è«´¬ù¡^
-  - `PatientEditDialog`¡B`PatientListPage`¡B`RegisterPage`¡B`EmrLookupPage`¡B`RegisterConfirmDialog`¡B`SelfRegisterKioskPage`
-- **¦C¦L**¡G©Ò¦³³æ¾Úªº©m¦W¡B¯f¾ú¸¹¡B¨­¤ÀÃÒ¡B¥Í¤é¡B©Ê§O¡B¦~ÄÖ¡B¦í§}¡B¹q¸Ü¡C
-- **¶×¤J**¡G`import_yisheng_data.py`¡B`import_yisheng_lean.py`¡B`sync_yisheng_since.py`¡B`backfill_noid_patients.py`¡B`backfill_patient_chart_fields.py`¡B`backfill_family_care.py`¡B`backfill_phone_allergy.py`¡B`repair_patient_id_category_ext.py`¡C
+  - `outpatient.py` workspaceã€`kiosk.py`ã€`quality_lab.py`ã€`referral_inbox`ã€`care_online_import`
+- **ç”³å ±**ï¼š`engine.py` JOIN `patient_index`ã€`xml_export_nhi.py`ã€`ic_daily_upload.py`ã€`deposit_refund.py`ã€`reg_discount_report.py`ã€‚
+- **å‰ç«¯**ï¼š
+  - `lib/patientMaster.ts`ï¼ˆ`fhirToPatientRecord` / `patientRecordToFhir`ï¼Œä¸»æª”ç·¨è¼¯å¥‘ç´„ï¼‰
+  - `PatientEditDialog`ã€`PatientListPage`ã€`RegisterPage`ã€`EmrLookupPage`ã€`RegisterConfirmDialog`ã€`SelfRegisterKioskPage`
+- **åˆ—å°**ï¼šæ‰€æœ‰å–®æ“šçš„å§“åã€ç—…æ­·è™Ÿã€èº«åˆ†è­‰ã€ç”Ÿæ—¥ã€æ€§åˆ¥ã€å¹´é½¡ã€ä½å€ã€é›»è©±ã€‚
+- **åŒ¯å…¥**ï¼š`import_yisheng_data.py`ã€`import_yisheng_lean.py`ã€`sync_yisheng_since.py`ã€`backfill_noid_patients.py`ã€`backfill_patient_chart_fields.py`ã€`backfill_family_care.py`ã€`backfill_phone_allergy.py`ã€`repair_patient_id_category_ext.py`ã€‚
 
-### ³´¨À
+### é™·é˜±
 
-1. °·«O¥dÄæ¦ì©M¶E©ÒÄæ¦ì¤À¦b¨â­ÓÂX¥R¡F`id_category` ¦P®É¦b¯Á¤Ş©MÂX¥R¡A¦sÀÉ®É·|³Q¦Û°Ê§ï¼g¡C
-2. ¨S¦³¨­¤ÀÃÒªº¯f¤H­n·Ó¼Ë¦s¡A¯f¾ú¸¹·í¯Á¤Ş¡]Âå¸t¶×¤J³W«h¡^¡C
-3. ®a±Ú¦¨­û¾a¹q¸Ü©M¦a§}ªº SQL ¤ñ¹ï¡AFHIR ¤Æ®É­n¨M©w¬O§_§ï¦¨ `Patient.link` ©Î `RelatedPerson`¡C
-4. ¹L±Ó¦P®É¦³¥DÀÉ¦r¦ê `allergic` ©M AllergyIntolerance ¸ê·½¡FÂà¶E³æ¦Lªº¬O­ş¤@­Ó­n½T»{¡C
-5. Patient DELETE ¸ô®|¤´¦s¦b¡]¦³´N¶E·|¾× 409¡^¡C
-
----
-
-## °Ï 3¡V5¡G¯f¦W¡B³B¤è¡B¥D¶D¡şSOAP
-
-### ¥Ø«e¦s©ñ
-
-- **Condition**¡G`condition_index`¡]`icd10_code`¡B`snomed_code`¡B`nhi_icd10_code`¡B`summary_text`¡B`clinical_status`¡^¡C`resource_cache` ¦bºëÂ²¶×¤J®É±`±`¨S¦³³oµ§¡C
-- **MedicationRequest**¡G`medication_request_index`¡A¥[¤W `useage`¡B`pay_mark`¡B`memo_mark`¡B`body_site`¡B`total_qty`¡B`use_type`¡B`line_sort`¡CÂX¥R¤lÁä¦³ `daysSupply`¡B`quantity`¡B`unitPrice`¡B`packVersion`¡B`priceDate`¡B`bodySite`¡B`tradeName`¡B`payMark`¡B`memoMark`¡C
-- **¥D¶D**¡G`encounter_index.chief_complaint` ¡÷ `clinical_note_index.chief_complaint` ¡÷ `Encounter.reasonCode` ¡÷ Composition¡]`STORED_CHIEF_COMPLAINT_SQL`¡^¡C
-- **Composition**¡GLOINC section + ÂX¥R `outpatient-soap`¡F¯Á¤Ş `clinical_note_index`¡C
-
-### Ä²ÂI
-
-- **¼g¤J**¡G
-  - `_upsert_condition_index`¡B`_upsert_medication_request_index`¡B`_upsert_clinical_note_index`
-  - `retain_encounter_chart`¡]¨S¦b¥»¦¸¦sÀÉ¤¤ªºÂÂ¯f¦W§ï entered-in-error¡AÂÂ³B¤è§ï cancelled¡^
-  - `condition.py`¡B`medication_request.py` CRUD
-  - `nhi.py`¡G`register_nhi_condition`¡B`register_nhi_medication`¡]§tÃÄ»ù Pack¡^¡B`register_nhi_soap`¡]¦P®É¼g reasonCode ©M `set_encounter_chief_complaint`¡^
-  - `nhi_clinical_mappers`¡B`nhi_soap_fhir_mapper`¡B`api/schemas/medication_request.to_fhir_dict`
-- **Åª¨ú**¡G
-  - `list_conditions`¡B`list_medication_requests`¡G¥Ñ¯Á¤Ş**¦X¦¨** FHIR¡A¤£Åª cache
-  - `lookup_chief_complaint`¡B`list_visit_summaries_for_patient`
-  - `outpatient.py` workspace¡B`patient_visit_history`
-  - `clinic_reports.py`¡]¯e¯f¡BÃÄ«~¡B¶EÀø²Î­p¡Aª½±µ SQL¡^
-  - `kiosk.py` §¹¶E§PÂ_¡B`nhi_card_bridge`¡]¦Û¶O§PÂ_¡^¡B`cc_learn.py`¡]¥D¶Dµü®w¡^
-- **¥Ó³ø**¡G`engine.py`¡]¯f¦W½X¡B³vµ§ÃÄ«~¡BpayMark ¥æ¡şÂà¡ş§÷¡^¡B`case_rules.py`¡B`xml_export_nhi.py`¡]p24 ¥æ¥IÀËÅç¡^¡C
-- **«eºİ**¡G
-  - `useClinicWorkspace`¡]`marksOf`¡B`persistChiefComplaint`¡B`ensureOutboundReferralOrder`¡B`ensureAcceptReferralOrder`¡^
-  - `DiagnosesWidget`¡B`RxGrid`¡B`HistoryRxPanel`¡B`ClinicOutpatientPage`¡B`EmrLookupPage`¡B`DrugCatalogPage`
-  - `lib/dittoRxLines.ts`¡B`caseMark.ts`¡B`drugCopay.ts`¡B`utils/nhiIntake.ts`
-- **¦C¦L**¡G`simpleSlip.ts`¡B`visitReceiptPrint.ts`¡B`releaseRx.ts`¡B`delegateLabSlip.ts`¡B`clinicPrintDocs.ts`¡]Âà¶E¡^¡C
-- **¶×¤J¡ş­×¸É¸}¥»**¡G
-  - ¶×¤J¡G`import_yisheng_data.py`¡B`import_yisheng_lean.py`¡B`sync_yisheng_since.py`
-  - ¸É¸ê®Æ¡G`backfill_blank_odate_visits.py`¡B`backfill_missing_real_dx.py`¡B`backfill_missing_rx.py`¡B`backfill_body_site.py`¡B`backfill_noid_patients.py`
-  - ­×´_¡G`repair_h603_icd.py`¡B`repair_condition_shortcuts.py`¡B`repair_history_rx_marks.py`¡B`repair_maintell_chief_complaint.py`
-  - ¤Ï¦V¸É cache¡G`bulk_materialize_fhir_from_index.py`
-
-### ³´¨À
-
-1. **¯Á¤Ş¤~¬O¥¿¥»**¡G²M³æ¥Ñ¯Á¤Ş¦X¦¨¡A`code.coding` ±`¥u¦³ code ©M display¡B¨S¦³ system¡F`clinicalStatus` ¤]¨S¦³ HL7 ºô§}¡C¾E²¾²Ä¤@¨B­n¥ı¨M©w¥¿¥»¡A¨Ã§â¥u¦³¯Á¤Şªº¦C¸É¦¨§¹¾ã FHIR¡C
-2. **³B¤èÂX¥Rºô§}¨â®M**¡G¼g¤J¥Î `https://wundadi.local/fhir/StructureDefinition/medication-billing/*`¡AÅª¨ú¦X¦¨¥Î `https://clinic.org/fhir/StructureDefinition/billing/*`¡A¾a `endswith` ¤ñ¹ï¡C
-3. `pay_mark`¡ş`memo_mark` ¥u¦³ÂX¥R¸Ì**¥X²{¸ÓÁä**®É¤~§ó·s¯Á¤Ş¡F¬Ù²¤¤£µ¥©ó²MªÅ¡CªÅ¥Õ¡]°·«O¡^©M¡u¦Û¡v¦b¥Ó³ø¤À¶}³B²z¡C
-4. ¥D¶D¤T¸ô¦X¬y¡F`regCc`¡B±¾¸¹ `reasonText`¡B¹w°İ¶Eªº `chiefComplaint` ³£**¤£¬O**Âå®v¥D¶D¡C
-5. ¥æ¥IÀËÅç³æ¨S¦³±Mªí¡A¬O±q MedicationRequest ªº payMark ¥æ¡şÂà§Y®É²Õ¥X¨Óªº¡C¥u·h¡u¤å¥óªí¡v·|º|±¼¥¦¡C
-6. `repair_condition_shortcuts.py` ·| DELETE ¥ş³¡ Condition ¦A­«¼g¡]ºû¹B¸}¥»¡A©M¸T¤î DELETE ­ì«h½Ä¬ğ¡^¡C
+1. å¥ä¿å¡æ¬„ä½å’Œè¨ºæ‰€æ¬„ä½åˆ†åœ¨å…©å€‹æ“´å……ï¼›`id_category` åŒæ™‚åœ¨ç´¢å¼•å’Œæ“´å……ï¼Œå­˜æª”æ™‚æœƒè¢«è‡ªå‹•æ”¹å¯«ã€‚
+2. æ²’æœ‰èº«åˆ†è­‰çš„ç—…äººè¦ç…§æ¨£å­˜ï¼Œç—…æ­·è™Ÿç•¶ç´¢å¼•ï¼ˆé†«è–åŒ¯å…¥è¦å‰‡ï¼‰ã€‚
+3. å®¶æ—æˆå“¡é é›»è©±å’Œåœ°å€çš„ SQL æ¯”å°ï¼ŒFHIR åŒ–æ™‚è¦æ±ºå®šæ˜¯å¦æ”¹æˆ `Patient.link` æˆ– `RelatedPerson`ã€‚
+4. éæ•åŒæ™‚æœ‰ä¸»æª”å­—ä¸² `allergic` å’Œ AllergyIntolerance è³‡æºï¼›è½‰è¨ºå–®å°çš„æ˜¯å“ªä¸€å€‹è¦ç¢ºèªã€‚
+5. Patient DELETE è·¯å¾‘ä»å­˜åœ¨ï¼ˆæœ‰å°±è¨ºæœƒæ“‹ 409ï¼‰ã€‚
 
 ---
 
-## °Ï 6¡V7¡G¥Í©R¼x¶H¡B¹L±Ó¡B¹w°İ¶E
+## å€ 3â€“5ï¼šç—…åã€è™•æ–¹ã€ä¸»è¨´ï¼SOAP
 
-- **Observation**¡G`resource_cache` + `observation_index`¡C`list_observations` ¥Î INNER JOIN cache¡A¥u¦³¯Á¤Ş¨S¦³ cache ªº¤£·|¥X²{¦b¶E¶¡¡C¼g¤J¡G`nhi.py.register_nhi_observation`¡B`nhi_observation_fhir_mapper`¡CÅª¨ú¡G`observation.py`¡Bworkspace¡C
-- **AllergyIntolerance**¡G`resource_cache` + `allergy_index`¡C¼g¤J¡G`nhi.py.register_nhi_allergy`¡B`allergy_intolerance.py`¡B`backfill_phone_allergy.py`¡CÅª¨ú¡G`list_allergy_payloads`¡B`outpatient._allergy_rows_for_patient`¡C¥t¦³¥DÀÉ `allergic` ¦r¦ê¡C
-- **¹w°İ¶E**¡G¥u¦s¦b Encounter ÂX¥R `patient-previsit`¡]`completed`¡B`chiefComplaint`¡B`symptomTags`¡B`submittedAt`¡B`visitKind`¡^¡A¨S¦³¯Á¤Ş¡C
-  - ¼g¤J¡G`attach_previsit_extension`¡B`kiosk.py` submit¡B`nhi.py.submit_previsit`¡C
-  - Åª¨ú¡G`previsit_text`¡A¥H¤Î workspace ªº `previsitText`¡ş`visitKind`¡C
-  - ¤£¦L¡B¤£·í¥D¶D¡]¨£ `docs/¥æ±µ-¥Ø«e¶i«×.md`¡^¡C
+### ç›®å‰å­˜æ”¾
 
----
+- **Condition**ï¼š`condition_index`ï¼ˆ`icd10_code`ã€`snomed_code`ã€`nhi_icd10_code`ã€`summary_text`ã€`clinical_status`ï¼‰ã€‚`resource_cache` åœ¨ç²¾ç°¡åŒ¯å…¥æ™‚å¸¸å¸¸æ²’æœ‰é€™ç­†ã€‚
+- **MedicationRequest**ï¼š`medication_request_index`ï¼ŒåŠ ä¸Š `useage`ã€`pay_mark`ã€`memo_mark`ã€`body_site`ã€`total_qty`ã€`use_type`ã€`line_sort`ã€‚æ“´å……å­éµæœ‰ `daysSupply`ã€`quantity`ã€`unitPrice`ã€`packVersion`ã€`priceDate`ã€`bodySite`ã€`tradeName`ã€`payMark`ã€`memoMark`ã€‚
+- **ä¸»è¨´**ï¼š`encounter_index.chief_complaint` â†’ `clinical_note_index.chief_complaint` â†’ `Encounter.reasonCode` â†’ Compositionï¼ˆ`STORED_CHIEF_COMPLAINT_SQL`ï¼‰ã€‚
+- **Composition**ï¼šLOINC section + æ“´å…… `outpatient-soap`ï¼›ç´¢å¼• `clinical_note_index`ã€‚
 
-## °Ï 8¡G¶EÂ_ÃÒ©ú¡B¹w¬ù³æ
+### è§¸é»
 
-### ¥Ø«e¦s©ñ
+- **å¯«å…¥**ï¼š
+  - `_upsert_condition_index`ã€`_upsert_medication_request_index`ã€`_upsert_clinical_note_index`
+  - `retain_encounter_chart`ï¼ˆæ²’åœ¨æœ¬æ¬¡å­˜æª”ä¸­çš„èˆŠç—…åæ”¹ entered-in-errorï¼ŒèˆŠè™•æ–¹æ”¹ cancelledï¼‰
+  - `condition.py`ã€`medication_request.py` CRUD
+  - `nhi.py`ï¼š`register_nhi_condition`ã€`register_nhi_medication`ï¼ˆå«è—¥åƒ¹ Packï¼‰ã€`register_nhi_soap`ï¼ˆåŒæ™‚å¯« reasonCode å’Œ `set_encounter_chief_complaint`ï¼‰
+  - `nhi_clinical_mappers`ã€`nhi_soap_fhir_mapper`ã€`api/schemas/medication_request.to_fhir_dict`
+- **è®€å–**ï¼š
+  - `list_conditions`ã€`list_medication_requests`ï¼šç”±ç´¢å¼•**åˆæˆ** FHIRï¼Œä¸è®€ cache
+  - `lookup_chief_complaint`ã€`list_visit_summaries_for_patient`
+  - `outpatient.py` workspaceã€`patient_visit_history`
+  - `clinic_reports.py`ï¼ˆç–¾ç—…ã€è—¥å“ã€è¨ºç™‚çµ±è¨ˆï¼Œç›´æ¥ SQLï¼‰
+  - `kiosk.py` å®Œè¨ºåˆ¤æ–·ã€`nhi_card_bridge`ï¼ˆè‡ªè²»åˆ¤æ–·ï¼‰ã€`cc_learn.py`ï¼ˆä¸»è¨´è©åº«ï¼‰
+- **ç”³å ±**ï¼š`engine.py`ï¼ˆç—…åç¢¼ã€é€ç­†è—¥å“ã€payMark äº¤ï¼è½‰ï¼æï¼‰ã€`case_rules.py`ã€`xml_export_nhi.py`ï¼ˆp24 äº¤ä»˜æª¢é©—ï¼‰ã€‚
+- **å‰ç«¯**ï¼š
+  - `useClinicWorkspace`ï¼ˆ`marksOf`ã€`persistChiefComplaint`ã€`ensureOutboundReferralOrder`ã€`ensureAcceptReferralOrder`ï¼‰
+  - `DiagnosesWidget`ã€`RxGrid`ã€`HistoryRxPanel`ã€`ClinicOutpatientPage`ã€`EmrLookupPage`ã€`DrugCatalogPage`
+  - `lib/dittoRxLines.ts`ã€`caseMark.ts`ã€`drugCopay.ts`ã€`utils/nhiIntake.ts`
+- **åˆ—å°**ï¼š`simpleSlip.ts`ã€`visitReceiptPrint.ts`ã€`releaseRx.ts`ã€`delegateLabSlip.ts`ã€`clinicPrintDocs.ts`ï¼ˆè½‰è¨ºï¼‰ã€‚
+- **åŒ¯å…¥ï¼ä¿®è£œè…³æœ¬**ï¼š
+  - åŒ¯å…¥ï¼š`import_yisheng_data.py`ã€`import_yisheng_lean.py`ã€`sync_yisheng_since.py`
+  - è£œè³‡æ–™ï¼š`backfill_blank_odate_visits.py`ã€`backfill_missing_real_dx.py`ã€`backfill_missing_rx.py`ã€`backfill_body_site.py`ã€`backfill_noid_patients.py`
+  - ä¿®å¾©ï¼š`repair_h603_icd.py`ã€`repair_condition_shortcuts.py`ã€`repair_history_rx_marks.py`ã€`repair_maintell_chief_complaint.py`
+  - åå‘è£œ cacheï¼š`bulk_materialize_fhir_from_index.py`
 
-- `visit_certificate`¡G¤@­Ó¬İ¶E¤@¦C¡A¥u UPDATE ¤£ DELETE¡CÄæ¦ì¦³ `doc_no`¡]8 ½X¤å¸¹¡^¡B`visit_date`¡B`print_date`¡B`diagnosis`¡B`order_text`¡B`appointment_text`¡B`english`¡B`doctor`¡B`source`¡A¥H¤Î¯f¾ú¸¹»P©m¦W§Ö·Ó¡C
-- ³]©wÁä `certificate.yishengMaxSerial`¡]Âå¸t¤å¸¹¤W­­¡^¡C
-- ¨S¦³ FHIR ¸ê·½¡C
+### é™·é˜±
 
-### Ä²ÂI
-
-- **¼g¤J**¡G`visit_certificate.save_for_visit`¡B`import_yisheng_certificates`¡]¥D¾÷±Ò°Ê®É¦b­I´º¶×¤J¡A¤£ÂĞ»\¤w¦s¦C¡^¡B`certificate.py` ªº `PUT /clinic/certificate`¡C
-- **Åª¨ú**¡G`find_for_visit`¡B`next_serial`¡B`GET /clinic/certificate`¡C
-- **«eºİ**¡G`CertificateDialog`¡]A/B/D/E ¤À­¶¥u¬O¥e¦ì¡A¤£¦s¡^¡B`ClinicOutpatientPage`¡B`clinicApi.fetchVisitCertificate`¡ş`saveVisitCertificate`¡C
-- **¦C¦L**¡G`clinicPrintDocs.buildCertificateHtml`¡]210¡Ñ297 ª½¦V¡^¡F¹w¬ù³æ¬O `CertificateDialog.printAppointment` ªº¤º´O HTML¡A¤£¨«¦P¤@­Ó½d¥»¡C
-- **´ú¸Õ**¡G`test_visit_certificate.py`¡C
-
-### ¥~³¡®æ¦¡
-
-Âå¸t `REGIOTH.Dat`¡B`DIAGSERN.Dat`¡B`REGISTER.Dat`¡]cp950¡^¡C
-
-### ³´¨À
-
-1. ¤å¸¹­n¥ş°|°ß¤@¡GDB ¸Ìªº `doc_no` ©M `yishengMaxSerial` ­n¦X¨Ö­pºâ¡C
-2. ¹w¬ù³æ©M¶EÂ_ÃÒ©ú¦@¥Î¦P¤@¦C¡C
-3. Âå¸t¶×¤Jªº¦C±`¯Ê©m¦W»P¯f¾ú¸¹¡AÅã¥Ü®É¾a·í¦¸¬İ¶E¸ê®Æ¸É¡C
-
----
-
-## °Ï 9¡GÂà¶E
-
-### ¥Ø«e¦s©ñ
-
-- `referral_slip`¡G`kind` ¦³ out ©M reply ¨âºØ¡CÄæ¦ì¥]¬AÂà©¹°|©Ò¡B¬ì§O¡B¥Øªº¡BÂå®v¡B¯f¦W¡B§Ç¸¹¡B®Ä´Á¡Bª¬ºA¡B`history_text`¡B`treat_text`¡B`sheet_json`¡B`local_id`¡B`nhi_id`¡B`uploaded_at`¡C
-- `referral_download`¡]¸pºİ²M³æ§Ö¨ú¡A¥DÁä¬O serial ¥[ kind¡^¡B`referral_accept`¡C
-- ³]©wÁä `referral_pull`¡B`referral_file_seq`¡C
-- Encounter reg ÂX¥R¡G`referralSeq`¡B`referralHospId`¡B`referralHospName`¡B`referralDate`¡B`acceptReferral`¡C
-- Âå¸t«Ê¦s¦C `ys-out-*`¡B`ys-reply-*`¡C
-
-### Ä²ÂI
-
-- **¼g¤J**¡G`referral_desk.py`¡]`save_slip`¡B`mark_uploaded`¡B`remove_slip`¡]·| DELETE¡^¡B`take_incoming`¡B`ensure_yisheng_archive`¡B`attach_bureau_serial`¡^¡B`referral_inbox.py`¡]`remember_download`¡B`apply_list_rows`¡B`mark_accepted`¡^¡B`nhi._link_incoming_referral`¡C
-- **²Õ¤W¶ÇÀÉ**¡G`referral.py`¡]`_pack_upload` ETA¡şETB¡B`_pack_accept` ETE¡B`_pack_delete` ETG¡şETH¡B`referral_pull` type 27¡B`referral_query`¡^¡B`nhi_referral.py`¡]`build_*_xml`¡B`query_referrals`¡^¡C
-- **¥Ó³ø**¡G`engine._outbound_referral_codes`¡B`_referral_fee_destination`¡]01036C¡^¡B`xml_export_nhi.py`¡]d16¡Bd17¡Bd18¡Bd55¡^¡B`media_check.py`¡C
-- **«eºİ**¡G`ReferralSlipDialog`¡B`ReferralPage`¡B`ReferralReplyForm`¡B`ReferralAcceptDialogs`¡B`RegisterConfirmDialog`¡B`useClinicWorkspace`¡]01036C¡B01038C Âå¥O¡^¡B`clinicApi`¡]¹ê»Ú¤W¶Ç¸g¥»¾÷ 5310 ªº `/tools/referral-io`¡^¡B`clinicDevice.uploadReferralOnSave`¡C
-- **¦C¦L**¡G`clinicPrintDocs.buildReferralSlipHtml`¡]210¡Ñ297¡A¥i¦L¦hÁp¡^¡FÂà¶E³æ³]©w¦s¦b localStorage `wundadi.referralSettings.v1`¡C
-- **«È¤áºİ**¡G`«È¤áºİ/referral_io.ps1`¡B`referral_daily.ps1`¡B`desk_agent.ps1`¡B`Âà¶E¤W¶Ç¤u¨ã/Âà¶E¤W¶Ç¤u¨ã.ps1`¡C
-- **´ú¸Õ**¡G`test_referral*.py`¡B`test_claims_nhi_check.py`¡C
-
-### ¥~³¡®æ¦¡
-
-Big5 XML ETA¡BETB¡BETE¡BETG¡BETH¡F`NHI_DownloadB`¡]type 04¡B10¡^¡F`NHI_GetB`¡]type 27¡ABig5 CSV¡^¡F`GetRefData` HTTPS JSON¡F¤ë¥Ó³ø d16¡Vd18¡Bd55¡FÂå¸t REFERRAL¡BREFERETURN¡C
-
-### ³´¨À
-
-1. `sheet_json` ©M¤@¯ëÄæ¦ì¤À®a¡FFHIR ¤Æ«á²Õ XML ®É¸ê®Æ¤´­n»ô¥ş¡C
-2. Âà¶E³æ¤¹³\¦³±ø¥ó DELETE¡A¸ò¯f¾ú¸T§Rªº¬Fµ¦­n¥t¥~©w¡C
-3. ¥¼¤W¶Çªº¯È¥»³æ¡]`paper: Y`¡^¤£¶i d55¡C
-4. ¡u¤w±µ¨ü¡vªºª¬ºA´²¦b slip¡Bdownload¡Baccept ¤T±iªí©M Encounter ÂX¥R¥|­Ó¦a¤è¡C
-5. ¤W¶Ç¤@©w¦b¶}ºô­¶ªº¨º¥x 5310 ¤W°µ¡A¥D¾÷¥u­t³d²ÕÀÉ¡C
-6. ¦^ÂĞ³æ¥i¯à¨S¦³¸j encounter¡C
+1. **ç´¢å¼•æ‰æ˜¯æ­£æœ¬**ï¼šæ¸…å–®ç”±ç´¢å¼•åˆæˆï¼Œ`code.coding` å¸¸åªæœ‰ code å’Œ displayã€æ²’æœ‰ systemï¼›`clinicalStatus` ä¹Ÿæ²’æœ‰ HL7 ç¶²å€ã€‚é·ç§»ç¬¬ä¸€æ­¥è¦å…ˆæ±ºå®šæ­£æœ¬ï¼Œä¸¦æŠŠåªæœ‰ç´¢å¼•çš„åˆ—è£œæˆå®Œæ•´ FHIRã€‚
+2. **è™•æ–¹æ“´å……ç¶²å€å…©å¥—**ï¼šå¯«å…¥ç”¨ `https://wundadi.local/fhir/StructureDefinition/medication-billing/*`ï¼Œè®€å–åˆæˆç”¨ `https://clinic.org/fhir/StructureDefinition/billing/*`ï¼Œé  `endswith` æ¯”å°ã€‚
+3. `pay_mark`ï¼`memo_mark` åªæœ‰æ“´å……è£¡**å‡ºç¾è©²éµ**æ™‚æ‰æ›´æ–°ç´¢å¼•ï¼›çœç•¥ä¸ç­‰æ–¼æ¸…ç©ºã€‚ç©ºç™½ï¼ˆå¥ä¿ï¼‰å’Œã€Œè‡ªã€åœ¨ç”³å ±åˆ†é–‹è™•ç†ã€‚
+4. ä¸»è¨´ä¸‰è·¯åˆæµï¼›`regCc`ã€æ›è™Ÿ `reasonText`ã€é å•è¨ºçš„ `chiefComplaint` éƒ½**ä¸æ˜¯**é†«å¸«ä¸»è¨´ã€‚
+5. äº¤ä»˜æª¢é©—å–®æ²’æœ‰å°ˆè¡¨ï¼Œæ˜¯å¾ MedicationRequest çš„ payMark äº¤ï¼è½‰å³æ™‚çµ„å‡ºä¾†çš„ã€‚åªæ¬ã€Œæ–‡ä»¶è¡¨ã€æœƒæ¼æ‰å®ƒã€‚
+6. `repair_condition_shortcuts.py` æœƒ DELETE å…¨éƒ¨ Condition å†é‡å¯«ï¼ˆç¶­é‹è…³æœ¬ï¼Œå’Œç¦æ­¢ DELETE åŸå‰‡è¡çªï¼‰ã€‚
 
 ---
 
-## °Ï 10¡G½×½èÀËÅç¡]type 26¡^
+## å€ 6â€“7ï¼šç”Ÿå‘½å¾µè±¡ã€éæ•ã€é å•è¨º
 
-- **¦s©ñ**¡G
-  - `quality_lab_report`¡]¨C¦¸¬İ¶Eªº¨C­Ó³B¸m¤@¦C¡F`report_text`¡B`slip_no`¡B`report_on`¡B`status` ¬° saved ©Î uploaded¡B`local_id`¡B`nhi_id`¡^
-  - `{db ¥Ø¿ı}/quality-lab/*.zip`¡B`quality_lab_seq.json`
-  - ¥Õ¦W³æ `QUALITY_ORDERS`¡G¥Ø«e¥u¦³ 13017C
-- **Ä²ÂI**¡G
-  - «áºİ¡G`quality_lab_desk.py`¡]save¡Bmark_uploaded¡Blist¡^¡B`quality_lab.py`¡]`build_lab_xml`¡B`pack_zip`¡B`alloc_serial`¡^¡B`api/routers/quality_lab.py`
-  - «eºİ¡G`QualityLabPanel`¡B`RxGrid`¡B`ClinicOutpatientPage`¡B`clinicApi`¡]¸g referral-io send type 26¡^
-  - «È¤áºİ¤u¨ã¡G`½×½è¤W¶Ç¤u¨ã/`¡B`½×½èÀËÅç¤W¶Ç¤p¤u¨ã/`
-- **¥~³¡®æ¦¡**¡GBig5 XML `<checkup>`¡BZIP ÀÉ¦W¡]°|©Ò½X + ¥Á°ê¤é´Á + ¬y¤ô¸¹¡^¡B`NHI_SendB` ©M `NHI_DownloadB` ¨â±ø¤W¶Ç¸ô®|¡C
-- **³´¨À**¡G
-  1. ­±ªO¤Wªº¼v¹³¥u¦bÂsÄı¾¹°O¾ĞÅé¡A¨S¦s¡C
-  2. `slip_no` ¥Ñ«eºİ sessionStorage ²£¥Í¡C
-  3. ¤w¤W¶Ç«á `/file` ·|©Úµ´­«°e¡C
+- **Observation**ï¼š`resource_cache` + `observation_index`ã€‚`list_observations` ç”¨ INNER JOIN cacheï¼Œåªæœ‰ç´¢å¼•æ²’æœ‰ cache çš„ä¸æœƒå‡ºç¾åœ¨è¨ºé–“ã€‚å¯«å…¥ï¼š`nhi.py.register_nhi_observation`ã€`nhi_observation_fhir_mapper`ã€‚è®€å–ï¼š`observation.py`ã€workspaceã€‚
+- **AllergyIntolerance**ï¼š`resource_cache` + `allergy_index`ã€‚å¯«å…¥ï¼š`nhi.py.register_nhi_allergy`ã€`allergy_intolerance.py`ã€`backfill_phone_allergy.py`ã€‚è®€å–ï¼š`list_allergy_payloads`ã€`outpatient._allergy_rows_for_patient`ã€‚å¦æœ‰ä¸»æª” `allergic` å­—ä¸²ã€‚
+- **é å•è¨º**ï¼šåªå­˜åœ¨ Encounter æ“´å…… `patient-previsit`ï¼ˆ`completed`ã€`chiefComplaint`ã€`symptomTags`ã€`submittedAt`ã€`visitKind`ï¼‰ï¼Œæ²’æœ‰ç´¢å¼•ã€‚
+  - å¯«å…¥ï¼š`attach_previsit_extension`ã€`kiosk.py` submitã€`nhi.py.submit_previsit`ã€‚
+  - è®€å–ï¼š`previsit_text`ï¼Œä»¥åŠ workspace çš„ `previsitText`ï¼`visitKind`ã€‚
+  - ä¸å°ã€ä¸ç•¶ä¸»è¨´ï¼ˆè¦‹ `docs/äº¤æ¥-ç›®å‰é€²åº¦.md`ï¼‰ã€‚
 
 ---
 
-## °Ï 11¡G·Ó¤ù
+## å€ 8ï¼šè¨ºæ–·è­‰æ˜ã€é ç´„å–®
 
-### ¥Ø«e¦s©ñ
+### ç›®å‰å­˜æ”¾
 
-- **LOOK ¥D¬ÛÃ¯**¡G`data/look/aa/bb/cc/`¡]¯f¾ú¸¹ 6 ½X©î¤T¼h¡^¡AÀÉ¦W¬O¯f¾ú¸¹ + 2 ½X base36 §Ç¸¹¡C¥i¥Î `WUNDADI_LOOK_DIR` ÂĞ¼g¡FÂÂ¸ô®| `Z:\SC\IMG` ¬°°h¸ô¡F¡u§R°£¡vªº·Ó¤ù²¾¨ì `data/look-removed/`¡C
-- `look_file`¡]ÀÉ¦W¯Á¤Ş¡^¡B`look_sync_state`¡C
-- ¯f¨_ Media¡G`resource_cache` ¦s§¹¾ã JSON¡A`content.data` ¬O base64¡F¥t¦³ `media_index`¡C
+- `visit_certificate`ï¼šä¸€å€‹çœ‹è¨ºä¸€åˆ—ï¼Œåª UPDATE ä¸ DELETEã€‚æ¬„ä½æœ‰ `doc_no`ï¼ˆ8 ç¢¼æ–‡è™Ÿï¼‰ã€`visit_date`ã€`print_date`ã€`diagnosis`ã€`order_text`ã€`appointment_text`ã€`english`ã€`doctor`ã€`source`ï¼Œä»¥åŠç—…æ­·è™Ÿèˆ‡å§“åå¿«ç…§ã€‚
+- è¨­å®šéµ `certificate.yishengMaxSerial`ï¼ˆé†«è–æ–‡è™Ÿä¸Šé™ï¼‰ã€‚
+- æ²’æœ‰ FHIR è³‡æºã€‚
 
-### Ä²ÂI
+### è§¸é»
 
-- `look_images.py`¡G
-  - Åª¨ú¡G`look_root`¡B`list_look_files`¡B`charts_with_images`¡]¬İÀÉ®×­×§ï®É¶¡¡A¤£Åª DB¡^¡B`iter_chart_photos`¡B`resolve_look_file`
-  - ¼g¤J¡G`write_look_image`¡B`set_look_date`¡B`replace_look_file`¡B`retire_look_file`
-- `sqlite_shadow_store`¡G`note_look_files`¡B`note_look_date`¡]¼g½]®Ö¡AÃş«¬ LookPhoto¡^¡B`charts_with_media`¡B`list_media`¡]¾B½ª base64¡^¡B`_upsert_media_index`¡C
-- `media.py`¡G`/fhir/Media`¡B`look-folder`¡B`look-sync`¡B`look-file`¡]·s¼W¡B´À´«¡B§ï¤é´Á¡B²¾¥X¡B¨úÀÉ¡^¡B`get_media?includeData`¡C
-- `nhi.py`¡G`register_nhi_media`¡]«eºİ¨S¦³©I¥s¥¦¡^¡B`list_media_by_encounter`¡F`nhi_media_fhir_mapper`¡C
-- `encounter.py` emr-lookup ªº `hasImage` ¿z¿ï¡C
-- **«eºİ**¡G`PatientLookDialog`¡]¥ıÅª LOOK¡A¨S¦³¤~Åª FHIR¡^¡B`LesionPhotosWidget`¡]workspace ¥Ø«e¦^ªÅ°}¦C¡^¡B`EmrLookupPage`¡B`LobbyPage`¡]¹ï»ôÀÉ¦W¡^¡B`ImgManagerPage`¡]­ì«¬¡A¤£¼g¡^¡B`clinicApi`¡C
-- **¨ä¥L**¡G`export_clinic_pack.write_look_index`¡Frepo ¥~ªº·Ó¤ù¤ÀÃş¤u¨ã `clinic-image-categorize-master` ·|©I¥s look-sync¡C
-- **´ú¸Õ**¡G`test_look_images.py`¡C
+- **å¯«å…¥**ï¼š`visit_certificate.save_for_visit`ã€`import_yisheng_certificates`ï¼ˆä¸»æ©Ÿå•Ÿå‹•æ™‚åœ¨èƒŒæ™¯åŒ¯å…¥ï¼Œä¸è¦†è“‹å·²å­˜åˆ—ï¼‰ã€`certificate.py` çš„ `PUT /clinic/certificate`ã€‚
+- **è®€å–**ï¼š`find_for_visit`ã€`next_serial`ã€`GET /clinic/certificate`ã€‚
+- **å‰ç«¯**ï¼š`CertificateDialog`ï¼ˆA/B/D/E åˆ†é åªæ˜¯å ä½ï¼Œä¸å­˜ï¼‰ã€`ClinicOutpatientPage`ã€`clinicApi.fetchVisitCertificate`ï¼`saveVisitCertificate`ã€‚
+- **åˆ—å°**ï¼š`clinicPrintDocs.buildCertificateHtml`ï¼ˆ210Ã—297 ç›´å‘ï¼‰ï¼›é ç´„å–®æ˜¯ `CertificateDialog.printAppointment` çš„å…§åµŒ HTMLï¼Œä¸èµ°åŒä¸€å€‹ç¯„æœ¬ã€‚
+- **æ¸¬è©¦**ï¼š`test_visit_certificate.py`ã€‚
 
-### ³´¨À
+### å¤–éƒ¨æ ¼å¼
 
-1. ¤TºØªF¦è¤£¦P¡GLOOK ÀÉ®×¡B¯f¨_ Media¡]base64 ¦s¦b DB¡^¡B`look_file` ¯Á¤Ş¡CFHIR ¤Æ«ØÄ³§â¼v¹³¥»Åé©ñ Binary ©Î¥~³¡ÀÉ®×¡ADB ¥u©ñ Media¡şDocumentReference «ü¼Ğ¡A¤£­n§â¬ÛÃ¯¶ë¶i base64¡C
-2. ¡u¦³¹Ï¹³¡vªº¿z¿ï¬İÀÉ®×­×§ï®É¶¡¥[ `media_index`¡A`look_file` ¤£°Ñ»P¡C
-3. LOOK §R°£¬O²¾ÀÉ¡A¤£¸I FHIR¡FLOOK §ï¤é´Áªº½]®Ö°O¦b `audit_modifications`¡A¤£¬O Media¡C
-4. `delete_cached_resource` ¤£·|²M `media_index`¡F`reindex_from_cache.py` ¤£­««Ø Media ©M Composition ªº¯Á¤Ş¡C
-5. Âå¬ü¬Û¤ùª¾ÃÑ®w¡]KAN-24¡^¬O¥t¤@¥ó¨Æ¡A¤£¦b³o¸Ì§ï¡C
+é†«è– `REGIOTH.Dat`ã€`DIAGSERN.Dat`ã€`REGISTER.Dat`ï¼ˆcp950ï¼‰ã€‚
+
+### é™·é˜±
+
+1. æ–‡è™Ÿè¦å…¨é™¢å”¯ä¸€ï¼šDB è£¡çš„ `doc_no` å’Œ `yishengMaxSerial` è¦åˆä½µè¨ˆç®—ã€‚
+2. é ç´„å–®å’Œè¨ºæ–·è­‰æ˜å…±ç”¨åŒä¸€åˆ—ã€‚
+3. é†«è–åŒ¯å…¥çš„åˆ—å¸¸ç¼ºå§“åèˆ‡ç—…æ­·è™Ÿï¼Œé¡¯ç¤ºæ™‚é ç•¶æ¬¡çœ‹è¨ºè³‡æ–™è£œã€‚
 
 ---
 
-## °Ï 12¡G­û¤u
+## å€ 9ï¼šè½‰è¨º
 
-### ¥Ø«e¦s©ñ
+### ç›®å‰å­˜æ”¾
 
-- `clinic_staff`¡G`id`¡B`name`¡B`role`¡B`nhi_id`¡B`cert_no`¡B`pin`¡B`status`¡B`room`¡C
-- Encounter reg ÂX¥R¡G`doctorId`¡B`doctorName`¡B`pharmacist`¡CÃÄ®vÄæ¥i¯à¦s­û¤u id¡A¤]¥i¯àª½±µ¦s©m¦W¡C
-- `encounter_index.claim_doctor_id`¡B`claim_pharmacist_id`¡G¥u¦³¶×¤J©M backfill ·|¼g¡C
-- `audit_modifications.operator_identity`¡]¥Ñ PIN ¸ÑªR¡^¡C
+- `referral_slip`ï¼š`kind` æœ‰ out å’Œ reply å…©ç¨®ã€‚æ¬„ä½åŒ…æ‹¬è½‰å¾€é™¢æ‰€ã€ç§‘åˆ¥ã€ç›®çš„ã€é†«å¸«ã€ç—…åã€åºè™Ÿã€æ•ˆæœŸã€ç‹€æ…‹ã€`history_text`ã€`treat_text`ã€`sheet_json`ã€`local_id`ã€`nhi_id`ã€`uploaded_at`ã€‚
+- `referral_download`ï¼ˆç½²ç«¯æ¸…å–®å¿«å–ï¼Œä¸»éµæ˜¯ serial åŠ  kindï¼‰ã€`referral_accept`ã€‚
+- è¨­å®šéµ `referral_pull`ã€`referral_file_seq`ã€‚
+- Encounter reg æ“´å……ï¼š`referralSeq`ã€`referralHospId`ã€`referralHospName`ã€`referralDate`ã€`acceptReferral`ã€‚
+- é†«è–å°å­˜åˆ— `ys-out-*`ã€`ys-reply-*`ã€‚
 
-### Ä²ÂI
+### è§¸é»
 
-- **¼g¤J**¡G
-  - `save_staff`¡B`delete_staff`¡]DELETE¡^
-  - `staff.py`¡B`import_yisheng_clinic_settings.py`¡]¾ãªí´À´«¡^
-  - `nhi.py` ¦sÀÉ®É¼g¤J doctorId¡şpharmacist
-  - `sync_yisheng_since.py`¡B`backfill_claim_source.py`
-- **Åª¨ú**¡G
-  - `get_staff_list`¡B`verify_pin`¡B`main.py` middleware¡]`x-pin-code`¡^
-  - `engine._load_staff_maps`¡B`_default_pharmacist_id`¡B`claim_month_reports`¡]ÃÄ®vÂI¼Æ¡^
-  - `referral.py`¡]Âå®v¥N¸¹¡^¡B`nhi.py` ¯}µ¡Âù PIN¡B`ic_daily_upload.py`
-- **«eºİ**¡G`StaffPage`¡B`VisitSaveConfirmPanel`¡B`ClinicOutpatientPage`¡B`RegisterConfirmDialog`¡B`ClinicSessionGate`¡B`RegisterPage`¡B`ClinicProfilePage`¡B`lib/doctorName.ts`¡C
-- **¦C¦L**¡G`simpleSlip.ts`¡B`visitReceiptPrint.ts`¡B`registerBookReport.ts`¡B`delegateLabSlip.ts`¡]Âå®v¥N¸¹¡^¡B`releaseRx.ts`¡B`cashDetailXlsx.ts`¡C
-- **¥Ó³ø**¡G`xml_export_nhi.py` d31¡]ÃÄ®v¡^¡C
+- **å¯«å…¥**ï¼š`referral_desk.py`ï¼ˆ`save_slip`ã€`mark_uploaded`ã€`remove_slip`ï¼ˆæœƒ DELETEï¼‰ã€`take_incoming`ã€`ensure_yisheng_archive`ã€`attach_bureau_serial`ï¼‰ã€`referral_inbox.py`ï¼ˆ`remember_download`ã€`apply_list_rows`ã€`mark_accepted`ï¼‰ã€`nhi._link_incoming_referral`ã€‚
+- **çµ„ä¸Šå‚³æª”**ï¼š`referral.py`ï¼ˆ`_pack_upload` ETAï¼ETBã€`_pack_accept` ETEã€`_pack_delete` ETGï¼ETHã€`referral_pull` type 27ã€`referral_query`ï¼‰ã€`nhi_referral.py`ï¼ˆ`build_*_xml`ã€`query_referrals`ï¼‰ã€‚
+- **ç”³å ±**ï¼š`engine._outbound_referral_codes`ã€`_referral_fee_destination`ï¼ˆ01036Cï¼‰ã€`xml_export_nhi.py`ï¼ˆd16ã€d17ã€d18ã€d55ï¼‰ã€`media_check.py`ã€‚
+- **å‰ç«¯**ï¼š`ReferralSlipDialog`ã€`ReferralPage`ã€`ReferralReplyForm`ã€`ReferralAcceptDialogs`ã€`RegisterConfirmDialog`ã€`useClinicWorkspace`ï¼ˆ01036Cã€01038C é†«ä»¤ï¼‰ã€`clinicApi`ï¼ˆå¯¦éš›ä¸Šå‚³ç¶“æœ¬æ©Ÿ 5310 çš„ `/tools/referral-io`ï¼‰ã€`clinicDevice.uploadReferralOnSave`ã€‚
+- **åˆ—å°**ï¼š`clinicPrintDocs.buildReferralSlipHtml`ï¼ˆ210Ã—297ï¼Œå¯å°å¤šè¯ï¼‰ï¼›è½‰è¨ºå–®è¨­å®šå­˜åœ¨ localStorage `wundadi.referralSettings.v1`ã€‚
+- **å®¢æˆ¶ç«¯**ï¼š`å®¢æˆ¶ç«¯/referral_io.ps1`ã€`referral_daily.ps1`ã€`desk_agent.ps1`ã€`è½‰è¨ºä¸Šå‚³å·¥å…·/è½‰è¨ºä¸Šå‚³å·¥å…·.ps1`ã€‚
+- **æ¸¬è©¦**ï¼š`test_referral*.py`ã€`test_claims_nhi_check.py`ã€‚
 
-### ³´¨À
+### å¤–éƒ¨æ ¼å¼
 
-1. ¦P¤@­Ó¤H¦³¤TºØÃÑ§O¡G¤º³¡ id¡B©m¦W¡B°·«O¨­¤ÀÃÒ¡CÃÄ®v±`¥u¦s©m¦W¡A¥Ó³ø®É¥Î©m¦W¹ï·ÓªíÂà NHI¡F¹ï·Ó¥¢±Ñ´NÅÜªÅ¥Õ©Î§ï¥Î¹w³]ÃÄ®v¡C
-2. `claim_*` ¯Á¤Ş©M¤é±`¦sÀÉ²æ¹_¡C
-3. ¦C¦L«e±`­«·s§ì­û¤uªí¡A©Ò¥H¦L¥Xªº¦W¦r¥i¯à©M¦sÀÉ·í¤U¤£¦P¡C
-4. PIN Äİ©ó¥»¾÷¸ê¦w³]©w¡A¤£©ñ¶i FHIR¡C
-5. FHIR ¥Ø¼Ğ¡GPractitioner + PractitionerRole¡A¬İ¶E§ï¥Î `Encounter.participant` °Ñ·Ó¡C
+Big5 XML ETAã€ETBã€ETEã€ETGã€ETHï¼›`NHI_DownloadB`ï¼ˆtype 04ã€10ï¼‰ï¼›`NHI_GetB`ï¼ˆtype 27ï¼ŒBig5 CSVï¼‰ï¼›`GetRefData` HTTPS JSONï¼›æœˆç”³å ± d16â€“d18ã€d55ï¼›é†«è– REFERRALã€REFERETURNã€‚
+
+### é™·é˜±
+
+1. `sheet_json` å’Œä¸€èˆ¬æ¬„ä½åˆ†å®¶ï¼›FHIR åŒ–å¾Œçµ„ XML æ™‚è³‡æ–™ä»è¦é½Šå…¨ã€‚
+2. è½‰è¨ºå–®å…è¨±æœ‰æ¢ä»¶ DELETEï¼Œè·Ÿç—…æ­·ç¦åˆªçš„æ”¿ç­–è¦å¦å¤–å®šã€‚
+3. æœªä¸Šå‚³çš„ç´™æœ¬å–®ï¼ˆ`paper: Y`ï¼‰ä¸é€² d55ã€‚
+4. ã€Œå·²æ¥å—ã€çš„ç‹€æ…‹æ•£åœ¨ slipã€downloadã€accept ä¸‰å¼µè¡¨å’Œ Encounter æ“´å……å››å€‹åœ°æ–¹ã€‚
+5. ä¸Šå‚³ä¸€å®šåœ¨é–‹ç¶²é çš„é‚£å° 5310 ä¸Šåšï¼Œä¸»æ©Ÿåªè² è²¬çµ„æª”ã€‚
+6. å›è¦†å–®å¯èƒ½æ²’æœ‰ç¶ encounterã€‚
 
 ---
 
-## °Ï 13¡G°|©Ò³]©w
+## å€ 10ï¼šè«–è³ªæª¢é©—ï¼ˆtype 26ï¼‰
 
-### ¥Ø«e¦s©ñ
+- **å­˜æ”¾**ï¼š
+  - `quality_lab_report`ï¼ˆæ¯æ¬¡çœ‹è¨ºçš„æ¯å€‹è™•ç½®ä¸€åˆ—ï¼›`report_text`ã€`slip_no`ã€`report_on`ã€`status` ç‚º saved æˆ– uploadedã€`local_id`ã€`nhi_id`ï¼‰
+  - `{db ç›®éŒ„}/quality-lab/*.zip`ã€`quality_lab_seq.json`
+  - ç™½åå–® `QUALITY_ORDERS`ï¼šç›®å‰åªæœ‰ 13017C
+- **è§¸é»**ï¼š
+  - å¾Œç«¯ï¼š`quality_lab_desk.py`ï¼ˆsaveã€mark_uploadedã€listï¼‰ã€`quality_lab.py`ï¼ˆ`build_lab_xml`ã€`pack_zip`ã€`alloc_serial`ï¼‰ã€`api/routers/quality_lab.py`
+  - å‰ç«¯ï¼š`QualityLabPanel`ã€`RxGrid`ã€`ClinicOutpatientPage`ã€`clinicApi`ï¼ˆç¶“ referral-io send type 26ï¼‰
+  - å®¢æˆ¶ç«¯å·¥å…·ï¼š`è«–è³ªä¸Šå‚³å·¥å…·/`ã€`è«–è³ªæª¢é©—ä¸Šå‚³å°å·¥å…·/`
+- **å¤–éƒ¨æ ¼å¼**ï¼šBig5 XML `<checkup>`ã€ZIP æª”åï¼ˆé™¢æ‰€ç¢¼ + æ°‘åœ‹æ—¥æœŸ + æµæ°´è™Ÿï¼‰ã€`NHI_SendB` å’Œ `NHI_DownloadB` å…©æ¢ä¸Šå‚³è·¯å¾‘ã€‚
+- **é™·é˜±**ï¼š
+  1. é¢æ¿ä¸Šçš„å½±åƒåªåœ¨ç€è¦½å™¨è¨˜æ†¶é«”ï¼Œæ²’å­˜ã€‚
+  2. `slip_no` ç”±å‰ç«¯ sessionStorage ç”¢ç”Ÿã€‚
+  3. å·²ä¸Šå‚³å¾Œ `/file` æœƒæ‹’çµ•é‡é€ã€‚
 
-- `clinic_runtime_settings` ¦UÁä¡G
-  - `clinic_profile_v1`¡Gprofile¡Bfees¡Bworkflow ¤T¶ô
-  - `yisheng_scini_v1`¡GÂå¸t Sc.ini ¥ş¤å
-  - `clinic_devices_v1`¡G¤u§@¯¸»P¸Ë¸mªº¦C¦L³]©w
+---
+
+## å€ 11ï¼šç…§ç‰‡
+
+### ç›®å‰å­˜æ”¾
+
+- **LOOK ä¸»ç›¸ç°¿**ï¼š`data/look/aa/bb/cc/`ï¼ˆç—…æ­·è™Ÿ 6 ç¢¼æ‹†ä¸‰å±¤ï¼‰ï¼Œæª”åæ˜¯ç—…æ­·è™Ÿ + 2 ç¢¼ base36 åºè™Ÿã€‚å¯ç”¨ `WUNDADI_LOOK_DIR` è¦†å¯«ï¼›èˆŠè·¯å¾‘ `Z:\SC\IMG` ç‚ºé€€è·¯ï¼›ã€Œåˆªé™¤ã€çš„ç…§ç‰‡ç§»åˆ° `data/look-removed/`ã€‚
+- `look_file`ï¼ˆæª”åç´¢å¼•ï¼‰ã€`look_sync_state`ã€‚
+- ç—…ç¶ Mediaï¼š`resource_cache` å­˜å®Œæ•´ JSONï¼Œ`content.data` æ˜¯ base64ï¼›å¦æœ‰ `media_index`ã€‚
+
+### è§¸é»
+
+- `look_images.py`ï¼š
+  - è®€å–ï¼š`look_root`ã€`list_look_files`ã€`charts_with_images`ï¼ˆçœ‹æª”æ¡ˆä¿®æ”¹æ™‚é–“ï¼Œä¸è®€ DBï¼‰ã€`iter_chart_photos`ã€`resolve_look_file`
+  - å¯«å…¥ï¼š`write_look_image`ã€`set_look_date`ã€`replace_look_file`ã€`retire_look_file`
+- `sqlite_shadow_store`ï¼š`note_look_files`ã€`note_look_date`ï¼ˆå¯«ç¨½æ ¸ï¼Œé¡å‹ LookPhotoï¼‰ã€`charts_with_media`ã€`list_media`ï¼ˆé®è”½ base64ï¼‰ã€`_upsert_media_index`ã€‚
+- `media.py`ï¼š`/fhir/Media`ã€`look-folder`ã€`look-sync`ã€`look-file`ï¼ˆæ–°å¢ã€æ›¿æ›ã€æ”¹æ—¥æœŸã€ç§»å‡ºã€å–æª”ï¼‰ã€`get_media?includeData`ã€‚
+- `nhi.py`ï¼š`register_nhi_media`ï¼ˆå‰ç«¯æ²’æœ‰å‘¼å«å®ƒï¼‰ã€`list_media_by_encounter`ï¼›`nhi_media_fhir_mapper`ã€‚
+- `encounter.py` emr-lookup çš„ `hasImage` ç¯©é¸ã€‚
+- **å‰ç«¯**ï¼š`PatientLookDialog`ï¼ˆå…ˆè®€ LOOKï¼Œæ²’æœ‰æ‰è®€ FHIRï¼‰ã€`LesionPhotosWidget`ï¼ˆworkspace ç›®å‰å›ç©ºé™£åˆ—ï¼‰ã€`EmrLookupPage`ã€`LobbyPage`ï¼ˆå°é½Šæª”åï¼‰ã€`ImgManagerPage`ï¼ˆåŸå‹ï¼Œä¸å¯«ï¼‰ã€`clinicApi`ã€‚
+- **å…¶ä»–**ï¼š`export_clinic_pack.write_look_index`ï¼›repo å¤–çš„ç…§ç‰‡åˆ†é¡å·¥å…· `clinic-image-categorize-master` æœƒå‘¼å« look-syncã€‚
+- **æ¸¬è©¦**ï¼š`test_look_images.py`ã€‚
+
+### é™·é˜±
+
+1. ä¸‰ç¨®æ±è¥¿ä¸åŒï¼šLOOK æª”æ¡ˆã€ç—…ç¶ Mediaï¼ˆbase64 å­˜åœ¨ DBï¼‰ã€`look_file` ç´¢å¼•ã€‚FHIR åŒ–å»ºè­°æŠŠå½±åƒæœ¬é«”æ”¾ Binary æˆ–å¤–éƒ¨æª”æ¡ˆï¼ŒDB åªæ”¾ Mediaï¼DocumentReference æŒ‡æ¨™ï¼Œä¸è¦æŠŠç›¸ç°¿å¡é€² base64ã€‚
+2. ã€Œæœ‰åœ–åƒã€çš„ç¯©é¸çœ‹æª”æ¡ˆä¿®æ”¹æ™‚é–“åŠ  `media_index`ï¼Œ`look_file` ä¸åƒèˆ‡ã€‚
+3. LOOK åˆªé™¤æ˜¯ç§»æª”ï¼Œä¸ç¢° FHIRï¼›LOOK æ”¹æ—¥æœŸçš„ç¨½æ ¸è¨˜åœ¨ `audit_modifications`ï¼Œä¸æ˜¯ Mediaã€‚
+4. `delete_cached_resource` ä¸æœƒæ¸… `media_index`ï¼›`reindex_from_cache.py` ä¸é‡å»º Media å’Œ Composition çš„ç´¢å¼•ã€‚
+5. é†«ç¾ç›¸ç‰‡çŸ¥è­˜åº«ï¼ˆKAN-24ï¼‰æ˜¯å¦ä¸€ä»¶äº‹ï¼Œä¸åœ¨é€™è£¡æ”¹ã€‚
+
+---
+
+## å€ 12ï¼šå“¡å·¥
+
+### ç›®å‰å­˜æ”¾
+
+- `clinic_staff`ï¼š`id`ã€`name`ã€`role`ã€`nhi_id`ã€`cert_no`ã€`pin`ã€`status`ã€`room`ã€‚
+- Encounter reg æ“´å……ï¼š`doctorId`ã€`doctorName`ã€`pharmacist`ã€‚è—¥å¸«æ¬„å¯èƒ½å­˜å“¡å·¥ idï¼Œä¹Ÿå¯èƒ½ç›´æ¥å­˜å§“åã€‚
+- `encounter_index.claim_doctor_id`ã€`claim_pharmacist_id`ï¼šåªæœ‰åŒ¯å…¥å’Œ backfill æœƒå¯«ã€‚
+- `audit_modifications.operator_identity`ï¼ˆç”± PIN è§£æï¼‰ã€‚
+
+### è§¸é»
+
+- **å¯«å…¥**ï¼š
+  - `save_staff`ã€`delete_staff`ï¼ˆDELETEï¼‰
+  - `staff.py`ã€`import_yisheng_clinic_settings.py`ï¼ˆæ•´è¡¨æ›¿æ›ï¼‰
+  - `nhi.py` å­˜æª”æ™‚å¯«å…¥ doctorIdï¼pharmacist
+  - `sync_yisheng_since.py`ã€`backfill_claim_source.py`
+- **è®€å–**ï¼š
+  - `get_staff_list`ã€`verify_pin`ã€`main.py` middlewareï¼ˆ`x-pin-code`ï¼‰
+  - `engine._load_staff_maps`ã€`_default_pharmacist_id`ã€`claim_month_reports`ï¼ˆè—¥å¸«é»æ•¸ï¼‰
+  - `referral.py`ï¼ˆé†«å¸«ä»£è™Ÿï¼‰ã€`nhi.py` ç ´çª—é›™ PINã€`ic_daily_upload.py`
+- **å‰ç«¯**ï¼š`StaffPage`ã€`VisitSaveConfirmPanel`ã€`ClinicOutpatientPage`ã€`RegisterConfirmDialog`ã€`ClinicSessionGate`ã€`RegisterPage`ã€`ClinicProfilePage`ã€`lib/doctorName.ts`ã€‚
+- **åˆ—å°**ï¼š`simpleSlip.ts`ã€`visitReceiptPrint.ts`ã€`registerBookReport.ts`ã€`delegateLabSlip.ts`ï¼ˆé†«å¸«ä»£è™Ÿï¼‰ã€`releaseRx.ts`ã€`cashDetailXlsx.ts`ã€‚
+- **ç”³å ±**ï¼š`xml_export_nhi.py` d31ï¼ˆè—¥å¸«ï¼‰ã€‚
+
+### é™·é˜±
+
+1. åŒä¸€å€‹äººæœ‰ä¸‰ç¨®è­˜åˆ¥ï¼šå…§éƒ¨ idã€å§“åã€å¥ä¿èº«åˆ†è­‰ã€‚è—¥å¸«å¸¸åªå­˜å§“åï¼Œç”³å ±æ™‚ç”¨å§“åå°ç…§è¡¨è½‰ NHIï¼›å°ç…§å¤±æ•—å°±è®Šç©ºç™½æˆ–æ”¹ç”¨é è¨­è—¥å¸«ã€‚
+2. `claim_*` ç´¢å¼•å’Œæ—¥å¸¸å­˜æª”è„«é‰¤ã€‚
+3. åˆ—å°å‰å¸¸é‡æ–°æŠ“å“¡å·¥è¡¨ï¼Œæ‰€ä»¥å°å‡ºçš„åå­—å¯èƒ½å’Œå­˜æª”ç•¶ä¸‹ä¸åŒã€‚
+4. PIN å±¬æ–¼æœ¬æ©Ÿè³‡å®‰è¨­å®šï¼Œä¸æ”¾é€² FHIRã€‚
+5. FHIR ç›®æ¨™ï¼šPractitioner + PractitionerRoleï¼Œçœ‹è¨ºæ”¹ç”¨ `Encounter.participant` åƒç…§ã€‚
+
+---
+
+## å€ 13ï¼šé™¢æ‰€è¨­å®š
+
+### ç›®å‰å­˜æ”¾
+
+- `clinic_runtime_settings` å„éµï¼š
+  - `clinic_profile_v1`ï¼šprofileã€feesã€workflow ä¸‰å¡Š
+  - `yisheng_scini_v1`ï¼šé†«è– Sc.ini å…¨æ–‡
+  - `clinic_devices_v1`ï¼šå·¥ä½œç«™èˆ‡è£ç½®çš„åˆ—å°è¨­å®š
   - `clinic_role_overrides_v1`
   - `clinic_case_rules_v1`
   - `clinic_catalog_overrides_v1`
   - `yisheng_id_categories_v1`
-  - ¥t¦³½]®Ö¡BÂà¶E§Ç¸¹¡BIC ¬ö¿ıµ¥Áä
-- µ{¦¡¹w³]¡G`clinic_settings.DEFAULT_PROFILE` §t¥Ü½d¾÷ºc¸ê®Æ¡F«eºİ `clinicProfile.ts` ªº `DEFAULT_*`¡C
-- «eºİ localStorage¡G`wundadi.printSettings.v1`¡B¸Ë¸m meta¡B·í¯Z session¡B`readLocalClinicBundle()`¡]°|©Ò¸ê®ÆÃè¹³¡A**¦C¦L©ïÀY¦h¥bÅª³o¸Ì**¡^¡C
+  - å¦æœ‰ç¨½æ ¸ã€è½‰è¨ºåºè™Ÿã€IC ç´€éŒ„ç­‰éµ
+- ç¨‹å¼é è¨­ï¼š`clinic_settings.DEFAULT_PROFILE` å«ç¤ºç¯„æ©Ÿæ§‹è³‡æ–™ï¼›å‰ç«¯ `clinicProfile.ts` çš„ `DEFAULT_*`ã€‚
+- å‰ç«¯ localStorageï¼š`wundadi.printSettings.v1`ã€è£ç½® metaã€ç•¶ç­ sessionã€`readLocalClinicBundle()`ï¼ˆé™¢æ‰€è³‡æ–™é¡åƒï¼Œ**åˆ—å°æŠ¬é ­å¤šåŠè®€é€™è£¡**ï¼‰ã€‚
 
-### Ä²ÂI
+### è§¸é»
 
-- **¼g¤J**¡G`clinic_settings.py`¡]`put_clinic_profile`¡B`put_scini_settings`¡B`put_device`¡B`put_role_overrides`¡B`put_case_rules`¡^¡B`import_yisheng_clinic_settings.py`¡B`clinicProfile.persistClinicBundle`¡C
-- **Åª¨ú**¡G
-  - `engine.py`¡]`_clinic_dept_code`¡B`_clinic_lab_code`¡B½Õ¾¯«¬ºA¡^
-  - `ic_upload.py`¡B`referral.py`¡B`quality_lab.py`¡B`claims.py`
-  - `get_effective_settings`¡]°|©Ò¡B¨¤¦â¡B¸Ë¸m¤T¼h¦X¨Ö¡^¡B`db_backup.py`
-- **«eºİ**¡G`ClinicProfilePage`¡B`SciniParamsEditor`¡B`CaseClassPanel`¡B`SelfRegisterKioskPage`¡B`ClinicOutpatientPage`¡C
-- **¦C¦L**¡G`clinicPrintDocs.ts`¡B`simpleSlip.ts`¡B`visitReceiptPrint.ts`¡B`registerBookReport.ts`¡B`delegateLabSlip.ts`¡B`releaseRx.ts`¡]°|©Ò¦W¡B¥N¸¹¡B°õ·Ó¡B¦a§}¡B¹q¸Ü¡B¬ì§O¡^¡C
+- **å¯«å…¥**ï¼š`clinic_settings.py`ï¼ˆ`put_clinic_profile`ã€`put_scini_settings`ã€`put_device`ã€`put_role_overrides`ã€`put_case_rules`ï¼‰ã€`import_yisheng_clinic_settings.py`ã€`clinicProfile.persistClinicBundle`ã€‚
+- **è®€å–**ï¼š
+  - `engine.py`ï¼ˆ`_clinic_dept_code`ã€`_clinic_lab_code`ã€èª¿åŠ‘å‹æ…‹ï¼‰
+  - `ic_upload.py`ã€`referral.py`ã€`quality_lab.py`ã€`claims.py`
+  - `get_effective_settings`ï¼ˆé™¢æ‰€ã€è§’è‰²ã€è£ç½®ä¸‰å±¤åˆä½µï¼‰ã€`db_backup.py`
+- **å‰ç«¯**ï¼š`ClinicProfilePage`ã€`SciniParamsEditor`ã€`CaseClassPanel`ã€`SelfRegisterKioskPage`ã€`ClinicOutpatientPage`ã€‚
+- **åˆ—å°**ï¼š`clinicPrintDocs.ts`ã€`simpleSlip.ts`ã€`visitReceiptPrint.ts`ã€`registerBookReport.ts`ã€`delegateLabSlip.ts`ã€`releaseRx.ts`ï¼ˆé™¢æ‰€åã€ä»£è™Ÿã€åŸ·ç…§ã€åœ°å€ã€é›»è©±ã€ç§‘åˆ¥ï¼‰ã€‚
 
-### ³´¨À
+### é™·é˜±
 
-1. ±¾¸¹¶O¦P®É¦s¦b profile ªº fees ©M¨­¤ÀÃş§Oªí¡A¨âÃä·|Å|¥[¡C
-2. ¦C¦L³]©w¤À§O¦s¦b¸Ë¸m³]©w©M localStorage ¨â³B¡A­n¥ı¨M©w¥H­şÃä¬°·Ç¡C
-3. «áºİ¹w³]­È¬O¥Ü½d¾÷ºc¡A·sÀô¹ÒÁÙ¨S¶×¤J®É¬İ°_¨Ó¹³¯u¸ê®Æ¡C
-4. `mainDept`¡B`dispenseType` ¬O¡u»¡©ú¦r¦ê + ¼Æ¦r¡v¡A¥Ó³ø¾a¥¿«h©â¼Æ¦r¡FFHIR ¤Æ­n§ï¦¨¥N½X¡C
-5. FHIR ¥Ø¼Ğ¡GOrganization + Location¡C¶O²v¡BSc.ini¡B¤u§@¯¸¡B¦C¦L³]©wÄİ©óµ{¦¡³]©w¡A¤£¥² FHIR ¤Æ¡C
-
----
-
-## °Ï 14¡G¨­¤ÀÃş§O
-
-- **¦s©ñ**¡G
-  - `id_category_settings` Äæ¦ì¡G`code`¡B`deposit`¡B`reg_fee`¡]±¾¸¹¶O´î§KÃB¡^¡B`copay`¡]¤j©ó 0 ¥Nªí§K¦¬³¡¤À­t¾á¡A¬O¶}Ãö¤£¬Oª÷ÃB¡^¡B¦~ÄÖ½d³ò¡B`is_default`
-  - Patient »P Encounter ÂX¥Rªº `idCategory`¡B`patient_index.id_category`
-- **Ä²ÂI**¡G
-  - «áºİ¡G`patient.py`¡]save¡Bdelete¡A§R°£«á·|­«·s§P©w¯f¤H¨­¤À¡^¡B`sqlite_shadow_store`¡]`get_default_category_by_age`¡B`_auto_fill_patient_id_category`¡B`reevaluate_patient_id_category`¡^¡B`nhi._stamp_id_category`¡B`_child_copay_code`¡]902 µ¥¡^¡B`reg_discount_report.py`¡B`niis_adapter.py`
-  - «eºİ¡G`IdCategoryTableDialog`¡B`ClinicProfilePage`¡B`PatientMasterForm`¡B`PatientEditDialog`¡B`PatientListPage`¡B`lib/idCategory.ts`¡]`identityVisitFees`¡^¡B`lib/ageFee.ts`¡B`SelfRegisterKioskPage`¡B`RegisterConfirmDialog`
-  - ¶×¤J¡G`import_yisheng_id_categories.py`¡B`import_yisheng_clinic_settings.py`¡B`import_yisheng_data.py`¡B`sync_yisheng_since.py`¡B`repair_patient_id_category_ext.py`
-- **³´¨À**¡G
-  1. ¨­¤À´î§K©M¦~ÄÖ´î§K¥i¯à¦P®É®M¥Î¡A­pºâ¶¶§Ç­n­ì¼Ë·h¹L¥h¡C
-  2. ¦³§O¦W¡]¡u¦ÑÀu¡v¡u¦Û¡vµ¥¡^¡A¥Ñ `canonicalIdCategory` ³B²z¡C
-  3. Encounter ¤Wªº¨­¤À¬O¬İ¶E·í®Éªº§Ö·Ó¡A¤£¯à¥Î¯f¤H²{¦bªº¨­¤À¦^±À¡C
+1. æ›è™Ÿè²»åŒæ™‚å­˜åœ¨ profile çš„ fees å’Œèº«åˆ†é¡åˆ¥è¡¨ï¼Œå…©é‚Šæœƒç–ŠåŠ ã€‚
+2. åˆ—å°è¨­å®šåˆ†åˆ¥å­˜åœ¨è£ç½®è¨­å®šå’Œ localStorage å…©è™•ï¼Œè¦å…ˆæ±ºå®šä»¥å“ªé‚Šç‚ºæº–ã€‚
+3. å¾Œç«¯é è¨­å€¼æ˜¯ç¤ºç¯„æ©Ÿæ§‹ï¼Œæ–°ç’°å¢ƒé‚„æ²’åŒ¯å…¥æ™‚çœ‹èµ·ä¾†åƒçœŸè³‡æ–™ã€‚
+4. `mainDept`ã€`dispenseType` æ˜¯ã€Œèªªæ˜å­—ä¸² + æ•¸å­—ã€ï¼Œç”³å ±é æ­£å‰‡æŠ½æ•¸å­—ï¼›FHIR åŒ–è¦æ”¹æˆä»£ç¢¼ã€‚
+5. FHIR ç›®æ¨™ï¼šOrganization + Locationã€‚è²»ç‡ã€Sc.iniã€å·¥ä½œç«™ã€åˆ—å°è¨­å®šå±¬æ–¼ç¨‹å¼è¨­å®šï¼Œä¸å¿… FHIR åŒ–ã€‚
 
 ---
 
-## °Ï 15¡GÃÄ«~¡B¯f¦W¡B¥Îªk¥DÀÉ
+## å€ 14ï¼šèº«åˆ†é¡åˆ¥
 
-### ¥Ø«e¦s©ñ
-
-- `frontend/public/yisheng_clinic_catalog.json`¡GÃÄ«~¡B¯f¦W¡BÃÄ²Õ¡B¥Îªk¡B³~®|¡C
-- `frontend/public/yisheng_drug_types.json`¡G¾¯«¬¡C
-- `clinic_runtime_settings.clinic_catalog_overrides_v1`¡G¶E©Ò¼W§R§ïªº®t²§¡F§R°£¥Î `deletedDrugKeys` °µ³n§R¡C
-- ÃÄ»ù¡G`rule_package`¡]Pack¡A¨Ì¬İ¶E¤éªº»ù´Á¡^¡C
-- ³W«hÀÉ¡G`rules/nopay_indicators.json`¡B`config/yisheng_dx_special.json`¡C
-
-### Ä²ÂI
-
-- **²£¥Í**¡G`export_yisheng_clinic_catalog.py`¡]`map_drug`¡B`map_dx`¡B`map_usage`¡B`map_packages`¡^¡B`build_diagnose_master.py`¡B`export_clinic_pack.py`¡C
-- **Åª¼g®t²§ÀÉ**¡G`clinic_settings.py`¡]`get/put_catalog_overrides`¡^¡B`maintenance.py`¡C
-- **«eºİ¸ü¤J»P½s¿è**¡G`useClinicCatalog.ts`¡]`reload`¡B`persistOverrides`¡^¡B`DrugCatalogPage`¡B`UsageCatalogPage`¡B`DiagnosesDbPage`¡B`DrugPackagesPage`¡B`DrugControlPage`¡B`DrugPickDialog`¡B`CaseClassPanel`¡B`EmrLookupPage`¡B`types/clinicCatalog.ts`¡C
-- **¶}ÃÄ»P­p¶q**¡G`utils/rxTotal.ts`¡B`RxGrid`¡B`utils/catalogRx.ts`¡]¾ú¥vÃÄ¦W¹ï MAKING¡B`patientRemind`¡^¡C
-- **«áºİ**¡G
-  - `engine.py`¡]`_catalog_lookup`¡B`_shipped_catalog`¡B`_spec_treat_codes`¡B`_dx_special_map`¡^
-  - `spoke/drug_price.lookup_drug_price`¡B`medication_request.py`¡B`nhi.py`
-  - `nopay_check.py`¡B`nopay_rules.py`¡B`case_rules.py`¡B`media_check.py`
-  - `spoke/hydrator.py`¡B`pack_store.py`¡B`packages.py`¡B`drug_price_refresh.py`
-- **¦C¦L**¡G©Ò¦³ÃÄ¦W³£¥ı¹L `applyClinicDrugDisplayNames`¡F`simpleSlip.ts` ¦L `patientRemind`¡F`visitReceiptPrint.ts` Åª catalog¡C
-- **¶×¤J**¡G`import_yisheng_data.py`¡B`sync_yisheng_since.py`¡]MAKING ÃÄ¦W¡^¡C
-
-### ³´¨À
-
-1. ¥DÀÉ¦³¨â¼h¡]ÀHµ{¦¡µo§Gªº JSON + DB ®t²§ÀÉ¡^¡A«eºİ¦X¨Ö®É `drugNo` ©M `alias` ¥i¯à¼²Áä¡C
-2. ¶}ÃÄµe­±Åã¥Ü¥DÀÉªº `unitPrice`¡A¥Ó³ø¥Î Pack ¨Ì¬İ¶E¤éªº»ù®æ¡A¨âªÌ¥i¯à¤£¦P¡CÃÄ»ù¤@«ß¥Î¬İ¶E·í¤éªº»ù´Á¡C
-3. µe­±ÃÄ¦W¥H MAKING¡]¶E©Ò¦Û­q¦W¡^¬°·Ç¡C¦P¤@°·«O½X¥i¯à¦³¦h¦C¤£¦P§Ö½X¡A¤£¥i¦X¨Ö¡C
-4. °·«O¥ş°êÃÄ»ù¯d¦b Pack¡A¤£Äİ©ó¶E©Ò¥DÀÉ¡C
-5. FHIR ¥Ø¼Ğ¡GMedication¡]TW Core¡^¡B¯f¦W¥Î ValueSet¡şCodeSystem¡F¥Îªk©MÃÄ²Õ¥i¥ıºû«ù¥»¦a©w¸q¡C
+- **å­˜æ”¾**ï¼š
+  - `id_category_settings` æ¬„ä½ï¼š`code`ã€`deposit`ã€`reg_fee`ï¼ˆæ›è™Ÿè²»æ¸›å…é¡ï¼‰ã€`copay`ï¼ˆå¤§æ–¼ 0 ä»£è¡¨å…æ”¶éƒ¨åˆ†è² æ“”ï¼Œæ˜¯é–‹é—œä¸æ˜¯é‡‘é¡ï¼‰ã€å¹´é½¡ç¯„åœã€`is_default`
+  - Patient èˆ‡ Encounter æ“´å……çš„ `idCategory`ã€`patient_index.id_category`
+- **è§¸é»**ï¼š
+  - å¾Œç«¯ï¼š`patient.py`ï¼ˆsaveã€deleteï¼Œåˆªé™¤å¾Œæœƒé‡æ–°åˆ¤å®šç—…äººèº«åˆ†ï¼‰ã€`sqlite_shadow_store`ï¼ˆ`get_default_category_by_age`ã€`_auto_fill_patient_id_category`ã€`reevaluate_patient_id_category`ï¼‰ã€`nhi._stamp_id_category`ã€`_child_copay_code`ï¼ˆ902 ç­‰ï¼‰ã€`reg_discount_report.py`ã€`niis_adapter.py`
+  - å‰ç«¯ï¼š`IdCategoryTableDialog`ã€`ClinicProfilePage`ã€`PatientMasterForm`ã€`PatientEditDialog`ã€`PatientListPage`ã€`lib/idCategory.ts`ï¼ˆ`identityVisitFees`ï¼‰ã€`lib/ageFee.ts`ã€`SelfRegisterKioskPage`ã€`RegisterConfirmDialog`
+  - åŒ¯å…¥ï¼š`import_yisheng_id_categories.py`ã€`import_yisheng_clinic_settings.py`ã€`import_yisheng_data.py`ã€`sync_yisheng_since.py`ã€`repair_patient_id_category_ext.py`
+- **é™·é˜±**ï¼š
+  1. èº«åˆ†æ¸›å…å’Œå¹´é½¡æ¸›å…å¯èƒ½åŒæ™‚å¥—ç”¨ï¼Œè¨ˆç®—é †åºè¦åŸæ¨£æ¬éå»ã€‚
+  2. æœ‰åˆ¥åï¼ˆã€Œè€å„ªã€ã€Œè‡ªã€ç­‰ï¼‰ï¼Œç”± `canonicalIdCategory` è™•ç†ã€‚
+  3. Encounter ä¸Šçš„èº«åˆ†æ˜¯çœ‹è¨ºç•¶æ™‚çš„å¿«ç…§ï¼Œä¸èƒ½ç”¨ç—…äººç¾åœ¨çš„èº«åˆ†å›æ¨ã€‚
 
 ---
 
-## °Ï 16¡G¦P¨B»P½]®Ö
+## å€ 15ï¼šè—¥å“ã€ç—…åã€ç”¨æ³•ä¸»æª”
 
-- **¦s©ñ**¡G`sync_queue`¡B`audit_modifications`¡B¶}Ãö `audit_recording`¡ş`audit_go_live_at`¡B¤Ö¶q `AuditEvent` ¸ê·½¡F`chart_presence` ¥u¦s¦b°O¾ĞÅé¡]¯f¾ú¶}±Ò¤¤ªºª¬ºA¡A­«±Ò´N®ø¥¢¡^¡C
-- **Ä²ÂI**¡G
-  - `enqueue_sync`¡B`dequeue_sync_batch`¡B`mark_sync_done`
-  - `sync_worker._process_sync_queue`¡B`local_fhir_repository`¡]°ß¤@ªº¼Ğ·Ç FHIR ¼g¤Jªù¡^
-  - `cache_resource` ¤ºªº½]®Ö diff¡B`write_audit_event`¡B`_insert_audit_row`¡B`list_audit_modifications`
-  - `patient.py`¡]audit-status¡Bmodifications¡^¡B`enable_audit_go_live`¡]¥i²MªÅ½]®Öªí¡^
-  - `nhi.py` ¯}µ¡¡]AuditEvent ©M audit_modifications ³£¼g¡^
-  - `main.py`¡]±Ò°Ê worker¡B¤â°Ê¼Ğ°O¦P¨B¡^
-- **³´¨À**¡G
-  1. ¨S³] `CLOUD_FHIR_URL` ®É¡Aworker **°²¸Ë¦P¨B¦¨¥\**¡A¦î¦C¥ş³¡¼Ğ¦¨¤w¦P¨B¡C¤£¯à·í³Æ¥÷¡A¤]¤£¯à·í¶³ºİ¤w¦³¸ê®ÆªºÃÒ¾Ú¡C
-  2. worker ·|¹ï¶³ºİ°e DELETE¡A³o©M¸T§R­ì«h½Ä¬ğ¡C¯u­n¤W¶³¤§«e­n¥ı®³±¼¡C
-  3. ¤é±`­×§ï°O¦b `audit_modifications`¡A¤£¬O FHIR AuditEvent¡CFHIR ¤Æ­n¨M©w¬O§_§ï¦¨ AuditEvent¡şProvenance¡C
+### ç›®å‰å­˜æ”¾
+
+- `frontend/public/yisheng_clinic_catalog.json`ï¼šè—¥å“ã€ç—…åã€è—¥çµ„ã€ç”¨æ³•ã€é€”å¾‘ã€‚
+- `frontend/public/yisheng_drug_types.json`ï¼šåŠ‘å‹ã€‚
+- `clinic_runtime_settings.clinic_catalog_overrides_v1`ï¼šè¨ºæ‰€å¢åˆªæ”¹çš„å·®ç•°ï¼›åˆªé™¤ç”¨ `deletedDrugKeys` åšè»Ÿåˆªã€‚
+- è—¥åƒ¹ï¼š`rule_package`ï¼ˆPackï¼Œä¾çœ‹è¨ºæ—¥çš„åƒ¹æœŸï¼‰ã€‚
+- è¦å‰‡æª”ï¼š`rules/nopay_indicators.json`ã€`config/yisheng_dx_special.json`ã€‚
+
+### è§¸é»
+
+- **ç”¢ç”Ÿ**ï¼š`export_yisheng_clinic_catalog.py`ï¼ˆ`map_drug`ã€`map_dx`ã€`map_usage`ã€`map_packages`ï¼‰ã€`build_diagnose_master.py`ã€`export_clinic_pack.py`ã€‚
+- **è®€å¯«å·®ç•°æª”**ï¼š`clinic_settings.py`ï¼ˆ`get/put_catalog_overrides`ï¼‰ã€`maintenance.py`ã€‚
+- **å‰ç«¯è¼‰å…¥èˆ‡ç·¨è¼¯**ï¼š`useClinicCatalog.ts`ï¼ˆ`reload`ã€`persistOverrides`ï¼‰ã€`DrugCatalogPage`ã€`UsageCatalogPage`ã€`DiagnosesDbPage`ã€`DrugPackagesPage`ã€`DrugControlPage`ã€`DrugPickDialog`ã€`CaseClassPanel`ã€`EmrLookupPage`ã€`types/clinicCatalog.ts`ã€‚
+- **é–‹è—¥èˆ‡è¨ˆé‡**ï¼š`utils/rxTotal.ts`ã€`RxGrid`ã€`utils/catalogRx.ts`ï¼ˆæ­·å²è—¥åå° MAKINGã€`patientRemind`ï¼‰ã€‚
+- **å¾Œç«¯**ï¼š
+  - `engine.py`ï¼ˆ`_catalog_lookup`ã€`_shipped_catalog`ã€`_spec_treat_codes`ã€`_dx_special_map`ï¼‰
+  - `spoke/drug_price.lookup_drug_price`ã€`medication_request.py`ã€`nhi.py`
+  - `nopay_check.py`ã€`nopay_rules.py`ã€`case_rules.py`ã€`media_check.py`
+  - `spoke/hydrator.py`ã€`pack_store.py`ã€`packages.py`ã€`drug_price_refresh.py`
+- **åˆ—å°**ï¼šæ‰€æœ‰è—¥åéƒ½å…ˆé `applyClinicDrugDisplayNames`ï¼›`simpleSlip.ts` å° `patientRemind`ï¼›`visitReceiptPrint.ts` è®€ catalogã€‚
+- **åŒ¯å…¥**ï¼š`import_yisheng_data.py`ã€`sync_yisheng_since.py`ï¼ˆMAKING è—¥åï¼‰ã€‚
+
+### é™·é˜±
+
+1. ä¸»æª”æœ‰å…©å±¤ï¼ˆéš¨ç¨‹å¼ç™¼ä½ˆçš„ JSON + DB å·®ç•°æª”ï¼‰ï¼Œå‰ç«¯åˆä½µæ™‚ `drugNo` å’Œ `alias` å¯èƒ½æ’éµã€‚
+2. é–‹è—¥ç•«é¢é¡¯ç¤ºä¸»æª”çš„ `unitPrice`ï¼Œç”³å ±ç”¨ Pack ä¾çœ‹è¨ºæ—¥çš„åƒ¹æ ¼ï¼Œå…©è€…å¯èƒ½ä¸åŒã€‚è—¥åƒ¹ä¸€å¾‹ç”¨çœ‹è¨ºç•¶æ—¥çš„åƒ¹æœŸã€‚
+3. ç•«é¢è—¥åä»¥ MAKINGï¼ˆè¨ºæ‰€è‡ªè¨‚åï¼‰ç‚ºæº–ã€‚åŒä¸€å¥ä¿ç¢¼å¯èƒ½æœ‰å¤šåˆ—ä¸åŒå¿«ç¢¼ï¼Œä¸å¯åˆä½µã€‚
+4. å¥ä¿å…¨åœ‹è—¥åƒ¹ç•™åœ¨ Packï¼Œä¸å±¬æ–¼è¨ºæ‰€ä¸»æª”ã€‚
+5. FHIR ç›®æ¨™ï¼šMedicationï¼ˆTW Coreï¼‰ã€ç—…åç”¨ ValueSetï¼CodeSystemï¼›ç”¨æ³•å’Œè—¥çµ„å¯å…ˆç¶­æŒæœ¬åœ°å®šç¾©ã€‚
 
 ---
 
-## ¦C¦LÁ`ªí
+## å€ 16ï¼šåŒæ­¥èˆ‡ç¨½æ ¸
 
-| ³æ¾Ú | ½d¥» | ¸ê®Æ¨Ó·½ | ¯È±i¡]mm¡^ |
+- **å­˜æ”¾**ï¼š`sync_queue`ã€`audit_modifications`ã€é–‹é—œ `audit_recording`ï¼`audit_go_live_at`ã€å°‘é‡ `AuditEvent` è³‡æºï¼›`chart_presence` åªå­˜åœ¨è¨˜æ†¶é«”ï¼ˆç—…æ­·é–‹å•Ÿä¸­çš„ç‹€æ…‹ï¼Œé‡å•Ÿå°±æ¶ˆå¤±ï¼‰ã€‚
+- **è§¸é»**ï¼š
+  - `enqueue_sync`ã€`dequeue_sync_batch`ã€`mark_sync_done`
+  - `sync_worker._process_sync_queue`ã€`local_fhir_repository`ï¼ˆå”¯ä¸€çš„æ¨™æº– FHIR å¯«å…¥é–€ï¼‰
+  - `cache_resource` å…§çš„ç¨½æ ¸ diffã€`write_audit_event`ã€`_insert_audit_row`ã€`list_audit_modifications`
+  - `patient.py`ï¼ˆaudit-statusã€modificationsï¼‰ã€`enable_audit_go_live`ï¼ˆå¯æ¸…ç©ºç¨½æ ¸è¡¨ï¼‰
+  - `nhi.py` ç ´çª—ï¼ˆAuditEvent å’Œ audit_modifications éƒ½å¯«ï¼‰
+  - `main.py`ï¼ˆå•Ÿå‹• workerã€æ‰‹å‹•æ¨™è¨˜åŒæ­¥ï¼‰
+- **é™·é˜±**ï¼š
+  1. æ²’è¨­ `CLOUD_FHIR_URL` æ™‚ï¼Œworker **å‡è£åŒæ­¥æˆåŠŸ**ï¼Œä½‡åˆ—å…¨éƒ¨æ¨™æˆå·²åŒæ­¥ã€‚ä¸èƒ½ç•¶å‚™ä»½ï¼Œä¹Ÿä¸èƒ½ç•¶é›²ç«¯å·²æœ‰è³‡æ–™çš„è­‰æ“šã€‚
+  2. worker æœƒå°é›²ç«¯é€ DELETEï¼Œé€™å’Œç¦åˆªåŸå‰‡è¡çªã€‚çœŸè¦ä¸Šé›²ä¹‹å‰è¦å…ˆæ‹¿æ‰ã€‚
+  3. æ—¥å¸¸ä¿®æ”¹è¨˜åœ¨ `audit_modifications`ï¼Œä¸æ˜¯ FHIR AuditEventã€‚FHIR åŒ–è¦æ±ºå®šæ˜¯å¦æ”¹æˆ AuditEventï¼Provenanceã€‚
+
+---
+
+## åˆ—å°ç¸½è¡¨
+
+| å–®æ“š | ç¯„æœ¬ | è³‡æ–™ä¾†æº | ç´™å¼µï¼ˆmmï¼‰ |
 |------|------|----------|-----------|
-| Â²¦¡¦¬¾Ú¡şÃÄ³æ | `simpleSlip.ts` `buildSimpleSlipHtml` | workspace + ¦î¦C + ÃÄ«~¥DÀÉ + °|©Ò localStorage | 114¡Ñ101.6¡]¹wÄı 210¡Ñ93 ³W«h¨£¦C¦LÂê©w¡^ |
-| ©ãª÷³æ | `clinicPrintDocs.ts` `buildDepositSlipHtml` | queueMeta + °|©Ò | 114¡Ñ101.6 |
-| ¥æ¥I½Õ¾¯³B¤èºà | `releaseRx.ts` | ¦î¦C + ·í¦¸³B¤è¡B¯f¦W | 297¡Ñ210 ¾î |
-| ¥æ¥IÀËÅç³B¤èºà | `delegateLabSlip.ts` | ¦î¦C + ³B¤è payMark ¥æ¡şÂà | 297¡Ñ210 ¾î |
-| ¶EÂ_ÃÒ©ú®Ñ | `clinicPrintDocs.ts` `buildCertificateHtml` | `visit_certificate` + ¬İ¶E¸ê®Æ | 210¡Ñ297 |
-| ¹w¬ù³æ | `CertificateDialog` ¤º´O | `appointment_text` | 210¡Ñ297 |
-| Âà¶E³æ | `clinicPrintDocs.ts` `buildReferralSlipHtml` | `referral_slip` + workspace | 210¡Ñ297 |
-| ±¾¸¹Ã¯Á`ªí | `HisRegisterBookPaper` + `registerBookReport.ts` | `/fhir/Encounter/cash-book`¡]¯Á¤Ş fee_*¡^ | 297¡Ñ495 |
-| ²{ª÷±b©ú²Ó | `HisCashDetailPaper`¡B`cashDetailXlsx.ts` | °Ï¶¡ Encounter + `cash_return` | 297¡Ñ495 |
-| ¶O¥Î²Î­p¦Uªí | `HisReportPaper` | `/maintenance/reports/{kind}`¡]¯Á¤Ş SQL¡^ | 297¡Ñ210 ¾î |
-| ¶EÂ_¥DÀÉ | `DiagnosesDbPage` | ¥DÀÉ + ®t²§ÀÉ | A4 |
-| ±¾¸¹¥xÂ²©ö¦¬¾Ú | `printJob` lines ¼Ò¦¡ | ·íµ§ queueMeta | receipt ³]©w |
-| ÃÄ³U¡BÁc¦¡³B¤è¡B©â¼fªí¡B¯f¾ú¼ĞÅÒ | `printSetupPreview.ts`¡B`PatientListPage` | ¥u¦³¹wÄı©Î©|¥¼±µ½u | ¡X |
+| ç°¡å¼æ”¶æ“šï¼è—¥å–® | `simpleSlip.ts` `buildSimpleSlipHtml` | workspace + ä½‡åˆ— + è—¥å“ä¸»æª” + é™¢æ‰€ localStorage | 114Ã—101.6ï¼ˆé è¦½ 210Ã—93 è¦å‰‡è¦‹åˆ—å°é–å®šï¼‰ |
+| æŠ¼é‡‘å–® | `clinicPrintDocs.ts` `buildDepositSlipHtml` | queueMeta + é™¢æ‰€ | 114Ã—101.6 |
+| äº¤ä»˜èª¿åŠ‘è™•æ–¹ç®‹ | `releaseRx.ts` | ä½‡åˆ— + ç•¶æ¬¡è™•æ–¹ã€ç—…å | 297Ã—210 æ©« |
+| äº¤ä»˜æª¢é©—è™•æ–¹ç®‹ | `delegateLabSlip.ts` | ä½‡åˆ— + è™•æ–¹ payMark äº¤ï¼è½‰ | 297Ã—210 æ©« |
+| è¨ºæ–·è­‰æ˜æ›¸ | `clinicPrintDocs.ts` `buildCertificateHtml` | `visit_certificate` + çœ‹è¨ºè³‡æ–™ | 210Ã—297 |
+| é ç´„å–® | `CertificateDialog` å…§åµŒ | `appointment_text` | 210Ã—297 |
+| è½‰è¨ºå–® | `clinicPrintDocs.ts` `buildReferralSlipHtml` | `referral_slip` + workspace | 210Ã—297 |
+| æ›è™Ÿç°¿ç¸½è¡¨ | `HisRegisterBookPaper` + `registerBookReport.ts` | `/fhir/Encounter/cash-book`ï¼ˆç´¢å¼• fee_*ï¼‰ | 297Ã—495 |
+| ç¾é‡‘å¸³æ˜ç´° | `HisCashDetailPaper`ã€`cashDetailXlsx.ts` | å€é–“ Encounter + `cash_return` | 297Ã—495 |
+| è²»ç”¨çµ±è¨ˆå„è¡¨ | `HisReportPaper` | `/maintenance/reports/{kind}`ï¼ˆç´¢å¼• SQLï¼‰ | 297Ã—210 æ©« |
+| è¨ºæ–·ä¸»æª” | `DiagnosesDbPage` | ä¸»æª” + å·®ç•°æª” | A4 |
+| æ›è™Ÿå°ç°¡æ˜“æ”¶æ“š | `printJob` lines æ¨¡å¼ | ç•¶ç­† queueMeta | receipt è¨­å®š |
+| è—¥è¢‹ã€ç¹å¼è™•æ–¹ã€æŠ½å¯©è¡¨ã€ç—…æ­·æ¨™ç±¤ | `printSetupPreview.ts`ã€`PatientListPage` | åªæœ‰é è¦½æˆ–å°šæœªæ¥ç·š | â€” |
 
-¦C¦L­nª`·N¡G
+åˆ—å°è¦æ³¨æ„ï¼š
 
-1. **¦C¦L®É¤~ºâ¥X¨Óªºª÷ÃB**¡G¦¬¾Úªº `resolvedSelfPay`¡B`payable`¡B`drugFeeShown`¡A©ãª÷ªº `yuanWhole`¡A±¾¸¹Ã¯ªº `day.total`¡C³o¨Ç¤£¦b DB¡A·h¸ê®Æ¤£·|¥X¿ù¡A¦ıÅª¨úÄæ¦ì¦WºÙ¤@§ï´Nºâ¿ù¡C
-2. ¬İ¶E¤¤¦C¦L¥Îªº¬Oµe­±¤Wªº**¯ó½Z**¡]`saveDraft`¡^¡A¤£¬O DB¡C
-3. °|©Ò©ïÀYÅª localStorage¡A¤£¬O¨C¦¸³£¥´ API¡C
-4. ¥æ¥IÀËÅç³æªº¥d¸¹¡]`labCardSeq`¡^©M¦¬¾Úªº¥d¸¹¡]`slipVisitSeq`¡^³W«h¤£¦P¡C
-5. ±¾¸¹Ã¯ªºªì¶E¡B¤í¥d¤À±í¾a `reg_cc` ©M `reg_remark`¡F¨ú®øªº±¾¸¹¤£­p¡F¤ë¥Ó³øÃş³øªí¨Ì¶O¥Î¦~¤ë­pºâ¡C
+1. **åˆ—å°æ™‚æ‰ç®—å‡ºä¾†çš„é‡‘é¡**ï¼šæ”¶æ“šçš„ `resolvedSelfPay`ã€`payable`ã€`drugFeeShown`ï¼ŒæŠ¼é‡‘çš„ `yuanWhole`ï¼Œæ›è™Ÿç°¿çš„ `day.total`ã€‚é€™äº›ä¸åœ¨ DBï¼Œæ¬è³‡æ–™ä¸æœƒå‡ºéŒ¯ï¼Œä½†è®€å–æ¬„ä½åç¨±ä¸€æ”¹å°±ç®—éŒ¯ã€‚
+2. çœ‹è¨ºä¸­åˆ—å°ç”¨çš„æ˜¯ç•«é¢ä¸Šçš„**è‰ç¨¿**ï¼ˆ`saveDraft`ï¼‰ï¼Œä¸æ˜¯ DBã€‚
+3. é™¢æ‰€æŠ¬é ­è®€ localStorageï¼Œä¸æ˜¯æ¯æ¬¡éƒ½æ‰“ APIã€‚
+4. äº¤ä»˜æª¢é©—å–®çš„å¡è™Ÿï¼ˆ`labCardSeq`ï¼‰å’Œæ”¶æ“šçš„å¡è™Ÿï¼ˆ`slipVisitSeq`ï¼‰è¦å‰‡ä¸åŒã€‚
+5. æ›è™Ÿç°¿çš„åˆè¨ºã€æ¬ å¡åˆ†æ¡¶é  `reg_cc` å’Œ `reg_remark`ï¼›å–æ¶ˆçš„æ›è™Ÿä¸è¨ˆï¼›æœˆç”³å ±é¡å ±è¡¨ä¾è²»ç”¨å¹´æœˆè¨ˆç®—ã€‚
 
 ---
 
-## ¸ó°Ï³Ì®e©öº|ªº¦a¤è¡]Àu¥ı³B²z¡^
+## è·¨å€æœ€å®¹æ˜“æ¼çš„åœ°æ–¹ï¼ˆå„ªå…ˆè™•ç†ï¼‰
 
-1. **¯Á¤Ş¤~¬O¥¿¥»ªº¸ê®Æ**¡G¯f¦W¡B³B¤è¡B¶O¥Î¡B`reg_cc`¡B`claim_*`¡C¥u§ï FHIR JSON ·|Åı²M³æ¡B³øªí¡B¥Ó³øÅª¨ìÂÂ­È¡C
-2. **¦P¤@¥ó¨Æ¦s¨â³B**¡Gqueue ª¬ºA¡B¨­¤ÀÃş§O¡B¹L±Ó¡B¦C¦L³]©w¡B¥D¶D¡B±¾¸¹¶O¡C
-3. **ª½±µ SQL ©Î `json.loads` Â¶¹L¦s¨ú¼h**¡G`engine.py`¡B`ic_daily_upload.py`¡B`clinic_reports.py`¡B`reg_discount_report.py`¡B`quality_lab.py`¡B`same_day.py`¡B`nhi_card_bridge.py`¡B`referral_inbox.py`¡A¥H¤Î´X¥G©Ò¦³ `scripts/`¡C
-4. **¦Û­qÂX¥Rºô§}¤£²Î¤@**¡G`wundadi.tw`¡B`wundadi.local`¡B`clinic.org`¡B`nhidcc.nhi.gov.tw` ¥|ºØ«eºó¨Ã¦s¡C
-5. **¤£¦b FHIR ªº±Mªí**¡G`visit_certificate`¡B`referral_*`¡B`quality_lab_report`¡B`cash_return`¡B`clinic_staff`¡B`id_category_settings`¡B`look_file`¡B`audit_modifications`¡C
-6. **«eºİ¦Û¤vºâ©Î¦Û¤v¦sªºªF¦è**¡G`totalFee`¡B¦C¦Lª÷ÃB¡BlocalStorage °|©Ò»P¦C¦L³]©w¡BsessionStorage ªº½×½è³æ¸¹¡C
-7. **DELETE ´İ¯d**¡GPatient¡B­û¤u¡B¨­¤ÀÃş§O¡BÂà¶E³æ¡B`repair_condition_shortcuts.py`¡B`sync_worker` °e¶³ºİ DELETE¡B`enable_audit_go_live` ²MªÅ½]®Öªí¡C
+1. **ç´¢å¼•æ‰æ˜¯æ­£æœ¬çš„è³‡æ–™**ï¼šç—…åã€è™•æ–¹ã€è²»ç”¨ã€`reg_cc`ã€`claim_*`ã€‚åªæ”¹ FHIR JSON æœƒè®“æ¸…å–®ã€å ±è¡¨ã€ç”³å ±è®€åˆ°èˆŠå€¼ã€‚
+2. **åŒä¸€ä»¶äº‹å­˜å…©è™•**ï¼šqueue ç‹€æ…‹ã€èº«åˆ†é¡åˆ¥ã€éæ•ã€åˆ—å°è¨­å®šã€ä¸»è¨´ã€æ›è™Ÿè²»ã€‚
+3. **ç›´æ¥ SQL æˆ– `json.loads` ç¹éå­˜å–å±¤**ï¼š`engine.py`ã€`ic_daily_upload.py`ã€`clinic_reports.py`ã€`reg_discount_report.py`ã€`quality_lab.py`ã€`same_day.py`ã€`nhi_card_bridge.py`ã€`referral_inbox.py`ï¼Œä»¥åŠå¹¾ä¹æ‰€æœ‰ `scripts/`ã€‚
+4. **è‡ªè¨‚æ“´å……ç¶²å€ä¸çµ±ä¸€**ï¼š`wundadi.tw`ã€`wundadi.local`ã€`clinic.org`ã€`nhidcc.nhi.gov.tw` å››ç¨®å‰ç¶´ä¸¦å­˜ã€‚
+5. **ä¸åœ¨ FHIR çš„å°ˆè¡¨**ï¼š`visit_certificate`ã€`referral_*`ã€`quality_lab_report`ã€`cash_return`ã€`clinic_staff`ã€`id_category_settings`ã€`look_file`ã€`audit_modifications`ã€‚
+6. **å‰ç«¯è‡ªå·±ç®—æˆ–è‡ªå·±å­˜çš„æ±è¥¿**ï¼š`totalFee`ã€åˆ—å°é‡‘é¡ã€localStorage é™¢æ‰€èˆ‡åˆ—å°è¨­å®šã€sessionStorage çš„è«–è³ªå–®è™Ÿã€‚
+7. **DELETE æ®˜ç•™**ï¼šPatientã€å“¡å·¥ã€èº«åˆ†é¡åˆ¥ã€è½‰è¨ºå–®ã€`repair_condition_shortcuts.py`ã€`sync_worker` é€é›²ç«¯ DELETEã€`enable_audit_go_live` æ¸…ç©ºç¨½æ ¸è¡¨ã€‚
 
-## «ØÄ³¾E²¾¶¶§Ç
+## å»ºè­°é·ç§»é †åº
 
-¨Ì¡u¥ı§ï¼g¤J¡BÂÂªí¯d§@­l¥Í¡B·sÂÂ¨Ã¦æ¨C¤é¤ñ¹ï¡BÅª¨ú³Ì«á´«¡vªº­ì«h¡G
+ä¾ã€Œå…ˆæ”¹å¯«å…¥ã€èˆŠè¡¨ç•™ä½œè¡ç”Ÿã€æ–°èˆŠä¸¦è¡Œæ¯æ—¥æ¯”å°ã€è®€å–æœ€å¾Œæ›ã€çš„åŸå‰‡ï¼š
 
-1. ²Î¤@ÂX¥Rºô§}»P code system¡]¤£°Ê¸ê®Æ»y·N¡A¥u¥¿³W¤Æ¡^¡C
-2. §â¥u¦³¯Á¤Şªº¯f¦W©M³B¤è¸É¦¨§¹¾ã FHIR¡]`bulk_materialize_fhir_from_index.py` Ãş¡^¡A¤§«á§ï¦¨ FHIR ¬°¥¿¥»¡B¯Á¤Ş¥Ñ FHIR ­««Ø¡C
-3. Organization¡şLocation ¡ö °|©Ò profile¡FPractitioner¡şPractitionerRole ¡ö ­û¤u¡A¬İ¶E§ï¥Î participant¡C
-4. ¶EÂ_ÃÒ©ú¡BÂà¶E¡B½×½è ¡÷ DocumentReference¡şServiceRequest¡şDiagnosticReport¡C¥~³¡ XML ¿é¥X·ÓÂÂ¡C
-5. ·Ó¤ù¡GLOOK ÀÉ®×«O¯d¡A¥[¤W Media¡şDocumentReference «ü¼Ğ¡C
-6. ±¾¸¹¶O¥Î¡B²{ª÷±b³Ì«á°µ¡]Account¡şChargeItem¡^¡A¦]¬°²o¯A±b°È»P±¾¸¹Ã¯¡C
-7. ¨C¤@¨B³£¹L©x¤è validator¡A¥B¤ë¥Ó³ø XML¡BIC XML¡BÂà¶E XML¡B½×½è zip ©M¾E²¾«e³v¦ì¤¸¤ñ¹ï¤@­P¡C
+1. çµ±ä¸€æ“´å……ç¶²å€èˆ‡ code systemï¼ˆä¸å‹•è³‡æ–™èªæ„ï¼Œåªæ­£è¦åŒ–ï¼‰ã€‚
+2. æŠŠåªæœ‰ç´¢å¼•çš„ç—…åå’Œè™•æ–¹è£œæˆå®Œæ•´ FHIRï¼ˆ`bulk_materialize_fhir_from_index.py` é¡ï¼‰ï¼Œä¹‹å¾Œæ”¹æˆ FHIR ç‚ºæ­£æœ¬ã€ç´¢å¼•ç”± FHIR é‡å»ºã€‚
+3. Organizationï¼Location â† é™¢æ‰€ profileï¼›Practitionerï¼PractitionerRole â† å“¡å·¥ï¼Œçœ‹è¨ºæ”¹ç”¨ participantã€‚
+4. è¨ºæ–·è­‰æ˜ã€è½‰è¨ºã€è«–è³ª â†’ DocumentReferenceï¼ServiceRequestï¼DiagnosticReportã€‚å¤–éƒ¨ XML è¼¸å‡ºç…§èˆŠã€‚
+5. ç…§ç‰‡ï¼šLOOK æª”æ¡ˆä¿ç•™ï¼ŒåŠ ä¸Š Mediaï¼DocumentReference æŒ‡æ¨™ã€‚
+6. æ›è™Ÿè²»ç”¨ã€ç¾é‡‘å¸³æœ€å¾Œåšï¼ˆAccountï¼ChargeItemï¼‰ï¼Œå› ç‚ºç‰½æ¶‰å¸³å‹™èˆ‡æ›è™Ÿç°¿ã€‚
+7. æ¯ä¸€æ­¥éƒ½éå®˜æ–¹ validatorï¼Œä¸”æœˆç”³å ± XMLã€IC XMLã€è½‰è¨º XMLã€è«–è³ª zip å’Œé·ç§»å‰é€ä½å…ƒæ¯”å°ä¸€è‡´ã€‚
