@@ -299,7 +299,7 @@ def step_patient(store: s.SqliteShadowStore, conn: sqlite3.Connection) -> Report
     rep = Report("Patient")
     for row in _batches(conn, "patient_index", "Patient"):
         rep.rows += 1
-        store._upsert_patient_index(conn, row["resource_id"], json.loads(row["_p"]))
+        store._upsert_patient_index(conn, row["resource_id"], json.loads(row["_p"]), check_keys=False)
         _finish(conn, "patient_index", row, rep)
     return rep
 

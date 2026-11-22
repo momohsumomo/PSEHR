@@ -807,12 +807,20 @@ class SqliteShadowStore(ShadowStore):
         self.retire_side_rows("clinic_staff", "id = ?", (staff_id,))
 
     def _upsert_patient_index(
-        self, conn: sqlite3.Connection, resource_id: str, payload: dict[str, Any]
+        self,
+        conn: sqlite3.Connection,
+        resource_id: str,
+        payload: dict[str, Any],
+        *,
+        check_keys: bool = True,
     ) -> None:
+        """check_keys=False is for bulk rebuilds: the pre-check scans the table per row;
+        the unique indexes on patient_index still refuse a duplicate."""
         fields = _patient_index_fields(payload)
-        _assert_patient_keys_unique(
-            conn, resource_id, fields.get("id_no"), fields.get("medical_no")
-        )
+        if check_keys:
+            _assert_patient_keys_unique(
+                conn, resource_id, fields.get("id_no"), fields.get("medical_no")
+            )
         conn.execute(
             """
             INSERT INTO patient_index (
