@@ -7,13 +7,14 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from src.core import fhir_urls
 from src.infrastructure.sqlite_shadow_store import (
     SqliteShadowStore,
     _apply_index_migrations,
     _patient_index_fields,
 )
 
-_CLINIC = "https://clinic.org/fhir/StructureDefinition/patient-clinic-ext"
+_CLINIC = fhir_urls.PATIENT_CLINIC
 
 
 def _close(store: SqliteShadowStore) -> None:
@@ -49,7 +50,7 @@ class PatientIndexSexFallbackTest(unittest.TestCase):
         payload = _imported("male")
         payload["extension"].append(
             {
-                "url": "https://nhidcc.nhi.gov.tw/fhir/StructureDefinition/nhi-card-basic",
+                "url": fhir_urls.PATIENT_NHI_CARD,
                 "extension": [{"url": "sex", "valueCode": "F"}, {"url": "birthdayRoc", "valueString": "0590525"}],
             }
         )

@@ -6,28 +6,32 @@ from src.core import fhir_urls
 
 ROOT = Path(__file__).resolve().parents[1]
 CUSTOM_URL = re.compile(
-    r"https?://(wundadi\.tw|wundadi\.local|clinic\.org|nhidcc\.nhi\.gov\.tw|www\.moi\.gov\.tw)"
+    r"https?://(wundadi\.tw|wundadi\.local|clinic\.org|nhidcc\.nhi\.gov\.tw|www\.moi\.gov\.tw"
+    r"|polarissehr\.eskincrux\.com|twcore\.mohw\.gov\.tw)"
 )
+P = "https://polarissehr.eskincrux.com/fhir"
 
 # Stored JSON on clinic hosts uses exactly these strings.
 FROZEN = {
-    "ENCOUNTER_QUEUE": "https://wundadi.tw/fhir/StructureDefinition/encounter-queue",
-    "ENCOUNTER_REG": "https://wundadi.tw/fhir/StructureDefinition/encounter-reg",
-    "ENCOUNTER_PREVISIT": "https://nhidcc.nhi.gov.tw/fhir/StructureDefinition/patient-previsit",
-    "PATIENT_NHI_CARD": "https://nhidcc.nhi.gov.tw/fhir/StructureDefinition/nhi-card-basic",
-    "PATIENT_CLINIC": "https://clinic.org/fhir/StructureDefinition/patient-clinic-ext",
-    "PATIENT_FIDO2_KEY": "https://wundadi.tw/fhir/StructureDefinition/patient-fido2-key",
-    "MEDICATION_BILLING": "https://wundadi.local/fhir/StructureDefinition/medication-billing",
-    "MEDICATION_BILLING_SCHEMA": "https://clinic.org/fhir/StructureDefinition/billing",
-    "COMPOSITION_SOAP": "https://nhidcc.nhi.gov.tw/fhir/StructureDefinition/outpatient-soap",
-    "OBSERVATION_OUTPATIENT": "https://nhidcc.nhi.gov.tw/fhir/StructureDefinition/outpatient-observation",
-    "ALLERGY_OUTPATIENT": "https://nhidcc.nhi.gov.tw/fhir/StructureDefinition/outpatient-allergy",
-    "MEDIA_LESION": "https://nhidcc.nhi.gov.tw/fhir/StructureDefinition/lesion-media",
-    "ID_TW_NATIONAL": "http://www.moi.gov.tw/id",
-    "ID_NHI_CARD": "https://nhidcc.nhi.gov.tw/id",
-    "ID_CHART_NUMBER": "https://clinic.org/chart-number",
-    "CODE_NHI_MEDICATION": "https://nhidcc.nhi.gov.tw/medication",
-    "CODE_TW_ICD10CM": "https://nhidcc.nhi.gov.tw/icd10cm",
+    "ENCOUNTER_BOOK": P + "/StructureDefinition/encounter-book",
+    "ENCOUNTER_QUEUE": P + "/StructureDefinition/encounter-queue",
+    "ENCOUNTER_REG": P + "/StructureDefinition/encounter-reg",
+    "ENCOUNTER_PREVISIT": P + "/StructureDefinition/patient-previsit",
+    "BASIC_KIND": P + "/CodeSystem/basic-kind",
+    "CASH_RETURN": P + "/StructureDefinition/cash-return",
+    "PATIENT_NHI_CARD": P + "/StructureDefinition/nhi-card-basic",
+    "PATIENT_CLINIC": P + "/StructureDefinition/patient-clinic-ext",
+    "PATIENT_FIDO2_KEY": P + "/StructureDefinition/patient-fido2-key",
+    "MEDICATION_BILLING": P + "/StructureDefinition/medication-billing",
+    "COMPOSITION_SOAP": P + "/StructureDefinition/outpatient-soap",
+    "OBSERVATION_OUTPATIENT": P + "/StructureDefinition/outpatient-observation",
+    "ALLERGY_OUTPATIENT": P + "/StructureDefinition/outpatient-allergy",
+    "MEDIA_LESION": P + "/StructureDefinition/lesion-media",
+    "ID_TW_NATIONAL": "http://www.moi.gov.tw",
+    "ID_NHI_CARD": P + "/sid/nhi-card-id",
+    "CHART_NUMBER_BASE": P + "/sid/medical-record",
+    "CODE_NHI_MEDICATION": "https://twcore.mohw.gov.tw/ig/twcore/CodeSystem/medication-nhi-tw",
+    "CODE_TW_ICD10CM": "https://twcore.mohw.gov.tw/ig/twcore/CodeSystem/icd-10-cm-2023-tw",
 }
 
 
@@ -46,6 +50,37 @@ class FhirUrlsTest(unittest.TestCase):
                 if CUSTOM_URL.search(line):
                     hits.append(f"{path.relative_to(ROOT)}:{no}")
         self.assertEqual(hits, [])
+
+    def test_modernize_rewrites_old_urls_and_chart_system(self):
+        patient = {
+            "resourceType": "Patient",
+            "identifier": [
+                {"use": "official", "system": "http://www.moi.gov.tw/id", "value": "X"},
+                {"use": "secondary", "system": "https://clinic.org/chart-number", "value": "7"},
+            ],
+            "extension": [
+                {"url": "https://clinic.org/fhir/StructureDefinition/patient-clinic-ext",
+                 "extension": [{"url": "idCategory", "valueString": "https://clinic.org/x"}]},
+                {"url": "https://clinic.org/fhir/StructureDefinition/reg", "valueString": "stale"},
+            ],
+        }
+        self.assertTrue(fhir_urls.modernize(patient, fhir_urls.chart_number_system("123")))
+        self.assertEqual(patient["identifier"][0]["system"], "http://www.moi.gov.tw")
+        self.assertEqual(patient["identifier"][1]["system"], P + "/sid/medical-record/123")
+        self.assertEqual(patient["identifier"][1]["type"]["coding"][0]["code"], "MR")
+        self.assertEqual([e["url"] for e in patient["extension"]], [fhir_urls.PATIENT_CLINIC])
+        self.assertEqual(patient["extension"][0]["extension"][0]["valueString"], "https://clinic.org/x")
+        self.assertFalse(fhir_urls.modernize(patient, fhir_urls.chart_number_system("123")))
+
+    def test_modernize_billing_prefix_and_unknown_clinic(self):
+        med = {"extension": [{"url": "https://clinic.org/fhir/StructureDefinition/billing/payMark", "valueString": "x"}],
+               "medicationCodeableConcept": {"coding": [{"system": "https://nhidcc.nhi.gov.tw/medication", "code": "A"}]}}
+        fhir_urls.modernize(med)
+        self.assertEqual(med["extension"][0]["url"], fhir_urls.MEDICATION_BILLING + "/payMark")
+        self.assertEqual(med["medicationCodeableConcept"]["coding"][0]["system"], fhir_urls.CODE_NHI_MEDICATION)
+        chart = {"identifier": [{"system": fhir_urls.ID_CHART_NUMBER, "value": "1"}]}
+        fhir_urls.modernize(chart, None)
+        self.assertEqual(chart["identifier"][0]["system"], fhir_urls.ID_CHART_NUMBER)
 
 
 if __name__ == "__main__":

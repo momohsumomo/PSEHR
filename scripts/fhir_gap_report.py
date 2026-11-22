@@ -22,7 +22,7 @@ from typing import Any, Callable
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from src.core.encounter_extensions import extract_reg_meta  # noqa: E402
+from src.core.encounter_extensions import extract_book, extract_reg_meta  # noqa: E402
 from src.infrastructure import sqlite_shadow_store as s  # noqa: E402
 
 
@@ -31,6 +31,9 @@ def _enc_fields(payload: dict[str, Any]) -> dict[str, Any]:
     out = {"patient_id": pid, "encounter_date": day, "queue_number": qn,
            "queue_status": qs, "fhir_status": fs}
     out.update(s._encounter_fee_fields(payload))
+    book = extract_book(payload)
+    book["owe_card"] = book.get("owe_card") or 0
+    out.update(book)
     return out
 
 

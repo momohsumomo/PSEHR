@@ -249,7 +249,7 @@ export const mockPatients: Record<
     gender: "male",
     birthDate: "1985-03-15",
     identifier: [
-      { use: "official", system: "http://www.moi.gov.tw/id", value: "A123456789" },
+      { use: "official", system: "http://www.moi.gov.tw", value: "A123456789" },
       { use: "secondary", system: "https://clinic.org/chart-number", value: "100001" },
     ],
     telecom: [
@@ -259,7 +259,7 @@ export const mockPatients: Record<
     address: [{ text: "台南市北區成功路1號", use: "home" }],
     extension: [
       {
-        url: "https://nhidcc.nhi.gov.tw/fhir/StructureDefinition/nhi-card-basic",
+        url: "https://polarissehr.eskincrux.com/fhir/StructureDefinition/nhi-card-basic",
         extension: [
           { url: "idNo", valueString: "A123456789" },
           { url: "birthdayRoc", valueString: "0740315" },
@@ -267,7 +267,7 @@ export const mockPatients: Record<
         ],
       },
       {
-        url: "https://clinic.org/fhir/StructureDefinition/patient-clinic-ext",
+        url: "https://polarissehr.eskincrux.com/fhir/StructureDefinition/patient-clinic-ext",
         extension: [
           { url: "kind", valueString: "D10 一般案" },
           { url: "keymoney", valueString: "500" },
@@ -288,14 +288,14 @@ export const mockPatients: Record<
     gender: "female",
     birthDate: "1992-08-20",
     identifier: [
-      { use: "official", system: "http://www.moi.gov.tw/id", value: "B223456789" },
+      { use: "official", system: "http://www.moi.gov.tw", value: "B223456789" },
       { use: "secondary", system: "https://clinic.org/chart-number", value: "100002" },
     ],
     telecom: [{ system: "phone", value: "0987654321", use: "mobile" }],
     address: [{ text: "台南市東區崇德路2號", use: "home" }],
     extension: [
       {
-        url: "https://nhidcc.nhi.gov.tw/fhir/StructureDefinition/nhi-card-basic",
+        url: "https://polarissehr.eskincrux.com/fhir/StructureDefinition/nhi-card-basic",
         extension: [
           { url: "idNo", valueString: "B223456789" },
           { url: "birthdayRoc", valueString: "0810820" },
@@ -303,7 +303,7 @@ export const mockPatients: Record<
         ],
       },
       {
-        url: "https://clinic.org/fhir/StructureDefinition/patient-clinic-ext",
+        url: "https://polarissehr.eskincrux.com/fhir/StructureDefinition/patient-clinic-ext",
         extension: [
           { url: "kind", valueString: "D10 一般案" },
           { url: "keymoney", valueString: "0" },

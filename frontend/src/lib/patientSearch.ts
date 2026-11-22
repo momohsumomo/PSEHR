@@ -96,7 +96,8 @@ export function mapApiPatientToHit(p: ApiPatient): PatientHit {
       (i) =>
         i.use === "secondary" ||
         i.system?.includes("chart") ||
-        i.system?.includes("chart-number"),
+        i.system?.includes("chart-number") ||
+        i.system?.includes("/sid/medical-record/"),
     )?.value || "";
   const nhiBasic = p.extension?.find((e) => e.url?.includes("nhi-card-basic"));
   let birthdayRoc =

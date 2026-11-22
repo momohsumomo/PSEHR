@@ -12,6 +12,12 @@ SYSTEM_SNOMED = "http://snomed.info/sct"
 SYSTEM_RXNORM = "http://www.nlm.nih.gov/research/umls/rxnorm"
 SYSTEM_NHI_MEDICATION = fhir_urls.CODE_NHI_MEDICATION
 SYSTEM_TW_ICD10CM = fhir_urls.CODE_TW_ICD10CM
+_NHI_ICD_SYSTEMS = {SYSTEM_TW_ICD10CM, *fhir_urls.LEGACY_ALIASES[SYSTEM_TW_ICD10CM]}
+_NHI_MED_SYSTEMS = {SYSTEM_NHI_MEDICATION, *fhir_urls.LEGACY_ALIASES[SYSTEM_NHI_MEDICATION]}
+
+
+def _same_system(system: str) -> set[str]:
+    return {system, *fhir_urls.LEGACY_ALIASES.get(system, ())}
 
 
 def _system_matches(system: str | None, *fragments: str) -> bool:
@@ -41,7 +47,11 @@ def extract_terminology_stickers(codeable: dict[str, Any] | None) -> dict[str, s
         if not code:
             continue
         system = c.get("system", "")
-        if _system_matches(system, "icd-10", "icd10"):
+        if system in _NHI_ICD_SYSTEMS:
+            result["nhiIcd10Code"] = str(code)
+        elif system in _NHI_MED_SYSTEMS:
+            result["nhiMedCode"] = str(code)
+        elif _system_matches(system, "icd-10", "icd10"):
             if _system_matches(system, "nhidcc", "nhi"):
                 result["nhiIcd10Code"] = str(code)
             else:
@@ -70,7 +80,7 @@ def build_condition_codeable(
 
     def _upsert(system: str, code: str, display: str | None = None) -> None:
         nonlocal coding
-        coding = [c for c in coding if c.get("system") != system]
+        coding = [c for c in coding if c.get("system") not in _same_system(system)]
         entry: dict[str, Any] = {"system": system, "code": code}
         if display:
             entry["display"] = display
@@ -102,7 +112,7 @@ def build_medication_codeable(
 
     def _upsert(system: str, code: str) -> None:
         nonlocal coding
-        coding = [c for c in coding if c.get("system") != system]
+        coding = [c for c in coding if c.get("system") not in _same_system(system)]
         coding.append({"system": system, "code": code})
 
     if nhi_code:
@@ -129,7 +139,7 @@ def build_allergy_codeable(
 
     def _upsert(system: str, code: str, display: str | None = None) -> None:
         nonlocal coding
-        coding = [c for c in coding if c.get("system") != system]
+        coding = [c for c in coding if c.get("system") not in _same_system(system)]
         entry: dict[str, Any] = {"system": system, "code": code}
         if display:
             entry["display"] = display

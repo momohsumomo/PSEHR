@@ -72,16 +72,24 @@ class ChiefComplaintSourceTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             store = SqliteShadowStore(Path(tmp) / "t.db")
             store.initialize()
-            with store._connect() as conn:
-                conn.execute(
-                    """
-                    INSERT INTO encounter_index
-                      (resource_id, patient_id, encounter_date, chief_complaint)
-                    VALUES ('enc-3', 'p1', '2026-10-24', 'HF')
-                    """
-                )
+            store.cache_resource(
+                "Encounter",
+                "enc-3",
+                {
+                    "resourceType": "Encounter",
+                    "id": "enc-3",
+                    "status": "arrived",
+                    "subject": {"reference": "Patient/p1"},
+                    "period": {"start": "2026-10-24T09:00:00"},
+                },
+            )
+            store.set_encounter_chief_complaint("enc-3", "HF")
             store.set_encounter_chief_complaint("enc-3", "skip 4m")
             self.assertEqual(store.lookup_chief_complaint("enc-3"), "skip 4m")
+            stored = store.get_cached_resource("Encounter", "enc-3")
+            from src.core.encounter_extensions import extract_book
+
+            self.assertEqual(extract_book(stored)["chief_complaint"], "skip 4m")
             _close(store)
 
     def test_registration_text_is_a_visit_note_not_the_complaint(self) -> None:

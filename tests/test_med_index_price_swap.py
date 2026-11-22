@@ -40,12 +40,15 @@ class MedIndexPriceSwapTest(unittest.TestCase):
             store = SqliteShadowStore(Path(tmp) / "t.db")
             store.initialize()
             try:
+                store.cache_resource("MedicationRequest", "m1", first)
+                store.cache_resource("MedicationRequest", "m1", second)
                 with store._connect() as conn:
-                    store._upsert_medication_request_index(conn, "m1", first)
-                    store._upsert_medication_request_index(conn, "m1", second)
                     row = conn.execute(
                         "SELECT unit_price FROM medication_request_index WHERE resource_id='m1'"
                     ).fetchone()
+                stored = store.get_cached_resource("MedicationRequest", "m1")
+                prices = [e["valueDecimal"] for e in stored.get("extension", []) if e["url"].endswith("/unitPrice")]
+                self.assertEqual(prices[-1] if prices else None, row[0])
                 return row[0]
             finally:
                 _close(store)

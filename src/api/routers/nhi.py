@@ -83,7 +83,7 @@ def _ensure_chart_on_payload(
         keep_chart = None
         for ident in existing.get("identifier") or []:
             if isinstance(ident, dict) and (
-                ident.get("use") == "secondary" or "chart" in str(ident.get("system") or "")
+                ident.get("use") == "secondary" or "chart" in str(ident.get("system") or "") or "medical-record" in str(ident.get("system") or "")
             ):
                 if str(ident.get("value") or "").strip():
                     keep_chart = ident
@@ -94,7 +94,7 @@ def _ensure_chart_on_payload(
                 for i in (fhir_payload.get("identifier") or [])
                 if not (
                     isinstance(i, dict)
-                    and (i.get("use") == "secondary" or "chart" in str(i.get("system") or ""))
+                    and (i.get("use") == "secondary" or "chart" in str(i.get("system") or "") or "medical-record" in str(i.get("system") or ""))
                 )
             ]
             idents.append(keep_chart)

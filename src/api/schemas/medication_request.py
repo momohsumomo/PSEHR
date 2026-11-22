@@ -76,28 +76,28 @@ class MedicationRequestBody(BaseModel):
         if self.bodySite is not None:
             extensions.append(
                 {
-                    "url": f"{fhir_urls.MEDICATION_BILLING_SCHEMA}/bodySite",
+                    "url": f"{fhir_urls.MEDICATION_BILLING}/bodySite",
                     "valueString": self.bodySite.strip(),
                 }
             )
         if self.tradeName is not None:
             extensions.append(
                 {
-                    "url": f"{fhir_urls.MEDICATION_BILLING_SCHEMA}/tradeName",
+                    "url": f"{fhir_urls.MEDICATION_BILLING}/tradeName",
                     "valueString": self.tradeName.strip(),
                 }
             )
         if self.payMark is not None:
             extensions.append(
                 {
-                    "url": f"{fhir_urls.MEDICATION_BILLING_SCHEMA}/payMark",
+                    "url": f"{fhir_urls.MEDICATION_BILLING}/payMark",
                     "valueString": self.payMark.strip(),
                 }
             )
         if self.memo is not None:
             extensions.append(
                 {
-                    "url": f"{fhir_urls.MEDICATION_BILLING_SCHEMA}/memoMark",
+                    "url": f"{fhir_urls.MEDICATION_BILLING}/memoMark",
                     "valueString": self.memo.strip(),
                 }
             )

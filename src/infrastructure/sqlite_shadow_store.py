@@ -9,7 +9,7 @@ import sqlite3
 import threading
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Any, Generator
+from typing import Any, Callable, Generator
 
 from src.core import fhir_urls
 from src.core.interfaces.shadow_store import ShadowStore
@@ -276,6 +276,7 @@ class SqliteShadowStore(ShadowStore):
         with self._connect() as conn:
             conn.executescript(_SCHEMA)
             _apply_index_migrations(conn)
+            _require_fhir_format(conn)
             self._seed_id_category_settings(conn)
 
     def _seed_id_category_settings(self, conn: sqlite3.Connection) -> None:
@@ -345,12 +346,32 @@ class SqliteShadowStore(ShadowStore):
 
             sanitize_patient_names(payload)
         with self._connect() as conn:
+            fhir_urls.modernize(payload, _chart_system(conn))
             if resource_type == "Patient":
                 self._auto_fill_patient_id_category(conn, payload)
             
-            cash_touch = None
             if resource_type == "Encounter":
-                cash_touch = self._stamp_cash_book_marks(conn, resource_id, payload)
+                from src.core.encounter_extensions import carry_book
+
+                stored = conn.execute(
+                    "SELECT payload_json FROM resource_cache WHERE resource_type = 'Encounter' AND resource_id = ?",
+                    (resource_id,),
+                ).fetchone()
+                carry_book(json.loads(stored[0]) if stored else None, payload)
+                self._stamp_cash_book_marks(conn, resource_id, payload)
+            elif resource_type == "MedicationRequest":
+                from src.core.medication_billing import carry_billing
+
+                prev = conn.execute(
+                    "SELECT * FROM medication_request_index WHERE resource_id = ?",
+                    (resource_id,),
+                ).fetchone()
+                if prev is not None:
+                    carry_billing(dict(prev), payload, _medication_request_index_fields(payload))
+            elif resource_type == "Condition":
+                from src.core.condition_status import normalize
+
+                normalize(payload)
 
             # Select old payload to detect updates and record changes
             old_row = conn.execute(
@@ -416,8 +437,6 @@ class SqliteShadowStore(ShadowStore):
                     raise
             elif resource_type == "Encounter":
                 self._upsert_encounter_index(conn, resource_id, payload)
-                if cash_touch:
-                    self._write_cash_book_columns(conn, resource_id, cash_touch)
             elif resource_type == "Condition":
                 self._upsert_condition_index(conn, resource_id, payload)
             elif resource_type == "MedicationRequest":
@@ -430,6 +449,28 @@ class SqliteShadowStore(ShadowStore):
                 self._upsert_allergy_index(conn, resource_id, payload)
             elif resource_type == "Media":
                 self._upsert_media_index(conn, resource_id, payload)
+            elif resource_type == "Basic":
+                self._upsert_cash_return_index(conn, resource_id, payload)
+
+    def _upsert_cash_return_index(self, conn: sqlite3.Connection, resource_id: str, payload: dict[str, Any]) -> None:
+        from src.core.cash_return import TEXT_FIELDS, from_basic
+
+        row = from_basic(payload)
+        if row is None:
+            return
+        cols = ["encounter_date", "amount"] + [c for c, _ in TEXT_FIELDS]
+        values = [row[c] for c in cols]
+        found = conn.execute("SELECT id FROM cash_return WHERE resource_id = ?", (resource_id,)).fetchone()
+        if found:
+            conn.execute(
+                f"UPDATE cash_return SET {', '.join(c + ' = ?' for c in cols)} WHERE id = ?",
+                (*values, found[0]),
+            )
+        else:
+            conn.execute(
+                f"INSERT INTO cash_return ({', '.join(cols)}, resource_id) VALUES ({', '.join('?' * (len(cols) + 1))})",
+                (*values, resource_id),
+            )
 
     def verify_pin(self, pin: str) -> str | None:
         with self._connect() as conn:
@@ -661,8 +702,8 @@ class SqliteShadowStore(ShadowStore):
             """
             INSERT INTO patient_index (
                 resource_id, family_name, given_name, identifier, birth_date,
-                id_no, birthday_roc, sex, medical_no, phone, address, id_category, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+                id_no, birthday_roc, sex, medical_no, phone, phone2, address, id_category, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
             ON CONFLICT(resource_id) DO UPDATE SET
                 family_name = excluded.family_name,
                 given_name = excluded.given_name,
@@ -673,6 +714,7 @@ class SqliteShadowStore(ShadowStore):
                 sex = excluded.sex,
                 medical_no = excluded.medical_no,
                 phone = excluded.phone,
+                phone2 = excluded.phone2,
                 address = excluded.address,
                 id_category = excluded.id_category,
                 updated_at = datetime('now')
@@ -688,6 +730,7 @@ class SqliteShadowStore(ShadowStore):
                 fields["sex"],
                 fields["medical_no"],
                 fields["phone"],
+                fields["phone2"],
                 fields["address"],
                 fields["id_category"],
             ),
@@ -702,7 +745,7 @@ class SqliteShadowStore(ShadowStore):
         A held deposit writes remark U+62BC. Refunding that deposit clears it.
         Imported CC text is left as stored, including spaces.
         """
-        from src.core.encounter_extensions import extract_reg_meta, put_reg_string
+        from src.core.encounter_extensions import extract_reg_meta, put_book, put_reg_string
 
         prev = conn.execute(
             """
@@ -761,42 +804,34 @@ class SqliteShadowStore(ShadowStore):
         ):
             put_reg_string(payload, "noteMark", "")
             touch["reg_remark"] = ""
+        if touch:
+            put_book(payload, touch)
         return touch or None
-
-    def _write_cash_book_columns(
-        self, conn: sqlite3.Connection, resource_id: str, touch: dict[str, str]
-    ) -> None:
-        if "reg_cc" in touch and "reg_remark" in touch:
-            conn.execute(
-                "UPDATE encounter_index SET reg_cc = ?, reg_remark = ? WHERE resource_id = ?",
-                (touch["reg_cc"], touch["reg_remark"], resource_id),
-            )
-        elif "reg_cc" in touch:
-            conn.execute(
-                "UPDATE encounter_index SET reg_cc = ? WHERE resource_id = ?",
-                (touch["reg_cc"], resource_id),
-            )
-        elif "reg_remark" in touch:
-            conn.execute(
-                "UPDATE encounter_index SET reg_remark = ? WHERE resource_id = ?",
-                (touch["reg_remark"], resource_id),
-            )
 
     def _upsert_encounter_index(
         self, conn: sqlite3.Connection, resource_id: str, payload: dict[str, Any]
     ) -> None:
+        from src.core.encounter_extensions import BOOK_FIELDS, extract_book
+
         patient_id, encounter_date, queue_number, queue_status, fhir_status = (
             _encounter_index_fields(payload)
         )
         fees = _encounter_fee_fields(payload)
+        book = extract_book(payload)
+        if book["owe_card"] is None:
+            book["owe_card"] = 0
+        book_cols = [col for col, _key, _kind in BOOK_FIELDS]
         conn.execute(
-            """
+            f"""
             INSERT INTO encounter_index (
                 resource_id, patient_id, encounter_date, queue_number, queue_status, fhir_status,
                 copay_code, case_no, fee_deposit, fee_copay, fee_card_disc, fee_drug_disc,
-                fee_drug_copay, fee_reg, fee_self, fee_total, fee_arrears, ic_upload_date, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+                fee_drug_copay, fee_reg, fee_self, fee_total, fee_arrears, ic_upload_date,
+                {", ".join(book_cols)}, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                {", ".join("?" for _ in book_cols)}, datetime('now'))
             ON CONFLICT(resource_id) DO UPDATE SET
+                {"".join(f"{col} = excluded.{col}, " for col in book_cols)}
                 patient_id = excluded.patient_id,
                 encounter_date = excluded.encounter_date,
                 queue_number = excluded.queue_number,
@@ -835,8 +870,46 @@ class SqliteShadowStore(ShadowStore):
                 fees["fee_total"],
                 fees["fee_arrears"],
                 fees["ic_upload_date"],
+                *[book[col] for col in book_cols],
             ),
         )
+
+    def _rewrite_encounter_json(
+        self, conn: sqlite3.Connection, resource_id: str, mutate: Callable[[dict[str, Any]], None]
+    ) -> bool:
+        """Change one stored Encounter and its index row together (no cash-book stamp)."""
+        return self._rewrite_json(conn, "Encounter", resource_id, mutate)
+
+    def _rewrite_json(
+        self,
+        conn: sqlite3.Connection,
+        resource_type: str,
+        resource_id: str,
+        mutate: Callable[[dict[str, Any]], None],
+    ) -> bool:
+        """Change one stored resource, then re-derive its index row from it."""
+        row = conn.execute(
+            "SELECT payload_json FROM resource_cache WHERE resource_type = ? AND resource_id = ?",
+            (resource_type, resource_id),
+        ).fetchone()
+        if not row:
+            return False
+        payload = json.loads(row[0])
+        mutate(payload)
+        conn.execute(
+            """
+            UPDATE resource_cache SET payload_json = ?, updated_at = datetime('now')
+            WHERE resource_type = ? AND resource_id = ?
+            """,
+            (json.dumps(payload, ensure_ascii=False), resource_type, resource_id),
+        )
+        upsert = {
+            "Encounter": self._upsert_encounter_index,
+            "Condition": self._upsert_condition_index,
+            "MedicationRequest": self._upsert_medication_request_index,
+        }[resource_type]
+        upsert(conn, resource_id, payload)
+        return True
 
     def _upsert_condition_index(
         self, conn: sqlite3.Connection, resource_id: str, payload: dict[str, Any]
@@ -875,67 +948,17 @@ class SqliteShadowStore(ShadowStore):
         self, conn: sqlite3.Connection, resource_id: str, payload: dict[str, Any]
     ) -> None:
         fields = _medication_request_index_fields(payload)
+        cols = list(fields)
         conn.execute(
-            """
-            INSERT INTO medication_request_index (
-                resource_id, patient_id, encounter_id,
-                nhi_code, rxnorm_code, drug_text, status,
-                days_supply, quantity, unit_price, pack_version, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+            f"""
+            INSERT INTO medication_request_index (resource_id, {', '.join(cols)}, updated_at)
+            VALUES (?, {', '.join('?' * len(cols))}, datetime('now'))
             ON CONFLICT(resource_id) DO UPDATE SET
-                patient_id = excluded.patient_id,
-                encounter_id = excluded.encounter_id,
-                nhi_code = excluded.nhi_code,
-                rxnorm_code = excluded.rxnorm_code,
-                drug_text = excluded.drug_text,
-                status = excluded.status,
-                days_supply = COALESCE(excluded.days_supply, medication_request_index.days_supply),
-                quantity = COALESCE(excluded.quantity, medication_request_index.quantity),
-                unit_price = CASE
-                    WHEN excluded.unit_price IS NOT NULL THEN excluded.unit_price
-                    WHEN medication_request_index.nhi_code IS excluded.nhi_code
-                        THEN medication_request_index.unit_price
-                    ELSE NULL END,
-                pack_version = CASE
-                    WHEN medication_request_index.nhi_code IS excluded.nhi_code
-                        THEN COALESCE(excluded.pack_version, medication_request_index.pack_version)
-                    ELSE excluded.pack_version END,
+                {', '.join(f'{c} = excluded.{c}' for c in cols)},
                 updated_at = datetime('now')
             """,
-            (
-                resource_id,
-                fields["patient_id"],
-                fields["encounter_id"],
-                fields["nhi_code"],
-                fields["rxnorm_code"],
-                fields["drug_text"],
-                fields["status"],
-                fields["days_supply"],
-                fields["quantity"],
-                fields["unit_price"],
-                fields["pack_version"],
-            ),
+            (resource_id, *(fields[c] for c in cols)),
         )
-        if "body_site" in fields:
-            conn.execute(
-                "UPDATE medication_request_index SET body_site = ? WHERE resource_id = ?",
-                (fields.get("body_site") or None, resource_id),
-            )
-        if "pay_mark" in fields:
-            conn.execute(
-                "UPDATE medication_request_index SET pay_mark = ? WHERE resource_id = ?",
-                (fields.get("pay_mark") or None, resource_id),
-            )
-        if "memo_mark" in fields:
-            conn.execute(
-                "UPDATE medication_request_index SET memo_mark = ? WHERE resource_id = ?",
-                (fields.get("memo_mark") or None, resource_id),
-            )
-        if "useage" in fields:
-            conn.execute(
-                "UPDATE medication_request_index SET useage = ? WHERE resource_id = ?",
-                (fields.get("useage") or None, resource_id),
-            )
 
     def get_cached_resource(
         self, resource_type: str, resource_id: str
@@ -1001,29 +1024,14 @@ class SqliteShadowStore(ShadowStore):
             )
 
     def update_encounter_queue_status(self, resource_id: str, queue_status: str, fhir_status: str) -> None:
+        from src.core.encounter_extensions import put_queue_status
+
+        def _set(payload: dict[str, Any]) -> None:
+            payload["status"] = fhir_status
+            put_queue_status(payload, queue_status)
+
         with self._connect() as conn:
-            conn.execute(
-                """
-                UPDATE encounter_index
-                SET queue_status = ?, fhir_status = ?, updated_at = datetime('now')
-                WHERE resource_id = ?
-                """,
-                (queue_status, fhir_status, resource_id),
-            )
-            row = conn.execute(
-                "SELECT payload_json FROM resource_cache WHERE resource_type = 'Encounter' AND resource_id = ?",
-                (resource_id,),
-            ).fetchone()
-            if row:
-                payload = json.loads(row[0])
-                payload["status"] = fhir_status
-                conn.execute(
-                    """
-                    UPDATE resource_cache SET payload_json = ?, updated_at = datetime('now')
-                    WHERE resource_type = 'Encounter' AND resource_id = ?
-                    """,
-                    (json.dumps(payload, ensure_ascii=False), resource_id),
-                )
+            self._rewrite_encounter_json(conn, resource_id, _set)
 
     def list_visit_summaries_for_patient(
         self,
@@ -1102,14 +1110,12 @@ class SqliteShadowStore(ShadowStore):
         eid = (encounter_id or "").split("/")[-1]
         if not eid:
             return
+        from src.core.encounter_extensions import put_book
+
+        value = str(text or "").strip()
         with self._connect() as conn:
-            conn.execute(
-                """
-                UPDATE encounter_index
-                SET chief_complaint = ?, updated_at = datetime('now')
-                WHERE resource_id = ?
-                """,
-                (str(text or "").strip(), eid),
+            self._rewrite_encounter_json(
+                conn, eid, lambda payload: put_book(payload, {"chief_complaint": value})
             )
 
     def list_encounters_for_patient(
@@ -1867,23 +1873,27 @@ class SqliteShadowStore(ShadowStore):
             ).fetchone()
             if exists:
                 return
-            conn.execute(
-                """
-                INSERT INTO cash_return (
-                    encounter_date, amount, keywords, chart_no, patient_name, id_no, treat_seq, case_no
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    encounter_date[:10],
-                    int(amount),
-                    key,
-                    chart_no,
-                    patient_name,
-                    id_no,
-                    treat_seq,
-                    case_no,
-                ),
-            )
+            visit = conn.execute(
+                "SELECT patient_id FROM encounter_index WHERE resource_id = ?",
+                (key,),
+            ).fetchone()
+        from src.core.cash_return import to_basic
+
+        payload = to_basic(
+            {
+                "encounter_date": encounter_date[:10],
+                "amount": int(amount),
+                "keywords": key,
+                "chart_no": chart_no,
+                "patient_name": patient_name,
+                "id_no": id_no,
+                "treat_seq": treat_seq,
+                "case_no": case_no,
+            },
+            patient_id=(visit[0] if visit else None),
+            encounter_id=(key if visit else None),
+        )
+        self.cache_resource("Basic", payload["id"], payload)
 
     def encounter_date_span(self) -> dict[str, Any]:
         """Date range and a recent busy clinic day. Uses the date index, not a full-history group."""
@@ -2471,33 +2481,32 @@ class SqliteShadowStore(ShadowStore):
         def _keep(ids: list[str] | None) -> list[str]:
             return [item.split("/")[-1] for item in (ids or []) if item]
 
+        from src.core.condition_status import mark_entered_in_error
+
+        def _cancel(payload: dict[str, Any]) -> None:
+            payload["status"] = "cancelled"
+
+        plan = (
+            (medication_ids, "MedicationRequest", "medication_request_index", "status",
+             "('cancelled', 'entered-in-error', 'stopped')", _cancel),
+            (condition_ids, "Condition", "condition_index", "clinical_status",
+             "('entered-in-error', 'inactive')", mark_entered_in_error),
+        )
         with self._connect() as conn:
-            if medication_ids is not None:
-                keep = _keep(medication_ids)
-                sql = """
-                    UPDATE medication_request_index
-                    SET status = 'cancelled', updated_at = datetime('now')
-                    WHERE encounter_id = ?
-                      AND IFNULL(status, 'active') NOT IN ('cancelled', 'entered-in-error', 'stopped')
-                """
+            for ids, rtype, table, column, done, mutate in plan:
+                if ids is None:
+                    continue
+                keep = _keep(ids)
+                sql = (
+                    f"SELECT resource_id FROM {table} WHERE encounter_id = ? "
+                    f"AND IFNULL({column}, 'active') NOT IN {done}"
+                )
                 params: list[Any] = [eid]
                 if keep:
                     sql += f" AND resource_id NOT IN ({','.join('?' for _ in keep)})"
                     params.extend(keep)
-                conn.execute(sql, params)
-            if condition_ids is not None:
-                keep = _keep(condition_ids)
-                sql = """
-                    UPDATE condition_index
-                    SET clinical_status = 'entered-in-error', updated_at = datetime('now')
-                    WHERE encounter_id = ?
-                      AND IFNULL(clinical_status, 'active') NOT IN ('entered-in-error', 'inactive')
-                """
-                params = [eid]
-                if keep:
-                    sql += f" AND resource_id NOT IN ({','.join('?' for _ in keep)})"
-                    params.extend(keep)
-                conn.execute(sql, params)
+                for (rid,) in conn.execute(sql, params).fetchall():
+                    self._rewrite_json(conn, rtype, rid, mutate)
 
     def list_medication_requests(
         self,
@@ -2556,14 +2565,14 @@ class SqliteShadowStore(ShadowStore):
             if pay_mark:
                 extensions.append(
                     {
-                        "url": f"{fhir_urls.MEDICATION_BILLING_SCHEMA}/payMark",
+                        "url": f"{fhir_urls.MEDICATION_BILLING}/payMark",
                         "valueString": pay_mark,
                     }
                 )
             if memo_mark:
                 extensions.append(
                     {
-                        "url": f"{fhir_urls.MEDICATION_BILLING_SCHEMA}/memoMark",
+                        "url": f"{fhir_urls.MEDICATION_BILLING}/memoMark",
                         "valueString": memo_mark,
                     }
                 )
@@ -2571,7 +2580,7 @@ class SqliteShadowStore(ShadowStore):
             if body_site:
                 extensions.append(
                     {
-                        "url": f"{fhir_urls.MEDICATION_BILLING_SCHEMA}/bodySite",
+                        "url": f"{fhir_urls.MEDICATION_BILLING}/bodySite",
                         "valueString": body_site,
                     }
                 )
@@ -2703,23 +2712,6 @@ class SqliteShadowStore(ShadowStore):
         """身分證／病歷號全庫唯一；衝突拋 PatientKeyConflict。"""
         with self._connect() as conn:
             _assert_patient_keys_unique(conn, resource_id, id_no, medical_no)
-
-    def release_medical_no_from_others(self, keep_resource_id: str, medical_no: str) -> int:
-        """匯入覆蓋用：清掉其他人身上相同病歷號，回傳清除筆數。"""
-        key = (medical_no or "").strip()
-        if not key:
-            return 0
-        with self._connect() as conn:
-            cur = conn.execute(
-                """
-                UPDATE patient_index
-                SET medical_no = NULL, updated_at = datetime('now')
-                WHERE trim(medical_no) = ? AND resource_id != ?
-                """,
-                (key, keep_resource_id),
-            )
-            # 同步清掉 resource_cache identifier 太重，索引為準；下次 PUT 會對齊
-            return int(cur.rowcount or 0)
 
     def list_cached_resources(
         self, resource_type: str, limit: int = 100, offset: int = 0
@@ -2889,16 +2881,7 @@ class SqliteShadowStore(ShadowStore):
             (json.dumps(payload, ensure_ascii=False), patient_id)
         )
         
-        fields = _patient_index_fields(payload)
-        conn.execute(
-            """
-            UPDATE patient_index SET
-                id_category = ?,
-                updated_at = datetime('now')
-            WHERE resource_id = ?
-            """,
-            (fields.get("id_category"), patient_id)
-        )
+        self._upsert_patient_index(conn, patient_id, payload)
 
 
     def count_patient_encounters(self, patient_id: str) -> int:
@@ -3663,6 +3646,45 @@ class PatientKeyConflict(ValueError):
         super().__init__(f"{label}「{value}」已存在（病患 {other_id}），不可重複")
 
 
+CLINIC_PROFILE_KEY = "clinic_profile_v1"
+
+
+def _chart_system(conn: sqlite3.Connection) -> str | None:
+    """Chart-number identifier system for this clinic; None until the clinic code is saved."""
+    raw = _get_runtime_setting(conn, CLINIC_PROFILE_KEY)
+    try:
+        saved = json.loads(raw) if raw else {}
+    except ValueError:
+        return None
+    profile = (saved.get("profile") if isinstance(saved, dict) else None) or {}
+    code = str(profile.get("clinicCode") or "").strip()
+    return fhir_urls.chart_number_system(code) if code else None
+
+
+FHIR_FORMAT_KEY = "fhir_format"
+FHIR_FORMAT = "final-1"
+
+
+class NotConvertedError(RuntimeError):
+    pass
+
+
+def _require_fhir_format(conn: sqlite3.Connection) -> None:
+    """Index rows are rebuilt from JSON on every save, so stored JSON must already
+    hold every index value. A new empty DB is marked; an old one must be converted
+    with scripts/fhir_convert.py first."""
+    if _get_runtime_setting(conn, FHIR_FORMAT_KEY) == FHIR_FORMAT:
+        return
+    used = conn.execute("SELECT 1 FROM resource_cache LIMIT 1").fetchone() or conn.execute(
+        "SELECT 1 FROM encounter_index LIMIT 1"
+    ).fetchone()
+    if used:
+        raise NotConvertedError(
+            "chart DB is not in FHIR format " + FHIR_FORMAT + "; run scripts/fhir_convert.py --apply on it first"
+        )
+    _set_runtime_setting(conn, FHIR_FORMAT_KEY, FHIR_FORMAT)
+
+
 def _ensure_runtime_settings_table(conn: sqlite3.Connection) -> None:
     conn.execute(
         """
@@ -3936,9 +3958,14 @@ def _apply_index_migrations(conn: sqlite3.Connection) -> None:
         ("seg", "TEXT"),
         ("treat_seq", "TEXT"),
         ("case_no", "TEXT"),
+        ("resource_id", "TEXT"),
     ):
         if column not in cash_cols:
             conn.execute(f"ALTER TABLE cash_return ADD COLUMN {column} {col_type}")
+    conn.execute(
+        "CREATE UNIQUE INDEX IF NOT EXISTS uq_cash_return_resource ON cash_return(resource_id) "
+        "WHERE resource_id IS NOT NULL"
+    )
     for table, column, col_type in _INDEX_MIGRATIONS:
         cols = {row[1] for row in conn.execute(f"PRAGMA table_info({table})").fetchall()}
         if column not in cols:
@@ -4144,13 +4171,10 @@ def _condition_index_fields(payload: dict[str, Any]) -> dict[str, Any]:
     if isinstance(enc, dict) and enc.get("reference"):
         encounter_id = str(enc["reference"]).split("/")[-1]
 
+    from src.core.condition_status import index_status
+
     stickers = extract_terminology_stickers(payload.get("code"))
-    status = "active"
-    cs = payload.get("clinicalStatus") or {}
-    for c in cs.get("coding") or []:
-        if c.get("code"):
-            status = str(c["code"])
-            break
+    status = index_status(payload)
 
     return {
         "patient_id": patient_id,
@@ -4182,8 +4206,9 @@ def _medication_request_index_fields(payload: dict[str, Any]) -> dict[str, Any]:
     body_site: str | None = None
     pay_mark: str | None = None
     memo_mark: str | None = None
-    saw_pay = False
-    saw_memo = False
+    total_qty: float | None = None
+    use_type: str | None = None
+    line_sort: int | None = None
 
     dispense = payload.get("dispenseRequest") or {}
     if isinstance(dispense, dict):
@@ -4215,13 +4240,22 @@ def _medication_request_index_fields(payload: dict[str, Any]) -> dict[str, Any]:
         elif url.endswith("/bodySite"):
             body_site = str(ext.get("valueString") or "").strip()
         elif url.endswith("/payMark"):
-            saw_pay = True
             pay_mark = str(ext.get("valueString") or "").strip()
         elif url.endswith("/memoMark"):
-            saw_memo = True
             memo_mark = str(ext.get("valueString") or "").strip()
+        elif url.endswith("/totalQty") and ext.get("valueDecimal") is not None:
+            total_qty = float(ext["valueDecimal"])
+        elif url.endswith("/useType") and ext.get("valueString") is not None:
+            use_type = str(ext["valueString"])
+        elif url.endswith("/lineSort") and ext.get("valueInteger") is not None:
+            line_sort = int(ext["valueInteger"])
 
-    out: dict[str, Any] = {
+    useage: str | None = None
+    doses = payload.get("dosageInstruction") or []
+    if isinstance(doses, list) and doses and isinstance(doses[0], dict):
+        useage = str(doses[0].get("text") or "").strip() or None
+
+    return {
         "patient_id": patient_id,
         "encounter_id": encounter_id,
         "nhi_code": stickers["nhiMedCode"],
@@ -4232,19 +4266,14 @@ def _medication_request_index_fields(payload: dict[str, Any]) -> dict[str, Any]:
         "quantity": quantity,
         "unit_price": unit_price,
         "pack_version": pack_version,
-        "body_site": body_site,
+        "body_site": body_site or None,
+        "pay_mark": pay_mark or None,
+        "memo_mark": memo_mark or None,
+        "useage": useage,
+        "total_qty": total_qty,
+        "use_type": use_type,
+        "line_sort": line_sort,
     }
-    if saw_pay:
-        out["pay_mark"] = pay_mark
-    if saw_memo:
-        out["memo_mark"] = memo_mark
-    if "dosageInstruction" in payload:
-        doses = payload.get("dosageInstruction") or []
-        text = ""
-        if isinstance(doses, list) and doses and isinstance(doses[0], dict):
-            text = str(doses[0].get("text") or "").strip()
-        out["useage"] = text or None
-    return out
 
 
 def _index_row_to_api(resource_type: str, row: dict[str, Any]) -> dict[str, Any]:
@@ -4478,7 +4507,7 @@ def _clinic_fields_from_payload(raw: str | dict[str, Any]) -> dict[str, str]:
                 if isinstance(ident, dict) and ident.get("value"):
                     use = ident.get("use")
                     system = str(ident.get("system") or "").lower()
-                    if use == "secondary" or "chart" in system:
+                    if use == "secondary" or "chart" in system or "medical-record" in system:
                         continue
                     out["idNo"] = str(ident["value"]).strip().upper()
                     break
@@ -4605,7 +4634,7 @@ def _patient_index_fields(payload: dict[str, Any]) -> dict[str, str | None]:
         if not isinstance(ident, dict) or not ident.get("value"):
             continue
         system = str(ident.get("system") or "")
-        if ident.get("use") == "secondary" or "chart" in system:
+        if ident.get("use") == "secondary" or fhir_urls.is_chart_number_system(system) or "chart" in system:
             medical_no = str(ident["value"]).strip() or None
             break
 
@@ -4617,6 +4646,12 @@ def _patient_index_fields(payload: dict[str, Any]) -> dict[str, str | None]:
             if bit and bit not in phone_bits:
                 phone_bits.append(bit)
     phone: str | None = " / ".join(phone_bits) if phone_bits else None
+    phone2: str | None = None
+    for tel in payload.get("telecom") or []:
+        if isinstance(tel, dict) and tel.get("system") == "phone" and tel.get("use") == "mobile":
+            phone2 = str(tel.get("value") or "").strip() or None
+            if phone2:
+                break
 
     # 提取地址
     address: str | None = None
@@ -4661,6 +4696,7 @@ def _patient_index_fields(payload: dict[str, Any]) -> dict[str, str | None]:
         "sex": stickers.get("sex") or _GENDER_SEX.get(str(payload.get("gender") or "").lower()),
         "medical_no": medical_no,
         "phone": phone,
+        "phone2": phone2,
         "address": address,
         "id_category": id_category,
     }

@@ -229,6 +229,7 @@ def create_patient(body: PatientBody) -> dict[str, Any]:
         if isinstance(ident, dict) and (
             ident.get("use") == "secondary"
             or "chart" in str(ident.get("system") or "")
+            or "medical-record" in str(ident.get("system") or "")
         ):
             if str(ident.get("value") or "").strip():
                 has_chart = True

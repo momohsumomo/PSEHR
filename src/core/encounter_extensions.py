@@ -9,6 +9,101 @@ from src.core import fhir_urls
 QUEUE_EXTENSION_URL = fhir_urls.ENCOUNTER_QUEUE
 REG_EXTENSION_URL = fhir_urls.ENCOUNTER_REG
 PREVISIT_EXTENSION_URL = fhir_urls.ENCOUNTER_PREVISIT
+BOOK_EXTENSION_URL = fhir_urls.ENCOUNTER_BOOK
+
+# encounter_index column -> encounter-book key. These were written to the index
+# only (imports, cash-book marks, chief complaint); the index is derived from here.
+# Kept apart from encounter-reg on purpose: readers of reg keys (claims, IC) must
+# not start seeing values they never saw.
+BOOK_FIELDS: tuple[tuple[str, str, str], ...] = (
+    ("chief_complaint", "chiefComplaint", "string"),
+    ("shift", "shift", "string"),
+    ("slot_time", "slotTime", "string"),
+    ("times_no", "timesNo", "integer"),
+    ("owe_card", "oweCard", "integer"),
+    ("reg_cc", "regCc", "string"),
+    ("reg_remark", "regRemark", "string"),
+    ("claim_doctor_id", "claimDoctorId", "string"),
+    ("claim_pharmacist_id", "claimPharmacistId", "string"),
+    ("treat_seq", "treatSeq", "string"),
+)
+
+
+def _book_ext(payload: dict[str, Any]) -> dict[str, Any] | None:
+    for ext in payload.get("extension") or []:
+        if isinstance(ext, dict) and ext.get("url") == BOOK_EXTENSION_URL:
+            return ext
+    return None
+
+
+def has_book(payload: dict[str, Any]) -> bool:
+    return _book_ext(payload) is not None
+
+
+def extract_book(payload: dict[str, Any]) -> dict[str, Any]:
+    """encounter-book as index columns; a missing key is None."""
+    out: dict[str, Any] = {col: None for col, _key, _kind in BOOK_FIELDS}
+    ext = _book_ext(payload)
+    if ext is None:
+        return out
+    by_key = {key: (col, kind) for col, key, kind in BOOK_FIELDS}
+    for sub in ext.get("extension") or []:
+        hit = by_key.get(str(sub.get("url") or ""))
+        if not hit:
+            continue
+        col, kind = hit
+        out[col] = sub.get("valueInteger") if kind == "integer" else sub.get("valueString")
+    return out
+
+
+def put_book(payload: dict[str, Any], values: dict[str, Any]) -> None:
+    """Set encounter-book columns in place. None or "" removes the key."""
+    exts = payload.setdefault("extension", [])
+    ext = _book_ext(payload)
+    if ext is None:
+        ext = {"url": BOOK_EXTENSION_URL, "extension": []}
+        exts.append(ext)
+    keys = {col: (key, kind) for col, key, kind in BOOK_FIELDS}
+    subs = list(ext.get("extension") or [])
+    for col, value in values.items():
+        key, kind = keys[col]
+        subs = [s for s in subs if s.get("url") != key]
+        if value is None or (kind == "string" and str(value) == ""):
+            continue
+        if kind == "integer":
+            subs.append({"url": key, "valueInteger": int(value)})
+        else:
+            subs.append({"url": key, "valueString": str(value)})
+    order = {key: i for i, (_col, key, _kind) in enumerate(BOOK_FIELDS)}
+    subs.sort(key=lambda s: order.get(str(s.get("url")), 99))
+    if subs:
+        ext["extension"] = subs
+    else:
+        payload["extension"] = [e for e in exts if e is not ext]
+
+
+def carry_book(old: dict[str, Any] | None, new: dict[str, Any]) -> None:
+    """A writer that rebuilt the Encounter without encounter-book keeps the stored one."""
+    if not old or has_book(new):
+        return
+    ext = _book_ext(old)
+    if ext is not None:
+        new.setdefault("extension", []).append(ext)
+
+
+def put_queue_status(payload: dict[str, Any], queue_status: str) -> None:
+    for ext in payload.get("extension") or []:
+        if not isinstance(ext, dict) or ext.get("url") != QUEUE_EXTENSION_URL:
+            continue
+        for sub in ext.get("extension") or []:
+            if sub.get("url") == "queueStatus":
+                sub["valueCode"] = queue_status
+                return
+        ext.setdefault("extension", []).append({"url": "queueStatus", "valueCode": queue_status})
+        return
+    payload.setdefault("extension", []).append(
+        {"url": QUEUE_EXTENSION_URL, "extension": [{"url": "queueStatus", "valueCode": queue_status}]}
+    )
 
 REG_STRING_KEYS = (
     "caseNo",

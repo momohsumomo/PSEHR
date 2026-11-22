@@ -50,7 +50,7 @@ export function Fido2BindingModal({
       // Fetch Patient FHIR resource
       const patient = await request<any>(`/v1/Patient/${patientId}`);
       
-      const FIDO2_KEY_EXTENSION_URL = "https://wundadi.tw/fhir/StructureDefinition/patient-fido2-key";
+      const FIDO2_KEY_EXTENSION_URL = "https://polarissehr.eskincrux.com/fhir/StructureDefinition/patient-fido2-key";
       const keys: any[] = [];
       if (patient.extension) {
         for (const ext of patient.extension) {

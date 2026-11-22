@@ -105,7 +105,8 @@ export function fhirToPatientRecord(p: ApiPatient): PatientRecord {
       (i) =>
         i.use === "secondary" ||
         i.system?.includes("chart") ||
-        i.system?.includes("chart-number"),
+        i.system?.includes("chart-number") ||
+        i.system?.includes("/sid/medical-record/"),
     )?.value || "";
 
   const sex = p.gender === "female" ? "女" : p.gender === "male" ? "男" : "其他";
@@ -238,8 +239,8 @@ export function patientRecordToFhir(record: PatientRecord): Record<string, unkno
   const gender = record.sex === "女" ? "female" : record.sex === "男" ? "male" : "other";
 
   const identifier: Array<{ use: string; system: string; value: string }> = [
-    { use: "official", system: "http://www.moi.gov.tw/id", value: record.idNo },
-    { use: "official", system: "https://nhidcc.nhi.gov.tw/id", value: record.idNo },
+    { use: "official", system: "http://www.moi.gov.tw", value: record.idNo },
+    { use: "official", system: "https://polarissehr.eskincrux.com/fhir/sid/nhi-card-id", value: record.idNo },
   ];
   if (record.medicalNo) {
     identifier.push({
@@ -274,7 +275,7 @@ export function patientRecordToFhir(record: PatientRecord): Record<string, unkno
     address,
     extension: [
       {
-        url: "https://nhidcc.nhi.gov.tw/fhir/StructureDefinition/nhi-card-basic",
+        url: "https://polarissehr.eskincrux.com/fhir/StructureDefinition/nhi-card-basic",
         extension: [
           { url: "idNo", valueString: record.idNo },
           { url: "birthdayRoc", valueString: record.birthday },
@@ -282,7 +283,7 @@ export function patientRecordToFhir(record: PatientRecord): Record<string, unkno
         ],
       },
       {
-        url: "https://clinic.org/fhir/StructureDefinition/patient-clinic-ext",
+        url: "https://polarissehr.eskincrux.com/fhir/StructureDefinition/patient-clinic-ext",
         extension: [
           { url: "kind", valueString: record.kind },
           { url: "keymoney", valueString: record.deposit },
