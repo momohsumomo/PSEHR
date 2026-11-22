@@ -305,4 +305,9 @@ def main() -> None:
 
 
 if __name__ == "__main__":
+    try:
+        from scripts.legacy_writer_guard import refuse_on_final_db
+    except ImportError:
+        from legacy_writer_guard import refuse_on_final_db
+    refuse_on_final_db()
     main()

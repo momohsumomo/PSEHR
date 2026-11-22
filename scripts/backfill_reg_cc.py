@@ -7,7 +7,10 @@ import sqlite3
 from pathlib import Path
 
 from scripts.import_yisheng_data import md5_id, parse_dbf_header, parse_roc_date
+from scripts.legacy_writer_guard import refuse_on_final_db
 from src.core.yisheng_register_fields import is_register_void
+
+refuse_on_final_db()
 
 NAMES = (
     "KEYWORD", "TIMESNO", "O_DATE", "R_DATE", "STATUS", "CASENO",
