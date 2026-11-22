@@ -278,6 +278,23 @@ class SqliteShadowStore(ShadowStore):
             _apply_index_migrations(conn)
             _require_fhir_format(conn)
             self._seed_id_category_settings(conn)
+        self._ensure_staff_resources()
+
+    def _ensure_staff_resources(self) -> None:
+        """Staff rows seeded into an empty DB get their Practitioner; the PIN stays table-only."""
+        from src.core.side_records import resource_id
+
+        with self._connect() as conn:
+            rows = [dict(r) for r in conn.execute("SELECT * FROM clinic_staff")]
+            have = {
+                str(r[0])
+                for r in conn.execute("SELECT resource_id FROM resource_cache WHERE resource_type = 'Practitioner'")
+            }
+        for row in rows:
+            if resource_id("clinic_staff", row["id"]) in have:
+                continue
+            pin = row.pop("pin", None)
+            self.put_side_row("clinic_staff", row, table_only={"pin": pin})
 
     def _seed_id_category_settings(self, conn: sqlite3.Connection) -> None:
         count = conn.execute("SELECT COUNT(*) FROM id_category_settings").fetchone()[0]

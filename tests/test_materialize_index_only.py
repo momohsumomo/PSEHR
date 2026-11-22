@@ -54,7 +54,8 @@ class MaterializeIndexOnlyTest(unittest.TestCase):
             return {
                 (t, i): (json.loads(p), u)
                 for t, i, p, u in conn.execute(
-                    "SELECT resource_type, resource_id, payload_json, updated_at FROM resource_cache"
+                    "SELECT resource_type, resource_id, payload_json, updated_at FROM resource_cache "
+                    "WHERE resource_type IN ('Condition', 'MedicationRequest')"
                 )
             }
 
