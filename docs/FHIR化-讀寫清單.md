@@ -18,10 +18,11 @@
 | 步 | 內容 | 狀態 |
 |----|------|------|
 | 1 | 自訂網址收進 `src/core/fhir_urls.py`，值不變；`tests/test_fhir_urls.py` 鎖住值，並禁止 `src/` 直接寫網址 | 完成（2026-11-22） |
-| 2 | 讀取端認得舊網址：`import_yisheng_lean.py` 寫的是 `clinic.org/.../queue`、`clinic.org/.../reg`，現行程式讀不到這些就診 JSON 裡的案類、預約、備註，只靠索引撐著 | 待做；先確認主機上有多少這種就診 |
-| 3 | 決定正式網址（不用 `clinic.org`、不冒用 `nhidcc.nhi.gov.tw`），新寫入改用正式網址，舊資料照讀 | 待做 |
+| 2 | 查主機副本（2026-11-22）：就診 455,078 筆，411,527 筆同時有舊 `clinic.org/.../queue`、`reg` 和新 `wundadi.tw` 擴充，沒有只有舊的。舊的是精簡匯入留下的過期複本：候診號、狀態、案類、時段全同，6 筆預約／備註舊值已被新值更新。結論：**不讀舊擴充**（列在 `fhir_urls.STALE_DUPLICATES`），精簡匯入改寫新網址，舊複本等整批改寫時移除 | 完成 |
+| 3 | 只有索引、沒有 FHIR JSON 的列：病名 53,713／603,209、處方 119,365／1,298,532；就診 0。要補成完整 FHIR 才能改以 FHIR 為正本 | 待做 |
+| 4 | 決定正式網址（不用 `clinic.org`、不冒用 `nhidcc.nhi.gov.tw`），新寫入改用正式網址，舊資料照讀。處方計費擴充目前兩套並存：`clinic.org/.../billing` 約 117.8 萬筆、`wundadi.local/.../medication-billing` 約 50.2 萬筆 | 待做 |
 
-`scripts/` 與前端（`patientMaster.ts`、mocks）仍直接寫網址，第 3 步換網址時要一起改。
+`scripts/` 與前端（`patientMaster.ts`、mocks）仍直接寫網址，第 4 步換網址時要一起改。
 
 ## 總覽
 

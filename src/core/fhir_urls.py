@@ -3,7 +3,7 @@
 These strings are stored inside resource_cache JSON. Changing a value here
 changes what new writes look like but not what is already on disk; readers
 must keep accepting every value listed in LEGACY_ALIASES until the stored data
-has been rewritten. See docs/FHIR化-讀寫清單.md.
+has been rewritten. See the FHIR read/write inventory doc under docs/.
 """
 
 # Encounter
@@ -36,9 +36,17 @@ ID_CHART_NUMBER = "https://clinic.org/chart-number"
 CODE_NHI_MEDICATION = "https://nhidcc.nhi.gov.tw/medication"
 CODE_TW_ICD10CM = "https://nhidcc.nhi.gov.tw/icd10cm"
 
-# Older URLs still present in stored JSON, keyed by the current URL.
+# Older URLs still present in stored JSON that carry live data, keyed by the
+# current URL. Readers must accept these.
 LEGACY_ALIASES: dict[str, tuple[str, ...]] = {
-    ENCOUNTER_QUEUE: ("https://clinic.org/fhir/StructureDefinition/queue",),
-    ENCOUNTER_REG: ("https://clinic.org/fhir/StructureDefinition/reg",),
     MEDICATION_BILLING: (MEDICATION_BILLING_SCHEMA,),
+}
+
+# Stale copies left by early lean imports. Every such Encounter also has the
+# current extension, which was updated later (check-in clears forespeak, edits
+# change noteMark), so reading these would bring back outdated values.
+# Never read; drop when stored Encounters are rewritten.
+STALE_DUPLICATES: dict[str, str] = {
+    "https://clinic.org/fhir/StructureDefinition/queue": ENCOUNTER_QUEUE,
+    "https://clinic.org/fhir/StructureDefinition/reg": ENCOUNTER_REG,
 }

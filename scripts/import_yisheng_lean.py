@@ -33,6 +33,7 @@ from scripts.import_yisheng_data import (
     parse_roc_date,
     read_dbf_records,
 )
+from src.core import fhir_urls
 from src.core.nhi_clinical_mappers import yisheng_selftype_to_pay_mark
 from src.core.yisheng_register_fields import (
     decode_register_time,
@@ -258,14 +259,14 @@ def main() -> int:
             "reasonCode": [{"text": chief[:4000]}] if chief else [],
             "extension": [
                 {
-                    "url": "https://clinic.org/fhir/StructureDefinition/queue",
+                    "url": fhir_urls.ENCOUNTER_QUEUE,
                     "extension": [
                         {"url": "queueNumber", "valueInteger": serno},
                         {"url": "queueStatus", "valueCode": visit_state["queue_status"]},
                     ],
                 },
                 {
-                    "url": "https://clinic.org/fhir/StructureDefinition/reg",
+                    "url": fhir_urls.ENCOUNTER_REG,
                     "extension": [
                         {"url": "shift", "valueString": shift or ""},
                         {"url": "caseNo", "valueString": _clean(r.get("CASENO"))},
