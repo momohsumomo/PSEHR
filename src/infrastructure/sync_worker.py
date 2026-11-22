@@ -31,7 +31,7 @@ class BackgroundSyncWorker:
             if CLOUD_FHIR_URL:
                 logger.info(f"Syncing to Cloud FHIR Server: {CLOUD_FHIR_URL}")
             else:
-                logger.info("CLOUD_FHIR_URL not configured. Running in local simulation mode.")
+                logger.info("CLOUD_FHIR_URL not configured. The sync queue waits; nothing is marked synced.")
 
     def stop(self) -> None:
         self._running = False
@@ -48,7 +48,9 @@ class BackgroundSyncWorker:
             await asyncio.sleep(SYNC_INTERVAL_SECS)
 
     async def _process_sync_queue(self) -> None:
-        # Dequeue batch of pending items
+        # No cloud: the queue waits. Nothing is marked synced that was not sent.
+        if not CLOUD_FHIR_URL:
+            return
         # SQLite may wait up to busy_timeout here; keep that off the event loop.
         batch = await asyncio.to_thread(self.store.dequeue_sync_batch, limit=20)
         if not batch:
@@ -57,39 +59,29 @@ class BackgroundSyncWorker:
         async with httpx.AsyncClient(timeout=10.0) as client:
             for item in batch:
                 queue_id = item["id"]
-                op = item["operation"]  # "create" | "update" | "delete"
+                op = item["operation"]
                 res_type = item.get("resource_type") or item.get("resourceType")
                 res_id = item.get("resource_id") or item.get("resourceId")
                 payload = item["payload"]
 
+                if op not in ("create", "update"):
+                    # Chart data is never deleted in the cloud (POST/PUT only).
+                    await asyncio.to_thread(self.store.mark_sync_skipped, queue_id, f"{op} is not sent")
+                    logger.info(f"sync_queue ID {queue_id}: {op} {res_type}/{res_id} not sent")
+                    continue
+
                 success = False
-                if CLOUD_FHIR_URL:
-                    # Perform actual cloud synchronization
-                    url = f"{CLOUD_FHIR_URL.rstrip('/')}/{res_type}/{res_id}"
-                    try:
-                        if op in ("create", "update"):
-                            r = await client.put(url, json=payload)
-                            if r.status_code in (200, 201):
-                                success = True
-                            else:
-                                logger.error(
-                                    f"Failed to sync {res_type}/{res_id} to cloud. Status code: {r.status_code}"
-                                )
-                        elif op == "delete":
-                            r = await client.delete(url)
-                            if r.status_code in (200, 204, 404):
-                                # 404 means it's already deleted on cloud, which is fine
-                                success = True
-                            else:
-                                logger.error(
-                                    f"Failed to delete {res_type}/{res_id} on cloud. Status code: {r.status_code}"
-                                )
-                    except Exception as e:
-                        logger.error(f"Network error syncing {res_type}/{res_id}: {e}")
-                else:
-                    # Simulation mode: auto-success
-                    logger.debug(f"[Simulation] Synced {op} {res_type}/{res_id}")
-                    success = True
+                url = f"{CLOUD_FHIR_URL.rstrip('/')}/{res_type}/{res_id}"
+                try:
+                    r = await client.put(url, json=payload)
+                    if r.status_code in (200, 201):
+                        success = True
+                    else:
+                        logger.error(
+                            f"Failed to sync {res_type}/{res_id} to cloud. Status code: {r.status_code}"
+                        )
+                except Exception as e:
+                    logger.error(f"Network error syncing {res_type}/{res_id}: {e}")
 
                 if success:
                     await asyncio.to_thread(self.store.mark_sync_done, queue_id)

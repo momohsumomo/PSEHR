@@ -479,6 +479,9 @@ class SqliteShadowStore(ShadowStore):
                 ).fetchone()
                 carry_book(json.loads(stored[0]) if stored else None, payload)
                 self._stamp_cash_book_marks(conn, resource_id, payload)
+                from src.core.clinic_org import put_service_provider
+
+                put_service_provider(payload, _clinic_code(conn))
             elif resource_type == "MedicationRequest":
                 from src.core.medication_billing import carry_billing
 
@@ -762,6 +765,12 @@ class SqliteShadowStore(ShadowStore):
     def set_json_setting(self, key: str, value: Any) -> None:
         with self._connect() as conn:
             _set_runtime_setting(conn, key, json.dumps(value, ensure_ascii=False))
+        if key == CLINIC_PROFILE_KEY:
+            from src.core.clinic_org import organization_for
+
+            org = organization_for(value)
+            if org is not None:
+                self.cache_resource("Organization", org["id"], org)
 
     def get_staff_list(self) -> list[dict[str, Any]]:
         with self._connect() as conn:
@@ -1104,7 +1113,7 @@ class SqliteShadowStore(ShadowStore):
                 """
                 SELECT id, operation, resource_type, resource_id, payload_json, created_at
                 FROM sync_queue
-                WHERE synced_at IS NULL
+                WHERE synced_at IS NULL AND skipped IS NULL
                 ORDER BY id
                 LIMIT ?
                 """,
@@ -1128,6 +1137,11 @@ class SqliteShadowStore(ShadowStore):
                 "UPDATE sync_queue SET synced_at = datetime('now') WHERE id = ?",
                 (queue_id,),
             )
+
+    def mark_sync_skipped(self, queue_id: int, reason: str) -> None:
+        """Not sent and never will be; kept apart from synced_at so nothing reads as uploaded."""
+        with self._connect() as conn:
+            conn.execute("UPDATE sync_queue SET skipped = ? WHERE id = ?", (reason, queue_id))
 
     def update_encounter_queue_status(self, resource_id: str, queue_status: str, fhir_status: str) -> None:
         from src.core.encounter_extensions import put_queue_status
@@ -3738,6 +3752,7 @@ _INDEX_MIGRATIONS: list[tuple[str, str, str]] = [
     ("encounter_index", "reg_cc", "TEXT"),
     ("encounter_index", "reg_remark", "TEXT"),
     ("id_category_settings", "is_default", "INTEGER NOT NULL DEFAULT 0"),
+    ("sync_queue", "skipped", "TEXT"),
 ]
 
 
@@ -3755,15 +3770,20 @@ class PatientKeyConflict(ValueError):
 CLINIC_PROFILE_KEY = "clinic_profile_v1"
 
 
-def _chart_system(conn: sqlite3.Connection) -> str | None:
-    """Chart-number identifier system for this clinic; None until the clinic code is saved."""
+def _clinic_code(conn: sqlite3.Connection) -> str:
+    from src.core.clinic_org import clinic_code
+
     raw = _get_runtime_setting(conn, CLINIC_PROFILE_KEY)
     try:
         saved = json.loads(raw) if raw else {}
     except ValueError:
-        return None
-    profile = (saved.get("profile") if isinstance(saved, dict) else None) or {}
-    code = str(profile.get("clinicCode") or "").strip()
+        return ""
+    return clinic_code(saved)
+
+
+def _chart_system(conn: sqlite3.Connection) -> str | None:
+    """Chart-number identifier system for this clinic; None until the clinic code is saved."""
+    code = _clinic_code(conn)
     return fhir_urls.chart_number_system(code) if code else None
 
 

@@ -456,6 +456,38 @@ def step_side(store: s.SqliteShadowStore, conn: sqlite3.Connection) -> Report:
     return rep
 
 
+def step_org(store: s.SqliteShadowStore, conn: sqlite3.Connection) -> Report:
+    from src.core.clinic_org import organization_for, put_service_provider
+
+    rep = Report("clinic Organization, Encounter.serviceProvider")
+    raw = s._get_runtime_setting(conn, s.CLINIC_PROFILE_KEY)
+    org = organization_for(json.loads(raw) if raw else None)
+    if org is None:
+        raise RuntimeError("clinic code missing in the clinic profile; save it before converting")
+    conn.execute(
+        "INSERT INTO resource_cache (resource_type, resource_id, payload_json, created_at, updated_at) "
+        "VALUES ('Organization', ?, ?, datetime('now'), datetime('now')) "
+        "ON CONFLICT(resource_type, resource_id) DO UPDATE SET payload_json = excluded.payload_json",
+        (org["id"], json.dumps(org, ensure_ascii=False)),
+    )
+    code = org["identifier"][0]["value"]
+    ids = [r[0] for r in conn.execute("SELECT resource_id FROM resource_cache WHERE resource_type = 'Encounter'")]
+    for i in range(0, len(ids), 2000):
+        chunk = ids[i : i + 2000]
+        marks = ",".join("?" * len(chunk))
+        for rid, text in conn.execute(
+            f"SELECT resource_id, payload_json FROM resource_cache "
+            f"WHERE resource_type = 'Encounter' AND resource_id IN ({marks})",
+            chunk,
+        ).fetchall():
+            rep.rows += 1
+            payload = json.loads(text)
+            if put_service_provider(payload, code):
+                _write(conn, "Encounter", rid, payload)
+                rep.json_changed += 1
+    return rep
+
+
 STEPS = {
     "materialize": step_materialize,
     "urls": step_urls,
@@ -467,6 +499,7 @@ STEPS = {
     "note": step_note,
     "other": step_other,
     "side": step_side,
+    "org": step_org,
 }
 
 

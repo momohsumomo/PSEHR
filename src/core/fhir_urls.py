@@ -41,6 +41,7 @@ MEDIA_LESION = _SD + "/lesion-media"
 # Identifier systems (TW Core idCardNumber uses the MOI URL as is)
 ID_TW_NATIONAL = "http://www.moi.gov.tw"
 ID_NHI_CARD = POLARIS_BASE + "/sid/nhi-card-id"
+ID_NHI_ORG = POLARIS_BASE + "/sid/nhi-org-id"
 CHART_NUMBER_BASE = POLARIS_BASE + "/sid/medical-record"
 # Writers may still send this; the store turns it into chart_number_system().
 ID_CHART_NUMBER = "https://clinic.org/chart-number"
