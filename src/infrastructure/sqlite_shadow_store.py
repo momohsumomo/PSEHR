@@ -2073,25 +2073,12 @@ class SqliteShadowStore(ShadowStore):
                 icd_code = cond_rows[0][0] or cond_rows[0][1] or "—"
                 disease_name = cond_rows[0][2] or "—"
 
-            med_rows = conn.execute(
-                "SELECT payload_json FROM resource_cache "
-                "WHERE resource_type = 'MedicationRequest' "
-                "  AND resource_id = (SELECT resource_id FROM medication_request_index WHERE encounter_id = ? LIMIT 1)",
+            med_days = conn.execute(
+                "SELECT MAX(days_supply) FROM medication_request_index WHERE encounter_id = ?",
                 (encounter_id,),
-            ).fetchall()
-            if med_rows:
-                try:
-                    med_payload = json.loads(med_rows[0][0])
-                    dosage_text = med_payload.get("dosageInstruction", [{}])[0].get("text", "")
-                    import re
-
-                    m = re.search(r"(\d+)\s*(天|日)", dosage_text)
-                    if m:
-                        rx_days = m.group(1)
-                    else:
-                        rx_days = "3"
-                except Exception:
-                    rx_days = "3"
+            ).fetchone()
+            if med_days and med_days[0] is not None:
+                rx_days = str(int(med_days[0]))
 
             obs_weight = conn.execute(
                 "SELECT value_num FROM observation_index WHERE encounter_id = ? AND vital_type = 'weight' LIMIT 1",

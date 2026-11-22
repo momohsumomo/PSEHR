@@ -1,6 +1,6 @@
 """Record what every reader gets from a chart DB copy, then diff two recordings.
 
-  python scripts/fhir_baseline.py capture --db COPY.db --out DIR [--look LOOK_DIR]
+  python scripts/fhir_baseline.py capture --db COPY.db --out DIR [--look LOOK_DIR] [--sample-from DIR]
   python scripts/fhir_baseline.py diff DIR_BEFORE DIR_AFTER
 
 Run capture on a local copy before and after a storage change; diff must be
@@ -152,34 +152,54 @@ def _sample(store, today: date) -> dict[str, Any]:
             ]
             index_only += _stride(ids, INDEX_ONLY)
         all_enc = sorted(set(encounters + index_only))
-        placeholders = ",".join("?" * len(all_enc)) or "''"
-        pairs = conn.execute(
-            f"SELECT resource_id, patient_id FROM encounter_index WHERE resource_id IN ({placeholders})",
-            all_enc,
-        ).fetchall()
-        patient_of = {r[0]: r[1] for r in pairs}
+        patient_of = _patient_of(conn, all_enc)
         patients = _stride(sorted({p for p in patient_of.values() if p}), PATIENTS)
-        med_no: dict[str, str] = {}
-        id_no: dict[str, str] = {}
-        if patients:
-            ph = ",".join("?" * len(patients))
-            for rid, med, idn in conn.execute(
-                f"SELECT resource_id, medical_no, id_no FROM patient_index WHERE resource_id IN ({ph})",
-                patients,
-            ):
-                med_no[rid] = med
-                id_no[rid] = idn
-    return {
-        "days": sample_days,
-        "icDays": recent[-IC_DAYS:],
-        "months": _months(today),
-        "encounters": all_enc,
-        "indexOnlyEncounters": sorted(set(index_only)),
-        "patientOf": patient_of,
-        "patients": patients,
-        "medicalNo": med_no,
-        "idNo": id_no,
-    }
+        sample = {
+            "days": sample_days,
+            "icDays": recent[-IC_DAYS:],
+            "months": _months(today),
+            "encounters": all_enc,
+            "indexOnlyEncounters": sorted(set(index_only)),
+            "patients": patients,
+        }
+        _add_lookups(conn, sample)
+    return sample
+
+
+def _patient_of(conn, encounters: list[str]) -> dict[str, str]:
+    placeholders = ",".join("?" * len(encounters)) or "''"
+    pairs = conn.execute(
+        f"SELECT resource_id, patient_id FROM encounter_index WHERE resource_id IN ({placeholders})",
+        encounters,
+    ).fetchall()
+    return {r[0]: r[1] for r in pairs}
+
+
+def _add_lookups(conn, sample: dict[str, Any]) -> None:
+    sample["patientOf"] = _patient_of(conn, sample["encounters"])
+    med_no: dict[str, str] = {}
+    id_no: dict[str, str] = {}
+    patients = sample["patients"]
+    if patients:
+        ph = ",".join("?" * len(patients))
+        for rid, med, idn in conn.execute(
+            f"SELECT resource_id, medical_no, id_no FROM patient_index WHERE resource_id IN ({ph})",
+            patients,
+        ):
+            med_no[rid] = med
+            id_no[rid] = idn
+    sample["medicalNo"] = med_no
+    sample["idNo"] = id_no
+
+
+def _reuse_sample(store, prior: Path) -> dict[str, Any]:
+    """Same days/encounters/patients as an earlier capture, so the two can be diffed
+    even when the storage change alters what _sample would pick."""
+    manifest = json.loads((prior / "manifest.json").read_text(encoding="utf-8"))
+    sample = dict(manifest["sample"])
+    with store._connect() as conn:
+        _add_lookups(conn, sample)
+    return sample
 
 
 class Recorder:
@@ -247,7 +267,7 @@ def capture(args) -> None:
     logging.getLogger("httpx").setLevel(logging.WARNING)
     today = date.today()
     store, client = _open_app(db, look)
-    sample = _sample(store, today)
+    sample = _reuse_sample(store, Path(args.sample_from)) if args.sample_from else _sample(store, today)
     print(
         f"sample: {len(sample['days'])} days, {len(sample['encounters'])} encounters "
         f"({len(sample['indexOnlyEncounters'])} index-only), {len(sample['patients'])} patients",
@@ -455,6 +475,7 @@ def main() -> None:
     cap.add_argument("--db", required=True)
     cap.add_argument("--out", required=True)
     cap.add_argument("--look", default="")
+    cap.add_argument("--sample-from", default="", help="reuse the sample of an earlier capture DIR")
     dif = sub.add_parser("diff")
     dif.add_argument("before")
     dif.add_argument("after")

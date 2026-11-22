@@ -20,10 +20,12 @@
 | 1 | 自訂網址收進 `src/core/fhir_urls.py`，值不變；`tests/test_fhir_urls.py` 鎖住值，並禁止 `src/` 直接寫網址 | 完成（2026-11-22） |
 | 2 | 查主機副本（2026-11-22）：就診 455,078 筆，411,527 筆同時有舊 `clinic.org/.../queue`、`reg` 和新 `wundadi.tw` 擴充，沒有只有舊的。舊的是精簡匯入留下的過期複本：候診號、狀態、案類、時段全同，6 筆預約／備註舊值已被新值更新。結論：**不讀舊擴充**（列在 `fhir_urls.STALE_DUPLICATES`），精簡匯入改寫新網址，舊複本等整批改寫時移除 | 完成 |
 | 2.5 | 對照工具 `scripts/fhir_baseline.py`（見下節）。同一份副本跑兩次：45 類、約 14,500 次呼叫完全一致，含月申報 XML、IC 檔 | 完成（2026-11-22） |
-| 3 | 只有索引、沒有 FHIR JSON 的列：病名 53,713／603,209、處方 119,365／1,298,532；就診 0。要補成完整 FHIR 才能改以 FHIR 為正本 | 待做 |
+| 3 | 只有索引、沒有 FHIR JSON 的列：病名 53,713／603,209、處方 119,365／1,298,532；就診 0。`scripts/materialize_index_only.py` 只對沒有 JSON 的列 INSERT，不動索引（提交前比對雜湊），每筆 JSON 用店家建索引的同一套函式解回去，17.3 萬筆全部和索引一致；索引沒從 JSON 讀的 `total_qty`、`use_type`、`line_sort` 寫成計費擴充 `totalQty`、`useType`、`lineSort`。同步修掉單筆掛號資料的「天數」：原本讀第一筆處方 JSON 找「X天」，找不到就填 3、沒 JSON 填「—」，改成和整天清單一樣取處方索引最大天數（修前同一筆兩邊不一致 371／688，修後 0）。本機副本驗證完成，**未套主機** | 副本完成 |
 | 4 | 決定正式網址（不用 `clinic.org`、不冒用 `nhidcc.nhi.gov.tw`），新寫入改用正式網址，舊資料照讀。處方計費擴充目前兩套並存：`clinic.org/.../billing` 約 117.8 萬筆、`wundadi.local/.../medication-billing` 約 50.2 萬筆 | 待做 |
 
 `scripts/` 與前端（`patientMaster.ts`、mocks）仍直接寫網址，第 4 步換網址時要一起改。
+
+改成 FHIR 為正本之前要先處理：刪掛號時 `sqlite_shadow_store.py` 直接把該次的病名索引改 `entered-in-error`、處方索引改 `cancelled`，JSON 沒跟著改。已有 JSON 的列兩邊會不一致，要改成先改 JSON 再由 JSON 更新索引。Condition 的 `entered-in-error` 目前放在 `clinicalStatus`（FHIR 應放 `verificationStatus`），第 4 步一起正規化。
 
 ## 對照工具
 
@@ -33,6 +35,8 @@
 2. 改之前：`.venv\Scripts\python.exe scripts\fhir_baseline.py capture --db <副本> --out <資料夾A> --look "\\OPD\PolarisSEHR\data\look"`
 3. 在副本上執行這一步的轉換，再跑一次 capture 到資料夾B。
 4. `.venv\Scripts\python.exe scripts\fhir_baseline.py diff <資料夾A> <資料夾B>`，要印出 `IDENTICAL`。
+
+- 轉換會改變抽樣結果時（例如補完 JSON 後就沒有「只有索引」的就診可抽），B 要加 `--sample-from <資料夾A>`，沿用 A 的日子、就診、病人。
 
 - 工具會打看診工作台、掛號清單、調閱、掛號簿、各統計報表、月申報 XML、IC 檔、診斷證明、轉診、照片相簿、病人歷史等 45 類讀取，抽樣近期與歷年的日子、只有索引的病名處方、300 位病人。
 - 資料庫在網路磁碟上會拒絕執行；輸出放在專案資料夾內也會拒絕（輸出含病人資料，不可進 git）。
@@ -517,7 +521,7 @@ Big5 XML ETA、ETB、ETE、ETG、ETH；`NHI_DownloadB`（type 04、10）；`NHI_
 依「先改寫入、舊表留作衍生、新舊並行每日比對、讀取最後換」的原則：
 
 1. 統一擴充網址與 code system（不動資料語意，只正規化）。
-2. 把只有索引的病名和處方補成完整 FHIR（`bulk_materialize_fhir_from_index.py` 類），之後改成 FHIR 為正本、索引由 FHIR 重建。
+2. 把只有索引的病名和處方補成完整 FHIR（`materialize_index_only.py`；舊的 `bulk_materialize_fhir_from_index.py` 會整批覆蓋、ICD 系統寫錯、丟欄位，不要用），之後改成 FHIR 為正本、索引由 FHIR 重建。
 3. Organization／Location ← 院所 profile；Practitioner／PractitionerRole ← 員工，看診改用 participant。
 4. 診斷證明、轉診、論質 → DocumentReference／ServiceRequest／DiagnosticReport。外部 XML 輸出照舊。
 5. 照片：LOOK 檔案保留，加上 Media／DocumentReference 指標。
