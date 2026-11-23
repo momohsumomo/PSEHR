@@ -88,3 +88,26 @@
 - Observation、Media：0 筆。過敏 3 筆一致。
 
 原則：畫面、申報讀哪一邊，哪一邊就是正本，寫進 JSON；每個「兩邊不同」的欄位要先查讀取端用哪邊，不可猜。
+
+## 換版後待修：TW Core 驗證（2026-11-23 摸底）
+
+用官方 FHIR Validator 加 `tw.gov.mohw.twcore#1.0.0`，抽驗演練副本每種資源 40 筆（不足全取），外部術語伺服器關閉（`-tx n/a`）、允許本站網域擴充。不影響畫面與申報，換版後分三批修；每批照轉換步驟、副本演練、重建比對、上線的流程，只用 POST/PUT。
+
+第一批，R4 本身不合法：
+
+- 子擴充寫了空字串 `""`（Patient、四張專表）：空值整個不寫，跟 NULL 一樣。
+- `Encounter.class` 結構錯：R4 是 Coding，要寫 `v3-ActCode` 的 `AMB`；讀這欄的程式一起改。
+- 空陣列：Patient `address`、`telecom`，Encounter `reasonCode`，少數 MedicationRequest 的 `coding`。
+- `clinicalStatus` 沒有 system（Condition、AllergyIntolerance）。
+- DocumentReference `date` 沒時區，要寫成 instant。
+
+第二批，TW Core 必填：
+
+- Condition 補 `category`（encounter-diagnosis）。
+- DocumentReference 補 `content`；建議 `type` 用 LOINC。
+- 新建病人的病歷號識別碼 `use` 寫成 `secondary`，TW Core 要 `official`，且新建病人多一個重複的病歷號識別碼：寫入端要改。
+- 處置碼（例如 `51010C`）掛在健保藥品 system 底下，要改用對應的系統。
+
+第三批：本站擴充發一個自己的小 IG package（StructureDefinition），驗證時不必再加 `-extension`。
+
+不是我們的問題：TW Core 1.0.0 的 `medication-nhi-tw` 只有 35 個範例碼卻標成 complete，藥碼「unknown code」來自 IG 本身。`dom-6`（narrative）是建議，不修。ICD 碼本身是否有效這次沒驗（術語伺服器關閉）。
