@@ -9,6 +9,7 @@ scripts/fhir_convert.py applies the same rewrite to what is already on disk.
 
 from __future__ import annotations
 
+import re
 from typing import Any
 
 POLARIS_BASE = "https://polarissehr.eskincrux.com/fhir"
@@ -53,6 +54,12 @@ CODE_NHI_MEDICATION = TWCORE_CODESYSTEM + "/medication-nhi-tw"
 CODE_TW_ICD10CM = TWCORE_CODESYSTEM + "/icd-10-cm-2023-tw"
 CODE_NHI_MEDICATION_OLD = "https://nhidcc.nhi.gov.tw/medication"
 CODE_TW_ICD10CM_OLD = "https://nhidcc.nhi.gov.tw/icd10cm"
+# Order lines that are not drugs: NHI fee items (51005C), NHI special
+# materials (12 characters), and the clinic's own items (PP, HAIR).
+CODE_NHI_SERVICE = TWCORE_CODESYSTEM + "/medical-service-payment-tw"
+CODE_NHI_MATERIAL = POLARIS_BASE + "/CodeSystem/nhi-special-material"
+CODE_CLINIC_ITEM = POLARIS_BASE + "/CodeSystem/clinic-item"
+ITEM_SYSTEMS = (CODE_NHI_MEDICATION, CODE_NHI_SERVICE, CODE_NHI_MATERIAL, CODE_CLINIC_ITEM)
 
 _OLD_SD_WUNDADI = "https://wundadi.tw/fhir/StructureDefinition"
 _OLD_SD_NHIDCC = "https://nhidcc.nhi.gov.tw/fhir/StructureDefinition"
@@ -94,6 +101,29 @@ STALE_DUPLICATES: dict[str, str] = {
     "https://clinic.org/fhir/StructureDefinition/queue": ENCOUNTER_QUEUE,
     "https://clinic.org/fhir/StructureDefinition/reg": ENCOUNTER_REG,
 }
+
+
+_DRUG_CODE = re.compile(r"^[A-Z][A-Z0-9]{9}$")
+_SERVICE_CODE = re.compile(r"^\d{5}[A-Z]$")
+_MATERIAL_CODE = re.compile(r"^[A-Z]{3}[A-Z0-9]{9}$")
+
+
+def icd10cm_code(code: str) -> str:
+    """ICD-10-CM as the code system writes it (L72.0); NHI files drop the dot (L720)."""
+    bare = str(code or "").strip().upper().replace(".", "")
+    return bare[:3] + "." + bare[3:] if len(bare) > 3 else bare
+
+
+def item_system(code: str) -> str:
+    """Code system for an order line code, decided by the code's shape alone."""
+    text = str(code or "").strip().upper()
+    if _DRUG_CODE.match(text):
+        return CODE_NHI_MEDICATION
+    if _SERVICE_CODE.match(text):
+        return CODE_NHI_SERVICE
+    if _MATERIAL_CODE.match(text):
+        return CODE_NHI_MATERIAL
+    return CODE_CLINIC_ITEM
 
 
 def chart_number_system(clinic_code: str) -> str:

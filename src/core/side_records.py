@@ -1,8 +1,9 @@
 """Desk tables kept as FHIR resources; the tables are derived from them.
 
 Each row is one resource: the standard skeleton (subject, encounter, date,
-status) plus one extension holding every table column as stored, so the row
-comes back exactly (NULL is an absent key, '' is valueString ""). A row that
+status) plus one extension holding every table column as stored. FHIR has no
+empty values, so NULL and '' are both left out; the table puts '' back in TEXT
+columns and NULL in the others (no desk TEXT column holds NULL). A row that
 the desk removes stays in FHIR with sub-extension "retired" and drops out of
 the table. Columns listed in EXCLUDED never enter FHIR (staff PIN).
 """

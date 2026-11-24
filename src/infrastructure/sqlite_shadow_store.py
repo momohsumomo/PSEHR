@@ -11,7 +11,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Callable, Generator
 
-from src.core import fhir_urls
+from src.core import fhir_urls, twcore_shape
 from src.core.interfaces.shadow_store import ShadowStore
 from src.core.context import current_machine_id, current_operator_identity
 
@@ -463,16 +463,25 @@ class SqliteShadowStore(ShadowStore):
         if retired:
             conn.execute(f"DELETE FROM {spec.table} WHERE {spec.key} = ?", (key,))
             return True
-        cols = [r[1] for r in conn.execute(f"PRAGMA table_info({spec.table})")]
+        info = conn.execute(f"PRAGMA table_info({spec.table})").fetchall()
+        cols = [r[1] for r in info]
+        blank = {r[1] for r in info if str(r[2] or "").upper() == "TEXT"}
         keep = EXCLUDED.get(spec.table, set())
         extra = getattr(self._local, "side_table_only", None) or {}
-        values = {c: row.get(c) for c in cols if c not in keep}
+        # FHIR leaves blank text out; the table keeps it as ''.
+        values = {c: row.get(c, "" if c in blank else None) for c in cols if c not in keep}
         values.update({c: v for c, v in extra.items() if c in cols})
         names = list(values)
-        sets = ", ".join(f"{c} = excluded.{c}" for c in names if c != spec.key)
+        # An existing row keeps its table-only columns (e.g. staff pin, NOT NULL) untouched.
+        if conn.execute(f"SELECT 1 FROM {spec.table} WHERE {spec.key} = ?", (key,)).fetchone():
+            sets = ", ".join(f"{c} = ?" for c in names if c != spec.key)
+            conn.execute(
+                f"UPDATE {spec.table} SET {sets} WHERE {spec.key} = ?",
+                [values[c] for c in names if c != spec.key] + [key],
+            )
+            return True
         conn.execute(
-            f"INSERT INTO {spec.table} ({', '.join(names)}) VALUES ({', '.join('?' for _ in names)}) "
-            f"ON CONFLICT({spec.key}) DO UPDATE SET {sets}",
+            f"INSERT INTO {spec.table} ({', '.join(names)}) VALUES ({', '.join('?' for _ in names)})",
             [values[c] for c in names],
         )
         return True
@@ -512,6 +521,7 @@ class SqliteShadowStore(ShadowStore):
                 from src.core.condition_status import normalize
 
                 normalize(payload)
+            twcore_shape.normalize(resource_type, payload)
 
             # Select old payload to detect updates and record changes
             old_row = conn.execute(
@@ -533,37 +543,47 @@ class SqliteShadowStore(ShadowStore):
             )
             self._audit_write(conn, resource_type, resource_id, old_row[0] if old_row else None, payload)
 
-            if self._upsert_side_row(conn, payload):
-                pass
-            elif resource_type == "Patient":
-                try:
-                    self._upsert_patient_index(conn, resource_id, payload)
-                except PatientKeyConflict:
-                    raise
-                except sqlite3.IntegrityError as exc:
-                    msg = str(exc)
-                    if "uq_patient_index_id_no" in msg or "id_no" in msg.lower():
-                        raise PatientKeyConflict("id_no", "?", resource_id) from exc
-                    if "uq_patient_index_medical_no" in msg or "medical_no" in msg.lower():
-                        raise PatientKeyConflict("medical_no", "?", resource_id) from exc
-                    raise
-            elif resource_type == "Encounter":
-                self._upsert_encounter_index(conn, resource_id, payload)
-            elif resource_type == "Condition":
-                self._upsert_condition_index(conn, resource_id, payload)
-            elif resource_type == "MedicationRequest":
-                self._upsert_medication_request_index(conn, resource_id, payload)
-            elif resource_type == "Composition":
-                self._upsert_clinical_note_index(conn, resource_id, payload)
-            elif resource_type == "Observation":
-                self._upsert_observation_index(conn, resource_id, payload)
-            elif resource_type == "AllergyIntolerance":
-                self._upsert_allergy_index(conn, resource_id, payload)
-            elif resource_type == "Media":
-                self._upsert_media_index(conn, resource_id, payload)
-            elif resource_type == "Basic":
-                self._upsert_cash_return_index(conn, resource_id, payload)
+            if not self._upsert_side_row(conn, payload):
+                self._derive_index(conn, resource_type, resource_id, payload)
             _sync_index_time(conn, resource_type, resource_id, payload)
+
+    def _derive_index(
+        self,
+        conn: sqlite3.Connection,
+        resource_type: str,
+        resource_id: str,
+        payload: dict[str, Any],
+        *,
+        check_keys: bool = True,
+    ) -> None:
+        if resource_type == "Patient":
+            try:
+                self._upsert_patient_index(conn, resource_id, payload, check_keys=check_keys)
+            except PatientKeyConflict:
+                raise
+            except sqlite3.IntegrityError as exc:
+                msg = str(exc)
+                if "uq_patient_index_id_no" in msg or "id_no" in msg.lower():
+                    raise PatientKeyConflict("id_no", "?", resource_id) from exc
+                if "uq_patient_index_medical_no" in msg or "medical_no" in msg.lower():
+                    raise PatientKeyConflict("medical_no", "?", resource_id) from exc
+                raise
+        elif resource_type == "Encounter":
+            self._upsert_encounter_index(conn, resource_id, payload)
+        elif resource_type == "Condition":
+            self._upsert_condition_index(conn, resource_id, payload)
+        elif resource_type == "MedicationRequest":
+            self._upsert_medication_request_index(conn, resource_id, payload)
+        elif resource_type == "Composition":
+            self._upsert_clinical_note_index(conn, resource_id, payload)
+        elif resource_type == "Observation":
+            self._upsert_observation_index(conn, resource_id, payload)
+        elif resource_type == "AllergyIntolerance":
+            self._upsert_allergy_index(conn, resource_id, payload)
+        elif resource_type == "Media":
+            self._upsert_media_index(conn, resource_id, payload)
+        elif resource_type == "Basic":
+            self._upsert_cash_return_index(conn, resource_id, payload)
 
     def _audit_write(
         self,
@@ -1047,6 +1067,7 @@ class SqliteShadowStore(ShadowStore):
             return False
         payload = json.loads(row[0])
         mutate(payload)
+        twcore_shape.normalize(resource_type, payload)
         put_last_updated(payload, _now_index_time())
         conn.execute(
             """
@@ -3034,13 +3055,17 @@ class SqliteShadowStore(ShadowStore):
                 break
         
         self._auto_fill_patient_id_category(conn, payload)
-        
+        twcore_shape.normalize("Patient", payload)
+        put_last_updated(payload, _now_index_time())
+
         conn.execute(
             "UPDATE resource_cache SET payload_json = ?, updated_at = datetime('now') WHERE resource_type = 'Patient' AND resource_id = ?",
             (json.dumps(payload, ensure_ascii=False), patient_id)
         )
-        
+        self._audit_write(conn, "Patient", patient_id, row[0], payload)
+
         self._upsert_patient_index(conn, patient_id, payload)
+        _sync_index_time(conn, "Patient", patient_id, payload)
 
 
     def count_patient_encounters(self, patient_id: str) -> int:
@@ -3867,7 +3892,9 @@ def _chart_system(conn: sqlite3.Connection) -> str | None:
 
 
 FHIR_FORMAT_KEY = "fhir_format"
-FHIR_FORMAT = "final-1"
+# final-1: every index value lives in JSON. final-2: JSON also passes TW Core (twcore_shape).
+FHIR_FORMAT = "final-2"
+FHIR_FORMAT_PREVIOUS = "final-1"
 
 
 class NotConvertedError(RuntimeError):

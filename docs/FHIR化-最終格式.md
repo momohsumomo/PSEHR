@@ -65,7 +65,7 @@
 
 `scripts/fhir_convert.py --db 副本 [--steps ...] [--apply]`。不加 `--apply` 只試跑、全部回滾；拒絕網路路徑與 repo 內的檔案。步驟依序：`materialize`（只在索引的病名、處方補 JSON）、`urls`（換正式網址，需要醫事機構代號）、`encounter`、`cash_return`、`medication`、`condition`、`patient`、`note`（只在索引的主訴建 Composition）、`other`（生命徵象、過敏、病灶照片）、`side`（8～12 區各表）、`org`（Organization 與 `serviceProvider`）。
 
-每步都還原索引的 `updated_at`（畫面靠它排序），並逐欄比對重產的索引。全部步驟跑完才寫 `fhir_format = final-1`；新版啟動時看到用過的庫沒有這個標記就拒絕開（`NotConvertedError`）。
+每步都還原索引的 `updated_at`（畫面靠它排序），並逐欄比對重產的索引。最後一步 `twcore` 把每筆 JSON 過 `src/core/twcore_shape.py`。全部步驟跑完，或 final-1 的庫只跑 `twcore`，才寫 `fhir_format = final-2`；新版啟動時看到用過的庫不是 final-2 就拒絕開（`NotConvertedError`）。
 
 ## 進度
 
@@ -89,9 +89,29 @@
 
 原則：畫面、申報讀哪一邊，哪一邊就是正本，寫進 JSON；每個「兩邊不同」的欄位要先查讀取端用哪邊，不可猜。
 
-## 換版後待修：TW Core 驗證（2026-11-23 摸底）
+## final-2：TW Core 驗證（2026-11-24）
 
-用官方 FHIR Validator 加 `tw.gov.mohw.twcore#1.0.0`，抽驗演練副本每種資源 40 筆（不足全取），外部術語伺服器關閉（`-tx n/a`）、允許本站網域擴充。不影響畫面與申報，換版後分三批修；每批照轉換步驟、副本演練、重建比對、上線的流程，只用 POST/PUT。
+`src/core/twcore_shape.py` 的 `normalize()` 在每次存檔（`cache_resource`、`_rewrite_json`）跑，轉換步驟 `twcore` 對舊資料跑同一套，只改寫法不改意思：
+
+- 空字串、null、空陣列、空物件整個不寫；只剩 url 的擴充也不寫。專表的 TEXT 欄位缺值時補回 `''`（主機實際資料這些欄沒有 NULL）。
+- `Encounter.class` = `v3-ActCode` 的 `AMB`，不寫 display。
+- Condition 補 `category` encounter-diagnosis；沒有 `clinicalStatus` 又不是輸入錯誤的補 `active`（索引原本就這樣讀）。過敏同樣。狀態 coding 補 system。
+- TW ICD-10-CM 碼照官方寫成有點（`L72.0`）；`extract_terminology_stickers` 讀回索引時去點，所以 `nhi_icd10_code`、申報、IC 上傳不變。
+- 醫令代碼依形狀分系統（`fhir_urls.item_system`）：藥碼 `medication-nhi-tw`、`NNNNNX` 診療 `medical-service-payment-tw`、特材 `nhi-special-material`、其餘 `clinic-item`。TW Core 系統上的 display 移到 `text`（已有 text 就丟掉）。完全沒有代碼的醫令寫 data-absent-reason。
+- 病歷號識別碼的 `use` 只留 official，重複識別碼去掉。
+- DocumentReference `date` 補成 instant，沒有 `content` 的補只有標題的 attachment。
+- Composition 沒有作者的寫 `Polaris SEHR`（跟轉換建立的筆記一樣）。
+
+演練（final-1 副本 → final-2）：改寫 2,259,587 筆，缺口 0，重建 IDENTICAL；索引只有 64 格從 `''` 變 NULL（病人身分類別、身分證；退現金 14 筆），讀取端都當空白。
+
+抽驗（每種 60 筆隨機＋10 筆最新＋以前出錯的樣態）剩下的錯誤都不是我們能修的：
+
+- `medication-nhi-tw` 只有 35 碼、`icd-10-cm-2023-tw` 只有 11 碼，卻都標 complete，所以真實藥碼、病名碼「unknown code」。
+- 輸入錯誤的病名：R4 `con-5` 不准有 `clinicalStatus`，TW Core 卻要求 1..1，兩者衝突，照 R4。
+
+還沒做：本站擴充發自己的 StructureDefinition 小 package，驗證時不必再加 `-extension`（只是文件，不動資料）。
+
+### 2026-11-23 摸底時的問題（已在 final-2 修掉）
 
 第一批，R4 本身不合法：
 
@@ -108,6 +128,4 @@
 - 新建病人的病歷號識別碼 `use` 寫成 `secondary`，TW Core 要 `official`，且新建病人多一個重複的病歷號識別碼：寫入端要改。
 - 處置碼（例如 `51010C`）掛在健保藥品 system 底下，要改用對應的系統。
 
-第三批：本站擴充發一個自己的小 IG package（StructureDefinition），驗證時不必再加 `-extension`。
-
-不是我們的問題：TW Core 1.0.0 的 `medication-nhi-tw` 只有 35 個範例碼卻標成 complete，藥碼「unknown code」來自 IG 本身。`dom-6`（narrative）是建議，不修。ICD 碼本身是否有效這次沒驗（術語伺服器關閉）。
+`dom-6`（narrative）是建議，不修。

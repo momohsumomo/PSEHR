@@ -526,6 +526,59 @@ def step_org(store: s.SqliteShadowStore, conn: sqlite3.Connection) -> Report:
     return rep
 
 
+def step_twcore(store: s.SqliteShadowStore, conn: sqlite3.Connection) -> Report:
+    """Every resource through twcore_shape; its index or desk row must come out the same."""
+    from src.core import twcore_shape
+    from src.core.side_records import from_resource
+
+    rep = Report("TW Core shape")
+    tables = {**s.INDEX_TABLE_FOR, "Basic": "cash_return"}
+    for rtype in [r[0] for r in conn.execute("SELECT DISTINCT resource_type FROM resource_cache")]:
+        table = tables.get(rtype)
+        ids = [r[0] for r in conn.execute(
+            "SELECT resource_id FROM resource_cache WHERE resource_type = ? ORDER BY resource_id", (rtype,)
+        )]
+        for i in range(0, len(ids), 2000):
+            chunk = ids[i : i + 2000]
+            marks = ",".join("?" * len(chunk))
+            for rid, text in conn.execute(
+                f"SELECT resource_id, payload_json FROM resource_cache "
+                f"WHERE resource_type = ? AND resource_id IN ({marks})",
+                (rtype, *chunk),
+            ).fetchall():
+                rep.rows += 1
+                payload = json.loads(text)
+                if not twcore_shape.normalize(rtype, payload):
+                    continue
+                rep.json_changed += 1
+                rep.notes[f"rewritten {rtype}"] += 1
+                _write(conn, rtype, rid, payload)
+                side = from_resource(payload)
+                if side is not None:
+                    spec, row, _retired = side
+                    key = row.get(spec.key)
+                    before = conn.execute(f"SELECT * FROM {spec.table} WHERE {spec.key} = ?", (key,)).fetchone()
+                    store._upsert_side_row(conn, payload)
+                    after = conn.execute(f"SELECT * FROM {spec.table} WHERE {spec.key} = ?", (key,)).fetchone()
+                    for col in (before.keys() if before else []):
+                        if after is None or before[col] != after[col]:
+                            rep.index_changed[f"{spec.table}.{col}"] += 1
+                    continue
+                if table is None:
+                    continue
+                before = conn.execute(f"SELECT * FROM {table} WHERE resource_id = ?", (rid,)).fetchone()
+                store._derive_index(conn, rtype, rid, payload, check_keys=False)
+                if before is not None:
+                    if "updated_at" in before.keys():
+                        conn.execute(f"UPDATE {table} SET updated_at = ? WHERE resource_id = ?",
+                                     (before["updated_at"], rid))
+                    after = conn.execute(f"SELECT * FROM {table} WHERE resource_id = ?", (rid,)).fetchone()
+                    _compare(before, after, rep)
+            if (i // 2000) % 50 == 0:
+                print(f"  {rtype} {i + len(chunk)}/{len(ids)}", flush=True)
+    return rep
+
+
 STEPS = {
     "materialize": step_materialize,
     "urls": step_urls,
@@ -538,6 +591,7 @@ STEPS = {
     "other": step_other,
     "side": step_side,
     "org": step_org,
+    "twcore": step_twcore,
 }
 
 
@@ -549,9 +603,10 @@ def run(db: Path, steps: list[str], apply: bool) -> int:
     raw.execute("BEGIN")
     try:
         s._apply_index_migrations(raw)
+        was = s._get_runtime_setting(raw, s.FHIR_FORMAT_KEY)
         for name in steps:
             STEPS[name](store, raw).show()
-        if set(steps) == set(STEPS):
+        if set(steps) == set(STEPS) or (was == s.FHIR_FORMAT_PREVIOUS and steps == ["twcore"]):
             s._set_runtime_setting(raw, s.FHIR_FORMAT_KEY, s.FHIR_FORMAT)
             print(f"\nmarked {s.FHIR_FORMAT_KEY} = {s.FHIR_FORMAT}")
         if apply:

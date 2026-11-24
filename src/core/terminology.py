@@ -13,7 +13,7 @@ SYSTEM_RXNORM = "http://www.nlm.nih.gov/research/umls/rxnorm"
 SYSTEM_NHI_MEDICATION = fhir_urls.CODE_NHI_MEDICATION
 SYSTEM_TW_ICD10CM = fhir_urls.CODE_TW_ICD10CM
 _NHI_ICD_SYSTEMS = {SYSTEM_TW_ICD10CM, *fhir_urls.LEGACY_ALIASES[SYSTEM_TW_ICD10CM]}
-_NHI_MED_SYSTEMS = {SYSTEM_NHI_MEDICATION, *fhir_urls.LEGACY_ALIASES[SYSTEM_NHI_MEDICATION]}
+_NHI_MED_SYSTEMS = {*fhir_urls.ITEM_SYSTEMS, *fhir_urls.LEGACY_ALIASES[SYSTEM_NHI_MEDICATION]}
 
 
 def _same_system(system: str) -> set[str]:
@@ -48,7 +48,7 @@ def extract_terminology_stickers(codeable: dict[str, Any] | None) -> dict[str, s
             continue
         system = c.get("system", "")
         if system in _NHI_ICD_SYSTEMS:
-            result["nhiIcd10Code"] = str(code)
+            result["nhiIcd10Code"] = str(code).replace(".", "")
         elif system in _NHI_MED_SYSTEMS:
             result["nhiMedCode"] = str(code)
         elif _system_matches(system, "icd-10", "icd10"):
@@ -91,7 +91,7 @@ def build_condition_codeable(
     if snomed_code:
         _upsert(SYSTEM_SNOMED, snomed_code)
     if nhi_icd10_code:
-        _upsert(SYSTEM_TW_ICD10CM, nhi_icd10_code)
+        _upsert(SYSTEM_TW_ICD10CM, fhir_urls.icd10cm_code(nhi_icd10_code))
 
     out: dict[str, Any] = {"coding": coding}
     if text:
@@ -110,15 +110,15 @@ def build_medication_codeable(
     coding: list[dict[str, Any]] = list(base.get("coding") or [])
     text = summary_text or base.get("text")
 
-    def _upsert(system: str, code: str) -> None:
+    def _upsert(system: str, code: str, replaces: set[str]) -> None:
         nonlocal coding
-        coding = [c for c in coding if c.get("system") not in _same_system(system)]
+        coding = [c for c in coding if c.get("system") not in replaces]
         coding.append({"system": system, "code": code})
 
     if nhi_code:
-        _upsert(SYSTEM_NHI_MEDICATION, nhi_code)
+        _upsert(fhir_urls.item_system(nhi_code), nhi_code, _NHI_MED_SYSTEMS)
     if rxnorm_code:
-        _upsert(SYSTEM_RXNORM, rxnorm_code)
+        _upsert(SYSTEM_RXNORM, rxnorm_code, _same_system(SYSTEM_RXNORM))
 
     out: dict[str, Any] = {"coding": coding}
     if text:
