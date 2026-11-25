@@ -19,12 +19,17 @@ RUNNING = "\u6b63\u5728\u5411\u5065\u4fdd\u7f72\u548c\u98df\u85e5\u7f72\u6293\u6
 INSTALLED = "\u5df2\u88dd\u9032\u67e5\u50f9\u3002"
 SAME = "\u5b98\u65b9\u85e5\u50f9\u8ddf\u4e0a\u4e00\u7248\u4e00\u6a23\uff0c\u6cbf\u7528\u73fe\u5728\u9019\u4e00\u7248\u3002"
 OVERDUE = "\u9019\u500b\u6708\u7684\u85e5\u50f9\u9084\u6c92\u66f4\u65b0\u6210\u3002"
-FETCH_FAIL = "\u9019\u6b21\u6c92\u6709\u6293\u6210\uff0c\u4ecd\u7528\u4e0a\u4e00\u7248\u3002"
-CHECKSUM_FAIL = "\u85e5\u50f9\u5305\u7684\u6aa2\u67e5\u78bc\u6c92\u904e\uff0c\u6c92\u6709\u88dd\u9032\u67e5\u50f9\uff0c\u4ecd\u7528\u4e0a\u4e00\u7248\u3002"
-PAST_CHANGED = "\u65b0\u7248\u6539\u5230\u5df2\u7d93\u751f\u6548\u7684\u820a\u50f9\u683c\uff0c\u6c92\u6709\u88dd\u9032\u67e5\u50f9\uff0c\u4ecd\u7528\u4e0a\u4e00\u7248\u3002"
+KEPT = "\u67e5\u50f9\u7167\u820a\u7528\u539f\u672c\u90a3\u4e00\u7248\uff0c\u50f9\u683c\u6c92\u8b8a\u3002"
+FETCH_FAIL = "\u9019\u6b21\u6c92\u6293\u6210\u3002" + KEPT
+CHECKSUM_FAIL = "\u6293\u4e0b\u4f86\u7684\u85e5\u50f9\u6a94\u6aa2\u67e5\u6c92\u904e\uff0c\u6c92\u6709\u88dd\u3002" + KEPT
+PAST_CHANGED = "\u65b0\u6a94\u6539\u5230\u5df2\u7d93\u751f\u6548\u7684\u820a\u50f9\u683c\uff0c\u6c92\u6709\u88dd\u3002" + KEPT
 STOPPED = "\u5df2\u505c\u7528 {v}\uff0c\u67e5\u50f9\u6539\u7528 {now}\u3002"
 RESUMED = "\u5df2\u6062\u5fa9 {v}\uff0c\u67e5\u50f9\u7528 {now}\u3002"
-INTERRUPTED = "\u4e0a\u6b21\u6c92\u6709\u505a\u5b8c\uff0c\u4ecd\u7528\u4e0a\u4e00\u7248\u3002"
+INTERRUPTED = (
+    "\u4e0a\u6b21\u6293\u85e5\u50f9\u6293\u5230\u4e00\u534a\uff0c\u7a0b\u5f0f\u525b\u597d\u91cd\u65b0\u555f\u52d5\uff0c\u6c92\u6293\u5b8c\u3002"
+    + KEPT
+    + "\u7b49\u4e00\u4e0b\u6703\u81ea\u52d5\u518d\u6293\uff0c\u4e5f\u53ef\u4ee5\u518d\u6309\u4e00\u6b21\u300c\u66f4\u65b0\u85e5\u50f9\u300d\u3002"
+)
 OK_MONTH = "\u9019\u500b\u6708\u5df2\u5c0d\u904e\u5b98\u65b9\u85e5\u50f9\u3002"
 
 _lock = threading.Lock()
@@ -60,7 +65,7 @@ def plain_block(message: str) -> str:
         parts.append("\u6709\u4e00\u7b46\u50f9\u683c\u8df3\u4e86\u5169\u500d\u4ee5\u4e0a")
     if not parts:
         parts.append("\u6a94\u6848\u770b\u8d77\u4f86\u4e0d\u5c0d")
-    return "\u9019\u6b21\u6c92\u6709\u88dd\u4e0a\uff0c\u4ecd\u7528\u4e0a\u4e00\u7248\u3002" + "\u3001".join(parts) + "\u3002"
+    return "\u9019\u6b21\u7684\u6a94\u6848\u4e0d\u5c0d\uff0c\u6c92\u6709\u88dd\uff1a" + "\u3001".join(parts) + "\u3002" + KEPT
 
 
 def public_view(state: dict[str, Any], today: date) -> dict[str, Any]:
@@ -70,7 +75,7 @@ def public_view(state: dict[str, Any], today: date) -> dict[str, Any]:
     detail = str(state.get("detail") or "")
     if status == "running":
         notice = RUNNING
-    elif status in ("blocked_event", "failed"):
+    elif status in ("blocked_event", "failed", "interrupted"):
         notice = detail or FETCH_FAIL
     elif not this_month:
         notice = OVERDUE
@@ -193,7 +198,7 @@ def recover_interrupted(path: Path | None = None) -> None:
         state = load_state(path)
         if state.get("status") != "running":
             return
-        state["status"] = "failed"
+        state["status"] = "interrupted"
         state["detail"] = INTERRUPTED
         state["lastAttemptOn"] = str(state.get("lastAttemptOn") or date.today().isoformat())
         state["finishedAt"] = datetime.now(timezone.utc).replace(microsecond=0).isoformat()

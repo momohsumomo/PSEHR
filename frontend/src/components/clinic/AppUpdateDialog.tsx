@@ -44,7 +44,7 @@ function drugOutcome(drug: DrugStatus | null): string {
   if (status === "blocked_event") {
     return `\u7d50\u679c\uff1a\u6a94\u6848\u4e0d\u5c0d\uff0c\u6c92\u6709\u5b89\u88dd\u3002${drug.detail ? drug.detail : ""}`;
   }
-  if (status === "failed") {
+  if (status === "failed" || status === "interrupted") {
     return `\u7d50\u679c\uff1a${drug.detail || "\u9019\u6b21\u6c92\u6709\u6293\u6210\u3002"}`;
   }
   return "";
@@ -125,7 +125,6 @@ export function AppUpdateDialog({ open, onClose }: { open: boolean; onClose: () 
         void request<DrugStatus>("/maintenance/drug-pack")
           .then((body) => {
             setDrug(body);
-            setNote(body.detail || "");
             if (body.running) watch();
             else setBusy("");
           })
@@ -138,7 +137,6 @@ export function AppUpdateDialog({ open, onClose }: { open: boolean; onClose: () 
     void request<DrugStatus>("/maintenance/drug-pack", { method: "POST" })
       .then((body) => {
         setDrug(body);
-        setNote(body.detail || "");
         if (body.running) watch();
         else setBusy("");
       })
@@ -237,7 +235,7 @@ export function AppUpdateDialog({ open, onClose }: { open: boolean; onClose: () 
             {drug?.lastSuccessOn ? `\u00b7 \u4e0a\u6b21 ${drug.lastSuccessOn}` : ""}
             {"\u3002\u9019\u53f0\u4e3b\u6a5f\u81ea\u5df1\u5411\u5065\u4fdd\u7f72\u3001\u98df\u85e5\u7f72\u6293\u6574\u4efd\u3002\u6a94\u6848\u4e0d\u5c0d\u5c31\u4e0d\u88dd\uff0c\u820a\u75c5\u6b77\u4ecd\u7528\u5c31\u91ab\u7576\u5929\u7684\u50f9\u683c\u3002"}
           </p>
-          {drug?.notice ? <p className="mt-1 text-[12px] leading-relaxed text-[#E7D7A8]">{drug.notice}</p> : null}
+          {drug?.notice && !drug.running && !drugResult ? <p className="mt-1 text-[12px] leading-relaxed text-[#E7D7A8]">{drug.notice}</p> : null}
           <button
             type="button"
             disabled={busy !== "" || Boolean(drug?.running)}

@@ -1,16 +1,22 @@
+import tempfile
 import unittest
 from datetime import date
+from pathlib import Path
 
 from src.core.drug_price_refresh import (
     CHECKSUM_FAIL,
     FETCH_FAIL,
     INSTALLED,
+    INTERRUPTED,
     OVERDUE,
     SAME,
     apply_pipeline_result,
     is_due,
+    load_state,
     plain_block,
     public_view,
+    recover_interrupted,
+    save_state,
 )
 
 
@@ -30,6 +36,16 @@ class DueTest(unittest.TestCase):
 
     def test_never_run_is_due(self) -> None:
         self.assertTrue(is_due({}, date(2026, 10, 28)))
+
+    def test_interrupted_run_retries_same_day(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "state.json"
+            save_state({"status": "running", "lastAttemptOn": "2026-10-28"}, path)
+            recover_interrupted(path)
+            state = load_state(path)
+        self.assertEqual(state["status"], "interrupted")
+        self.assertTrue(is_due(state, date(2026, 10, 28)))
+        self.assertEqual(public_view(state, date(2026, 10, 28))["notice"], INTERRUPTED)
 
 
 class ResultTest(unittest.TestCase):
