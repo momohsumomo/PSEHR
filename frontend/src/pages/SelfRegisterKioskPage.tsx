@@ -53,7 +53,7 @@ const shell =
 const card =
   "flex min-h-0 flex-1 flex-col items-center justify-center rounded-[2rem] px-8 text-center shadow-[0_16px_36px_rgba(18,42,58,.12)] active:scale-[0.99] disabled:opacity-60";
 const keyBtn =
-  "flex items-center justify-center rounded-2xl bg-white text-4xl font-semibold text-[#16324a] shadow-[0_8px_18px_rgba(18,42,58,.08)] active:bg-[#e7f3f6] disabled:opacity-60";
+  "flex items-center justify-center rounded-2xl bg-white text-5xl font-semibold text-[#16324a] shadow-[0_8px_18px_rgba(18,42,58,.08)] active:bg-[#e7f3f6] disabled:opacity-60";
 
 function idTail(idNo: string): string {
   const id = idNo.replace(/\s/g, "").toUpperCase();
@@ -424,31 +424,38 @@ export function SelfRegisterKioskPage() {
           <CardDeskTools variant="light" registerOnly />
           <AssignHcReaderButton />
         </div>
-        <p className="text-[1.7rem] font-semibold tracking-wide text-[#12324a]">{clinicName || "\u81ea\u52a9\u639b\u865f"}</p>
-        <h1 className="mt-1 text-5xl font-bold tracking-[0.18em] text-[#12324a]">
+        <p className="text-[2.2rem] font-semibold tracking-wide text-[#12324a]">{clinicName || "\u81ea\u52a9\u639b\u865f"}</p>
+        <h1 className="mt-1 text-6xl font-bold tracking-[0.18em] text-[#12324a]">
           {"\u81ea\u52a9\u639b\u865f"}
-          <span className="ml-4 align-middle text-2xl font-semibold tracking-normal text-[#0f4c6e]">
+          <span className="ml-4 align-middle text-3xl font-semibold tracking-normal text-[#0f4c6e]">
             {waitLabel || "\u5019\u8a3a\u4eba\u6578 \u2014"}
           </span>
         </h1>
         <div className="mx-auto mt-3 h-1 w-16 rounded-full bg-[#c4a36a]" />
       </header>
       {note && mode !== "done" && mode !== "notice" ? (
-        <div className="mx-6 mt-4 rounded-2xl bg-[#f8e4e4] px-4 py-3 text-center text-xl font-bold text-[#8a3030]">{note}</div>
+        <div className="mx-6 mt-4 rounded-2xl bg-[#f8e4e4] px-4 py-3 text-center text-2xl font-bold text-[#8a3030]">{note}</div>
       ) : null}
       {mode === "home" ? (
         <div className="flex min-h-0 flex-1 flex-col gap-4 p-6">
           <div className="flex min-h-0 flex-1 gap-6">
           <button type="button" disabled={busy} className={`${card} bg-[#1A6FB5] text-white`} onClick={() => { setNote(""); setMode("kind"); }}>
             <span className="mb-5 h-1.5 w-14 rounded-full bg-[#d6ebf8]" />
-            <span className="text-5xl font-bold">{"\u7121\u5065\u4fdd\u5361\u639b\u865f"}</span>
-            <span className="mt-5 rounded-full bg-white/20 px-5 py-2 text-2xl font-semibold text-white">{"\u521d\u8a3a\u4e0d\u53ef\u4f7f\u7528"}</span>
+            <span className="text-6xl font-bold">{"\u7121\u5065\u4fdd\u5361\u639b\u865f"}</span>
+            <span className="mt-5 rounded-full bg-white/20 px-5 py-2 text-3xl font-semibold text-white">{"\u521d\u8a3a\u4e0d\u53ef\u4f7f\u7528"}</span>
           </button>
           <button type="button" disabled={busy} className={`${card} bg-[#8BE04A] text-[#14320c] shadow-[0_16px_40px_rgba(90,190,40,.45)]`} onClick={() => void runCard()}>
             <span className="mb-5 h-1.5 w-14 rounded-full bg-white/80" />
-            <span className="text-5xl font-bold">{"\u5065\u4fdd\u5361\u639b\u865f"}</span>
-            <span className="mt-5 text-2xl font-medium text-[#1d4a12]">
-              {busy ? "\u8b80\u5361\u4e2d" : "\u8acb\u63d2\u5361\u518d\u6309"}
+            <span className="text-6xl font-bold">{"\u5065\u4fdd\u5361\u639b\u865f"}</span>
+            <span className="mt-5 text-3xl font-medium text-[#1d4a12]">
+              {busy ? (
+                "\u8b80\u5361\u4e2d"
+              ) : (
+                <>
+                  <span className="text-6xl font-bold">{"\u5148\u63d2\u5361"}</span>
+                  {"\u518d\u6309"}
+                </>
+              )}
             </span>
           </button>
           </div>
@@ -456,7 +463,7 @@ export function SelfRegisterKioskPage() {
       ) : null}
       {mode === "kind" ? (
         <div className="flex min-h-0 flex-1 flex-col gap-4 p-6">
-          <h2 className="text-center text-3xl font-semibold">{"\u7121\u5065\u4fdd\u5361\u639b\u865f"}</h2>
+          <h2 className="text-center text-4xl font-semibold">{"\u7121\u5065\u4fdd\u5361\u639b\u865f"}</h2>
           <div className="flex min-h-0 flex-1 gap-6">
             <button
               type="button"
@@ -468,8 +475,8 @@ export function SelfRegisterKioskPage() {
                 setMode("id");
               }}
             >
-              <span className="text-6xl font-bold">{"\u62bc\u91d1"}</span>
-              <span className="mt-4 text-2xl text-[#8a6430]">{"\u5148\u6536\u62bc\u91d1\uff0c\u4e4b\u5f8c\u88dc\u5361"}</span>
+              <span className="text-7xl font-bold">{"\u62bc\u91d1"}</span>
+              <span className="mt-4 text-3xl text-[#8a6430]">{"\u5148\u6536\u62bc\u91d1\uff0c\u4e4b\u5f8c\u88dc\u5361"}</span>
             </button>
             <button
               type="button"
@@ -481,22 +488,22 @@ export function SelfRegisterKioskPage() {
                 setMode("id");
               }}
             >
-              <span className="text-6xl font-bold">{"\u81ea\u8cbb"}</span>
-              <span className="mt-4 text-2xl text-[#d5e8f2]">{"\u4e0d\u8d70\u5065\u4fdd"}</span>
+              <span className="text-7xl font-bold">{"\u81ea\u8cbb"}</span>
+              <span className="mt-4 text-3xl text-[#d5e8f2]">{"\u4e0d\u8d70\u5065\u4fdd"}</span>
             </button>
           </div>
-          <button type="button" className="h-14 rounded-2xl bg-white/80 text-xl font-semibold text-[#31586e] shadow" onClick={() => setMode("home")}>
+          <button type="button" className="h-16 rounded-2xl bg-white/80 text-2xl font-semibold text-[#31586e] shadow" onClick={() => setMode("home")}>
             {"\u56de\u4e0a\u4e00\u9801"}
           </button>
         </div>
       ) : null}
       {mode === "id" ? (
         <div className="flex min-h-0 flex-1 flex-col gap-3 p-6">
-          <h2 className="text-center text-3xl font-semibold">
+          <h2 className="text-center text-4xl font-semibold">
             {walk === "deposit" ? "\u62bc\u91d1" : "\u81ea\u8cbb"}
             {"\u3000\u8acb\u8f38\u5165\u8eab\u5206\u8b49\u5f8c\u4e5d\u78bc"}
           </h2>
-          <div className="rounded-2xl bg-white py-4 text-center font-mono text-5xl tracking-[0.4em] text-[#0f4c6e] shadow-[0_8px_18px_rgba(18,42,58,.08)]">
+          <div className="rounded-2xl bg-white py-4 text-center font-mono text-6xl tracking-[0.4em] text-[#0f4c6e] shadow-[0_8px_18px_rgba(18,42,58,.08)]">
             {digits.padEnd(9, "\u00b7")}
           </div>
           <div className="grid flex-1 grid-cols-3 gap-3">
@@ -505,21 +512,21 @@ export function SelfRegisterKioskPage() {
                 {n}
               </button>
             ))}
-            <button type="button" className={`${keyBtn} text-2xl`} onClick={() => { setDigits(""); setNote(""); }}>
+            <button type="button" className={`${keyBtn} text-3xl`} onClick={() => { setDigits(""); setNote(""); }}>
               {"\u6e05\u9664"}
             </button>
             <button type="button" disabled={busy} className={keyBtn} onClick={() => pushDigit("0")}>
               0
             </button>
-            <button type="button" className={`${keyBtn} text-2xl`} onClick={() => setDigits((prev) => prev.slice(0, -1))}>
+            <button type="button" className={`${keyBtn} text-3xl`} onClick={() => setDigits((prev) => prev.slice(0, -1))}>
               {"\u522a\u9664"}
             </button>
           </div>
           <div className="flex gap-3">
-            <button type="button" className="h-16 flex-1 rounded-2xl bg-white text-2xl font-semibold text-[#31586e] shadow" onClick={() => setMode("kind")}>
+            <button type="button" className="h-20 flex-1 rounded-2xl bg-white text-3xl font-semibold text-[#31586e] shadow" onClick={() => setMode("kind")}>
               {"\u56de\u4e0a\u4e00\u9801"}
             </button>
-            <button type="button" disabled={busy} className="h-16 flex-[2] rounded-2xl bg-[#0f4c6e] text-3xl font-bold text-white" onClick={() => void lookup()}>
+            <button type="button" disabled={busy} className="h-20 flex-[2] rounded-2xl bg-[#0f4c6e] text-4xl font-bold text-white" onClick={() => void lookup()}>
               {busy ? "\u67e5\u8a62\u4e2d" : "\u78ba\u5b9a"}
             </button>
           </div>
@@ -527,22 +534,22 @@ export function SelfRegisterKioskPage() {
       ) : null}
       {mode === "pick" ? (
         <div className="flex min-h-0 flex-1 flex-col gap-3 p-6">
-          <h2 className="text-center text-3xl font-semibold">{"\u6709\u5e7e\u4f4d\u5f8c\u4e5d\u78bc\u76f8\u540c\uff0c\u8acb\u9ede\u81ea\u5df1\u7684\u540d\u5b57"}</h2>
+          <h2 className="text-center text-4xl font-semibold">{"\u6709\u5e7e\u4f4d\u5f8c\u4e5d\u78bc\u76f8\u540c\uff0c\u8acb\u9ede\u81ea\u5df1\u7684\u540d\u5b57"}</h2>
           <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-auto">
             {hits.map((hit) => (
               <button
                 key={hit.id}
                 type="button"
                 disabled={busy}
-                className="rounded-2xl bg-white px-6 py-5 text-left text-3xl font-bold shadow"
+                className="rounded-2xl bg-white px-6 py-5 text-left text-4xl font-bold shadow"
                 onClick={() => void registerHit(hit, walk)}
               >
                 {maskName(hit.name)}
-                <span className="ml-4 text-2xl font-semibold text-[#3d7a96]">{hit.birthdayRoc.slice(0, 3)}</span>
+                <span className="ml-4 text-3xl font-semibold text-[#3d7a96]">{hit.birthdayRoc.slice(0, 3)}</span>
               </button>
             ))}
           </div>
-          <button type="button" className="h-14 rounded-2xl bg-white text-xl font-semibold text-[#31586e] shadow" onClick={() => setMode("id")}>
+          <button type="button" className="h-16 rounded-2xl bg-white text-2xl font-semibold text-[#31586e] shadow" onClick={() => setMode("id")}>
             {"\u56de\u4e0a\u4e00\u9801"}
           </button>
         </div>
@@ -550,12 +557,12 @@ export function SelfRegisterKioskPage() {
       {mode === "notice" ? (
         <div className="flex flex-1 flex-col items-center justify-center p-8 text-center">
           <div className="max-w-3xl rounded-[2rem] bg-white px-12 py-12 shadow-[0_16px_36px_rgba(18,42,58,.12)]">
-            <p className="text-4xl font-bold leading-snug text-[#16324a]">
+            <p className="text-5xl font-bold leading-snug text-[#16324a]">
               {"\u521d\u8a3a\u75c5\u60a3\uff0c\u639b\u5b8c\u865f\u5f8c\u8acb\u81f3\u6ac3\u53f0\u586b\u5beb\u521d\u8a3a\u55ae"}
             </p>
             <button
               type="button"
-              className="mt-10 h-20 min-w-64 rounded-2xl bg-[#0f4c6e] px-8 text-3xl font-bold text-white"
+              className="mt-10 h-24 min-w-64 rounded-2xl bg-[#0f4c6e] px-8 text-4xl font-bold text-white"
               onClick={() => setMode("done")}
             >
               {"\u6211\u77e5\u9053\u4e86"}
@@ -566,11 +573,11 @@ export function SelfRegisterKioskPage() {
       {mode === "done" ? (
         <div className="flex flex-1 flex-col items-center justify-center text-center">
           <div className="rounded-[2rem] bg-white px-16 py-12 shadow-[0_16px_36px_rgba(18,42,58,.12)]">
-            <div className="text-3xl font-bold">{who}</div>
-            {number ? <div className="mt-4 text-7xl font-bold text-[#0f4c6e]">{number}</div> : null}
-            <div className={number ? "mt-4 text-2xl" : "mt-6 text-4xl font-bold leading-snug"}>{note}</div>
+            <div className="text-4xl font-bold">{who}</div>
+            {number ? <div className="mt-4 text-8xl font-bold text-[#0f4c6e]">{number}</div> : null}
+            <div className={number ? "mt-4 text-3xl" : "mt-6 text-5xl font-bold leading-snug"}>{note}</div>
           </div>
-          <button type="button" className="mt-8 h-16 w-56 rounded-2xl bg-[#0f4c6e] text-2xl font-bold text-white" onClick={resetHome}>
+          <button type="button" className="mt-8 h-20 w-56 rounded-2xl bg-[#0f4c6e] text-3xl font-bold text-white" onClick={resetHome}>
             {"\u5b8c\u6210"}
           </button>
         </div>
