@@ -1,0 +1,263 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "encounter-book",
+  "url": "https://polarissehr.eskincrux.com/fhir/StructureDefinition/encounter-book",
+  "version": "1.0.0",
+  "name": "EncounterBook",
+  "title": "EncounterBook",
+  "status": "active",
+  "description": "Polaris SEHR extension; shape taken from the stored chart data.",
+  "fhirVersion": "4.0.1",
+  "kind": "complex-type",
+  "abstract": false,
+  "context": [
+    {
+      "type": "element",
+      "expression": "Encounter"
+    }
+  ],
+  "type": "Extension",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Extension",
+        "path": "Extension"
+      },
+      {
+        "id": "Extension.extension",
+        "path": "Extension.extension",
+        "slicing": {
+          "discriminator": [
+            {
+              "type": "value",
+              "path": "url"
+            }
+          ],
+          "rules": "open"
+        }
+      },
+      {
+        "id": "Extension.extension:chiefComplaint",
+        "path": "Extension.extension",
+        "sliceName": "chiefComplaint",
+        "min": 0,
+        "max": "1"
+      },
+      {
+        "id": "Extension.extension:chiefComplaint.url",
+        "path": "Extension.extension.url",
+        "fixedUri": "chiefComplaint"
+      },
+      {
+        "id": "Extension.extension:chiefComplaint.value[x]",
+        "path": "Extension.extension.value[x]",
+        "type": [
+          {
+            "code": "string"
+          }
+        ]
+      },
+      {
+        "id": "Extension.extension:claimDoctorId",
+        "path": "Extension.extension",
+        "sliceName": "claimDoctorId",
+        "min": 0,
+        "max": "1"
+      },
+      {
+        "id": "Extension.extension:claimDoctorId.url",
+        "path": "Extension.extension.url",
+        "fixedUri": "claimDoctorId"
+      },
+      {
+        "id": "Extension.extension:claimDoctorId.value[x]",
+        "path": "Extension.extension.value[x]",
+        "type": [
+          {
+            "code": "string"
+          }
+        ]
+      },
+      {
+        "id": "Extension.extension:claimPharmacistId",
+        "path": "Extension.extension",
+        "sliceName": "claimPharmacistId",
+        "min": 0,
+        "max": "1"
+      },
+      {
+        "id": "Extension.extension:claimPharmacistId.url",
+        "path": "Extension.extension.url",
+        "fixedUri": "claimPharmacistId"
+      },
+      {
+        "id": "Extension.extension:claimPharmacistId.value[x]",
+        "path": "Extension.extension.value[x]",
+        "type": [
+          {
+            "code": "string"
+          }
+        ]
+      },
+      {
+        "id": "Extension.extension:oweCard",
+        "path": "Extension.extension",
+        "sliceName": "oweCard",
+        "min": 0,
+        "max": "1"
+      },
+      {
+        "id": "Extension.extension:oweCard.url",
+        "path": "Extension.extension.url",
+        "fixedUri": "oweCard"
+      },
+      {
+        "id": "Extension.extension:oweCard.value[x]",
+        "path": "Extension.extension.value[x]",
+        "type": [
+          {
+            "code": "integer"
+          }
+        ]
+      },
+      {
+        "id": "Extension.extension:regCc",
+        "path": "Extension.extension",
+        "sliceName": "regCc",
+        "min": 0,
+        "max": "1"
+      },
+      {
+        "id": "Extension.extension:regCc.url",
+        "path": "Extension.extension.url",
+        "fixedUri": "regCc"
+      },
+      {
+        "id": "Extension.extension:regCc.value[x]",
+        "path": "Extension.extension.value[x]",
+        "type": [
+          {
+            "code": "string"
+          }
+        ]
+      },
+      {
+        "id": "Extension.extension:regRemark",
+        "path": "Extension.extension",
+        "sliceName": "regRemark",
+        "min": 0,
+        "max": "1"
+      },
+      {
+        "id": "Extension.extension:regRemark.url",
+        "path": "Extension.extension.url",
+        "fixedUri": "regRemark"
+      },
+      {
+        "id": "Extension.extension:regRemark.value[x]",
+        "path": "Extension.extension.value[x]",
+        "type": [
+          {
+            "code": "string"
+          }
+        ]
+      },
+      {
+        "id": "Extension.extension:shift",
+        "path": "Extension.extension",
+        "sliceName": "shift",
+        "min": 0,
+        "max": "1"
+      },
+      {
+        "id": "Extension.extension:shift.url",
+        "path": "Extension.extension.url",
+        "fixedUri": "shift"
+      },
+      {
+        "id": "Extension.extension:shift.value[x]",
+        "path": "Extension.extension.value[x]",
+        "type": [
+          {
+            "code": "string"
+          }
+        ]
+      },
+      {
+        "id": "Extension.extension:slotTime",
+        "path": "Extension.extension",
+        "sliceName": "slotTime",
+        "min": 0,
+        "max": "1"
+      },
+      {
+        "id": "Extension.extension:slotTime.url",
+        "path": "Extension.extension.url",
+        "fixedUri": "slotTime"
+      },
+      {
+        "id": "Extension.extension:slotTime.value[x]",
+        "path": "Extension.extension.value[x]",
+        "type": [
+          {
+            "code": "string"
+          }
+        ]
+      },
+      {
+        "id": "Extension.extension:timesNo",
+        "path": "Extension.extension",
+        "sliceName": "timesNo",
+        "min": 0,
+        "max": "1"
+      },
+      {
+        "id": "Extension.extension:timesNo.url",
+        "path": "Extension.extension.url",
+        "fixedUri": "timesNo"
+      },
+      {
+        "id": "Extension.extension:timesNo.value[x]",
+        "path": "Extension.extension.value[x]",
+        "type": [
+          {
+            "code": "integer"
+          }
+        ]
+      },
+      {
+        "id": "Extension.extension:treatSeq",
+        "path": "Extension.extension",
+        "sliceName": "treatSeq",
+        "min": 0,
+        "max": "1"
+      },
+      {
+        "id": "Extension.extension:treatSeq.url",
+        "path": "Extension.extension.url",
+        "fixedUri": "treatSeq"
+      },
+      {
+        "id": "Extension.extension:treatSeq.value[x]",
+        "path": "Extension.extension.value[x]",
+        "type": [
+          {
+            "code": "string"
+          }
+        ]
+      },
+      {
+        "id": "Extension.url",
+        "path": "Extension.url",
+        "fixedUri": "https://polarissehr.eskincrux.com/fhir/StructureDefinition/encounter-book"
+      },
+      {
+        "id": "Extension.value[x]",
+        "path": "Extension.value[x]",
+        "max": "0"
+      }
+    ]
+  }
+}

@@ -1,0 +1,326 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "visit-certificate",
+  "url": "https://polarissehr.eskincrux.com/fhir/StructureDefinition/visit-certificate",
+  "version": "1.0.0",
+  "name": "VisitCertificate",
+  "title": "VisitCertificate",
+  "status": "active",
+  "description": "Polaris SEHR extension; shape taken from the stored chart data.",
+  "fhirVersion": "4.0.1",
+  "kind": "complex-type",
+  "abstract": false,
+  "context": [
+    {
+      "type": "element",
+      "expression": "DocumentReference"
+    }
+  ],
+  "type": "Extension",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Extension",
+        "path": "Extension"
+      },
+      {
+        "id": "Extension.extension",
+        "path": "Extension.extension",
+        "slicing": {
+          "discriminator": [
+            {
+              "type": "value",
+              "path": "url"
+            }
+          ],
+          "rules": "open"
+        }
+      },
+      {
+        "id": "Extension.extension:diagnosis",
+        "path": "Extension.extension",
+        "sliceName": "diagnosis",
+        "min": 0,
+        "max": "1"
+      },
+      {
+        "id": "Extension.extension:diagnosis.url",
+        "path": "Extension.extension.url",
+        "fixedUri": "diagnosis"
+      },
+      {
+        "id": "Extension.extension:diagnosis.value[x]",
+        "path": "Extension.extension.value[x]",
+        "type": [
+          {
+            "code": "string"
+          }
+        ]
+      },
+      {
+        "id": "Extension.extension:doc-no",
+        "path": "Extension.extension",
+        "sliceName": "doc-no",
+        "min": 0,
+        "max": "1"
+      },
+      {
+        "id": "Extension.extension:doc-no.url",
+        "path": "Extension.extension.url",
+        "fixedUri": "doc_no"
+      },
+      {
+        "id": "Extension.extension:doc-no.value[x]",
+        "path": "Extension.extension.value[x]",
+        "type": [
+          {
+            "code": "string"
+          }
+        ]
+      },
+      {
+        "id": "Extension.extension:doctor",
+        "path": "Extension.extension",
+        "sliceName": "doctor",
+        "min": 0,
+        "max": "1"
+      },
+      {
+        "id": "Extension.extension:doctor.url",
+        "path": "Extension.extension.url",
+        "fixedUri": "doctor"
+      },
+      {
+        "id": "Extension.extension:doctor.value[x]",
+        "path": "Extension.extension.value[x]",
+        "type": [
+          {
+            "code": "string"
+          }
+        ]
+      },
+      {
+        "id": "Extension.extension:encounter-id",
+        "path": "Extension.extension",
+        "sliceName": "encounter-id",
+        "min": 0,
+        "max": "1"
+      },
+      {
+        "id": "Extension.extension:encounter-id.url",
+        "path": "Extension.extension.url",
+        "fixedUri": "encounter_id"
+      },
+      {
+        "id": "Extension.extension:encounter-id.value[x]",
+        "path": "Extension.extension.value[x]",
+        "type": [
+          {
+            "code": "string"
+          }
+        ]
+      },
+      {
+        "id": "Extension.extension:english",
+        "path": "Extension.extension",
+        "sliceName": "english",
+        "min": 0,
+        "max": "1"
+      },
+      {
+        "id": "Extension.extension:english.url",
+        "path": "Extension.extension.url",
+        "fixedUri": "english"
+      },
+      {
+        "id": "Extension.extension:english.value[x]",
+        "path": "Extension.extension.value[x]",
+        "type": [
+          {
+            "code": "integer"
+          }
+        ]
+      },
+      {
+        "id": "Extension.extension:id",
+        "path": "Extension.extension",
+        "sliceName": "id",
+        "min": 0,
+        "max": "1"
+      },
+      {
+        "id": "Extension.extension:id.url",
+        "path": "Extension.extension.url",
+        "fixedUri": "id"
+      },
+      {
+        "id": "Extension.extension:id.value[x]",
+        "path": "Extension.extension.value[x]",
+        "type": [
+          {
+            "code": "string"
+          }
+        ]
+      },
+      {
+        "id": "Extension.extension:medical-no",
+        "path": "Extension.extension",
+        "sliceName": "medical-no",
+        "min": 0,
+        "max": "1"
+      },
+      {
+        "id": "Extension.extension:medical-no.url",
+        "path": "Extension.extension.url",
+        "fixedUri": "medical_no"
+      },
+      {
+        "id": "Extension.extension:medical-no.value[x]",
+        "path": "Extension.extension.value[x]",
+        "type": [
+          {
+            "code": "string"
+          }
+        ]
+      },
+      {
+        "id": "Extension.extension:order-text",
+        "path": "Extension.extension",
+        "sliceName": "order-text",
+        "min": 0,
+        "max": "1"
+      },
+      {
+        "id": "Extension.extension:order-text.url",
+        "path": "Extension.extension.url",
+        "fixedUri": "order_text"
+      },
+      {
+        "id": "Extension.extension:order-text.value[x]",
+        "path": "Extension.extension.value[x]",
+        "type": [
+          {
+            "code": "string"
+          }
+        ]
+      },
+      {
+        "id": "Extension.extension:patient-name",
+        "path": "Extension.extension",
+        "sliceName": "patient-name",
+        "min": 0,
+        "max": "1"
+      },
+      {
+        "id": "Extension.extension:patient-name.url",
+        "path": "Extension.extension.url",
+        "fixedUri": "patient_name"
+      },
+      {
+        "id": "Extension.extension:patient-name.value[x]",
+        "path": "Extension.extension.value[x]",
+        "type": [
+          {
+            "code": "string"
+          }
+        ]
+      },
+      {
+        "id": "Extension.extension:print-date",
+        "path": "Extension.extension",
+        "sliceName": "print-date",
+        "min": 0,
+        "max": "1"
+      },
+      {
+        "id": "Extension.extension:print-date.url",
+        "path": "Extension.extension.url",
+        "fixedUri": "print_date"
+      },
+      {
+        "id": "Extension.extension:print-date.value[x]",
+        "path": "Extension.extension.value[x]",
+        "type": [
+          {
+            "code": "string"
+          }
+        ]
+      },
+      {
+        "id": "Extension.extension:source",
+        "path": "Extension.extension",
+        "sliceName": "source",
+        "min": 0,
+        "max": "1"
+      },
+      {
+        "id": "Extension.extension:source.url",
+        "path": "Extension.extension.url",
+        "fixedUri": "source"
+      },
+      {
+        "id": "Extension.extension:source.value[x]",
+        "path": "Extension.extension.value[x]",
+        "type": [
+          {
+            "code": "string"
+          }
+        ]
+      },
+      {
+        "id": "Extension.extension:updated-at",
+        "path": "Extension.extension",
+        "sliceName": "updated-at",
+        "min": 0,
+        "max": "1"
+      },
+      {
+        "id": "Extension.extension:updated-at.url",
+        "path": "Extension.extension.url",
+        "fixedUri": "updated_at"
+      },
+      {
+        "id": "Extension.extension:updated-at.value[x]",
+        "path": "Extension.extension.value[x]",
+        "type": [
+          {
+            "code": "string"
+          }
+        ]
+      },
+      {
+        "id": "Extension.extension:visit-date",
+        "path": "Extension.extension",
+        "sliceName": "visit-date",
+        "min": 0,
+        "max": "1"
+      },
+      {
+        "id": "Extension.extension:visit-date.url",
+        "path": "Extension.extension.url",
+        "fixedUri": "visit_date"
+      },
+      {
+        "id": "Extension.extension:visit-date.value[x]",
+        "path": "Extension.extension.value[x]",
+        "type": [
+          {
+            "code": "string"
+          }
+        ]
+      },
+      {
+        "id": "Extension.url",
+        "path": "Extension.url",
+        "fixedUri": "https://polarissehr.eskincrux.com/fhir/StructureDefinition/visit-certificate"
+      },
+      {
+        "id": "Extension.value[x]",
+        "path": "Extension.value[x]",
+        "max": "0"
+      }
+    ]
+  }
+}

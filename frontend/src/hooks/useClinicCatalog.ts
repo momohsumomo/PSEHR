@@ -70,10 +70,44 @@ function attachDrugTypes(catalog: ClinicCatalog, rows: DrugTypeRow[]): ClinicCat
     ...catalog,
     drugs: catalog.drugs.map((drug) => {
       if (String(drug.drugType || "").trim()) return drug;
+      // Treatment / exam / material rows are not tablets; empty nhiCode aliases
+      // in yisheng_drug_types.json used to stamp 膜衣錠 onto laser etc.
+      const cast = `${drug.cast || ""} ${drug.typeName || ""}`;
+      if (
+        cast.includes("\u6cbb\u7642") ||
+        cast.includes("\u6aa2\u67e5") ||
+        cast.includes("\u624b\u8853") ||
+        cast.includes("\u8655\u7f6e") ||
+        cast.includes("\u865b\u64ec") ||
+        cast.includes("\u7279\u6750") ||
+        cast.includes("\u6750\u6599")
+      ) {
+        return drug;
+      }
       const alias = String(drug.alias || drug.shortName || "").trim().toUpperCase();
       const nhi = String(drug.nhiCode || "").trim().toUpperCase();
       const form = byPair.get(`${alias}|${nhi}`) || "";
       return form ? { ...drug, drugType: form } : drug;
+    }),
+  };
+}
+
+type DiagnoseRow = { short?: string; icd10?: string };
+
+/** The diagnosis master fills ICD-10 from the ICD-9 crosswalk; the visit catalog was exported without it. */
+function attachMasterIcd10(catalog: ClinicCatalog, rows: DiagnoseRow[]): ClinicCatalog {
+  const byShort = new Map<string, string>();
+  for (const row of rows) {
+    const short = String(row.short || "").trim();
+    const icd10 = String(row.icd10 || "").trim();
+    if (short && icd10) byShort.set(short, icd10);
+  }
+  return {
+    ...catalog,
+    diagnoses: catalog.diagnoses.map((dg) => {
+      if (String(dg.icd10 || dg.nhiIcd10 || "").trim()) return dg;
+      const icd10 = byShort.get(String(dg.short || "").trim());
+      return icd10 ? { ...dg, icd10, nhiIcd10: icd10 } : dg;
     }),
   };
 }
@@ -217,6 +251,15 @@ export function useClinicCatalog() {
       }
     } catch {
       /* 劑型清單沒載到時，藥品其他欄位仍可用 */
+    }
+    try {
+      const master = await fetch("/yisheng_diagnose.json");
+      if (master.ok) {
+        const body = (await master.json()) as { rows?: DiagnoseRow[] };
+        baseCat = attachMasterIcd10(baseCat, body.rows || []);
+      }
+    } catch {
+      /* 病名主檔沒載到時，目錄原本的 ICD-10 仍可用 */
     }
     let ov = EMPTY_OVERRIDES;
     try {

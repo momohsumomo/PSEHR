@@ -1,0 +1,116 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "nhi-card-basic",
+  "url": "https://polarissehr.eskincrux.com/fhir/StructureDefinition/nhi-card-basic",
+  "version": "1.0.0",
+  "name": "NhiCardBasic",
+  "title": "NhiCardBasic",
+  "status": "active",
+  "description": "Polaris SEHR extension; shape taken from the stored chart data.",
+  "fhirVersion": "4.0.1",
+  "kind": "complex-type",
+  "abstract": false,
+  "context": [
+    {
+      "type": "element",
+      "expression": "Patient"
+    }
+  ],
+  "type": "Extension",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Extension",
+        "path": "Extension"
+      },
+      {
+        "id": "Extension.extension",
+        "path": "Extension.extension",
+        "slicing": {
+          "discriminator": [
+            {
+              "type": "value",
+              "path": "url"
+            }
+          ],
+          "rules": "open"
+        }
+      },
+      {
+        "id": "Extension.extension:birthdayRoc",
+        "path": "Extension.extension",
+        "sliceName": "birthdayRoc",
+        "min": 0,
+        "max": "1"
+      },
+      {
+        "id": "Extension.extension:birthdayRoc.url",
+        "path": "Extension.extension.url",
+        "fixedUri": "birthdayRoc"
+      },
+      {
+        "id": "Extension.extension:birthdayRoc.value[x]",
+        "path": "Extension.extension.value[x]",
+        "type": [
+          {
+            "code": "string"
+          }
+        ]
+      },
+      {
+        "id": "Extension.extension:idNo",
+        "path": "Extension.extension",
+        "sliceName": "idNo",
+        "min": 0,
+        "max": "1"
+      },
+      {
+        "id": "Extension.extension:idNo.url",
+        "path": "Extension.extension.url",
+        "fixedUri": "idNo"
+      },
+      {
+        "id": "Extension.extension:idNo.value[x]",
+        "path": "Extension.extension.value[x]",
+        "type": [
+          {
+            "code": "string"
+          }
+        ]
+      },
+      {
+        "id": "Extension.extension:sex",
+        "path": "Extension.extension",
+        "sliceName": "sex",
+        "min": 0,
+        "max": "1"
+      },
+      {
+        "id": "Extension.extension:sex.url",
+        "path": "Extension.extension.url",
+        "fixedUri": "sex"
+      },
+      {
+        "id": "Extension.extension:sex.value[x]",
+        "path": "Extension.extension.value[x]",
+        "type": [
+          {
+            "code": "code"
+          }
+        ]
+      },
+      {
+        "id": "Extension.url",
+        "path": "Extension.url",
+        "fixedUri": "https://polarissehr.eskincrux.com/fhir/StructureDefinition/nhi-card-basic"
+      },
+      {
+        "id": "Extension.value[x]",
+        "path": "Extension.value[x]",
+        "max": "0"
+      }
+    ]
+  }
+}

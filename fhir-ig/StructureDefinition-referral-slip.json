@@ -1,0 +1,557 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "referral-slip",
+  "url": "https://polarissehr.eskincrux.com/fhir/StructureDefinition/referral-slip",
+  "version": "1.0.0",
+  "name": "ReferralSlip",
+  "title": "ReferralSlip",
+  "status": "active",
+  "description": "Polaris SEHR extension; shape taken from the stored chart data.",
+  "fhirVersion": "4.0.1",
+  "kind": "complex-type",
+  "abstract": false,
+  "context": [
+    {
+      "type": "element",
+      "expression": "ServiceRequest"
+    }
+  ],
+  "type": "Extension",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Extension",
+        "path": "Extension"
+      },
+      {
+        "id": "Extension.extension",
+        "path": "Extension.extension",
+        "slicing": {
+          "discriminator": [
+            {
+              "type": "value",
+              "path": "url"
+            }
+          ],
+          "rules": "open"
+        }
+      },
+      {
+        "id": "Extension.extension:dept",
+        "path": "Extension.extension",
+        "sliceName": "dept",
+        "min": 0,
+        "max": "1"
+      },
+      {
+        "id": "Extension.extension:dept.url",
+        "path": "Extension.extension.url",
+        "fixedUri": "dept"
+      },
+      {
+        "id": "Extension.extension:dept.value[x]",
+        "path": "Extension.extension.value[x]",
+        "type": [
+          {
+            "code": "string"
+          }
+        ]
+      },
+      {
+        "id": "Extension.extension:dest-code",
+        "path": "Extension.extension",
+        "sliceName": "dest-code",
+        "min": 0,
+        "max": "1"
+      },
+      {
+        "id": "Extension.extension:dest-code.url",
+        "path": "Extension.extension.url",
+        "fixedUri": "dest_code"
+      },
+      {
+        "id": "Extension.extension:dest-code.value[x]",
+        "path": "Extension.extension.value[x]",
+        "type": [
+          {
+            "code": "string"
+          }
+        ]
+      },
+      {
+        "id": "Extension.extension:dest-hosp",
+        "path": "Extension.extension",
+        "sliceName": "dest-hosp",
+        "min": 0,
+        "max": "1"
+      },
+      {
+        "id": "Extension.extension:dest-hosp.url",
+        "path": "Extension.extension.url",
+        "fixedUri": "dest_hosp"
+      },
+      {
+        "id": "Extension.extension:dest-hosp.value[x]",
+        "path": "Extension.extension.value[x]",
+        "type": [
+          {
+            "code": "string"
+          }
+        ]
+      },
+      {
+        "id": "Extension.extension:diagnosis",
+        "path": "Extension.extension",
+        "sliceName": "diagnosis",
+        "min": 0,
+        "max": "1"
+      },
+      {
+        "id": "Extension.extension:diagnosis.url",
+        "path": "Extension.extension.url",
+        "fixedUri": "diagnosis"
+      },
+      {
+        "id": "Extension.extension:diagnosis.value[x]",
+        "path": "Extension.extension.value[x]",
+        "type": [
+          {
+            "code": "string"
+          }
+        ]
+      },
+      {
+        "id": "Extension.extension:doctor",
+        "path": "Extension.extension",
+        "sliceName": "doctor",
+        "min": 0,
+        "max": "1"
+      },
+      {
+        "id": "Extension.extension:doctor.url",
+        "path": "Extension.extension.url",
+        "fixedUri": "doctor"
+      },
+      {
+        "id": "Extension.extension:doctor.value[x]",
+        "path": "Extension.extension.value[x]",
+        "type": [
+          {
+            "code": "string"
+          }
+        ]
+      },
+      {
+        "id": "Extension.extension:encounter-id",
+        "path": "Extension.extension",
+        "sliceName": "encounter-id",
+        "min": 0,
+        "max": "1"
+      },
+      {
+        "id": "Extension.extension:encounter-id.url",
+        "path": "Extension.extension.url",
+        "fixedUri": "encounter_id"
+      },
+      {
+        "id": "Extension.extension:encounter-id.value[x]",
+        "path": "Extension.extension.value[x]",
+        "type": [
+          {
+            "code": "string"
+          }
+        ]
+      },
+      {
+        "id": "Extension.extension:history-text",
+        "path": "Extension.extension",
+        "sliceName": "history-text",
+        "min": 0,
+        "max": "1"
+      },
+      {
+        "id": "Extension.extension:history-text.url",
+        "path": "Extension.extension.url",
+        "fixedUri": "history_text"
+      },
+      {
+        "id": "Extension.extension:history-text.value[x]",
+        "path": "Extension.extension.value[x]",
+        "type": [
+          {
+            "code": "string"
+          }
+        ]
+      },
+      {
+        "id": "Extension.extension:id",
+        "path": "Extension.extension",
+        "sliceName": "id",
+        "min": 0,
+        "max": "1"
+      },
+      {
+        "id": "Extension.extension:id.url",
+        "path": "Extension.extension.url",
+        "fixedUri": "id"
+      },
+      {
+        "id": "Extension.extension:id.value[x]",
+        "path": "Extension.extension.value[x]",
+        "type": [
+          {
+            "code": "string"
+          }
+        ]
+      },
+      {
+        "id": "Extension.extension:id-no",
+        "path": "Extension.extension",
+        "sliceName": "id-no",
+        "min": 0,
+        "max": "1"
+      },
+      {
+        "id": "Extension.extension:id-no.url",
+        "path": "Extension.extension.url",
+        "fixedUri": "id_no"
+      },
+      {
+        "id": "Extension.extension:id-no.value[x]",
+        "path": "Extension.extension.value[x]",
+        "type": [
+          {
+            "code": "string"
+          }
+        ]
+      },
+      {
+        "id": "Extension.extension:kind",
+        "path": "Extension.extension",
+        "sliceName": "kind",
+        "min": 0,
+        "max": "1"
+      },
+      {
+        "id": "Extension.extension:kind.url",
+        "path": "Extension.extension.url",
+        "fixedUri": "kind"
+      },
+      {
+        "id": "Extension.extension:kind.value[x]",
+        "path": "Extension.extension.value[x]",
+        "type": [
+          {
+            "code": "string"
+          }
+        ]
+      },
+      {
+        "id": "Extension.extension:local-id",
+        "path": "Extension.extension",
+        "sliceName": "local-id",
+        "min": 0,
+        "max": "1"
+      },
+      {
+        "id": "Extension.extension:local-id.url",
+        "path": "Extension.extension.url",
+        "fixedUri": "local_id"
+      },
+      {
+        "id": "Extension.extension:local-id.value[x]",
+        "path": "Extension.extension.value[x]",
+        "type": [
+          {
+            "code": "string"
+          }
+        ]
+      },
+      {
+        "id": "Extension.extension:medical-no",
+        "path": "Extension.extension",
+        "sliceName": "medical-no",
+        "min": 0,
+        "max": "1"
+      },
+      {
+        "id": "Extension.extension:medical-no.url",
+        "path": "Extension.extension.url",
+        "fixedUri": "medical_no"
+      },
+      {
+        "id": "Extension.extension:medical-no.value[x]",
+        "path": "Extension.extension.value[x]",
+        "type": [
+          {
+            "code": "string"
+          }
+        ]
+      },
+      {
+        "id": "Extension.extension:nhi-id",
+        "path": "Extension.extension",
+        "sliceName": "nhi-id",
+        "min": 0,
+        "max": "1"
+      },
+      {
+        "id": "Extension.extension:nhi-id.url",
+        "path": "Extension.extension.url",
+        "fixedUri": "nhi_id"
+      },
+      {
+        "id": "Extension.extension:nhi-id.value[x]",
+        "path": "Extension.extension.value[x]",
+        "type": [
+          {
+            "code": "string"
+          }
+        ]
+      },
+      {
+        "id": "Extension.extension:note",
+        "path": "Extension.extension",
+        "sliceName": "note",
+        "min": 0,
+        "max": "1"
+      },
+      {
+        "id": "Extension.extension:note.url",
+        "path": "Extension.extension.url",
+        "fixedUri": "note"
+      },
+      {
+        "id": "Extension.extension:note.value[x]",
+        "path": "Extension.extension.value[x]",
+        "type": [
+          {
+            "code": "string"
+          }
+        ]
+      },
+      {
+        "id": "Extension.extension:opened-on",
+        "path": "Extension.extension",
+        "sliceName": "opened-on",
+        "min": 0,
+        "max": "1"
+      },
+      {
+        "id": "Extension.extension:opened-on.url",
+        "path": "Extension.extension.url",
+        "fixedUri": "opened_on"
+      },
+      {
+        "id": "Extension.extension:opened-on.value[x]",
+        "path": "Extension.extension.value[x]",
+        "type": [
+          {
+            "code": "string"
+          }
+        ]
+      },
+      {
+        "id": "Extension.extension:patient-name",
+        "path": "Extension.extension",
+        "sliceName": "patient-name",
+        "min": 0,
+        "max": "1"
+      },
+      {
+        "id": "Extension.extension:patient-name.url",
+        "path": "Extension.extension.url",
+        "fixedUri": "patient_name"
+      },
+      {
+        "id": "Extension.extension:patient-name.value[x]",
+        "path": "Extension.extension.value[x]",
+        "type": [
+          {
+            "code": "string"
+          }
+        ]
+      },
+      {
+        "id": "Extension.extension:purpose",
+        "path": "Extension.extension",
+        "sliceName": "purpose",
+        "min": 0,
+        "max": "1"
+      },
+      {
+        "id": "Extension.extension:purpose.url",
+        "path": "Extension.extension.url",
+        "fixedUri": "purpose"
+      },
+      {
+        "id": "Extension.extension:purpose.value[x]",
+        "path": "Extension.extension.value[x]",
+        "type": [
+          {
+            "code": "string"
+          }
+        ]
+      },
+      {
+        "id": "Extension.extension:serial",
+        "path": "Extension.extension",
+        "sliceName": "serial",
+        "min": 0,
+        "max": "1"
+      },
+      {
+        "id": "Extension.extension:serial.url",
+        "path": "Extension.extension.url",
+        "fixedUri": "serial"
+      },
+      {
+        "id": "Extension.extension:serial.value[x]",
+        "path": "Extension.extension.value[x]",
+        "type": [
+          {
+            "code": "string"
+          }
+        ]
+      },
+      {
+        "id": "Extension.extension:sheet-json",
+        "path": "Extension.extension",
+        "sliceName": "sheet-json",
+        "min": 0,
+        "max": "1"
+      },
+      {
+        "id": "Extension.extension:sheet-json.url",
+        "path": "Extension.extension.url",
+        "fixedUri": "sheet_json"
+      },
+      {
+        "id": "Extension.extension:sheet-json.value[x]",
+        "path": "Extension.extension.value[x]",
+        "type": [
+          {
+            "code": "string"
+          }
+        ]
+      },
+      {
+        "id": "Extension.extension:status",
+        "path": "Extension.extension",
+        "sliceName": "status",
+        "min": 0,
+        "max": "1"
+      },
+      {
+        "id": "Extension.extension:status.url",
+        "path": "Extension.extension.url",
+        "fixedUri": "status"
+      },
+      {
+        "id": "Extension.extension:status.value[x]",
+        "path": "Extension.extension.value[x]",
+        "type": [
+          {
+            "code": "string"
+          }
+        ]
+      },
+      {
+        "id": "Extension.extension:treat-text",
+        "path": "Extension.extension",
+        "sliceName": "treat-text",
+        "min": 0,
+        "max": "1"
+      },
+      {
+        "id": "Extension.extension:treat-text.url",
+        "path": "Extension.extension.url",
+        "fixedUri": "treat_text"
+      },
+      {
+        "id": "Extension.extension:treat-text.value[x]",
+        "path": "Extension.extension.value[x]",
+        "type": [
+          {
+            "code": "string"
+          }
+        ]
+      },
+      {
+        "id": "Extension.extension:updated-at",
+        "path": "Extension.extension",
+        "sliceName": "updated-at",
+        "min": 0,
+        "max": "1"
+      },
+      {
+        "id": "Extension.extension:updated-at.url",
+        "path": "Extension.extension.url",
+        "fixedUri": "updated_at"
+      },
+      {
+        "id": "Extension.extension:updated-at.value[x]",
+        "path": "Extension.extension.value[x]",
+        "type": [
+          {
+            "code": "string"
+          }
+        ]
+      },
+      {
+        "id": "Extension.extension:uploaded-at",
+        "path": "Extension.extension",
+        "sliceName": "uploaded-at",
+        "min": 0,
+        "max": "1"
+      },
+      {
+        "id": "Extension.extension:uploaded-at.url",
+        "path": "Extension.extension.url",
+        "fixedUri": "uploaded_at"
+      },
+      {
+        "id": "Extension.extension:uploaded-at.value[x]",
+        "path": "Extension.extension.value[x]",
+        "type": [
+          {
+            "code": "string"
+          }
+        ]
+      },
+      {
+        "id": "Extension.extension:valid-until",
+        "path": "Extension.extension",
+        "sliceName": "valid-until",
+        "min": 0,
+        "max": "1"
+      },
+      {
+        "id": "Extension.extension:valid-until.url",
+        "path": "Extension.extension.url",
+        "fixedUri": "valid_until"
+      },
+      {
+        "id": "Extension.extension:valid-until.value[x]",
+        "path": "Extension.extension.value[x]",
+        "type": [
+          {
+            "code": "string"
+          }
+        ]
+      },
+      {
+        "id": "Extension.url",
+        "path": "Extension.url",
+        "fixedUri": "https://polarissehr.eskincrux.com/fhir/StructureDefinition/referral-slip"
+      },
+      {
+        "id": "Extension.value[x]",
+        "path": "Extension.value[x]",
+        "max": "0"
+      }
+    ]
+  }
+}

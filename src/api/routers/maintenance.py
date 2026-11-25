@@ -87,6 +87,21 @@ def drug_pack_apply() -> dict:
     return start_refresh(force=True)
 
 
+@router.get("/drug-pack/item", summary="One NHI code from the installed drug catalog (price on the given day)")
+def drug_pack_item(
+    code: str = Query(..., min_length=1, max_length=20),
+    date: str = Query("", max_length=10, description="YYYY-MM-DD; today when empty"),
+) -> dict:
+    from datetime import date as _date
+
+    from src.spoke.drug_price import drug_item
+
+    found = drug_item(code, date or _date.today().isoformat())
+    if not found:
+        raise HTTPException(status_code=404, detail="\u85e5\u50f9\u5305\u88e1\u6c92\u6709\u9019\u500b\u5065\u4fdd\u78bc\u3002")
+    return found
+
+
 class DrugPackActiveBody(BaseModel):
     version: str = Field(min_length=1, max_length=80)
     active: bool

@@ -1,0 +1,431 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "patient-clinic-ext",
+  "url": "https://polarissehr.eskincrux.com/fhir/StructureDefinition/patient-clinic-ext",
+  "version": "1.0.0",
+  "name": "PatientClinicExt",
+  "title": "PatientClinicExt",
+  "status": "active",
+  "description": "Polaris SEHR extension; shape taken from the stored chart data.",
+  "fhirVersion": "4.0.1",
+  "kind": "complex-type",
+  "abstract": false,
+  "context": [
+    {
+      "type": "element",
+      "expression": "Patient"
+    }
+  ],
+  "type": "Extension",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Extension",
+        "path": "Extension"
+      },
+      {
+        "id": "Extension.extension",
+        "path": "Extension.extension",
+        "slicing": {
+          "discriminator": [
+            {
+              "type": "value",
+              "path": "url"
+            }
+          ],
+          "rules": "open"
+        }
+      },
+      {
+        "id": "Extension.extension:allergic",
+        "path": "Extension.extension",
+        "sliceName": "allergic",
+        "min": 0,
+        "max": "1"
+      },
+      {
+        "id": "Extension.extension:allergic.url",
+        "path": "Extension.extension.url",
+        "fixedUri": "allergic"
+      },
+      {
+        "id": "Extension.extension:allergic.value[x]",
+        "path": "Extension.extension.value[x]",
+        "type": [
+          {
+            "code": "string"
+          }
+        ]
+      },
+      {
+        "id": "Extension.extension:arrearage",
+        "path": "Extension.extension",
+        "sliceName": "arrearage",
+        "min": 0,
+        "max": "1"
+      },
+      {
+        "id": "Extension.extension:arrearage.url",
+        "path": "Extension.extension.url",
+        "fixedUri": "arrearage"
+      },
+      {
+        "id": "Extension.extension:arrearage.value[x]",
+        "path": "Extension.extension.value[x]",
+        "type": [
+          {
+            "code": "string"
+          }
+        ]
+      },
+      {
+        "id": "Extension.extension:birthOrder",
+        "path": "Extension.extension",
+        "sliceName": "birthOrder",
+        "min": 0,
+        "max": "1"
+      },
+      {
+        "id": "Extension.extension:birthOrder.url",
+        "path": "Extension.extension.url",
+        "fixedUri": "birthOrder"
+      },
+      {
+        "id": "Extension.extension:birthOrder.value[x]",
+        "path": "Extension.extension.value[x]",
+        "type": [
+          {
+            "code": "string"
+          }
+        ]
+      },
+      {
+        "id": "Extension.extension:birthdayRoc",
+        "path": "Extension.extension",
+        "sliceName": "birthdayRoc",
+        "min": 0,
+        "max": "1"
+      },
+      {
+        "id": "Extension.extension:birthdayRoc.url",
+        "path": "Extension.extension.url",
+        "fixedUri": "birthdayRoc"
+      },
+      {
+        "id": "Extension.extension:birthdayRoc.value[x]",
+        "path": "Extension.extension.value[x]",
+        "type": [
+          {
+            "code": "string"
+          }
+        ]
+      },
+      {
+        "id": "Extension.extension:blood",
+        "path": "Extension.extension",
+        "sliceName": "blood",
+        "min": 0,
+        "max": "1"
+      },
+      {
+        "id": "Extension.extension:blood.url",
+        "path": "Extension.extension.url",
+        "fixedUri": "blood"
+      },
+      {
+        "id": "Extension.extension:blood.value[x]",
+        "path": "Extension.extension.value[x]",
+        "type": [
+          {
+            "code": "string"
+          }
+        ]
+      },
+      {
+        "id": "Extension.extension:contactPhone",
+        "path": "Extension.extension",
+        "sliceName": "contactPhone",
+        "min": 0,
+        "max": "1"
+      },
+      {
+        "id": "Extension.extension:contactPhone.url",
+        "path": "Extension.extension.url",
+        "fixedUri": "contactPhone"
+      },
+      {
+        "id": "Extension.extension:contactPhone.value[x]",
+        "path": "Extension.extension.value[x]",
+        "type": [
+          {
+            "code": "string"
+          }
+        ]
+      },
+      {
+        "id": "Extension.extension:copayDisc",
+        "path": "Extension.extension",
+        "sliceName": "copayDisc",
+        "min": 0,
+        "max": "1"
+      },
+      {
+        "id": "Extension.extension:copayDisc.url",
+        "path": "Extension.extension.url",
+        "fixedUri": "copayDisc"
+      },
+      {
+        "id": "Extension.extension:copayDisc.value[x]",
+        "path": "Extension.extension.value[x]",
+        "type": [
+          {
+            "code": "string"
+          }
+        ]
+      },
+      {
+        "id": "Extension.extension:familyCareCase",
+        "path": "Extension.extension",
+        "sliceName": "familyCareCase",
+        "min": 0,
+        "max": "1"
+      },
+      {
+        "id": "Extension.extension:familyCareCase.url",
+        "path": "Extension.extension.url",
+        "fixedUri": "familyCareCase"
+      },
+      {
+        "id": "Extension.extension:familyCareCase.value[x]",
+        "path": "Extension.extension.value[x]",
+        "type": [
+          {
+            "code": "string"
+          }
+        ]
+      },
+      {
+        "id": "Extension.extension:familyCareDate",
+        "path": "Extension.extension",
+        "sliceName": "familyCareDate",
+        "min": 0,
+        "max": "1"
+      },
+      {
+        "id": "Extension.extension:familyCareDate.url",
+        "path": "Extension.extension.url",
+        "fixedUri": "familyCareDate"
+      },
+      {
+        "id": "Extension.extension:familyCareDate.value[x]",
+        "path": "Extension.extension.value[x]",
+        "type": [
+          {
+            "code": "string"
+          }
+        ]
+      },
+      {
+        "id": "Extension.extension:idCategory",
+        "path": "Extension.extension",
+        "sliceName": "idCategory",
+        "min": 0,
+        "max": "1"
+      },
+      {
+        "id": "Extension.extension:idCategory.url",
+        "path": "Extension.extension.url",
+        "fixedUri": "idCategory"
+      },
+      {
+        "id": "Extension.extension:idCategory.value[x]",
+        "path": "Extension.extension.value[x]",
+        "type": [
+          {
+            "code": "string"
+          }
+        ]
+      },
+      {
+        "id": "Extension.extension:keymoney",
+        "path": "Extension.extension",
+        "sliceName": "keymoney",
+        "min": 0,
+        "max": "1"
+      },
+      {
+        "id": "Extension.extension:keymoney.url",
+        "path": "Extension.extension.url",
+        "fixedUri": "keymoney"
+      },
+      {
+        "id": "Extension.extension:keymoney.value[x]",
+        "path": "Extension.extension.value[x]",
+        "type": [
+          {
+            "code": "string"
+          }
+        ]
+      },
+      {
+        "id": "Extension.extension:kind",
+        "path": "Extension.extension",
+        "sliceName": "kind",
+        "min": 0,
+        "max": "1"
+      },
+      {
+        "id": "Extension.extension:kind.url",
+        "path": "Extension.extension.url",
+        "fixedUri": "kind"
+      },
+      {
+        "id": "Extension.extension:kind.value[x]",
+        "path": "Extension.extension.value[x]",
+        "type": [
+          {
+            "code": "string"
+          }
+        ]
+      },
+      {
+        "id": "Extension.extension:marry",
+        "path": "Extension.extension",
+        "sliceName": "marry",
+        "min": 0,
+        "max": "1"
+      },
+      {
+        "id": "Extension.extension:marry.url",
+        "path": "Extension.extension.url",
+        "fixedUri": "marry"
+      },
+      {
+        "id": "Extension.extension:marry.value[x]",
+        "path": "Extension.extension.value[x]",
+        "type": [
+          {
+            "code": "string"
+          }
+        ]
+      },
+      {
+        "id": "Extension.extension:medicalHistory",
+        "path": "Extension.extension",
+        "sliceName": "medicalHistory",
+        "min": 0,
+        "max": "1"
+      },
+      {
+        "id": "Extension.extension:medicalHistory.url",
+        "path": "Extension.extension.url",
+        "fixedUri": "medicalHistory"
+      },
+      {
+        "id": "Extension.extension:medicalHistory.value[x]",
+        "path": "Extension.extension.value[x]",
+        "type": [
+          {
+            "code": "string"
+          }
+        ]
+      },
+      {
+        "id": "Extension.extension:memo",
+        "path": "Extension.extension",
+        "sliceName": "memo",
+        "min": 0,
+        "max": "1"
+      },
+      {
+        "id": "Extension.extension:memo.url",
+        "path": "Extension.extension.url",
+        "fixedUri": "memo"
+      },
+      {
+        "id": "Extension.extension:memo.value[x]",
+        "path": "Extension.extension.value[x]",
+        "type": [
+          {
+            "code": "string"
+          }
+        ]
+      },
+      {
+        "id": "Extension.extension:nhiCardNo",
+        "path": "Extension.extension",
+        "sliceName": "nhiCardNo",
+        "min": 0,
+        "max": "1"
+      },
+      {
+        "id": "Extension.extension:nhiCardNo.url",
+        "path": "Extension.extension.url",
+        "fixedUri": "nhiCardNo"
+      },
+      {
+        "id": "Extension.extension:nhiCardNo.value[x]",
+        "path": "Extension.extension.value[x]",
+        "type": [
+          {
+            "code": "string"
+          }
+        ]
+      },
+      {
+        "id": "Extension.extension:parentId",
+        "path": "Extension.extension",
+        "sliceName": "parentId",
+        "min": 0,
+        "max": "1"
+      },
+      {
+        "id": "Extension.extension:parentId.url",
+        "path": "Extension.extension.url",
+        "fixedUri": "parentId"
+      },
+      {
+        "id": "Extension.extension:parentId.value[x]",
+        "path": "Extension.extension.value[x]",
+        "type": [
+          {
+            "code": "string"
+          }
+        ]
+      },
+      {
+        "id": "Extension.extension:postalCode",
+        "path": "Extension.extension",
+        "sliceName": "postalCode",
+        "min": 0,
+        "max": "1"
+      },
+      {
+        "id": "Extension.extension:postalCode.url",
+        "path": "Extension.extension.url",
+        "fixedUri": "postalCode"
+      },
+      {
+        "id": "Extension.extension:postalCode.value[x]",
+        "path": "Extension.extension.value[x]",
+        "type": [
+          {
+            "code": "string"
+          }
+        ]
+      },
+      {
+        "id": "Extension.url",
+        "path": "Extension.url",
+        "fixedUri": "https://polarissehr.eskincrux.com/fhir/StructureDefinition/patient-clinic-ext"
+      },
+      {
+        "id": "Extension.value[x]",
+        "path": "Extension.value[x]",
+        "max": "0"
+      }
+    ]
+  }
+}

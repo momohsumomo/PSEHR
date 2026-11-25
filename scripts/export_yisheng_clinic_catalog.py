@@ -78,14 +78,16 @@ def _route(row: dict[str, str]) -> str:
         return "ext"
     if cat == "\u6ce8\u5c04":
         return "im"
-    if cat in ("\u6cbb\u7642", "\u624b\u8853"):
-        return "ext"
+    if cat in ("\u6cbb\u7642", "\u624b\u8853", "\u8655\u7f6e"):
+        return "treatment"
     if cat == "\u5167\u670d":
         return "po"
-    if cat == "\u7279\u6750":
-        return "ext"
+    if cat in ("\u7279\u6750", "\u6750\u6599"):
+        return "material"
     if cat == "\u6aa2\u67e5":
         return "exam"
+    if cat == "\u865b\u64ec":
+        return "na"
     return "po"
 
 

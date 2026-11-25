@@ -1,0 +1,137 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "outpatient-soap",
+  "url": "https://polarissehr.eskincrux.com/fhir/StructureDefinition/outpatient-soap",
+  "version": "1.0.0",
+  "name": "OutpatientSoap",
+  "title": "OutpatientSoap",
+  "status": "active",
+  "description": "Polaris SEHR extension; shape taken from the stored chart data.",
+  "fhirVersion": "4.0.1",
+  "kind": "complex-type",
+  "abstract": false,
+  "context": [
+    {
+      "type": "element",
+      "expression": "Composition"
+    }
+  ],
+  "type": "Extension",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Extension",
+        "path": "Extension"
+      },
+      {
+        "id": "Extension.extension",
+        "path": "Extension.extension",
+        "slicing": {
+          "discriminator": [
+            {
+              "type": "value",
+              "path": "url"
+            }
+          ],
+          "rules": "open"
+        }
+      },
+      {
+        "id": "Extension.extension:assessment",
+        "path": "Extension.extension",
+        "sliceName": "assessment",
+        "min": 0,
+        "max": "1"
+      },
+      {
+        "id": "Extension.extension:assessment.url",
+        "path": "Extension.extension.url",
+        "fixedUri": "assessment"
+      },
+      {
+        "id": "Extension.extension:assessment.value[x]",
+        "path": "Extension.extension.value[x]",
+        "type": [
+          {
+            "code": "string"
+          }
+        ]
+      },
+      {
+        "id": "Extension.extension:chiefComplaint",
+        "path": "Extension.extension",
+        "sliceName": "chiefComplaint",
+        "min": 0,
+        "max": "1"
+      },
+      {
+        "id": "Extension.extension:chiefComplaint.url",
+        "path": "Extension.extension.url",
+        "fixedUri": "chiefComplaint"
+      },
+      {
+        "id": "Extension.extension:chiefComplaint.value[x]",
+        "path": "Extension.extension.value[x]",
+        "type": [
+          {
+            "code": "string"
+          }
+        ]
+      },
+      {
+        "id": "Extension.extension:encounterId",
+        "path": "Extension.extension",
+        "sliceName": "encounterId",
+        "min": 0,
+        "max": "1"
+      },
+      {
+        "id": "Extension.extension:encounterId.url",
+        "path": "Extension.extension.url",
+        "fixedUri": "encounterId"
+      },
+      {
+        "id": "Extension.extension:encounterId.value[x]",
+        "path": "Extension.extension.value[x]",
+        "type": [
+          {
+            "code": "string"
+          }
+        ]
+      },
+      {
+        "id": "Extension.extension:plan",
+        "path": "Extension.extension",
+        "sliceName": "plan",
+        "min": 0,
+        "max": "1"
+      },
+      {
+        "id": "Extension.extension:plan.url",
+        "path": "Extension.extension.url",
+        "fixedUri": "plan"
+      },
+      {
+        "id": "Extension.extension:plan.value[x]",
+        "path": "Extension.extension.value[x]",
+        "type": [
+          {
+            "code": "string"
+          }
+        ]
+      },
+      {
+        "id": "Extension.url",
+        "path": "Extension.url",
+        "fixedUri": "https://polarissehr.eskincrux.com/fhir/StructureDefinition/outpatient-soap"
+      },
+      {
+        "id": "Extension.value[x]",
+        "path": "Extension.value[x]",
+        "max": "0"
+      }
+    ]
+  }
+}

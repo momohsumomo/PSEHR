@@ -208,6 +208,21 @@ export function textHasAllWords(text: string, query: string): boolean {
   return words.every((word) => hay.includes(word));
 }
 
+/** Consonant skeleton: seborrheic, sborheic and sbrheic all become "sbrhc". */
+function skeleton(word: string): string {
+  const w = word.toLowerCase().replace(/[^a-z]/g, "");
+  if (!w) return "";
+  return (w[0] + w.slice(1).replace(/[aeiouy]/g, "")).replace(/(.)\1+/g, "$1");
+}
+
+/** 醫聖英文病名常是縮寫拼法（sborheic）；每個查詢字的骨架都要是某個字骨架的開頭。 */
+function abbreviatedHit(text: string | undefined, query: string): boolean {
+  const words = (text || "").split(/\s+/).map(skeleton).filter(Boolean);
+  const wanted = query.split(/\s+/).filter((q) => q.length >= 3).map(skeleton);
+  if (!words.length || !wanted.length || wanted.some((s) => s.length < 2)) return false;
+  return wanted.every((s) => words.some((w) => w.startsWith(s)));
+}
+
 function fieldScore(value: string | undefined, query: string): number {
   const text = (value || "").trim().toLowerCase();
   if (!text || !query) return 0;
@@ -277,6 +292,7 @@ export function searchDiagnoses(
         fieldScore(d.aCode, codeQuery),
       );
       let score = Math.max(en, code);
+      if (!score && !cjk && (abbreviatedHit(d.nameEn, lower) || abbreviatedHit(d.text, lower))) score = 15;
       if (cjk) score = Math.max(score, zh + (zh >= 300 ? 20 : 0));
       else if (zh > 0) score = Math.max(score, Math.min(zh, 30));
       const typed = (d.nameEn || d.text || "").trim();

@@ -12,6 +12,20 @@ import {
 } from "@/components/clinic/HisPageFrame";
 import { HIS, HIS_FBAR_COLORS } from "@/lib/hisTheme";
 import { useEscLayer } from "@/hooks/useEscLayer";
+import { request } from "@/api/clinicApi";
+
+type PackItem = {
+  nhiCode: string;
+  unitPrice: number | null;
+  packVersion?: string;
+  nameEn?: string;
+  nameZh?: string;
+  ingredient?: string;
+  form?: string;
+  manufacturer?: string;
+};
+
+const NHI_DRUG_CODE = /^[A-Z][A-Z0-9]{9}$/;
 
 type DrugForm = {
   drugNo: string;
@@ -65,6 +79,102 @@ type DrugForm = {
 function textNum(value: unknown): string {
   if (value == null || value === "") return "";
   return String(value);
+}
+
+/** CAST values the chart right rail and 醫聖 already understand. */
+const CLINIC_CAT_OPTIONS = [
+  "\u5167\u670d",
+  "\u5916\u7528",
+  "\u6ce8\u5c04",
+  "\u6cbb\u7642",
+  "\u6aa2\u67e5",
+  "\u624b\u8853",
+  "\u8655\u7f6e",
+  "\u7279\u6750",
+  "\u6750\u6599",
+  "\u865b\u64ec",
+];
+
+const ROUTE_OPTIONS = [
+  "po",
+  "im",
+  "iv",
+  "ivd",
+  "ivp",
+  "sc",
+  "ext",
+  "rect",
+  "skin",
+  "vag",
+  "inhl",
+  "na",
+  "sl",
+  "exam",
+  "treatment",
+  "material",
+];
+
+const PAY_MARK_OPTIONS = [
+  { value: "", label: "\uff08\u7a7a\u767d\uff09" },
+  { value: "\u81ea", label: "\u81ea" },
+  { value: "\u4ea4", label: "\u4ea4" },
+  { value: "\u6750", label: "\u6750" },
+];
+
+const INDEX_OPTIONS = [
+  { value: "Y", label: "Y" },
+  { value: "N", label: "N" },
+];
+
+function selectOptions(fixed: string[], current: string): string[] {
+  const value = current.trim();
+  if (value && !fixed.includes(value)) return [value, ...fixed];
+  return fixed;
+}
+
+function usageOptions(
+  usages: Array<{ code?: string; label?: string }>,
+  current: string,
+): Array<{ value: string; label: string }> {
+  const seen = new Set<string>();
+  const out: Array<{ value: string; label: string }> = [];
+  for (const u of usages) {
+    const code = String(u.code || "").trim();
+    if (!code || seen.has(code)) continue;
+    seen.add(code);
+    const label = String(u.label || "").trim();
+    out.push({ value: code, label: label && label !== code ? `${code}  ${label}` : code });
+  }
+  const value = current.trim();
+  if (value && !seen.has(value)) out.unshift({ value, label: value });
+  return out;
+}
+
+function HisSelect({
+  value,
+  onChange,
+  options,
+  blankLabel,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  options: Array<string | { value: string; label: string }>;
+  blankLabel?: string;
+}) {
+  return (
+    <select className={hisInputClass} value={value} onChange={(e) => onChange(e.target.value)}>
+      {blankLabel != null ? <option value="">{blankLabel}</option> : null}
+      {options.map((opt) => {
+        const v = typeof opt === "string" ? opt : opt.value;
+        const label = typeof opt === "string" ? opt : opt.label;
+        return (
+          <option key={`${v || "blank"}:${label}`} value={v}>
+            {label}
+          </option>
+        );
+      })}
+    </select>
+  );
 }
 
 const emptyForm = (): DrugForm => ({
@@ -127,6 +237,36 @@ export function DrugCatalogPage() {
   const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const filterRef = useRef<HTMLInputElement>(null);
+  const packCodeRef = useRef("");
+
+  const fillFromPack = async (raw: string) => {
+    const code = raw.trim().toUpperCase();
+    if (!NHI_DRUG_CODE.test(code) || code === packCodeRef.current) return;
+    packCodeRef.current = code;
+    try {
+      const item = await request<PackItem>(`/maintenance/drug-pack/item?code=${encodeURIComponent(code)}`);
+      setForm((prev) =>
+        prev.nhiCode.trim().toUpperCase() !== code
+          ? prev
+          : {
+              ...prev,
+              nhiCode: code,
+              totalPrice: item.unitPrice != null ? String(item.unitPrice) : prev.totalPrice,
+              tradeName: prev.tradeName || item.nameEn || item.nameZh || "",
+              generic: prev.generic || item.ingredient || "",
+              drugType: prev.drugType || item.form || "",
+              maker: prev.maker || item.manufacturer || "",
+            },
+      );
+      setNotice(
+        item.unitPrice != null
+          ? `\u5df2\u5e36\u5165\u4eca\u5929\u7684\u5065\u4fdd\u50f9 ${item.unitPrice}\uff08\u85e5\u50f9\u5305 ${item.packVersion || ""}\uff09\uff0c\u7a7a\u767d\u7684\u540d\u7a31\u3001\u5291\u578b\u4e5f\u88dc\u4e0a\u4e86\u3002`
+          : "\u9019\u500b\u5065\u4fdd\u78bc\u4eca\u5929\u6c92\u6709\u6709\u6548\u7684\u50f9\u683c\uff0c\u53ea\u88dc\u4e86\u540d\u7a31\u3001\u5291\u578b\u3002",
+      );
+    } catch {
+      setNotice("\u85e5\u50f9\u5305\u88e1\u6c92\u6709\u9019\u500b\u5065\u4fdd\u78bc\uff0c\u8acb\u624b\u52d5\u586b\u5beb\u3002");
+    }
+  };
 
   useEffect(() => {
     if (!loaded) return;
@@ -173,10 +313,12 @@ export function DrugCatalogPage() {
 
   const loadDrug = (d: any | null) => {
     if (!d) {
+      packCodeRef.current = "";
       setSelectedCode(null);
       setForm(emptyForm());
       return;
     }
+    packCodeRef.current = String(d.nhiCode || "").trim().toUpperCase();
     setSelectedCode(keyOfDrug(d));
     setForm({
       ...emptyForm(),
@@ -237,6 +379,7 @@ export function DrugCatalogPage() {
   }, [catalog.drugs.length]);
 
   const onNew = () => {
+    packCodeRef.current = "";
     setSelectedCode(null);
     setForm(emptyForm());
     setNotice("\u65b0\u589e\u6a21\u5f0f\uff1a\u586b\u5beb\u5f8c\u6309 F9 \u5b58\u6a94");
@@ -387,7 +530,12 @@ export function DrugCatalogPage() {
               <input className={`${hisInputClass} font-mono`} value={form.alias} onChange={(e) => setForm({ ...form, alias: e.target.value })} />
             </HisField>
             <HisField label="健保碼">
-              <input className={`${hisInputClass} font-mono`} value={form.nhiCode} onChange={(e) => setForm({ ...form, nhiCode: e.target.value })} />
+              <input
+                className={`${hisInputClass} font-mono`}
+                value={form.nhiCode}
+                onChange={(e) => setForm({ ...form, nhiCode: e.target.value })}
+                onBlur={(e) => void fillFromPack(e.target.value)}
+              />
             </HisField>
             <HisField label="批號">
               <input className={hisInputClass} value={form.batchNo} onChange={(e) => setForm({ ...form, batchNo: e.target.value })} />
@@ -414,10 +562,39 @@ export function DrugCatalogPage() {
           </div>
           <div className="grid grid-cols-2 gap-1">
             <HisField label="診療類別">
-              <input className={hisInputClass} value={form.clinicCat} onChange={(e) => setForm({ ...form, clinicCat: e.target.value })} />
+              <HisSelect
+                value={form.clinicCat}
+                blankLabel={"\uff08\u7a7a\u767d\uff09"}
+                options={selectOptions(CLINIC_CAT_OPTIONS, form.clinicCat)}
+                onChange={(clinicCat) => {
+                  const procedure =
+                    clinicCat.includes("\u6cbb\u7642") ||
+                    clinicCat.includes("\u6aa2\u67e5") ||
+                    clinicCat.includes("\u624b\u8853") ||
+                    clinicCat.includes("\u8655\u7f6e") ||
+                    clinicCat.includes("\u865b\u64ec");
+                  const pillForm =
+                    form.drugType.includes("\u9320") ||
+                    form.drugType.includes("\u81a0\u56ca") ||
+                    form.drugType.includes("\u7c89") ||
+                    form.drugType.includes("\u6db2") ||
+                    form.drugType.includes("\u818f");
+                  setForm({
+                    ...form,
+                    clinicCat,
+                    // Procedure rows should not keep a tablet form left over from import.
+                    drugType: procedure && pillForm ? "" : form.drugType,
+                  });
+                }}
+              />
             </HisField>
             <HisField label="自定分類">
-              <input className={hisInputClass} value={form.customCat} onChange={(e) => setForm({ ...form, customCat: e.target.value })} />
+              <HisSelect
+                value={form.customCat}
+                blankLabel={"\uff08\u7a7a\u767d\uff09"}
+                options={selectOptions(CLINIC_CAT_OPTIONS, form.customCat)}
+                onChange={(customCat) => setForm({ ...form, customCat })}
+              />
             </HisField>
           </div>
           <div className="grid grid-cols-5 gap-1">
@@ -431,7 +608,12 @@ export function DrugCatalogPage() {
               <input className={hisInputClass} value={form.unit} onChange={(e) => setForm({ ...form, unit: e.target.value })} />
             </HisField>
             <HisField label="用法">
-              <input className={hisInputClass} value={form.usage} onChange={(e) => setForm({ ...form, usage: e.target.value })} />
+              <HisSelect
+                value={form.usage}
+                blankLabel={"\uff08\u7a7a\u767d\uff09"}
+                options={usageOptions(catalog.usages || [], form.usage)}
+                onChange={(usage) => setForm({ ...form, usage })}
+              />
             </HisField>
             <HisField label="劑型">
               <input
@@ -449,7 +631,15 @@ export function DrugCatalogPage() {
           </div>
           <div className="grid grid-cols-4 gap-1">
             <HisField label="途徑">
-              <input className={hisInputClass} value={form.route} onChange={(e) => setForm({ ...form, route: e.target.value })} />
+              <HisSelect
+                value={form.route}
+                blankLabel={"\uff08\u7a7a\u767d\uff09"}
+                options={selectOptions(
+                  [...new Set([...(catalog.routes || []), ...ROUTE_OPTIONS])],
+                  form.route,
+                )}
+                onChange={(route) => setForm({ ...form, route })}
+              />
             </HisField>
             <HisField label="劑量">
               <input className={`${hisInputClass} font-mono`} value={form.dose} onChange={(e) => setForm({ ...form, dose: e.target.value })} />
@@ -486,12 +676,20 @@ export function DrugCatalogPage() {
               <input className={hisInputClass} value={form.drugChg} onChange={(e) => setForm({ ...form, drugChg: e.target.value })} />
             </HisField>
             <HisField label="選用">
-              <input className={`${hisInputClass} font-mono`} value={form.indexFlag} onChange={(e) => setForm({ ...form, indexFlag: e.target.value })} />
+              <HisSelect
+                value={form.indexFlag || "Y"}
+                options={INDEX_OPTIONS}
+                onChange={(indexFlag) => setForm({ ...form, indexFlag })}
+              />
             </HisField>
           </div>
           <div className="grid grid-cols-4 gap-1">
             <HisField label="自費">
-              <input className={hisInputClass} value={form.payMark} onChange={(e) => setForm({ ...form, payMark: e.target.value })} />
+              <HisSelect
+                value={form.payMark}
+                options={PAY_MARK_OPTIONS}
+                onChange={(payMark) => setForm({ ...form, payMark })}
+              />
             </HisField>
             <HisField label="自費金額">
               <input className={`${hisInputClass} font-mono`} value={form.selfPayPrice} onChange={(e) => setForm({ ...form, selfPayPrice: e.target.value })} />

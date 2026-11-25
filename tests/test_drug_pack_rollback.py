@@ -100,6 +100,19 @@ class RollbackTest(unittest.TestCase):
         clear_price_cache()
         self.assertEqual(self.store.latest_active_version(), "2026.11.0")
 
+    def test_drug_item_uses_price_in_force_and_latest_names(self) -> None:
+        from src.spoke.drug_price import drug_item
+
+        old = {**row("AC12345100", 10.0, "2026-01-01", "2026-10-31"), "nameEn": "OLD", "form": "F1"}
+        new = {**row("AC12345100", 9.0, "2026-11-01"), "nameEn": "NEW", "form": "F2", "ingredient": "X"}
+        self.store.install_package(pack("2026.11.0", [old, new], "2026-11-01"))
+        item = drug_item("ac12345100", "2026-10-15", pack_store=self.store)
+        self.assertEqual((item["unitPrice"], item["nameEn"], item["form"]), (10.0, "OLD", "F1"))
+        item = drug_item("AC12345100", "2026-11-25", pack_store=self.store)
+        self.assertEqual((item["unitPrice"], item["nameEn"], item["ingredient"]), (9.0, "NEW", "X"))
+        self.assertIsNone(drug_item("AC12345100", "2025-12-31", pack_store=self.store)["unitPrice"])
+        self.assertIsNone(drug_item("ZZ00000000", "2026-11-25", pack_store=self.store))
+
     def test_cannot_stop_the_only_version(self) -> None:
         self.store.install_package(pack("2026.10.0", [row("A1", 10.0, "2026-01-01")]))
         with self.assertRaises(ValueError):

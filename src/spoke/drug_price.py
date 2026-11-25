@@ -108,6 +108,35 @@ def drug_facts(nhi_code: str, *, pack_store: PackStore | None = None) -> dict[st
     return {"atc": str(row.get("atc") or "").strip().upper(), "form": str(row.get("form") or "").strip()}
 
 
+def drug_item(nhi_code: str, target_date: str, *, pack_store: PackStore | None = None) -> dict[str, Any] | None:
+    """Catalog facts for the drug page: price in force on target_date plus names and form."""
+    code = (nhi_code or "").strip().upper()
+    day = (target_date or "")[:10]
+    if not code or not day:
+        return None
+    pack = _catalog(pack_store or PackStore())
+    if not pack:
+        return None
+    rows = _index(pack).get(code) or []
+    if not rows:
+        return None
+    best = _covering(rows, day)
+    latest = max(rows, key=lambda r: str(r.get("startDate") or ""))
+    row = best or latest
+    price = _row_price(best) if best else None
+    return {
+        "nhiCode": code,
+        "unitPrice": price,
+        "priceDate": day,
+        "packVersion": pack.get("version") or (pack.get("payload") or {}).get("version"),
+        "nameEn": str(row.get("nameEn") or "").strip(),
+        "nameZh": str(row.get("nameZh") or row.get("display") or "").strip(),
+        "ingredient": str(row.get("ingredient") or "").strip(),
+        "form": str(row.get("form") or "").strip(),
+        "manufacturer": str(row.get("manufacturer") or "").strip(),
+    }
+
+
 def lookup_drug_price(
     nhi_code: str,
     target_date: str,

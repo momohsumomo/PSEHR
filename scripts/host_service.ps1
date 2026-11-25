@@ -50,6 +50,7 @@ function Stop-HostPorts {
   Get-CimInstance Win32_Process | Where-Object {
     $_.CommandLine -and (
       $_.CommandLine -match "uvicorn src\.api\.main:app" -or
+      $_.CommandLine -match "wait_fhir_format\.py" -or
       $_.CommandLine -match "vite" -or
       $_.CommandLine -match "npm run dev" -or
       $_.CommandLine -match "scripts\\start_api\.bat" -or
@@ -86,9 +87,18 @@ function Start-HiddenCmd([string]$WorkDir, [string]$Command, [string]$LogName) {
 
 function Start-Api {
   if (Test-Listen 5000) { return }
+  if (Test-ApiWaiting) { return }
   if (-not (Test-Path $Py)) { throw "Missing .venv. Run install-host first." }
   $env:PYTHONPATH = $Root
-  Start-HiddenCmd $Root "set PYTHONPATH=$Root&& `"$Py`" -m uvicorn src.api.main:app --host 0.0.0.0 --port 5000" "api.log"
+  $wait = Join-Path $Root "scripts\wait_fhir_format.py"
+  Start-HiddenCmd $Root "set PYTHONPATH=$Root&& `"$Py`" `"$wait`" && `"$Py`" -m uvicorn src.api.main:app --host 0.0.0.0 --port 5000" "api.log"
+}
+
+function Test-ApiWaiting {
+  $hit = Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object {
+    $_.CommandLine -and $_.CommandLine -match "wait_fhir_format\.py"
+  }
+  return [bool]$hit
 }
 
 function Start-Ui {
@@ -213,6 +223,10 @@ function Start-HostPair {
   Start-Beacon
   Allow-Lan
   if (-not (Wait-Ready)) {
+    if ((Test-Listen 3010) -and (Test-ApiWaiting)) {
+      Write-HostLog "api waiting for converted chart DB"
+      return
+    }
     Write-HostLog "ports not listening"
     Show-HostFail
     exit 1

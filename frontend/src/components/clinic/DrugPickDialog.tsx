@@ -38,12 +38,19 @@ const TABS: Array<[Tab, string]> = [
 const INJECTION = new Set(["im", "iv", "ivd", "ivp", "sc", "inj"]);
 
 function tabOf(drug: CatalogDrug): Tab {
-  const use = String(drug.useType || "").trim().toLowerCase();
-  if (INJECTION.has(use)) return "injection";
-  const type = String(drug.typeName || "").trim();
-  if (type === "\u5167\u670d") return "oral";
-  if (type === "\u5916\u7528") return "external";
-  if (type === "\u6cbb\u7642") return "treatment";
+  const cast = `${drug.cast || ""} ${drug.typeName || ""}`;
+  const use = String(drug.useType || drug.route || "").trim().toLowerCase();
+  if (
+    cast.includes("\u6cbb\u7642") ||
+    cast.includes("\u624b\u8853") ||
+    cast.includes("\u8655\u7f6e") ||
+    use.includes("treatment")
+  ) {
+    return "treatment";
+  }
+  if (INJECTION.has(use) || cast.includes("\u6ce8\u5c04")) return "injection";
+  if (cast.includes("\u5167\u670d") || use === "po" || use === "oral") return "oral";
+  if (cast.includes("\u5916\u7528") || use === "ext" || use === "topical") return "external";
   return "other";
 }
 

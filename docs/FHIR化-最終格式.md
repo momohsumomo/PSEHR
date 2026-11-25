@@ -109,7 +109,7 @@
 - `medication-nhi-tw` 只有 35 碼、`icd-10-cm-2023-tw` 只有 11 碼，卻都標 complete，所以真實藥碼、病名碼「unknown code」。
 - 輸入錯誤的病名：R4 `con-5` 不准有 `clinicalStatus`，TW Core 卻要求 1..1，兩者衝突，照 R4。
 
-還沒做：本站擴充發自己的 StructureDefinition 小 package，驗證時不必再加 `-extension`（只是文件，不動資料）。
+本站擴充的 StructureDefinition 放在 `fhir-ig/`（`scripts/build_extension_sds.py --db 副本.db` 掃資料庫副本產生，只有網址和型別，沒有病歷）。驗證時改用 `-ig fhir-ig`，不必再加 `-extension`。新增擴充欄位後要重跑一次產生器再提交。
 
 ### 2026-11-23 摸底時的問題（已在 final-2 修掉）
 

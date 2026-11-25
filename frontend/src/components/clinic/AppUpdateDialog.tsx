@@ -23,12 +23,32 @@ type SoftwareStatus = {
 
 type DrugStatus = {
   running?: boolean;
+  status?: string;
   version?: string | null;
   lastSuccessOn?: string;
   notice?: string;
   detail?: string;
   versions?: { version: string; installedAt?: string; active?: boolean }[];
 };
+
+/** One short line so staff can tell "nothing new" from "bad file" or "installed". */
+function drugOutcome(drug: DrugStatus | null): string {
+  if (!drug || drug.running) return "";
+  const status = String(drug.status || "");
+  if (status === "skipped_no_change") {
+    return "\u7d50\u679c\uff1a\u5b98\u65b9\u85e5\u50f9\u8ddf\u73fe\u5728\u4e00\u6a23\uff0c\u6c92\u6709\u65b0\u7248\u8981\u88dd\u3002";
+  }
+  if (status === "success") {
+    return "\u7d50\u679c\uff1a\u5df2\u88dd\u9032\u67e5\u50f9\u3002";
+  }
+  if (status === "blocked_event") {
+    return `\u7d50\u679c\uff1a\u6a94\u6848\u4e0d\u5c0d\uff0c\u6c92\u6709\u5b89\u88dd\u3002${drug.detail ? drug.detail : ""}`;
+  }
+  if (status === "failed") {
+    return `\u7d50\u679c\uff1a${drug.detail || "\u9019\u6b21\u6c92\u6709\u6293\u6210\u3002"}`;
+  }
+  return "";
+}
 
 function short(sha: string | undefined): string {
   const text = (sha || "").trim();
@@ -74,6 +94,8 @@ export function AppUpdateDialog({ open, onClose }: { open: boolean; onClose: () 
   }, [open]);
 
   if (!open) return null;
+
+  const drugResult = drugOutcome(drug);
 
   const applySoftware = (version?: string) => {
     setBusy(version || "software");
@@ -224,6 +246,15 @@ export function AppUpdateDialog({ open, onClose }: { open: boolean; onClose: () 
           >
             {busy === "drug" || drug?.running ? "\u6293\u53d6\u4e2d\u2026" : "\u66f4\u65b0\u85e5\u50f9"}
           </button>
+          {busy === "drug" || drug?.running ? (
+            <p className="mt-2 text-[13px] leading-relaxed text-[#E7D7A8]">
+              {"\u6b63\u5728\u6293\u53d6\u3002\u5b8c\u6210\u5f8c\u6703\u5beb\u660e\u662f\u6c92\u65b0\u7248\u3001\u5df2\u5b89\u88dd\u3001\u9084\u662f\u6a94\u6848\u4e0d\u5c0d\u3002"}
+            </p>
+          ) : drugResult ? (
+            <p className="mt-2 rounded border border-[#E7D7A8]/35 bg-black/20 px-2 py-1.5 text-[13px] leading-relaxed text-[#E7D7A8]">
+              {drugResult}
+            </p>
+          ) : null}
           {(drug?.versions || []).length > 1 ? (
             <div className="mt-3 border-t border-white/10 pt-2">
               <p className="text-[12px] leading-relaxed text-[#A9B8CE]">

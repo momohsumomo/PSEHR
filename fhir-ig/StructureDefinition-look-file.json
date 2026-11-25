@@ -1,0 +1,179 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "look-file",
+  "url": "https://polarissehr.eskincrux.com/fhir/StructureDefinition/look-file",
+  "version": "1.0.0",
+  "name": "LookFile",
+  "title": "LookFile",
+  "status": "active",
+  "description": "Polaris SEHR extension; shape taken from the stored chart data.",
+  "fhirVersion": "4.0.1",
+  "kind": "complex-type",
+  "abstract": false,
+  "context": [
+    {
+      "type": "element",
+      "expression": "Media"
+    }
+  ],
+  "type": "Extension",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Extension",
+        "path": "Extension"
+      },
+      {
+        "id": "Extension.extension",
+        "path": "Extension.extension",
+        "slicing": {
+          "discriminator": [
+            {
+              "type": "value",
+              "path": "url"
+            }
+          ],
+          "rules": "open"
+        }
+      },
+      {
+        "id": "Extension.extension:chart-no",
+        "path": "Extension.extension",
+        "sliceName": "chart-no",
+        "min": 0,
+        "max": "1"
+      },
+      {
+        "id": "Extension.extension:chart-no.url",
+        "path": "Extension.extension.url",
+        "fixedUri": "chart_no"
+      },
+      {
+        "id": "Extension.extension:chart-no.value[x]",
+        "path": "Extension.extension.value[x]",
+        "type": [
+          {
+            "code": "string"
+          }
+        ]
+      },
+      {
+        "id": "Extension.extension:file-name",
+        "path": "Extension.extension",
+        "sliceName": "file-name",
+        "min": 0,
+        "max": "1"
+      },
+      {
+        "id": "Extension.extension:file-name.url",
+        "path": "Extension.extension.url",
+        "fixedUri": "file_name"
+      },
+      {
+        "id": "Extension.extension:file-name.value[x]",
+        "path": "Extension.extension.value[x]",
+        "type": [
+          {
+            "code": "string"
+          }
+        ]
+      },
+      {
+        "id": "Extension.extension:modified",
+        "path": "Extension.extension",
+        "sliceName": "modified",
+        "min": 0,
+        "max": "1"
+      },
+      {
+        "id": "Extension.extension:modified.url",
+        "path": "Extension.extension.url",
+        "fixedUri": "modified"
+      },
+      {
+        "id": "Extension.extension:modified.value[x]",
+        "path": "Extension.extension.value[x]",
+        "type": [
+          {
+            "code": "string"
+          }
+        ]
+      },
+      {
+        "id": "Extension.extension:noted-at",
+        "path": "Extension.extension",
+        "sliceName": "noted-at",
+        "min": 0,
+        "max": "1"
+      },
+      {
+        "id": "Extension.extension:noted-at.url",
+        "path": "Extension.extension.url",
+        "fixedUri": "noted_at"
+      },
+      {
+        "id": "Extension.extension:noted-at.value[x]",
+        "path": "Extension.extension.value[x]",
+        "type": [
+          {
+            "code": "string"
+          }
+        ]
+      },
+      {
+        "id": "Extension.extension:rel",
+        "path": "Extension.extension",
+        "sliceName": "rel",
+        "min": 0,
+        "max": "1"
+      },
+      {
+        "id": "Extension.extension:rel.url",
+        "path": "Extension.extension.url",
+        "fixedUri": "rel"
+      },
+      {
+        "id": "Extension.extension:rel.value[x]",
+        "path": "Extension.extension.value[x]",
+        "type": [
+          {
+            "code": "string"
+          }
+        ]
+      },
+      {
+        "id": "Extension.extension:size-bytes",
+        "path": "Extension.extension",
+        "sliceName": "size-bytes",
+        "min": 0,
+        "max": "1"
+      },
+      {
+        "id": "Extension.extension:size-bytes.url",
+        "path": "Extension.extension.url",
+        "fixedUri": "size_bytes"
+      },
+      {
+        "id": "Extension.extension:size-bytes.value[x]",
+        "path": "Extension.extension.value[x]",
+        "type": [
+          {
+            "code": "integer"
+          }
+        ]
+      },
+      {
+        "id": "Extension.url",
+        "path": "Extension.url",
+        "fixedUri": "https://polarissehr.eskincrux.com/fhir/StructureDefinition/look-file"
+      },
+      {
+        "id": "Extension.value[x]",
+        "path": "Extension.value[x]",
+        "max": "0"
+      }
+    ]
+  }
+}

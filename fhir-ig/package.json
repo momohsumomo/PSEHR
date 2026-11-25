@@ -1,0 +1,12 @@
+{
+  "name": "polarissehr.extensions",
+  "version": "1.0.0",
+  "fhirVersions": [
+    "4.0.1"
+  ],
+  "type": "fhir.ig",
+  "canonical": "https://polarissehr.eskincrux.com/fhir",
+  "dependencies": {
+    "hl7.fhir.r4.core": "4.0.1"
+  }
+}
