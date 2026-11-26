@@ -76,7 +76,7 @@
   - `encounter-reg` 擴充：字串鍵 `REG_STRING_KEYS`、布林鍵 `REG_BOOL_KEYS`，定義在 `src/core/encounter_extensions.py`。包含案類、部分負擔代碼、就醫序號、卡片序號、簽章、醫師、藥師、各項費用、轉診、IC 上傳、`regCc`、`idCategory` 等約 60 個鍵。
   - `Encounter.status`、`period.start`、`subject`。
 - `encounter_index`：`queue_*`、`copay_code`、`case_no`、`fee_deposit`／`fee_copay`／`fee_card_disc`／`fee_drug_disc`／`fee_drug_copay`／`fee_reg`／`fee_self`／`fee_total`／`fee_arrears`、`ic_upload_date`、`chief_complaint`、`shift`、`slot_time`、`times_no`、`owe_card`、`reg_cc`、`reg_remark`、`claim_doctor_id`、`claim_pharmacist_id`、`treat_seq`。
-- `cash_return`：還單、退押現金，以看診日入帳。
+- `cash_return`：還單、退押現金。有 `cash_day`（IC 退押日）就算那天，沒有（醫聖舊還單）算看診日；`cash_book` = off 不算進費用統計。
 - 寫入鏈：`create/update` → `cache_resource` → `_stamp_cash_book_marks`（會改 JSON）→ `_upsert_encounter_index` → `_write_cash_book_columns`。
 
 ### 觸點
@@ -126,7 +126,7 @@
 5. 不在白名單的 reg 鍵（例如 `depositPaid`、`icRolledBack`）會被丟掉，不進 JSON。
 6. 多處直接 `json.loads` 解析 reg，沒走統一讀取層（`reg_discount_report`、`engine`、`ic_daily_upload._load_reg`、`nhi_card_bridge`）。
 7. `list_encounters_for_patient` 回傳的欄位很少，歷史畫面若靠它會缺費用與序號。
-8. 還單算在看診日，退押上傳算在退押當日。
+8. IC 退押的還單和每日上傳都算在退押當日；醫聖舊還單算在看診日。
 9. `chief_complaint`（醫師主訴）、`regCc`（醫聖 6 碼 CC）、`visitCc` 是三種不同東西。
 10. `totalFee` 由前端組，後端 `patch_encounter_reg` 另有 `adjusted_visit_total`（已退押）。兩邊規則要一起搬。
 11. 醫聖欄位對照散在 `backfill_cash_book._iter_fields`，申報和 IC 也在引用。

@@ -3,6 +3,10 @@
 The cash_return table is derived from these. Fields are kept as booked: an
 imported refund keeps its own day and codes, so the cash book of that day
 does not move when the patient record is edited later.
+
+date is the visit day. cashDay is the day the cash went back (a card refund);
+the cash book counts the row on that day. cashBook "off" keeps the row for the
+visit total but out of the cash book.
 """
 
 from __future__ import annotations
@@ -24,7 +28,11 @@ TEXT_FIELDS = (
     ("seg", "seg"),
     ("treat_seq", "treatSeq"),
     ("case_no", "caseNo"),
+    ("cash_day", "cashDay"),
+    ("cash_book", "cashBook"),
 )
+
+OFF_BOOK = "off"
 
 
 def resource_id_for(keywords: str) -> str:

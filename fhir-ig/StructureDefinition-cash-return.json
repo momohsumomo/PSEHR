@@ -81,6 +81,48 @@
         ]
       },
       {
+        "id": "Extension.extension:cashBook",
+        "path": "Extension.extension",
+        "sliceName": "cashBook",
+        "min": 0,
+        "max": "1"
+      },
+      {
+        "id": "Extension.extension:cashBook.url",
+        "path": "Extension.extension.url",
+        "fixedUri": "cashBook"
+      },
+      {
+        "id": "Extension.extension:cashBook.value[x]",
+        "path": "Extension.extension.value[x]",
+        "type": [
+          {
+            "code": "string"
+          }
+        ]
+      },
+      {
+        "id": "Extension.extension:cashDay",
+        "path": "Extension.extension",
+        "sliceName": "cashDay",
+        "min": 0,
+        "max": "1"
+      },
+      {
+        "id": "Extension.extension:cashDay.url",
+        "path": "Extension.extension.url",
+        "fixedUri": "cashDay"
+      },
+      {
+        "id": "Extension.extension:cashDay.value[x]",
+        "path": "Extension.extension.value[x]",
+        "type": [
+          {
+            "code": "string"
+          }
+        ]
+      },
+      {
         "id": "Extension.extension:chartNo",
         "path": "Extension.extension",
         "sliceName": "chartNo",

@@ -33,8 +33,8 @@ export function RefundDepositDialog({ open, onClose, initialIdNo = "", onDone }:
     setPicked("");
     setNote("");
     const id = initialIdNo.trim().toUpperCase();
-    if (id.length !== 10) return;
-    void load(id);
+    if (id.length === 10) void load(id);
+    else void onRead();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, initialIdNo]);
 
@@ -74,7 +74,7 @@ export function RefundDepositDialog({ open, onClose, initialIdNo = "", onDone }:
     }
   };
 
-  const onRefund = async () => {
+  const onRefund = async (cashBook: boolean) => {
     if (!picked) {
       setNote("請先選一筆押單");
       return;
@@ -82,7 +82,7 @@ export function RefundDepositDialog({ open, onClose, initialIdNo = "", onDone }:
     setBusy(true);
     setNote("");
     try {
-      const res = await refundDeposit(picked);
+      const res = await refundDeposit(picked, cashBook);
       setNote(res.reason || "已退押");
       setItems((rows) => rows.filter((row) => row.encounterId !== picked));
       setPicked("");
@@ -98,17 +98,17 @@ export function RefundDepositDialog({ open, onClose, initialIdNo = "", onDone }:
     <HisXpDialog open={open} title="退押" onClose={onClose} width={560}>
       <div className="flex flex-col gap-2 text-[13px] text-black">
         <p>
-          插入這位的健保卡。這個月的申報還沒送出之前，押金都可以退。取到就醫序號後，押金用現金退回。這筆跟退押那天一起上傳。
+          插入這位的健保卡。這個月的申報還沒送出之前，押金都可以退。取到就醫序號後，押金用現金退回，算在今天的費用統計（還單）；選「不入現金帳」就不算。
         </p>
         <div className="flex gap-2">
-          <button type="button" className="border px-3 py-1" disabled={busy} onClick={() => void onRead()}>
-            讀卡
+          <button type="button" className="border px-3 py-1 font-bold" disabled={busy || !picked} onClick={() => void onRefund(true)}>
+            入現金帳
           </button>
-          <button type="button" className="border px-3 py-1 font-bold" disabled={busy || !picked} onClick={() => void onRefund()}>
-            退押
+          <button type="button" className="border px-3 py-1" disabled={busy || !picked} onClick={() => void onRefund(false)}>
+            不入現金帳
           </button>
           <button type="button" className="border px-3 py-1" onClick={onClose}>
-            離開
+            取消
           </button>
         </div>
         <table className="w-full border-collapse text-left">

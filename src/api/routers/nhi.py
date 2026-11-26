@@ -1457,6 +1457,7 @@ def refund_deposit(encounter_id: str, body: dict[str, Any] | None = None) -> dic
         sam_id=str(result.samId or ""),
         hc_id=str(result.hcId or profile.get("cardId") or ""),
         hc_id_no=got,
+        cash_book=bool((body or {}).get("cashBook", True)) if isinstance(body, dict) else True,
     )
     if not applied.get("ok"):
         raise HTTPException(status_code=422, detail=str(applied.get("reason") or "沒有退押"))

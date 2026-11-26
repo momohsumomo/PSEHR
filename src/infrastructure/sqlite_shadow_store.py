@@ -1902,12 +1902,11 @@ class SqliteShadowStore(ShadowStore):
                 """,
                 tuple(params),
             ).fetchall()
-            # Refund cash leaves the drawer on the refund day in cash_return.encounter_date,
-            # but the visit total still holds depositPaid on the visit day. Attribute the
-            # return to that visit day so one day's book nets (已收 - 還單) like 醫聖.
+            # A card refund counts on cash_day, the day the cash went back. Rows without
+            # one (imported 還單) stay on the visit day. cash_book 'off' is left out.
             returns = conn.execute(
                 """
-                SELECT COALESCE(ei.encounter_date, cr.encounter_date),
+                SELECT COALESCE(NULLIF(cr.cash_day, ''), ei.encounter_date, cr.encounter_date),
                        CASE WHEN UPPER(TRIM(IFNULL(COALESCE(ei.case_no, cr.case_no), '')))
                                  IN ('9X', '\u81ea', '\u81ea\u8cbb') THEN '\u81ea\u8cbb'
                             WHEN TRIM(IFNULL(COALESCE(ei.copay_code, cr.copay_code), '')) IN ('', '0')
@@ -1916,9 +1915,10 @@ class SqliteShadowStore(ShadowStore):
                        COUNT(*), COALESCE(SUM(cr.amount), 0)
                 FROM cash_return cr
                 LEFT JOIN encounter_index ei ON ei.resource_id = cr.keywords
-                WHERE COALESCE(ei.encounter_date, cr.encounter_date) >= ?
-                  AND COALESCE(ei.encounter_date, cr.encounter_date) <= ?
-                GROUP BY COALESCE(ei.encounter_date, cr.encounter_date),
+                WHERE IFNULL(cr.cash_book, '') != 'off'
+                  AND COALESCE(NULLIF(cr.cash_day, ''), ei.encounter_date, cr.encounter_date) >= ?
+                  AND COALESCE(NULLIF(cr.cash_day, ''), ei.encounter_date, cr.encounter_date) <= ?
+                GROUP BY COALESCE(NULLIF(cr.cash_day, ''), ei.encounter_date, cr.encounter_date),
                          CASE WHEN UPPER(TRIM(IFNULL(COALESCE(ei.case_no, cr.case_no), '')))
                                    IN ('9X', '\u81ea', '\u81ea\u8cbb') THEN '\u81ea\u8cbb'
                               WHEN TRIM(IFNULL(COALESCE(ei.copay_code, cr.copay_code), '')) IN ('', '0')
@@ -2000,18 +2000,19 @@ class SqliteShadowStore(ShadowStore):
         }
 
     def list_cash_returns(self, date_from: str, date_to: str) -> list[dict[str, Any]]:
-        """Refunds (還單) attributed to the visit day when keywords is an encounter id."""
+        """Refunds (還單) on their cash day; imported ones without a cash day stay on the visit day."""
         with self._connect() as conn:
             rows = conn.execute(
                 """
-                SELECT COALESCE(ei.encounter_date, cr.encounter_date), cr.amount,
+                SELECT COALESCE(NULLIF(cr.cash_day, ''), ei.encounter_date, cr.encounter_date), cr.amount,
                        COALESCE(ei.copay_code, cr.copay_code),
                        cr.chart_no, cr.patient_name, cr.id_no, cr.seg, cr.treat_seq, cr.case_no
                 FROM cash_return cr
                 LEFT JOIN encounter_index ei ON ei.resource_id = cr.keywords
-                WHERE COALESCE(ei.encounter_date, cr.encounter_date) >= ?
-                  AND COALESCE(ei.encounter_date, cr.encounter_date) <= ?
-                ORDER BY COALESCE(ei.encounter_date, cr.encounter_date), cr.id
+                WHERE IFNULL(cr.cash_book, '') != 'off'
+                  AND COALESCE(NULLIF(cr.cash_day, ''), ei.encounter_date, cr.encounter_date) >= ?
+                  AND COALESCE(NULLIF(cr.cash_day, ''), ei.encounter_date, cr.encounter_date) <= ?
+                ORDER BY COALESCE(NULLIF(cr.cash_day, ''), ei.encounter_date, cr.encounter_date), cr.id
                 """,
                 (date_from[:10], date_to[:10]),
             ).fetchall()
@@ -2041,8 +2042,12 @@ class SqliteShadowStore(ShadowStore):
         id_no: str = "",
         treat_seq: str = "",
         case_no: str = "",
+        cash_day: str = "",
+        cash_book: bool = True,
     ) -> None:
         """One cash refund row. Same keywords (encounter id) is not inserted twice."""
+        from src.core.cash_return import OFF_BOOK
+
         key = (keywords or "").strip()
         if not key or amount <= 0:
             return
@@ -2069,6 +2074,8 @@ class SqliteShadowStore(ShadowStore):
                 "id_no": id_no,
                 "treat_seq": treat_seq,
                 "case_no": case_no,
+                "cash_day": cash_day[:10] or None,
+                "cash_book": None if cash_book else OFF_BOOK,
             },
             patient_id=(visit[0] if visit else None),
             encounter_id=(key if visit else None),
@@ -4191,6 +4198,8 @@ def _apply_index_migrations(conn: sqlite3.Connection) -> None:
         ("treat_seq", "TEXT"),
         ("case_no", "TEXT"),
         ("resource_id", "TEXT"),
+        ("cash_day", "TEXT"),
+        ("cash_book", "TEXT"),
     ):
         if column not in cash_cols:
             conn.execute(f"ALTER TABLE cash_return ADD COLUMN {column} {col_type}")

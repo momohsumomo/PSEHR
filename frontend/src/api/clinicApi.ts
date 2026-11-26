@@ -896,7 +896,7 @@ export async function fetchOpenDeposits(idNo: string): Promise<{ items: OpenDepo
   return request(`/nhi/v1/deposits/open?${q.toString()}`);
 }
 
-export async function refundDeposit(encounterId: string): Promise<{
+export async function refundDeposit(encounterId: string, cashBook = true): Promise<{
   ok: boolean;
   amount: number;
   sequenceNumber: string;
@@ -907,7 +907,7 @@ export async function refundDeposit(encounterId: string): Promise<{
   const deskSign = await signLocalHc("03");
   return request(`/nhi/v1/encounter/${encodeURIComponent(encounterId)}/refund-deposit`, {
     method: "POST",
-    body: JSON.stringify({ basic, deskSign }),
+    body: JSON.stringify({ basic, deskSign, cashBook }),
   });
 }
 

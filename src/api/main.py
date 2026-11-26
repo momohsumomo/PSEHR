@@ -11,6 +11,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from typing import Any
 
 from fastapi import FastAPI, HTTPException, Request
@@ -137,6 +138,12 @@ def on_startup() -> None:
     store = get_shadow_store()
     store.initialize()
     PackStore(store.db_path).initialize()
+    from src.claims.deposit_refund import backfill_cash_days
+
+    try:
+        backfill_cash_days(store)
+    except Exception:
+        logging.getLogger(__name__).exception("cash day backfill failed")
     start_sync_worker(store)
     start_pack_hydrator_worker()
     start_drug_price_worker()

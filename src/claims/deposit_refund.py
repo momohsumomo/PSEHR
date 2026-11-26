@@ -20,6 +20,7 @@ _NO_AMOUNT = "\u9019\u7b46\u6c92\u6709\u62bc\u91d1\u91d1\u984d\u3002"
 _FUTURE = "\u770b\u8a3a\u65e5\u9084\u5728\u4eca\u5929\u4e4b\u5f8c\uff0c\u4e0d\u80fd\u9000\u62bc\u3002"
 _NO_SEQ = "\u6c92\u6709\u53d6\u5230\u5c31\u91ab\u5e8f\u865f\uff0c\u6c92\u6709\u9000\u62bc\u3002"
 _CARD_MISMATCH = "\u63d2\u5361\u8eab\u5206\u8b49\u8207\u9019\u7b46\u62bc\u55ae\u4e0d\u7b26\uff0c\u672a\u53d6\u865f\u3001\u672a\u9000\u62bc\u3002"
+_OFF_BOOK = "\u6c92\u6709\u7b97\u9032\u4eca\u5929\u7684\u73fe\u91d1\u5e33\u3002"
 _DONE = "\u5df2\u9000\u62bc\u3002\u73fe\u91d1\u9000\u56de\uff0c\u9019\u7b46\u8ddf\u4eca\u5929\u7684\u6bcf\u65e5\u4e0a\u50b3\u4e00\u8d77\u9001\u3002"
 
 
@@ -172,8 +173,13 @@ def apply_refund(
     hc_id: str,
     hc_id_no: str,
     today: date | None = None,
+    cash_book: bool = True,
 ) -> dict[str, Any]:
-    """Write the refund. Caller must already hold a real sequence from the bureau."""
+    """Write the refund. Caller must already hold a real sequence from the bureau.
+
+    cash_book False keeps the return row (the visit total still holds the deposit)
+    but leaves it out of the cash book.
+    """
     day = today or date.today()
     seq = (sequence_number or "").strip()
     treat = (treatment_number or "").strip()
@@ -215,8 +221,7 @@ def apply_refund(
     )
     repo.update_resource("Encounter", encounter_id, payload)
     amount = int(prepared["amount"])
-    # Cash book nets on the visit day (deposit stays in that day's totalFee).
-    # IC daily upload still uses icUploadDate = refund day above.
+    # The deposit stays in the visit day's totalFee; the cash goes back today.
     store.insert_cash_return(
         encounter_date=str(prepared.get("encounterDate") or upload_day),
         amount=amount,
@@ -226,6 +231,8 @@ def apply_refund(
         id_no=str(prepared.get("idNo") or ""),
         treat_seq=seq,
         case_no=str(prepared.get("caseNo") or ""),
+        cash_day=upload_day,
+        cash_book=cash_book,
     )
     return {
         "ok": True,
@@ -233,8 +240,61 @@ def apply_refund(
         "amount": amount,
         "sequenceNumber": seq,
         "uploadDate": upload_day,
-        "reason": _DONE,
+        "reason": _DONE if cash_book else _DONE + _OFF_BOOK,
     }
+
+
+BACKFILL_KEY = "cash_return_cash_day_v1"
+
+
+def backfill_cash_days(store: Any) -> int:
+    """Card refunds written before cashDay existed: book them on the refund day.
+
+    Only rows this program wrote (the visit carries the refund's own sequence,
+    upload day and makeup mark). Imported 還單 keep their day. Runs once.
+    """
+    from src.core.fhir_urls import CASH_RETURN
+
+    if store.get_json_setting(BACKFILL_KEY):
+        return 0
+    with store._connect() as conn:
+        rows = conn.execute(
+            """
+            SELECT cr.resource_id, cr.amount, cr.treat_seq, rc.payload_json, b.payload_json
+            FROM cash_return cr
+            JOIN resource_cache rc ON rc.resource_type = 'Encounter' AND rc.resource_id = cr.keywords
+            JOIN resource_cache b ON b.resource_type = 'Basic' AND b.resource_id = cr.resource_id
+            WHERE IFNULL(cr.cash_day, '') = ''
+            """
+        ).fetchall()
+    moved = 0
+    for basic_id, amount, treat_seq, enc_json, basic_json in rows:
+        try:
+            reg = extract_reg_meta(json.loads(enc_json))
+            basic = json.loads(basic_json)
+        except (TypeError, json.JSONDecodeError):
+            continue
+        day = str(reg.get("icUploadDate") or "")[:10]
+        paid = str(reg.get("depositPaid") or "").strip()
+        if (
+            len(day) != 10
+            or str(reg.get("icRemark") or "") != "2"
+            or str(reg.get("afterCheck") or "") != "2"
+            or not paid.isdigit()
+            or int(paid) != int(amount or 0)
+            or str(reg.get("treatSeq") or "").strip() != str(treat_seq or "").strip()
+        ):
+            continue
+        for ext in basic.get("extension") or []:
+            if isinstance(ext, dict) and ext.get("url") == CASH_RETURN:
+                ext.setdefault("extension", []).append({"url": "cashDay", "valueString": day})
+                break
+        else:
+            continue
+        store.cache_resource("Basic", str(basic_id), basic)
+        moved += 1
+    store.set_json_setting(BACKFILL_KEY, {"moved": moved, "on": date.today().isoformat()})
+    return moved
 
 
 def _load(
