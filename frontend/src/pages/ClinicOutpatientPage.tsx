@@ -113,7 +113,7 @@ import {
   type VisitSaveDraft,
 } from "@/components/clinic/VisitSaveConfirmPanel";
 import { HIS, HIS_FONT, hisFontStyle } from "@/lib/hisTheme";
-import { findCardCheckIn, findWaitingAppointment, otherShiftAppointmentNote } from "@/lib/appointmentCheckIn";
+import { cardForCheckIn, findCardCheckIn, findWaitingAppointment, otherShiftAppointmentNote } from "@/lib/appointmentCheckIn";
 import { compareClinicQueue, normalizeClock, nowClock, planQueueNumber, shiftQueueNumbers, skipsCloudWrite, takeRegisteredPick } from "@/lib/queueOrder";
 import { depositInTotal } from "@/lib/visitFee";
 import { AppointmentCheckInDialog, InsertNumberDialog, PrebookArriveDialog, PrebookNoCardDialog } from "@/components/clinic/InsertNumberDialog";
@@ -393,6 +393,7 @@ export function ClinicOutpatientPage() {
   } | null>(null);
   const [prebookAskId, setPrebookAskId] = useState<string | null>(null);
   const [noCardAskId, setNoCardAskId] = useState<string | null>(null);
+  const [noCardWhy, setNoCardWhy] = useState("");
   const [confirmForm, setConfirmForm] = useState<RegisterEditForm>(() => emptyRegisterForm());
   const [finderOpen, setFinderOpen] = useState(false);
   const [newPatientQuery, setNewPatientQuery] = useState<string | null>(null);
@@ -2292,7 +2293,7 @@ export function ClinicOutpatientPage() {
         entryShift,
       );
       if (booked) {
-        beginCheckIn(booked, {
+        const base: Partial<RegisterEditForm> = {
           patientId: hit.id,
           idNo: hit.idNo,
           birthday: hit.birthdayRoc,
@@ -2304,7 +2305,10 @@ export function ClinicOutpatientPage() {
           prebook: false,
           payType: "4",
           pharmacist: session?.pharmacist || lastPharmacist(),
-        });
+        };
+        void cardForCheckIn(readCardRegisterPatient, hit).then((card) =>
+          card ? beginCheckIn(booked, { ...base, ...card }, true) : beginCheckIn(booked, base),
+        );
         return;
       }
       const otherNote = otherShiftAppointmentNote(
@@ -2330,7 +2334,7 @@ export function ClinicOutpatientPage() {
         }),
       );
     },
-    [beginCheckIn, entryShift, offerQueueNumber, openConfirmFromSeed, queue, session],
+    [beginCheckIn, entryShift, offerQueueNumber, openConfirmFromSeed, queue, readCardRegisterPatient, session],
   );
 
   const seedFromEntry = useCallback((entry: NonNullable<typeof selected>): Partial<RegisterEditForm> => {
@@ -2384,6 +2388,54 @@ export function ClinicOutpatientPage() {
       burdenFee: entry.burdenFee || "",
     };
   }, [session]);
+
+  /** Check-in reads the card in this desk's reader first. Deposit or self-pay is only offered when that fails. */
+  const arrivePrebook = useCallback(
+    (id: string) => {
+      const row = queue.find((e) => e.encounterId === id);
+      if (!row) return;
+      const askNoCard = (why: string) => {
+        setNoCardWhy(why);
+        setNoCardAskId(id);
+      };
+      void (async () => {
+        try {
+          const res = await readCardRegisterPatient();
+          const cardIdNo = (res.validation?.idNo || "").trim().toUpperCase();
+          const rowIdNo = (row.idNo || "").trim().toUpperCase();
+          const tail = (v: string | undefined) => (v || "").split("/").pop() || "";
+          const same =
+            (Boolean(res.patientId) && tail(res.patientId) === tail(row.patientId)) ||
+            (cardIdNo.length === 10 && cardIdNo === rowIdNo);
+          if (!same) {
+            askNoCard("\u8b80\u5361\u6a5f\u4e0a\u7684\u5361\u4e0d\u662f\u9019\u4f4d\u3002\u8acb\u63db\u6210\u9019\u4f4d\u7684\u5361\u518d\u5831\u5230\uff1b\u771f\u7684\u6c92\u6709\u5361\u624d\u9078\u62bc\u91d1\u6216\u81ea\u8cbb\u3002");
+            return;
+          }
+          if (res.cardBridgeNote) setSeqNote(res.cardBridgeNote);
+          openConfirmFromSeed({
+            ...seedFromEntry(row),
+            patientId: res.patientId || row.patientId,
+            idNo: res.validation?.idNo || row.idNo || "",
+            birthday: res.validation?.birthdayRoc || seedFromEntry(row).birthday,
+            sex: res.validation?.sex || seedFromEntry(row).sex,
+            patientName: res.validation?.patientName || row.patientDisplay,
+            cardId: res.validation?.cardId || "",
+            cardIdentity: res.validation?.identityStatus || "",
+            encounterId: id,
+            prebook: false,
+            payType: "4",
+            icException: "ic",
+            deposit: "",
+            noCardReason: "",
+          }, true);
+        } catch (e) {
+          const why = e instanceof Error ? e.message : "\u8b80\u5361\u5931\u6557";
+          askNoCard(`\u6c92\u6709\u8b80\u5230\u5065\u4fdd\u5361\uff08${why}\uff09\u3002\u6709\u5361\u8acb\u63d2\u597d\u518d\u5831\u5230\u4e00\u6b21\uff1b\u771f\u7684\u6c92\u6709\u5361\u624d\u9078\u62bc\u91d1\u6216\u81ea\u8cbb\u3002`);
+        }
+      })();
+    },
+    [openConfirmFromSeed, queue, readCardRegisterPatient, seedFromEntry],
+  );
 
   const openPrebookChoice = useCallback(
     (kind: "deposit" | "selfPay") => {
@@ -4224,12 +4276,13 @@ export function ClinicOutpatientPage() {
         onYes={() => {
           const id = prebookAskId;
           setPrebookAskId(null);
-          if (id) setNoCardAskId(id);
+          if (id) arrivePrebook(id);
         }}
         onNo={() => setPrebookAskId(null)}
       />
       <PrebookNoCardDialog
         open={noCardAskId != null}
+        reason={noCardWhy}
         onDeposit={() => openPrebookChoice("deposit")}
         onSelfPay={() => openPrebookChoice("selfPay")}
         onNo={() => setNoCardAskId(null)}
