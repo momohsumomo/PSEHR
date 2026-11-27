@@ -1544,7 +1544,6 @@ export function RegisterPage() {
       />
       <RefundDepositDialog
         open={refundOpen}
-        initialIdNo={selected?.idNo}
         onClose={() => setRefundOpen(false)}
         onDone={() => void refreshQueue()}
       />

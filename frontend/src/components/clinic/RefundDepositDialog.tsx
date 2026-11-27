@@ -11,7 +11,6 @@ import {
 type Props = {
   open: boolean;
   onClose: () => void;
-  initialIdNo?: string;
   onDone?: () => void;
 };
 
@@ -21,7 +20,7 @@ function roc(iso: string): string {
   return String(Number(y) - 1911) + "." + m + "." + d;
 }
 
-export function RefundDepositDialog({ open, onClose, initialIdNo = "", onDone }: Props) {
+export function RefundDepositDialog({ open, onClose, onDone }: Props) {
   const [items, setItems] = useState<OpenDeposit[]>([]);
   const [picked, setPicked] = useState("");
   const [note, setNote] = useState("");
@@ -32,11 +31,10 @@ export function RefundDepositDialog({ open, onClose, initialIdNo = "", onDone }:
     setItems([]);
     setPicked("");
     setNote("");
-    const id = initialIdNo.trim().toUpperCase();
-    if (id.length === 10) void load(id);
-    else void onRead();
+    // The card in the reader is the only identity source; the selected queue row may be someone else.
+    void onRead();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, initialIdNo]);
+  }, [open]);
 
   async function load(idNo: string) {
     setBusy(true);
