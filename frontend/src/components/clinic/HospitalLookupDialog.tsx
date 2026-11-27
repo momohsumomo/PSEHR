@@ -40,11 +40,13 @@ export function HospitalLookupDialog({ open, onClose, onPick }: Props) {
   const [picked, setPicked] = useState("");
   const [favs, setFavs] = useState<string[]>([]);
   const [error, setError] = useState("");
+  const [typedName, setTypedName] = useState("");
 
   useEffect(() => {
     if (!open) return;
     setFavs(loadFavs());
     setQuery("");
+    setTypedName("");
     setGrade("1");
     if (rows.length) return;
     void fetch("/nhi-hospitals.json")
@@ -70,6 +72,13 @@ export function HospitalLookupDialog({ open, onClose, onPick }: Props) {
       return row.name.includes(q) || row.code.includes(q) || row.address.includes(q);
     });
   }, [rows, grade, query]);
+
+  // The roster only lists hospitals; a clinic is picked by typing its full code.
+  const typedCode = /^[0-9A-Za-z]{10}$/.test(query.trim()) && !byCode.has(query.trim()) ? query.trim() : "";
+  const chooseTyped = () => {
+    if (!typedCode) return;
+    onPick({ code: typedCode, name: typedName.trim(), address: "", phone: "", grade: "3" });
+  };
 
   const remember = (code: string) => {
     const next = [code, ...favs.filter((item) => item !== code)].slice(0, 30);
@@ -98,8 +107,8 @@ export function HospitalLookupDialog({ open, onClose, onPick }: Props) {
             </label>
           ))}
           <input
-            className="ml-auto w-40 border border-[#808080] bg-white px-1"
-            placeholder={"\u540d\u7a31\u3001\u4ee3\u78bc\u3001\u4f4f\u5740"}
+            className="ml-auto w-64 border border-[#808080] bg-white px-1"
+            placeholder={"\u540d\u7a31\u3001\u4ee3\u78bc\u3001\u4f4f\u5740\uff08\u8a3a\u6240\u6253 10 \u78bc\u4ee3\u865f\uff09"}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
@@ -115,6 +124,24 @@ export function HospitalLookupDialog({ open, onClose, onPick }: Props) {
                 </tr>
               </thead>
               <tbody>
+                {typedCode ? (
+                  <tr className="bg-[#FFFFC0]">
+                    <td className="border border-[#9bd] px-1">
+                      <input
+                        className="w-full border border-[#808080] bg-white px-1"
+                        placeholder={"\u9662\u6240\u540d\u7a31\uff08\u53ef\u4e0d\u586b\uff09"}
+                        value={typedName}
+                        onChange={(e) => setTypedName(e.target.value)}
+                      />
+                    </td>
+                    <td className="border border-[#9bd] px-1 font-bold">{typedCode}</td>
+                    <td className="border border-[#9bd] px-1">
+                      <button type="button" className="border border-[#808080] bg-[#D4D0C8] px-2 font-bold" onClick={chooseTyped}>
+                        {"\u540d\u518a\u6c92\u6709\uff0c\u76f4\u63a5\u7528\u9019\u500b\u4ee3\u865f"}
+                      </button>
+                    </td>
+                  </tr>
+                ) : null}
                 {shown.map((row) => (
                   <tr
                     key={row.code}
