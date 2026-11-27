@@ -68,9 +68,16 @@ public class RefIo {
   $found = @(Get-ChildItem -LiteralPath $dest -Recurse -Filter "*.csv" -ErrorAction SilentlyContinue | Sort-Object LastWriteTime -Descending)
   if ($found.Count -gt 0) { $csv = $found[0].FullName }
   $rows = @()
+  $csvB64 = ""
   if ($csv) {
+    $csvBytes = [IO.File]::ReadAllBytes($csv)
+    # The host parses this copy; the bureau file is UTF-8 with a BOM, older ones Big5.
+    $csvB64 = [Convert]::ToBase64String($csvBytes)
     $enc = [Text.Encoding]::GetEncoding(950)
-    $text = $enc.GetString([IO.File]::ReadAllBytes($csv))
+    if ($csvBytes.Length -ge 3 -and $csvBytes[0] -eq 0xEF -and $csvBytes[1] -eq 0xBB -and $csvBytes[2] -eq 0xBF) {
+      $enc = New-Object System.Text.UTF8Encoding $false
+    }
+    $text = $enc.GetString($csvBytes).TrimStart([char]0xFEFF)
     $lines = @($text -split "`r?`n" | Where-Object { $_.Trim() -ne "" })
     $header = $false
     $cols = @()
@@ -111,7 +118,7 @@ public class RefIo {
       $rows += $row
     }
   }
-  Write-Result @{ ok = ($code -eq 0); code = $code; localId = $local; nhiId = $nhi; rows = $rows }
+  Write-Result @{ ok = ($code -eq 0); code = $code; localId = $local; nhiId = $nhi; rows = $rows; csvB64 = $csvB64 }
   exit 0
 }
 

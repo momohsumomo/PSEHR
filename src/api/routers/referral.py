@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import base64
+import binascii
 from datetime import date, datetime, timedelta
 from typing import Any
 
@@ -50,6 +51,7 @@ from src.core.referral_inbox import (
     download_person,
     list_downloads,
     mark_accepted,
+    parse_list_csv,
     pending_list,
     prompts_for,
     remember_download,
@@ -522,9 +524,11 @@ class ReferralPullApplyBody(BaseModel):
     localId: str = ""
     kind: str = ""
     rows: list[dict[str, Any]] = []
+    csvB64: str = ""
 
 
 _PULL_KEY = "referral_pull"
+LIST_WINDOW_DAYS = 90
 
 
 def _file_seq() -> str:
@@ -775,7 +779,8 @@ def referral_pull() -> dict[str, Any]:
     if len(hosp) != 10:
         return {"ok": False, "step": "", "reason": "\u6c92\u6709\u9662\u6240\u4ee3\u78bc\u3002"}
     end = date.today()
-    start = end - timedelta(days=1)
+    # Notices stay valid 90 days and often arrive long after opening, so each pull re-reads the whole window.
+    start = end - timedelta(days=LIST_WINDOW_DAYS)
     payload = build_list_request(start.strftime("%Y%m%d"), end.strftime("%Y%m%d"))
     files = []
     for kind in ("1", "2"):
@@ -812,7 +817,13 @@ def referral_pull_sent(body: ReferralPullSentBody) -> dict[str, Any]:
 
 @router.post("/pull-apply")
 def referral_pull_apply(body: ReferralPullApplyBody) -> dict[str, Any]:
-    count = apply_list_rows(body.rows, body.kind or "1")
+    rows = body.rows
+    if body.csvB64:
+        try:
+            rows = parse_list_csv(base64.b64decode(body.csvB64))
+        except (ValueError, binascii.Error):
+            rows = body.rows
+    count = apply_list_rows(rows, body.kind or "1")
     store = get_shadow_store()
     bag = store.get_json_setting(_PULL_KEY) or {}
     jobs = bag.get("jobs") if isinstance(bag, dict) else []

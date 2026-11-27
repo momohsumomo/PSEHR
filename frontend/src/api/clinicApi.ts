@@ -1064,6 +1064,7 @@ async function postReferralIo(body: Record<string, unknown>): Promise<{
   nhiId?: string;
   code?: number;
   rows?: Array<Record<string, string>>;
+  csvB64?: string;
 }> {
   const ctrl = new AbortController();
   const timer = window.setTimeout(() => ctrl.abort(), 35000);
@@ -1081,6 +1082,7 @@ async function postReferralIo(body: Record<string, unknown>): Promise<{
       nhiId?: string;
       code?: number;
       rows?: Array<Record<string, string>>;
+      csvB64?: string;
     };
   } catch (err) {
     if (err instanceof DOMException && err.name === "AbortError") {
@@ -1167,7 +1169,7 @@ export async function pullReferralNow(): Promise<string> {
     const got = await postReferralIo({ op: "fetch", localId: job.localId, nhiId: job.nhiId });
     const applied = await request<{ ok: boolean; count?: number }>("/nhi/v1/referral/pull-apply", {
       method: "POST",
-      body: JSON.stringify({ localId: job.localId, kind: job.kind, rows: got.rows || [] }),
+      body: JSON.stringify({ localId: job.localId, kind: job.kind, rows: got.rows || [], csvB64: got.csvB64 || "" }),
     });
     count += applied.count || 0;
   }

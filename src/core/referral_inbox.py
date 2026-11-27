@@ -362,7 +362,8 @@ def _cell(row: dict[str, Any], *names: str) -> str:
         value = row.get(name)
         if value is None:
             continue
-        text = str(value).strip()
+        # The bureau CSV prefixes every value with ' so Excel keeps leading zeros.
+        text = str(value).strip().lstrip("'").strip()
         if text:
             return text
     return ""
@@ -371,6 +372,38 @@ def _cell(row: dict[str, Any], *names: str) -> str:
 def _digits(text: str) -> str:
     found = re.sub(r"\D", "", text or "")
     return found
+
+
+def _ymd(text: str) -> str:
+    """Western YYYYMMDD from 115/10/13, 1151013 or 20261013."""
+    raw = (text or "").strip().split(" ")[0]
+    parts = [p for p in re.split(r"[/\-.]", raw) if p]
+    if len(parts) == 3 and all(p.isdigit() for p in parts):
+        year = int(parts[0])
+        if year < 1911:
+            year += 1911
+        return "%04d%02d%02d" % (year, int(parts[1]), int(parts[2]))
+    digits = _digits(raw)
+    if len(digits) == 7:
+        return "%04d%s" % (int(digits[:3]) + 1911, digits[3:])
+    return digits[:8]
+
+
+def parse_list_csv(raw: bytes) -> list[dict[str, str]]:
+    """The type 27 list file as the bureau wrote it. It is UTF-8 with a BOM; older files were Big5."""
+    import csv
+    import io
+
+    try:
+        text = raw.decode("utf-8-sig")
+    except UnicodeDecodeError:
+        text = raw.decode("cp950", errors="replace")
+    reader = csv.reader(io.StringIO(text))
+    lines = [row for row in reader if any(cell.strip() for cell in row)]
+    if not lines:
+        return []
+    head = [cell.strip() for cell in lines[0]]
+    return [dict(zip(head, [cell.strip() for cell in row])) for row in lines[1:]]
 
 
 def apply_list_rows(rows: list[dict[str, Any]], query_kind: str) -> int:
@@ -390,15 +423,15 @@ def apply_list_rows(rows: list[dict[str, Any]], query_kind: str) -> int:
         slip = ReferralSlip(
             serial=serial,
             hosp_seq=self_seq,
-            open_date=_digits(_cell(raw, "\u958b\u55ae\u65e5\u671f", "openDate"))[:8],
+            open_date=_ymd(_cell(raw, "\u958b\u55ae\u65e5\u671f", "openDate")),
             kind=kind,
             summary="",
             deleted=False,
-            hosp_id=_cell(raw, "\u5efa\u8b70\u8f49\u8a3a\u9662\u6240\u4ee3\u78bc", "hospId"),
-            hosp_name=_cell(raw, "\u5efa\u8b70\u8f49\u8a3a\u9662\u6240", "hospName"),
+            hosp_id=_cell(raw, "\u5efa\u8b70\u8f49\u8a3a\u9662\u6240\u4ee3\u78bc", "\u8f49\u51fa\u9662\u6240\u4ee3\u78bc", "hospId"),
+            hosp_name=_cell(raw, "\u5efa\u8b70\u8f49\u8a3a\u9662\u6240", "\u8f49\u51fa\u9662\u6240", "hospName"),
             status=_cell(raw, "\u72c0\u614b", "status"),
             contact=_cell(raw, "\u9023\u7e6b\u8655\u7406\u8a3b\u8a18", "contact"),
-            valid_until=_digits(_cell(raw, "\u6709\u6548\u671f\u9650", "validUntil"))[:8],
+            valid_until=_ymd(_cell(raw, "\u6709\u6548\u671f\u9650", "validUntil")),
         )
         if patient:
             name = _cell(raw, "\u59d3\u540d", "patientName")

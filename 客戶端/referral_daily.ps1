@@ -35,9 +35,12 @@ try {
       $body = @{ op = "fetch"; localId = "$($job.localId)"; nhiId = "$($job.nhiId)" } | ConvertTo-Json -Compress
       $got = Invoke-RestMethod -Uri $desk -Method POST -Body $body -ContentType "application/json" -TimeoutSec 90
       $rows = @()
-      if ($got.rows) { $rows = @($got.rows) }
-      $apply = @{ localId = "$($job.localId)"; kind = "$($job.kind)"; rows = $rows } | ConvertTo-Json -Compress -Depth 6
-      Invoke-RestMethod -Uri ($hostUrl + "/nhi/v1/referral/pull-apply") -Method POST -Body $apply -ContentType "application/json" -TimeoutSec 30 | Out-Null
+      $csvB64 = "$($got.csvB64)"
+      # Windows PowerShell mangles non-ASCII text both ways; the raw file goes up as base64 instead.
+      if (-not $csvB64 -and $got.rows) { $rows = @($got.rows) }
+      $apply = @{ localId = "$($job.localId)"; kind = "$($job.kind)"; rows = $rows; csvB64 = $csvB64 } | ConvertTo-Json -Compress -Depth 6
+      $applyBytes = [Text.Encoding]::UTF8.GetBytes($apply)
+      Invoke-RestMethod -Uri ($hostUrl + "/nhi/v1/referral/pull-apply") -Method POST -Body $applyBytes -ContentType "application/json; charset=utf-8" -TimeoutSec 30 | Out-Null
     }
     [IO.File]::WriteAllText($mark, ($today + " done"))
   } elseif ("$($plan.step)" -eq "wait") {
