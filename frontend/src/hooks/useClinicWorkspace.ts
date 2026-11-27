@@ -871,7 +871,8 @@ export function useClinicWorkspace(options?: {
     ) => {
       if (!apiMode) throw new Error("掛號需 API 模式");
       const mode = form.icException || "ic";
-      if (mode === "ic") form = { ...form, deposit: "" };
+      // The host keeps the stored value when a field is blank, so a card on a deposit hold must send 0.
+      if (mode === "ic") form = { ...form, deposit: form.encounterId ? "0" : "" };
       if (mode === "badCard" && !form.noCardReason.trim()) {
         form = { ...form, noCardReason: BAD_CARD_REASON };
       }
