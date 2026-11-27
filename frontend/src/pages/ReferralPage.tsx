@@ -5,7 +5,9 @@ import {
   fetchReferralDownloads,
   fetchReferralSlips,
   pullReferralNow,
+  queryReferral,
   saveReferralSlip,
+  signReferralLookup,
   uploadReferralSlip,
   type ReferralSlipRow,
 } from "@/api/clinicApi";
@@ -297,12 +299,50 @@ export function ReferralPage() {
         >
           {"\u73fe\u5728\u4e0b\u8f09"}
         </button>
+        <button
+          type="button"
+          className="border border-[#808080] bg-[#D4D0C8] px-2 py-1 text-[13px] font-bold"
+          disabled={busy}
+          title={"\u5c0d\u65b9\u6c92\u6307\u5b9a\u672c\u9662\u7684\u8f49\u8a3a\u55ae\uff0c\u6e05\u55ae\u4e0b\u8f09\u4e0d\u5230\uff0c\u8981\u63d2\u75c5\u4eba\u7684\u5361\u67e5\u3002"}
+          onClick={() => {
+            void (async () => {
+              setBusy(true);
+              setNote("");
+              try {
+                const sign = await signReferralLookup("");
+                const idNo = String(sign.hcIdNo || "").trim();
+                if (!idNo) throw new Error("\u8b80\u4e0d\u5230\u5065\u4fdd\u5361\u3002\u8acb\u78ba\u8a8d\u9019\u53f0\u8b80\u5361\u6a5f\u4e0a\u63d2\u7684\u662f\u75c5\u4eba\u7684\u5361\u3002");
+                const ref = await queryReferral({ idNo }, sign);
+                if (!ref.ok) {
+                  setNote(ref.reason || "\u5065\u4fdd\u7f72\u6c92\u6709\u56de\u61c9\u3002");
+                  return;
+                }
+                const slips = ref.slips || [];
+                if (!slips.length) {
+                  setNote(ref.reason || "\u9019\u4f4d\u6c92\u6709\u9084\u6c92\u53d7\u7406\u7684\u8f49\u5165\u3002");
+                  return;
+                }
+                const from = slips.map((s) => s.summary || s.hospId).filter(Boolean).join("\u3001");
+                setNote(
+                  `\u67e5\u5230 ${slips.length} \u7b46\u9084\u6c92\u53d7\u7406\u7684\u8f49\u5165\uff08${from}\uff09\u3002\u5df2\u5b58\u9032\u4e0b\u8f09\u540d\u55ae\uff1b\u56de\u639b\u865f\u628a\u9019\u4f4d\u91cd\u65b0\u5b58\u6a94\uff0c\u5c31\u6703\u554f\u8981\u4e0d\u8981\u63a5\u53d7\u3002`,
+                );
+                if (mode === "down") await load("down");
+              } catch (err: unknown) {
+                setNote(err instanceof Error ? err.message : "\u63d2\u5361\u67e5\u8f49\u8a3a\u5931\u6557");
+              } finally {
+                setBusy(false);
+              }
+            })();
+          }}
+        >
+          {"\u63d2\u5361\u67e5\u8f49\u8a3a"}
+        </button>
         <span className="text-[12px]">
           {mode === "out"
             ? "\u9084\u6c92\u9001\u51fa\u7684\uff0c\u9000\u639b\u6642\u4e00\u4f75\u522a\u3002\u4e0a\u50b3\u672a\u6eff\u4e00\u5c0f\u6642\u53ef\u4ee5\u522a\u9664\u958b\u7acb\u3002\u8d85\u904e\u5c31\u7559\u8457\u3002"
             : mode === "reply"
               ? "\u7576\u5929\u9000\u639b\u53ef\u4ee5\u522a\u9664\u9019\u7b46\u56de\u5fa9\u3002\u4e0d\u662f\u7576\u5929\u7684\u5c31\u7559\u8457\u3002"
-              : "\u6bcf\u5929 07:10 \u4e0b\u8f09\u4e00\u6b21\u3002\u73fe\u5728\u4e0b\u8f09\u662f\u984d\u5916\u518d\u505a\u3002\u53d6\u56de\u4ee5\u5f8c\u5c0d\u9f4a\u8f49\u51fa\u8207\u8f49\u5165\uff0c\u4e0d\u62ff\u4f86\u6c7a\u5b9a\u80fd\u4e0d\u80fd\u522a\u3002"}
+              : "\u6bcf\u5929 07:10 \u4e0b\u8f09\u5f80\u524d 90 \u5929\u7684\u6e05\u55ae\u3002\u73fe\u5728\u4e0b\u8f09\u662f\u984d\u5916\u518d\u505a\u3002\u6c92\u6307\u5b9a\u672c\u9662\u7684\u8f49\u5165\u55ae\u6e05\u55ae\u88e1\u6c92\u6709\uff0c\u8981\u63d2\u5361\u67e5\u8f49\u8a3a\u3002\u53d6\u56de\u4ee5\u5f8c\u5c0d\u9f4a\u8f49\u51fa\u8207\u8f49\u5165\uff0c\u4e0d\u62ff\u4f86\u6c7a\u5b9a\u80fd\u4e0d\u80fd\u522a\u3002"}
         </span>
       </div>
       <div className="flex min-h-0 flex-1">
