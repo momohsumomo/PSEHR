@@ -36,7 +36,7 @@ import { registerHubAction } from "@/lib/registerHubActions";
 import { isoBirthDateToRoc, formatBirthdayRoc, loadClinicRegisterDefaults, type PatientHit } from "@/lib/patientSearch";
 import { isDepositHold } from "@/lib/registerModes";
 import { HIS, HIS_FONT, hisFontStyle } from "@/lib/hisTheme";
-import { cardForCheckIn, findCardCheckIn, findWaitingAppointment, otherShiftAppointmentNote } from "@/lib/appointmentCheckIn";
+import { findCardCheckIn, findWaitingAppointment, otherShiftAppointmentNote } from "@/lib/appointmentCheckIn";
 import { displayCase } from "@/lib/caseMark";
 import { storedCopayFields } from "@/lib/cardIdentity";
 import { roomLabel, roomNumber } from "@/lib/roomMark";
@@ -593,7 +593,7 @@ export function RegisterPage() {
     setFinderOpen(false);
     const booked = findWaitingAppointment(queue, { patientId: hit.id, idNo: hit.idNo }, regShift);
     if (booked) {
-      const base: Partial<RegisterEditForm> = {
+      beginCheckIn(booked, {
         ...seedFromEntry(booked),
         patientId: hit.id,
         idNo: hit.idNo,
@@ -608,10 +608,7 @@ export function RegisterPage() {
         pharmacist: lastPharmacist(),
         queueNumber: booked.queueNumber != null ? String(booked.queueNumber) : "",
         visitClock: booked.slotTime || "",
-      };
-      void cardForCheckIn(readCardRegisterPatient, hit).then((card) =>
-        card ? beginCheckIn(booked, { ...base, ...card }, true) : beginCheckIn(booked, base),
-      );
+      });
       return;
     }
     const otherNote = otherShiftAppointmentNote(queue, { patientId: hit.id, idNo: hit.idNo }, regShift);

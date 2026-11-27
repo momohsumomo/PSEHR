@@ -111,46 +111,6 @@ export function findCardCheckIn<T extends WaitingAppointment>(
   );
 }
 
-type CardReadLike = {
-  patientId?: string;
-  validation?: {
-    idNo?: string;
-    birthdayRoc?: string;
-    patientName?: string;
-    cardId?: string;
-    identityStatus?: string;
-  } | null;
-};
-
-/**
- * A searched check-in still reads the card in this desk's reader first.
- * Only this patient's own card turns it into a card visit; otherwise null and the deposit path stays.
- */
-export async function cardForCheckIn(
-  read: () => Promise<CardReadLike>,
-  who: { id?: string; idNo?: string },
-) {
-  try {
-    const res = await read();
-    const cardIdNo = normIdNo(res.validation?.idNo);
-    const same =
-      (Boolean(res.patientId) && idTail(res.patientId) === idTail(who.id)) ||
-      (cardIdNo.length === 10 && cardIdNo === normIdNo(who.idNo));
-    if (!same) return null;
-    return {
-      patientId: res.patientId || who.id,
-      idNo: res.validation?.idNo || who.idNo || "",
-      cardId: res.validation?.cardId || "",
-      cardIdentity: res.validation?.identityStatus || "",
-      icException: "ic" as const,
-      deposit: "",
-      noCardReason: "",
-    };
-  } catch {
-    return null;
-  }
-}
-
 /** Desk reminder when another shift still has a booking we are leaving alone. */
 export function otherShiftAppointmentNote<T extends WaitingAppointment>(
   queue: T[],

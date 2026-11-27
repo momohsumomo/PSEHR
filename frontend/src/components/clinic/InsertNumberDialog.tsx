@@ -183,13 +183,11 @@ export function PrebookArriveDialog({
 /** 預約報到的第二問：無健保卡時選押金或自費，再開一般掛號窗。 */
 export function PrebookNoCardDialog({
   open,
-  reason = "",
   onDeposit,
   onSelfPay,
   onNo,
 }: {
   open: boolean;
-  reason?: string;
   onDeposit: () => void;
   onSelfPay: () => void;
   onNo: () => void;
@@ -201,7 +199,6 @@ export function PrebookNoCardDialog({
         <header className="bg-[#004D00] px-3 py-1.5 text-xs font-black text-white">
           {"\u7121\u5065\u4fdd\u5361\u5831\u5230"}
         </header>
-        {reason ? <p className="px-3 pt-3 text-[13px] font-bold text-[#B00000]">{reason}</p> : null}
         <p className="px-3 py-4 text-[15px] font-bold text-[#004D00]">
           {"\u662f\u5426\u8981\u7121\u5065\u4fdd\u5361\u5831\u5230?"}
         </p>
