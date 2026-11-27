@@ -1,5 +1,6 @@
 import { ageYearsMonths } from "@/lib/ageLabel";
 import { HIS, HIS_FONT } from "@/lib/hisTheme";
+import { patientChartNo } from "@/lib/patientSearch";
 
 interface PatientHeaderWidgetProps {
   clinicalProfile: any;
@@ -21,7 +22,7 @@ export function PatientHeaderWidget({
 }: PatientHeaderWidgetProps) {
   void _clinicalProfile;
   const medicalNo =
-    selected?.medicalNo ?? patientResource?.identifier?.[0]?.value ?? "—";
+    selected?.medicalNo ?? (patientResource ? patientChartNo(patientResource) : "") ?? "—";
   const bits: Array<{ label?: string; value: string }> = [
     { value: selected?.patientDisplay ?? "—" },
     { value: ageYearsMonths(selected?.age || selected?.ageSex) || "" },

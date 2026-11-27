@@ -1,4 +1,5 @@
 import type { ApiPatient } from "@/api/clinicApi";
+import { patientChartNo, patientIdNo } from "@/lib/patientSearch";
 
 /** 病患主檔（對醫聖 USER／病患基本資料）。 */
 export type PatientRecord = {
@@ -83,31 +84,8 @@ export function fhirToPatientRecord(p: ApiPatient): PatientRecord {
   const family = p.name?.[0]?.family || "";
   const given = p.name?.[0]?.given?.join("") || "";
   const name = p.name?.[0]?.text || `${family}${given}` || "無姓名";
-  const idNo =
-    p.identifier?.find(
-      (i) =>
-        i.use === "official" ||
-        !!i.system?.includes("moi.gov") ||
-        !!i.system?.includes("nhidcc") ||
-        !!i.system?.endsWith("/id") ||
-        !!i.system?.includes("id-no"),
-    )?.value ||
-    p.identifier?.find(
-      (i) =>
-        i.use !== "secondary" &&
-        !i.system?.includes("chart") &&
-        !!i.value,
-    )?.value ||
-    p.identifier?.[0]?.value ||
-    "";
-  const medicalNo =
-    p.identifier?.find(
-      (i) =>
-        i.use === "secondary" ||
-        i.system?.includes("chart") ||
-        i.system?.includes("chart-number") ||
-        i.system?.includes("/sid/medical-record/"),
-    )?.value || "";
+  const idNo = patientIdNo(p);
+  const medicalNo = patientChartNo(p);
 
   const sex = p.gender === "female" ? "女" : p.gender === "male" ? "男" : "其他";
 

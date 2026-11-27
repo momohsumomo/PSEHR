@@ -1,3 +1,5 @@
+import type { ApiPatient } from "@/api/clinicApi";
+import { patientIdNo } from "@/lib/patientSearch";
 import type { DiagnosisRow, RxLine } from "@/mocks/clinicMocks";
 
 const ORDER_CODE = /^\d{5}[A-Z]$/i;
@@ -22,8 +24,7 @@ export function extractPatientIdNo(
   patient: Record<string, unknown> | null | undefined,
 ): string | undefined {
   if (!patient) return undefined;
-  const identifiers = patient.identifier as Array<{ value?: string }> | undefined;
-  const value = identifiers?.[0]?.value?.trim();
+  const value = patientIdNo(patient as ApiPatient).trim();
   return value || undefined;
 }
 

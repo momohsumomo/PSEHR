@@ -84,21 +84,39 @@ export function birthdayToStored(raw: string): string {
   return text.replace(/\D/g, "").slice(0, 7);
 }
 
+type Ident = NonNullable<ApiPatient["identifier"]>[number];
+
+function isChartIdentifier(i: Ident): boolean {
+  const system = i.system || "";
+  return system.includes("/sid/medical-record") || system.includes("chart");
+}
+
+/** National ID: the moi.gov.tw identifier, then the card id. A chart number never counts, whatever its use. */
+export function patientIdNo(p: ApiPatient): string {
+  const ids = (p.identifier || []).filter((i) => !!i.value && !isChartIdentifier(i));
+  return (
+    ids.find((i) => i.system?.includes("moi.gov"))?.value ||
+    ids.find((i) => i.system?.includes("nhi-card-id") || i.system?.includes("nhidcc"))?.value ||
+    ids.find((i) => i.system?.endsWith("/id") || i.system?.includes("id-no"))?.value ||
+    ""
+  );
+}
+
+export function patientChartNo(p: ApiPatient): string {
+  return (
+    (p.identifier || []).find((i) => isChartIdentifier(i))?.value ||
+    (p.identifier || []).find((i) => i.use === "secondary")?.value ||
+    ""
+  );
+}
+
 /** 從 FHIR Patient 抽出櫃台列表用欄位。 */
 export function mapApiPatientToHit(p: ApiPatient): PatientHit {
   const family = p.name?.[0]?.family || "";
   const given = p.name?.[0]?.given?.join("") || "";
   const name = p.name?.[0]?.text || `${family}${given}` || "無姓名";
-  const idNo =
-    p.identifier?.find((i) => i.use === "official" || i.system?.includes("id"))?.value || "";
-  const medicalNo =
-    p.identifier?.find(
-      (i) =>
-        i.use === "secondary" ||
-        i.system?.includes("chart") ||
-        i.system?.includes("chart-number") ||
-        i.system?.includes("/sid/medical-record/"),
-    )?.value || "";
+  const idNo = patientIdNo(p);
+  const medicalNo = patientChartNo(p);
   const nhiBasic = p.extension?.find((e) => e.url?.includes("nhi-card-basic"));
   let birthdayRoc =
     nhiBasic?.extension?.find((sub) => sub.url === "birthdayRoc")?.valueString || "";

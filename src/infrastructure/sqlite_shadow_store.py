@@ -4735,6 +4735,8 @@ def _clinic_fields_from_payload(raw: str | dict[str, Any]) -> dict[str, str]:
             if not isinstance(ident, dict) or not ident.get("value"):
                 continue
             system = str(ident.get("system") or "").lower()
+            if "chart" in system or "medical-record" in system:
+                continue
             if (
                 ident.get("use") == "official"
                 or "moi.gov" in system
@@ -4908,6 +4910,8 @@ def _patient_index_fields(payload: dict[str, Any]) -> dict[str, str | None]:
             if not isinstance(ident, dict) or not ident.get("value"):
                 continue
             system = str(ident.get("system") or "").lower()
+            if "chart" in system or "medical-record" in system:
+                continue
             if (
                 "moi.gov" in system
                 or "nhidcc" in system
