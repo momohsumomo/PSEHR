@@ -120,8 +120,18 @@ export function ReferralPage() {
     const text = status || "";
     return text.includes("\u5df2\u53d7\u7406") && !text.includes("\u5df2\u56de\u5fa9") && !text.includes("\u5df2\u56de\u8986");
   };
-  const downQuiet = mode === "down" ? shown.filter((row) => acceptedWithoutReply(row.status || "")) : [];
-  const downOpen = mode === "down" ? shown.filter((row) => !acceptedWithoutReply(row.status || "")) : shown;
+  // Incoming notices nobody here has taken yet; the desk accepts only when the patient arrives.
+  const notYetTaken = (status: string) =>
+    /^\u5225\u4eba\u8f49(\u4f86|\u56de)/.test(status) &&
+    status.includes("\u672a\u53d7\u7406") &&
+    !status.includes("\u672c\u9662\u5df2\u63a5\u53d7");
+  const downNew = mode === "down" ? shown.filter((row) => notYetTaken(row.status || "")) : [];
+  const downQuiet =
+    mode === "down" ? shown.filter((row) => !notYetTaken(row.status || "") && acceptedWithoutReply(row.status || "")) : [];
+  const downOpen =
+    mode === "down"
+      ? shown.filter((row) => !notYetTaken(row.status || "") && !acceptedWithoutReply(row.status || ""))
+      : shown;
 
   const current = items.find((row) => row.id === picked) || null;
   const today = useMemo(() => {
@@ -391,10 +401,43 @@ export function ReferralPage() {
             </label>
           </div>
           <ul className="min-h-0 flex-1 overflow-auto text-[12px]">
-            {downOpen.length === 0 && downQuiet.length === 0 ? (
+            {mode === "down" ? (
+              <li className="bg-[#FFF0C0] px-2 py-1 text-[12px] font-bold">
+                {`\u5df2\u4e0b\u8f09\u672a\u53d7\u7406\uff08${downNew.length}\uff09`}
+              </li>
+            ) : null}
+            {mode === "down" && downNew.length === 0 ? (
+              <li className="px-2 py-1 text-[#606060]">{"\u6c92\u6709\u3002\u6309\u300c\u73fe\u5728\u4e0b\u8f09\u300d\uff0c\u5341\u5206\u9418\u5f8c\u518d\u6309\u4e00\u6b21\u53d6\u56de\u3002"}</li>
+            ) : null}
+            {downNew.map((row) => (
+              <li key={row.id}>
+                <button
+                  type="button"
+                  className="block w-full px-2 py-1 text-left"
+                  style={{ background: row.id === picked ? "#FFF2A8" : "transparent" }}
+                  onClick={() => {
+                    setPicked(row.id);
+                    setSlipOpen(false);
+                  }}
+                >
+                  <div className="font-bold">{rocDay(row.openedOn)} {row.patientName || "\u2014"} {row.medicalNo}</div>
+                  <div className="text-[11px] text-[#404040]">
+                    {row.status || "\u2014"}
+                    {row.destHosp ? ` \u00b7 ${row.destHosp}` : ""}
+                    {row.validUntil ? ` \u00b7 \u6709\u6548\u81f3 ${row.validUntil}` : ""}
+                  </div>
+                </button>
+              </li>
+            ))}
+            {mode !== "down" && downOpen.length === 0 ? (
               <li className="px-2 py-2 text-[#606060]">{"\u9019\u6bb5\u6c92\u6709\u5b58\u6a94\u3002\u62ff\u6389\u65e5\u671f\u5c31\u662f\u5168\u90e8\u7d00\u9304\u3002"}</li>
             ) : (
               <>
+              {mode === "down" && downOpen.length > 0 ? (
+                <li className="border-t bg-[#F4F1EA] px-2 py-1 text-[12px] font-bold" style={{ borderColor: "#808080" }}>
+                  {`\u8f49\u51fa\u8207\u5df2\u56de\u8986\uff08${downOpen.length}\uff09`}
+                </li>
+              ) : null}
               {downOpen.map((row) => (
                 <li key={row.id}>
                   <button
